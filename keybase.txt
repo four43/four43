@@ -1,0 +1,54 @@
+==================================================================
+https://keybase.io/four43
+--------------------------------------------------------------------
+
+I hereby claim:
+
+  * I am an admin of http://four43.com
+  * I am four43 (https://keybase.io/four43) on keybase.
+  * I have a public key ASCE009nDfIKdsU5NcuSu9SIUGd2onCwOq7k5XmKU-lJzQo
+
+To do so, I am signing this object:
+
+{
+    "body": {
+        "key": {
+            "eldest_kid": "012084d34f670df20a76c53935cb92bbd488506776a270b03aaee4e5798a53e949cd0a",
+            "host": "keybase.io",
+            "kid": "012084d34f670df20a76c53935cb92bbd488506776a270b03aaee4e5798a53e949cd0a",
+            "uid": "ad77f32c9aafa9d302c14b0e1ba8b719",
+            "username": "four43"
+        },
+        "service": {
+            "hostname": "four43.com",
+            "protocol": "http:"
+        },
+        "type": "web_service_binding",
+        "version": 1
+    },
+    "client": {
+        "name": "keybase.io go client",
+        "version": "1.0.16"
+    },
+    "ctime": 1467403219,
+    "expire_in": 504576000,
+    "merkle_root": {
+        "ctime": 1467403221,
+        "hash": "a7900e49b3e44aa1063aeefd8ac76f0fdd980a6c3a3550cda910617610d6c6a40407b987c88097fc5151c0c8c301cc45c8eba9339cd277d5a5ffefa4aa7902a2",
+        "seqno": 506202
+    },
+    "prev": "1fd3281b845d41bee6332637504dde55dbdc3600b78709bf20955274d113c71b",
+    "seqno": 8,
+    "tag": "signature"
+}
+
+which yields the signature:
+
+hKRib2R5hqhkZXRhY2hlZMOpaGFzaF90eXBlCqNrZXnEIwEghNNPZw3yCnbFOTXLkrvUiFBndqJwsDqu5OV5ilPpSc0Kp3BheWxvYWTFAu97ImJvZHkiOnsia2V5Ijp7ImVsZGVzdF9raWQiOiIwMTIwODRkMzRmNjcwZGYyMGE3NmM1MzkzNWNiOTJiYmQ0ODg1MDY3NzZhMjcwYjAzYWFlZTRlNTc5OGE1M2U5NDljZDBhIiwiaG9zdCI6ImtleWJhc2UuaW8iLCJraWQiOiIwMTIwODRkMzRmNjcwZGYyMGE3NmM1MzkzNWNiOTJiYmQ0ODg1MDY3NzZhMjcwYjAzYWFlZTRlNTc5OGE1M2U5NDljZDBhIiwidWlkIjoiYWQ3N2YzMmM5YWFmYTlkMzAyYzE0YjBlMWJhOGI3MTkiLCJ1c2VybmFtZSI6ImZvdXI0MyJ9LCJzZXJ2aWNlIjp7Imhvc3RuYW1lIjoiZm91cjQzLmNvbSIsInByb3RvY29sIjoiaHR0cDoifSwidHlwZSI6IndlYl9zZXJ2aWNlX2JpbmRpbmciLCJ2ZXJzaW9uIjoxfSwiY2xpZW50Ijp7Im5hbWUiOiJrZXliYXNlLmlvIGdvIGNsaWVudCIsInZlcnNpb24iOiIxLjAuMTYifSwiY3RpbWUiOjE0Njc0MDMyMTksImV4cGlyZV9pbiI6NTA0NTc2MDAwLCJtZXJrbGVfcm9vdCI6eyJjdGltZSI6MTQ2NzQwMzIyMSwiaGFzaCI6ImE3OTAwZTQ5YjNlNDRhYTEwNjNhZWVmZDhhYzc2ZjBmZGQ5ODBhNmMzYTM1NTBjZGE5MTA2MTc2MTBkNmM2YTQwNDA3Yjk4N2M4ODA5N2ZjNTE1MWMwYzhjMzAxY2M0NWM4ZWJhOTMzOWNkMjc3ZDVhNWZmZWZhNGFhNzkwMmEyIiwic2Vxbm8iOjUwNjIwMn0sInByZXYiOiIxZmQzMjgxYjg0NWQ0MWJlZTYzMzI2Mzc1MDRkZGU1NWRiZGMzNjAwYjc4NzA5YmYyMDk1NTI3NGQxMTNjNzFiIiwic2Vxbm8iOjgsInRhZyI6InNpZ25hdHVyZSJ9o3NpZ8RA3tW98ajxLaTnWRbxj8/yoUMiyR7rKK/mWJtGkcchHw0szpXYnJR1OEs9ZySztyT6D2TJ4ulS8dxuM7QaHGqUBahzaWdfdHlwZSCkaGFzaIKkdHlwZQildmFsdWXEIDtztCG8X2WsrQr+WCbQ7EtkL+txSCxirLrU+uf3WGVXo3RhZ80CAqd2ZXJzaW9uAQ==
+
+And finally, I am proving ownership of this host by posting or
+appending to this document.
+
+View my publicly-auditable identity here: https://keybase.io/four43
+
+==================================================================
