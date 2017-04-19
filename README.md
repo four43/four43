@@ -1,6 +1,7 @@
-four43
-======
+# four43
 
 The professional site of Seth Miller
 
-Now with more React!?
+## React?
+
+Yeah, way over done for a simple little site, but it's fun.
