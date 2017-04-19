@@ -63,7 +63,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 11);
+/******/ 	return __webpack_require__(__webpack_require__.s = 9);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -74,40 +74,6 @@ module.exports = React;
 
 /***/ }),
 /* 1 */
-/***/ (function(module, exports) {
-
-module.exports = ReactDOM;
-
-/***/ }),
-/* 2 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", { value: true });
-var React = __webpack_require__(0);
-var About_1 = __webpack_require__(3);
-var Contact_1 = __webpack_require__(4);
-var Highlights_1 = __webpack_require__(5);
-var Nav_1 = __webpack_require__(6);
-var Projects_1 = __webpack_require__(7);
-var Title_1 = __webpack_require__(8);
-var Values_1 = __webpack_require__(9);
-var Work_1 = __webpack_require__(10);
-exports.App = function () { return (React.createElement("div", null,
-    React.createElement("header", null,
-        React.createElement(Nav_1.Nav, null),
-        React.createElement(Title_1.Title, null)),
-    React.createElement(About_1.About, { now: new Date() }),
-    React.createElement(Highlights_1.Highlights, null),
-    React.createElement(Work_1.Work, null),
-    React.createElement(Projects_1.Projects, null),
-    React.createElement(Values_1.Values, null),
-    React.createElement(Contact_1.Contact, null))); };
-
-
-/***/ }),
-/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -160,7 +126,7 @@ exports.About = About;
 
 
 /***/ }),
-/* 4 */
+/* 2 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -191,7 +157,7 @@ exports.Contact = function () { return (React.createElement("section", { id: "co
 
 
 /***/ }),
-/* 5 */
+/* 3 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -221,7 +187,7 @@ exports.Highlights = function () { return (React.createElement("section", { id: 
 
 
 /***/ }),
-/* 6 */
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -261,7 +227,7 @@ exports.Nav = function () { return (React.createElement("div", { id: "navbars" }
 
 
 /***/ }),
-/* 7 */
+/* 5 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -305,7 +271,7 @@ exports.Projects = function () { return (React.createElement("section", { id: "p
 
 
 /***/ }),
-/* 8 */
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -343,7 +309,7 @@ exports.Title = function () { return (React.createElement("div", null,
 
 
 /***/ }),
-/* 9 */
+/* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -360,7 +326,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var React = __webpack_require__(0);
-var ReactDOM = __webpack_require__(1);
+var ReactDOM = __webpack_require__(10);
 var Values = (function (_super) {
     __extends(Values, _super);
     function Values(props) {
@@ -411,7 +377,7 @@ exports.Values = Values;
 
 
 /***/ }),
-/* 10 */
+/* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -428,7 +394,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var React = __webpack_require__(0);
-var moment = __webpack_require__(12);
+var moment = __webpack_require__(11);
 var Work = (function (_super) {
     __extends(Work, _super);
     function Work(props) {
@@ -545,21 +511,63 @@ exports.Work = Work;
 
 
 /***/ }),
-/* 11 */
+/* 9 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 var React = __webpack_require__(0);
-var ReactDOM = __webpack_require__(1);
-var App_1 = __webpack_require__(2);
-ReactDOM.render(React.createElement(App_1.App, null), document.getElementById('root'));
-console.log("\n ___                 _  _  ____  \n/  _|               | || ||___ \\\n| |_ ___  _   _ _ __| || |_ __) |\n|  _/ _ \\| | | | '__|__   _|__ <\n| || (_) | |_| | |     | | ___) |\n|_| \\___/ \\__,_|_|     |_||____/\n\nThe professional home of Seth Miller. Please take a look around.\n\nThis website was created using Typescript and React, a bit much for a simple page, but it's fun, and that's what\npersonal sites are for.\nThe full source is available at: https://github.com/four43/four43/tree/gh-pages\n\nLike what you see? Contact me: seth@four43.com\n");
+var About_1 = __webpack_require__(1);
+var Contact_1 = __webpack_require__(2);
+var Highlights_1 = __webpack_require__(3);
+var Nav_1 = __webpack_require__(4);
+var Projects_1 = __webpack_require__(5);
+var Title_1 = __webpack_require__(6);
+var Values_1 = __webpack_require__(7);
+var Work_1 = __webpack_require__(8);
+var App = (function (_super) {
+    __extends(App, _super);
+    function App(props) {
+        var _this = _super.call(this, props) || this;
+        console.log("\n ___                 _  _  ____  \n/  _|               | || ||___ \\\n| |_ ___  _   _ _ __| || |_ __) |\n|  _/ _ \\| | | | '__|__   _|__ <\n| || (_) | |_| | |     | | ___) |\n|_| \\___/ \\__,_|_|     |_||____/\n\nThe professional home of Seth Miller. Please take a look around.\n\nThis website was created using Typescript and React, a bit much for a simple page, but it's fun, and that's what\npersonal sites are for.\nThe full source is available at: https://github.com/four43/four43/tree/gh-pages\n\nLike what you see? Contact me: seth@four43.com\n");
+        return _this;
+    }
+    App.prototype.render = function () {
+        return (React.createElement("div", null,
+            React.createElement("header", null,
+                React.createElement(Nav_1.Nav, null),
+                React.createElement(Title_1.Title, null)),
+            React.createElement(About_1.About, { now: new Date() }),
+            React.createElement(Highlights_1.Highlights, null),
+            React.createElement(Work_1.Work, null),
+            React.createElement(Projects_1.Projects, null),
+            React.createElement(Values_1.Values, null),
+            React.createElement(Contact_1.Contact, null)));
+    };
+    return App;
+}(React.Component));
+exports.App = App;
 
 
 /***/ }),
-/* 12 */
+/* 10 */
+/***/ (function(module, exports) {
+
+module.exports = ReactDOM;
+
+/***/ }),
+/* 11 */
 /***/ (function(module, exports) {
 
 module.exports = moment;
