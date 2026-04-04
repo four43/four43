@@ -1,1 +1,8 @@
-.node_modules
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+.bundle/
+vendor/
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
