@@ -1,0 +1,1 @@
+Microsoft is still dominant because IT teams don’t innovate. It’s easy. These teams aren’t facilitating innovation, they’re mitigating risk. Innovation doesn’t come from such a position. 
