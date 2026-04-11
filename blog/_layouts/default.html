@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include head.html %}
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
+  {% include topbar.html %}
+
+  <main id="main-content">
+    {{ content }}
+  </main>
+
+  {% include footer.html %}
+
+  <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+    <button class="mobile-menu__close" id="hamburger-close" aria-label="Close menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+    <div class="mobile-menu__identity">
+      <a href="{{ '/' | relative_url }}" class="mobile-menu__site-name">four43</a>
+      <div class="mobile-menu__byline">by {{ site.author }}</div>
+    </div>
+    <ul class="mobile-menu__nav">
+      <li class="mobile-menu__nav-item"><a href="{{ '/blog/' | relative_url }}">Blog</a></li>
+      <li class="mobile-menu__nav-item"><a href="{{ '/archive/' | relative_url }}">Archive</a></li>
+      <li class="mobile-menu__nav-item"><a href="{{ '/projects/' | relative_url }}">Projects</a></li>
+      <li class="mobile-menu__nav-item"><a href="{{ '/about/' | relative_url }}">About</a></li>
+    </ul>
+  </div>
+  <div class="mobile-menu__overlay" id="mobile-menu-overlay"></div>
+
+  <script src="{{ '/assets/js/menu.js' | relative_url }}" defer></script>
+  <script src="{{ '/assets/js/search.js' | relative_url }}" defer></script>
+</body>
+</html>

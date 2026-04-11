@@ -1,0 +1,21 @@
+{% assign post_limit = include.limit | default: 1000 %}
+{% assign show_excerpts = include.excerpts | default: false %}
+{% assign posts = site.posts | slice: 0, post_limit %}
+
+<ul class="post-list">
+  {% for post in posts %}
+  <li class="post-list__item">
+    <div class="post-list__header">
+      <span class="post-list__title">
+        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+      </span>
+      <time class="post-list__date" datetime="{{ post.date | date_to_xmlschema }}">
+        {{ post.date | date: "%B %-d, %Y" }}
+      </time>
+    </div>
+    {% if show_excerpts %}
+    <p class="post-list__excerpt">{{ post.excerpt | strip_html | truncatewords: 40 }}</p>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>

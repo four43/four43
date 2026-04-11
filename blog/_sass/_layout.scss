@@ -1,0 +1,141 @@
+// ── Skip link ──
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: var(--bg);
+  z-index: 100;
+  border-radius: 0 0 4px 4px;
+
+  &:focus {
+    top: 0;
+  }
+}
+
+// ── Top bar ──
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem var(--gap);
+  max-width: var(--container-max);
+  margin: 0 auto;
+}
+
+.topbar__logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: var(--text-heading);
+
+  &:visited {
+    color: var(--text-heading);
+  }
+
+  svg {
+    height: 36px;
+    width: auto;
+  }
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.topbar__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--text);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-heading);
+  }
+
+  &:visited {
+    color: var(--text);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+}
+
+.topbar__divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+// ── Main content ──
+.container {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 2rem var(--gap);
+}
+
+.container--narrow {
+  max-width: var(--content-max);
+}
+
+// ── Two-column blog layout ──
+.blog-layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  gap: 3rem;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 2rem var(--gap);
+}
+
+.blog-layout__sidebar {
+  position: sticky;
+  top: 2rem;
+  align-self: start;
+  text-align: right;
+}
+
+.blog-layout__main {
+  min-width: 0;
+}
+
+// ── Footer ──
+.footer__divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+.footer {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 1.5rem var(--gap);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+
+  a {
+    color: var(--text-muted);
+
+    &:hover {
+      color: var(--link);
+    }
+  }
+}

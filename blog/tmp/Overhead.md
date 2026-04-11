@@ -1,0 +1,1 @@
+Everything is overhead except the solution. Tickets, sprints, code

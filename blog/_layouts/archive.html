@@ -1,0 +1,25 @@
+---
+layout: default
+---
+
+<div class="container container--narrow">
+  <h1>{{ page.title }}</h1>
+
+  {% assign postsByYear = site.posts | group_by_exp: "post", "post.date | date: '%Y'" %}
+  {% for year in postsByYear %}
+    <h2 class="archive__year">{{ year.name }}</h2>
+
+    {% assign postsByMonth = year.items | group_by_exp: "post", "post.date | date: '%B'" %}
+    {% for month in postsByMonth %}
+      <h3 class="archive__month">{{ month.name }}</h3>
+      <ul class="archive__list">
+        {% for post in month.items %}
+        <li class="archive__item">
+          <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+          <time class="archive__date" datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%b %-d" }}</time>
+        </li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+  {% endfor %}
+</div>

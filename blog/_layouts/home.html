@@ -1,0 +1,12 @@
+---
+layout: default
+---
+
+<div class="container container--narrow">
+  {% include hero.html %}
+
+  <h2 class="post-list__heading">Latest</h2>
+  {% include post-list.html limit=10 excerpts=true %}
+
+  <a href="{{ '/blog/' | relative_url }}" class="post-list__more">View all posts</a>
+</div>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360">
+  <circle cx="180" cy="180" r="180" fill="#4a525a"/>
+  <circle cx="180" cy="145" r="55" fill="#6b7280"/>
+  <ellipse cx="180" cy="290" rx="90" ry="80" fill="#6b7280"/>
+  <text x="180" y="365" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="14">placeholder</text>
+</svg>
