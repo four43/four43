@@ -1,0 +1,23 @@
+title: four43
+tagline: the web home of Seth Miller
+author: four43
+description: Personal site of Seth Miller
+url: "https://four43.com"
+baseurl: ""
+
+theme: minima
+
+markdown: kramdown
+permalink: /:title/
+
+github_url: https://github.com/four43
+linkedin_url: https://www.linkedin.com/in/four43/
+
+collections:
+  projects:
+    output: true
+    permalink: /projects/:title/
+
+exclude:
+  - .obsidian/
+  - tmp/

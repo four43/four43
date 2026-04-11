@@ -1,0 +1,29 @@
+---
+layout: default
+---
+
+<div class="container container--narrow">
+  <h1>{{ page.title }}</h1>
+  <div class="post__content">
+    {{ content }}
+  </div>
+
+  {% assign projects = site.projects | sort: "start_date" | reverse %}
+  {% for project in projects %}
+  <div class="project">
+    <h2 class="project__title">
+      {% if project.link %}
+        <a href="{{ project.link }}">{{ project.title }}</a>
+      {% else %}
+        {{ project.title }}
+      {% endif %}
+    </h2>
+    <div class="project__meta">
+      {{ project.start_date | date: "%B %Y" }}{% if project.end_date %} &ndash; {{ project.end_date | date: "%B %Y" }}{% else %} &ndash; Present{% endif %}
+    </div>
+    <div class="project__description">
+      {{ project.content }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
