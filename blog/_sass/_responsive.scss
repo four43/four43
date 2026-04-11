@@ -1,0 +1,153 @@
+// ── Hamburger menu overlay ──
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100%;
+  background: var(--bg-elevated);
+  z-index: 200;
+  padding: 2rem 1.5rem;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+
+  &.is-open {
+    transform: translateX(0);
+  }
+}
+
+.mobile-menu__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  margin-bottom: 1rem;
+  margin-left: -0.5rem;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+}
+
+.mobile-menu__overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 199;
+}
+
+.mobile-menu__identity {
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.mobile-menu__site-name {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  text-decoration: none;
+  display: block;
+}
+
+.mobile-menu__byline {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.mobile-menu__nav {
+  list-style: none;
+  padding: 0;
+}
+
+.mobile-menu__nav-item {
+  margin-bottom: 0.75rem;
+
+  a {
+    color: var(--text);
+    font-size: 1.1rem;
+    text-decoration: none;
+    display: block;
+    padding: 0.5rem 0;
+
+    &:hover {
+      color: var(--link);
+    }
+  }
+}
+
+// ── Tablet breakpoint: sidebar collapses ──
+@media (max-width: 768px) {
+  .hamburger {
+    display: inline-flex;
+  }
+
+  .mobile-menu {
+    display: block;
+  }
+
+  .blog-layout {
+    display: block;
+  }
+
+  .blog-layout__sidebar {
+    display: none;
+  }
+
+  .blog-layout__main {
+    width: 100%;
+  }
+
+  .search-input.is-open {
+    width: 180px;
+  }
+}
+
+// ── Small phone ──
+@media (max-width: 480px) {
+  :root {
+    --gap: 1rem;
+  }
+
+  h1, .post__title, .hero__name {
+    font-size: 1.6rem;
+  }
+
+  .hero__photo {
+    width: 140px;
+    height: 140px;
+  }
+
+  .post-list__header {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .post-list__date {
+    margin-left: 0;
+  }
+
+  .search-input.is-open {
+    width: 150px;
+  }
+
+  .footer {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+}
