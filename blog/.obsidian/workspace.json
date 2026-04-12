@@ -11,10 +11,14 @@
             "id": "9357f98942a655f7",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "_posts/2026-04-11-purpose-built-tools.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "2026-04-11-purpose-built-tools"
             }
           }
         ]
@@ -173,26 +177,27 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "289f1d6654581913",
+  "active": "9357f98942a655f7",
   "lastOpenFiles": [
-    "tmp/Purpose Built Tools.md",
+    "_plugins/link_preview.rb.tmp.1908385.1775957265181",
+    "_config.yml.tmp.1908385.1775956964913",
+    "_plugins/link_preview.rb.tmp.1908385.1775956782759",
+    "_config.yml.tmp.1908385.1775956114164",
+    "_sass/_components.scss.tmp.1908385.1775956093861",
+    "_layouts/post.html.tmp.1908385.1775956087783",
+    "_includes/link-preview.html",
+    "_includes/link-preview.html.tmp.1908385.1775956083301",
+    "_plugins/link_preview.rb",
+    "_plugins/link_preview.rb.tmp.1908385.1775956081232",
+    "_plugins",
     "_posts/2026-04-04-hello-world.md",
+    "_posts/2026-04-11-purpose-built-tools.md",
     "index.md",
     "tmp/Overhead.md",
     "tmp/Microsoft is Legacy.md",
     "tmp/Extensibility has always been king - 100x so in modern times.md",
     "tmp/A New World of Thinkers.md",
-    "tmp",
     "docs/move-to-obsidian.md",
-    "docs",
-    "_posts",
-    "_config.yml",
-    "Gemfile",
-    "webpack.config.js",
-    "tsconfig.json",
-    "src/scss/app.scss",
-    "src/components/Work.tsx",
-    "src/components/Values.tsx",
     "dist/fonts/fontello/font/four43.svg",
     "dist/img/icons/mstile-70x70.png",
     "dist/img/icons/mstile-310x310.png",

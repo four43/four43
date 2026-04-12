@@ -1,0 +1,18 @@
+{% if page.link_preview %}
+<a href="{{ page.link_preview.url }}" class="link-preview" target="_blank" rel="noopener">
+  {% if page.link_preview.image %}
+  <div class="link-preview__image">
+    <img src="{{ page.link_preview.image }}" alt="" loading="lazy">
+  </div>
+  {% endif %}
+  <div class="link-preview__content">
+    {% if page.link_preview.title %}
+    <div class="link-preview__title">{{ page.link_preview.title }}</div>
+    {% endif %}
+    {% if page.link_preview.description %}
+    <div class="link-preview__description">{{ page.link_preview.description }}</div>
+    {% endif %}
+    <div class="link-preview__domain">{{ page.link_preview.domain }}</div>
+  </div>
+</a>
+{% endif %}

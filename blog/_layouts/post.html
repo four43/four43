@@ -10,6 +10,9 @@ layout: default
     </div>
   </header>
   <div class="post__content">
+    {% if page.link_preview %}
+      {% include link-preview.html %}
+    {% endif %}
     {{ content }}
   </div>
 </article>

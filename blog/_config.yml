@@ -7,6 +7,11 @@ baseurl: ""
 
 theme: minima
 
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
 markdown: kramdown
 permalink: /:title/
 
@@ -21,3 +26,4 @@ collections:
 exclude:
   - .obsidian/
   - tmp/
+  - .link_preview_cache/

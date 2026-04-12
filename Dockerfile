@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /srv/jekyll
 
-COPY Gemfile Gemfile
+COPY Gemfile Gemfile.lock ./
 RUN bundle install
 
 EXPOSE 4000 35729
