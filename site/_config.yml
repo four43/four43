@@ -18,12 +18,14 @@ permalink: /:title/
 github_url: https://github.com/four43
 linkedin_url: https://www.linkedin.com/in/four43/
 
+collections_dir: content
+
 collections:
   projects:
     output: true
     permalink: /projects/:title/
 
 exclude:
-  - .obsidian/
-  - tmp/
-  - .link_preview_cache/
+  - content/.obsidian/
+  - content/tmp/
+  - content/.link_preview_cache/

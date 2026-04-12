@@ -26,26 +26,55 @@ Deployment is automatic: push to `gh-pages` branch → GitHub Actions builds Jek
 
 - **Static site generator:** Jekyll with the `minima` theme
 - **Markdown processor:** Kramdown
-- **Content source:** `blog/` directory (Obsidian vault synced via Git plugin)
 - **Hosting:** GitHub Pages via `.github/workflows/deploy.yml`
 - **Custom domain:** four43.com (configured via `CNAME` file)
 
+### Directory Structure
+
+```text
+/
+├── content/                 # Obsidian vault (open THIS in Obsidian)
+│   ├── .obsidian/           # Obsidian plugin/workspace config
+│   ├── _posts/              # Published blog posts
+│   ├── _projects/           # Project entries (Jekyll collection)
+│   └── tmp/                 # Draft posts (excluded from build)
+│
+├── site/                    # Jekyll source (--source site)
+│   ├── _config.yml          # Jekyll config (collections_dir: content)
+│   ├── _includes/           # Partials (topbar, sidebar, etc.)
+│   ├── _layouts/            # Layouts (post, page, home, etc.)
+│   ├── _plugins/            # Plugins (link_preview)
+│   ├── _sass/               # Stylesheets
+│   ├── assets/              # Static assets (CSS, JS, images, logo)
+│   ├── content -> ../content  # Symlink so Jekyll finds collections
+│   ├── index.md, about.md, etc.
+│   └── CNAME
+│
+├── Gemfile                  # Ruby dependencies
+├── Dockerfile
+└── docker-compose.yml
+```
+
+`content/` is the Obsidian vault — only authored content. `site/` is the Jekyll source — templates, layouts, styles, and pages. A symlink `site/content -> ../content` lets Jekyll find `_posts` and `_projects` via `collections_dir: content`.
+
 ## Content Structure
 
-- **Blog posts:** `blog/_posts/YYYY-MM-DD-title.md` — requires front matter: `layout: post`, `title`, `date`
-- **Pages:** `blog/*.md` (e.g., `blog/index.md` with `layout: home`)
+- **Blog posts:** `content/_posts/YYYY-MM-DD-title.md` — requires front matter: `layout: post`, `title`, `date`
+- **Projects:** `content/_projects/*.md` — requires front matter: `layout: page`, `title`
+- **Drafts:** `content/tmp/*.md` — not built by Jekyll
+- **Pages:** `site/*.md` (e.g., `site/index.md` with `layout: home`)
 - **Permalinks:** `/:title/` (no date in URL)
 
 ## Key Configuration
 
-- `_config.yml` — Jekyll config (theme, permalinks, exclusions)
-- `Gemfile` — Ruby dependencies (only `github-pages` gem)
+- `site/_config.yml` — Jekyll config (theme, permalinks, `collections_dir: content`, exclusions)
+- `Gemfile` — Ruby dependencies
 - `.github/workflows/deploy.yml` — CI/CD pipeline
 - `docs/move-to-obsidian.md` — Migration rationale and decision log
 
 ## Obsidian Compatibility
 
-Use standard Markdown links (`[text](url)`), not Obsidian wikilinks. Image paths must be absolute (`/assets/image.png`). The `.obsidian/` directory is in git for plugin config but excluded from the published site via `_config.yml`.
+The Obsidian vault is `content/` — open that directory in Obsidian, not the repo root. Use standard Markdown links (`[text](url)`), not Obsidian wikilinks. Image paths must be absolute (`/assets/image.png`). The `.obsidian/` directory is in git for plugin config but excluded from the published site via `site/_config.yml`.
 
 ## Branch Layout
 

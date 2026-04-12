@@ -12,4 +12,4 @@ RUN bundle install
 
 EXPOSE 4000 35729
 
-CMD ["bundle", "exec", "jekyll", "serve", "--source", "blog", "--host", "0.0.0.0", "--livereload"]
+CMD ["bundle", "exec", "jekyll", "serve", "--source", "site", "--host", "0.0.0.0", "--livereload"]

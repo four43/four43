@@ -11,14 +11,10 @@
             "id": "9357f98942a655f7",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "_posts/2026-04-11-purpose-built-tools.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "2026-04-11-purpose-built-tools"
+              "title": "New tab"
             }
           }
         ]
@@ -179,6 +175,12 @@
   },
   "active": "9357f98942a655f7",
   "lastOpenFiles": [
+    "_posts/2026-04-11-purpose-built-tools.md",
+    "_tmp_staging/Overhead.md",
+    "_tmp_staging/Microsoft is Legacy.md",
+    "_tmp_staging/Extensibility has always been king - 100x so in modern times.md",
+    "_tmp_staging/A New World of Thinkers.md",
+    "_tmp_staging",
     "_plugins/link_preview.rb.tmp.1908385.1775957265181",
     "_config.yml.tmp.1908385.1775956964913",
     "_plugins/link_preview.rb.tmp.1908385.1775956782759",
@@ -188,10 +190,7 @@
     "_includes/link-preview.html",
     "_includes/link-preview.html.tmp.1908385.1775956083301",
     "_plugins/link_preview.rb",
-    "_plugins/link_preview.rb.tmp.1908385.1775956081232",
-    "_plugins",
     "_posts/2026-04-04-hello-world.md",
-    "_posts/2026-04-11-purpose-built-tools.md",
     "index.md",
     "tmp/Overhead.md",
     "tmp/Microsoft is Legacy.md",
