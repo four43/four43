@@ -1,0 +1,16 @@
+import { chromium } from 'playwright';
+import fs from 'fs';
+const exe = fs.readdirSync('/opt/pw-browsers').filter(d => d.startsWith('chromium-')).map(d => `/opt/pw-browsers/${d}/chrome-linux/chrome`).find(p => fs.existsSync(p));
+const [w, h, name, script] = [+process.argv[2] || 390, +process.argv[3] || 844, process.argv[4] || 'shot', process.argv[5] || ''];
+const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: true, isMobile: w < 700 });
+page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') console.log('console', m.type(), m.text()); });
+page.on('pageerror', e => console.log('pageerror', e.message));
+await page.goto('file:///mnt/user-data/outputs/pig-pens.html');
+await page.waitForFunction(() => window.piggies, null, { timeout: 60000 });
+await page.evaluate(() => window.piggies.pause(true));
+if (script) await page.evaluate(script);
+await page.evaluate(() => window.piggies.render());
+await page.screenshot({ path: `/home/claude/pigs/${name}.png` });
+await browser.close();
+console.log('ok');

@@ -1,0 +1,22 @@
+{
+  "name": "pigs",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "esbuild": "^0.28.2",
+    "pngjs": "^7.0.0",
+    "three": "^0.160.0"
+  },
+  "type": "module"
+}
