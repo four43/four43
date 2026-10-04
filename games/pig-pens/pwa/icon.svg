@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- full-bleed background so it works as a maskable icon -->
+  <rect width="512" height="512" fill="#bfe6f5"/>
+  <ellipse cx="256" cy="440" rx="230" ry="70" fill="#7cc46a"/>
+  <!-- ears -->
+  <path d="M120 170 L150 70 L215 140 Z" fill="#f08fa8" stroke="#6b4428" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M392 170 L362 70 L297 140 Z" fill="#f08fa8" stroke="#6b4428" stroke-width="12" stroke-linejoin="round"/>
+  <!-- head -->
+  <circle cx="256" cy="270" r="150" fill="#f6a9bd" stroke="#6b4428" stroke-width="12"/>
+  <!-- cheeks -->
+  <circle cx="160" cy="300" r="24" fill="#f08fa8"/>
+  <circle cx="352" cy="300" r="24" fill="#f08fa8"/>
+  <!-- eyes -->
+  <circle cx="200" cy="230" r="18" fill="#5a3820"/>
+  <circle cx="312" cy="230" r="18" fill="#5a3820"/>
+  <circle cx="206" cy="224" r="6" fill="#fff"/>
+  <circle cx="318" cy="224" r="6" fill="#fff"/>
+  <!-- snout -->
+  <ellipse cx="256" cy="310" rx="70" ry="50" fill="#d9667f" stroke="#6b4428" stroke-width="10"/>
+  <ellipse cx="232" cy="310" rx="13" ry="20" fill="#6b4428"/>
+  <ellipse cx="280" cy="310" rx="13" ry="20" fill="#6b4428"/>
+</svg>
