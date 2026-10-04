@@ -361,7 +361,7 @@ if (vMud.x > 0.002) {
   // ---------- camera -----------------------------------------------------------------
   const cam = { tx: 0, tz: 1, yaw: 0, pitch: 0.92, dist: 46 };
   const fitCam = () => {
-    const a = innerWidth / innerHeight;
+    const a = canvas.clientWidth / canvas.clientHeight;
     cam.yaw = a < 0.9 ? Math.PI / 2 : 0;           // long axis of the pens runs up the screen on phones
     cam.dist = a < 0.9 ? 52 : 42; cam.tx = a < 0.9 ? 0 : 0; cam.tz = a < 0.9 ? 0 : 2;
   };
@@ -373,7 +373,7 @@ if (vMud.x > 0.002) {
     camera.position.set(cam.tx + Math.sin(cam.yaw) * cp * cam.dist, Math.sin(cam.pitch) * cam.dist, cam.tz + Math.cos(cam.yaw) * cp * cam.dist);
     camera.lookAt(cam.tx, 0.5, cam.tz);
   };
-  const resize = () => { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.9 ? 64 : 48; camera.updateProjectionMatrix(); };
+  const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.9 ? 64 : 48; camera.updateProjectionMatrix(); };
   addEventListener('resize', resize); resize(); applyCam();
 
   // ---------- input -------------------------------------------------------------------
@@ -471,39 +471,10 @@ if (vMud.x > 0.002) {
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist *= Math.exp(e.deltaY * 0.0012); }, { passive: false });
 
-  // ---------- top bar: bell, sound, minimap ----------------------------------------------------
+  // ---------- top bar: bell, sound -------------------------------------------------------------
   const ringBell = () => { sim.bell(); sound.bell(); showHint('Dinner time. Every trough is full.', 2.5); };
   $('bell').addEventListener('click', () => { sound.unlock(); ringBell(); });
   $('mute').addEventListener('click', () => { sound.unlock(); sound.muted = !sound.muted; $('mute').setAttribute('aria-pressed', sound.muted ? 'true' : 'false'); $('mute').setAttribute('aria-label', sound.muted ? 'Turn sound on' : 'Turn sound off'); });
-  const mini = $('mini'), mctx = mini.getContext('2d');
-  const F = lay.field, MW = F.x1 - F.x0, MH = F.z1 - F.z0;
-  const miniSize = () => { const r = mini.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1); mini.width = r.width * dpr; mini.height = r.height * dpr; };
-  addEventListener('resize', miniSize); miniSize();
-  // the minimap is drawn in the camera's frame so "up" on the map is "away" on screen
-  function drawMini() {
-    const W2 = mini.width, H2 = mini.height, sc = Math.min(W2, H2) / Math.max(MW, MH) * 0.98;
-    mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.clearRect(0, 0, W2, H2);
-    mctx.translate(W2 / 2, H2 / 2); mctx.rotate(cam.yaw); mctx.scale(sc, sc);
-    mctx.fillStyle = '#9fd57c'; mctx.fillRect(F.x0, F.z0, MW, MH);
-    mctx.fillStyle = '#d3ad7c'; for (const p of lay.pens) mctx.fillRect(p.x0, p.z0, p.x1 - p.x0, p.z1 - p.z0);
-    mctx.fillStyle = '#e2c79c'; mctx.fillRect(lay.lane.x0, lay.lane.z0, lay.lane.x1 - lay.lane.x0, lay.lane.z1 - lay.lane.z0);
-    mctx.fillStyle = '#7a5434'; mctx.beginPath(); mctx.ellipse(lay.wallow.x, lay.wallow.z, lay.wallow.rx, lay.wallow.rz, 0, 0, 7); mctx.fill();
-    mctx.strokeStyle = '#7a4a2a'; mctx.lineWidth = 0.55; mctx.beginPath();
-    for (const e of lay.edges) { if (e.kind === 'gate') continue; const h = L / 2; if (e.dir === 'x') { mctx.moveTo(e.x - h, e.z); mctx.lineTo(e.x + h, e.z); } else { mctx.moveTo(e.x, e.z - h); mctx.lineTo(e.x, e.z + h); } }
-    mctx.stroke();
-    for (const t of sim.troughs) { mctx.fillStyle = '#6b3f22'; mctx.fillRect(t.x - t.len / 2, t.z - 0.5, t.len, 1); mctx.fillStyle = '#f7c948'; mctx.fillRect(t.x - t.len / 2, t.z - 0.5, t.len * t.level, 1); }
-    for (const f of sim.foods) { mctx.fillStyle = '#e8483f'; mctx.beginPath(); mctx.arc(f.x, f.z, 0.55, 0, 7); mctx.fill(); }
-    for (const p of sim.pigs) { mctx.fillStyle = p.state === ST.FLEE ? '#ff5c8a' : `rgb(${255 - p.mud * 140 | 0},${179 - p.mud * 95 | 0},${198 - p.mud * 145 | 0})`; mctx.beginPath(); mctx.arc(p.px, p.pz, p.piglet ? 0.55 : 0.8, 0, 7); mctx.fill(); }
-    mctx.fillStyle = '#5b3a20'; mctx.beginPath(); mctx.arc(sim.dog.x, sim.dog.z, 1.0, 0, 7); mctx.fill();
-    mctx.strokeStyle = '#ffffff'; mctx.lineWidth = 0.6; mctx.stroke();
-    // view footprint
-    mctx.strokeStyle = 'rgba(255,255,255,0.9)'; mctx.lineWidth = 0.5; mctx.beginPath(); mctx.arc(cam.tx, cam.tz, 1.6, 0, 7); mctx.stroke();
-  }
-  mini.addEventListener('pointerdown', e => {
-    const r = mini.getBoundingClientRect(), dpr = mini.width / r.width, W2 = mini.width, H2 = mini.height, sc = Math.min(W2, H2) / Math.max(MW, MH) * 0.98;
-    let x = ((e.clientX - r.left) * dpr - W2 / 2) / sc, z = ((e.clientY - r.top) * dpr - H2 / 2) / sc;
-    const c = Math.cos(-cam.yaw), s = Math.sin(-cam.yaw); cam.tx = x * c - z * s; cam.tz = x * s + z * c;
-  });
 
   const badge = $('snacks');
   let shownLeft = -1;
@@ -523,7 +494,6 @@ if (vMud.x > 0.002) {
     updatePigs(dt); updateDog(dt); updateHose(dt); updateFoods(); updateBadge(); if ((frames & 7) === 0) updateTroughFood();
     if (ring.visible) { ring.rotation.y += dt; ring.scale.setScalar(1 + 0.08 * Math.sin(now * 0.01)); }
     applyCam(); renderer.render(scene, camera);
-    if ((frames & 1) === 0) drawMini();
     if (hintTimer > 0) { hintTimer -= dt; if (hintTimer <= 0) hint.classList.remove('on'); }
     frames++; requestAnimationFrame(frame);
   }
@@ -536,7 +506,7 @@ if (vMud.x > 0.002) {
     sim, cam, setTool, THREE, camera,
     stepN(n) { for (let i = 0; i < n; i++) sim.step(); },
     pause(v) { paused = v; },
-    render() { updatePigs(1 / 60); updateDog(1 / 60); updateFoods(); updateTroughFood(); applyCam(); drawMini(); renderer.render(scene, camera); },
+    render() { updatePigs(1 / 60); updateDog(1 / 60); updateFoods(); updateTroughFood(); applyCam(); renderer.render(scene, camera); },
     toolDown, toolMove, toolUp, toss, aimHose, updateHose,
   };
 }

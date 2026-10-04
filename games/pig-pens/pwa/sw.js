@@ -19,7 +19,16 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   const font = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
   if (url.origin !== location.origin && !font) return;
-  // Cache-first; a new build changes CACHE (via __VERSION__), which re-fetches everything.
+  // The page itself is network-first so a reopened home-screen app picks up a new build
+  // straight away; the cache is only the offline fallback.
+  if (req.mode === 'navigate') {
+    e.respondWith(fetch(req).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./', copy)); }
+      return res;
+    }).catch(() => caches.match('./')));
+    return;
+  }
+  // Everything else is cache-first; a new build changes CACHE (via __VERSION__), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
