@@ -1,0 +1,22 @@
+import { chromium } from 'playwright';
+import fs from 'fs';
+const exe = fs.readdirSync('/opt/pw-browsers').filter(d => d.startsWith('chromium-')).map(d => `/opt/pw-browsers/${d}/chrome-linux/chrome`).find(p => fs.existsSync(p));
+const browser = await chromium.launch({ executablePath: exe, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+page.on('pageerror', e => console.log('pageerror', e.message));
+await page.goto('file:///mnt/user-data/outputs/pig-pens.html');
+await page.waitForFunction(() => window.piggies, null, { timeout: 60000 });
+console.log('minimap gone', await page.$('#mini') === null, '| switch label', await page.$eval('#daynight', e => e.getAttribute('aria-label')));
+await page.tap('#daynight');
+console.log('after tap: night', await page.evaluate(() => piggies.sim.clock.night), '| label', await page.$eval('#daynight', e => e.getAttribute('aria-label')));
+// let the fox catch someone (fast-forward the sim headlessly in-page)
+await page.evaluate(() => { piggies.pause(true); const S = piggies.sim; let k = 0; while (!S.flock.fox.carrying && k < 60 * 120) { S.step(); k++; } for (const e of S.events.splice(0)) {} });
+const f = await page.evaluate(() => { const f = piggies.sim.flock.fox; return { x: f.x, z: f.z, name: f.carrying && f.carrying.name }; });
+console.log('fox has', f.name);
+await page.evaluate(f => { Object.assign(piggies.cam, { tx: f.x, tz: f.z, dist: 7, pitch: 0.7 }); piggies.render(); }, f);
+const [x, y] = await page.evaluate(f => { const v = new piggies.THREE.Vector3(f.x, 0.4, f.z).project(piggies.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, f);
+await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(60); await page.mouse.up();
+console.log('after tapping fox: still carrying', await page.evaluate(() => !!piggies.sim.flock.fox.carrying), '| events', await page.evaluate(() => piggies.sim.events.map(e => e.type + (e.reason ? ':' + e.reason : '')).join(',')));
+await page.tap('#daynight');
+console.log('back to day: night', await page.evaluate(() => piggies.sim.clock.night));
+await browser.close();

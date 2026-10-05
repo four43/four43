@@ -64,6 +64,7 @@ const statics = {
   rock: 'nature-kit_rock-smallc', pumpkin: 'nature-kit_crop-pumpkin', corn: 'nature-kit_crops-cornstaged', grass: 'nature-kit_grass-large', grassS: 'nature-kit_grass',
   hay: 'graveyard-kit_hay-bale', hayB: 'graveyard-kit_hay-bale-bundled', apple: 'food-kit_apple', carrot: 'food-kit_carrot', cabbage: 'food-kit_cabbage',
   cob: 'food-kit_corn', barrel: 'food-kit_barrel', tractor: 'car-kit_tractor',
+  egg: 'food-kit_egg', sack: 'food-kit_bag', wheat: 'nature-kit_crops-wheatstagea', sign: 'nature-kit_sign',
 };
 for (const [k, f] of Object.entries(statics)) {
   const { root, geom } = await load(f + '.glb');
@@ -75,7 +76,7 @@ for (const [k, f] of Object.entries(statics)) {
 async function bakePet(file) {
   const { root, geom } = await load(file);
   const meshNodes = root.listNodes().filter(n => n.getMesh());
-  const order = ['body', 'Group', 'leg-front-left', 'leg-front-right', 'leg-back-left', 'leg-back-right'];
+  const order = ['body', 'Group', 'leg-front-left', 'leg-front-right', 'leg-back-left', 'leg-back-right', 'wing-left', 'wing-right', 'tail'];
   meshNodes.sort((a, b) => order.indexOf(a.getName()) - order.indexOf(b.getName()));
   const parts = meshNodes.map(n => ({ name: n.getName(), ...geom(n, mIdent()) }));
   const anims = {}; const FPS = 30;
@@ -109,7 +110,9 @@ async function bakePet(file) {
 }
 out.pig = await bakePet('cube-pets_animal-pig.glb');
 out.dog = await bakePet('cube-pets_animal-dog.glb');
+out.chick = await bakePet('cube-pets_animal-chick.glb');
+out.fox = await bakePet('cube-pets_animal-fox.glb');
 fs.writeFileSync('src/assets.json', JSON.stringify(out));
 console.log('bytes', fs.statSync('src/assets.json').size);
-for (const [k, v] of Object.entries(out)) if (k !== 'pig' && k !== 'dog') console.log(k, Object.entries(v).map(([n, g]) => n + ':' + g.idx.length / 3).join(' '));
-for (const pet of ['pig','dog']) console.log(pet, out[pet].parts.map(p=>p.name).join(','), Object.entries(out[pet].anims).map(([k, a]) => k + ' ' + a.dur + 's/' + a.frames.length).join(', '));
+for (const [k, v] of Object.entries(out)) if (!['pig','dog','chick','fox'].includes(k)) console.log(k, Object.entries(v).map(([n, g]) => n + ':' + g.idx.length / 3).join(' '));
+for (const pet of ['pig','dog','chick','fox']) console.log(pet, out[pet].parts.map(p=>p.name).join(','), Object.entries(out[pet].anims).map(([k, a]) => k + ' ' + a.dur + 's/' + a.frames.length).join(', '));

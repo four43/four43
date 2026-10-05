@@ -10,6 +10,18 @@ export class FlowGrid {
     }
     this.heap = new Int32Array(n * 8); this.hk = new Float32Array(n * 8);
   }
+  // re-rasterise blocked cells inside a world rect (after a gate opens or closes)
+  refresh(obstacles, inflate, x0, z0, x1, z1) {
+    const c = this.cell;
+    const i0 = Math.max(0, Math.floor((x0 - inflate - this.x0) / c) - 1), i1 = Math.min(this.nx - 1, Math.ceil((x1 + inflate - this.x0) / c) + 1);
+    const j0 = Math.max(0, Math.floor((z0 - inflate - this.z0) / c) - 1), j1 = Math.min(this.nz - 1, Math.ceil((z1 + inflate - this.z0) / c) + 1);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const x = this.x0 + (i + 0.5) * c, z = this.z0 + (j + 0.5) * c; let b = 0;
+      for (const o of obstacles) if (hit(o, x, z, inflate)) { b = 1; break; }
+      this.blocked[j * this.nx + i] = b;
+    }
+    this.version = (this.version || 0) + 1;
+  }
   idx(x, z) {
     const i = Math.floor((x - this.x0) / this.cell), j = Math.floor((z - this.z0) / this.cell);
     if (i < 0 || j < 0 || i >= this.nx || j >= this.nz) return -1;
@@ -83,6 +95,7 @@ export class FlowGrid {
 }
 
 export function hit(o, x, z, inflate) {
+  if (o.active === false) return false;
   if (o.type === 'circle') return Math.hypot(x - o.x, z - o.z) < o.r + inflate;
   let lx = x - o.x, lz = z - o.z;
   if (o.rot) { const c = Math.cos(o.rot), s = Math.sin(o.rot); const ax = c * lx - s * lz, az = s * lx + c * lz; lx = ax; lz = az; }

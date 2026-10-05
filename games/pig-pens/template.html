@@ -53,32 +53,75 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #tools button[aria-pressed="true"]{background:var(--pink);color:#5a2232;box-shadow:inset 0 0 0 2.5px var(--snout)}
 #tools button:active{transform:translateY(2px)}
 #tools button:focus-visible,.round:focus-visible{outline:3px solid #2f7de1;outline-offset:2px}
-#top{position:fixed;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;gap:10px;z-index:5}
-.round{all:unset;cursor:pointer;width:52px;height:52px;display:grid;place-items:center;border-radius:50%;color:var(--ink)}
+#top{position:fixed;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;gap:8px;align-items:flex-start;z-index:5}
+.round{all:unset;cursor:pointer;width:46px;height:46px;display:grid;place-items:center;border-radius:50%;color:var(--ink)}
 .round svg{width:27px;height:27px}
 #bell{background:var(--hay);color:#5a3820}
 .round:active{transform:translateY(2px);box-shadow:0 2px 0 var(--mud)}
-#mute[aria-pressed="true"] .on{display:none} #mute:not([aria-pressed="true"]) .off{display:none}
-#hint{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 98px);transform:translate(-50%,8px);max-width:min(88vw,420px);text-align:center;padding:9px 16px;font-size:15px;line-height:1.3;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:4;border-radius:16px}
+#hint{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 98px);z-index:5;transform:translate(-50%,8px);max-width:min(88vw,420px);text-align:center;padding:9px 16px;font-size:15px;line-height:1.3;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:4;border-radius:16px}
 #hint.on{opacity:1;transform:translate(-50%,0)}
+#timecol{display:flex;flex-direction:row-reverse;align-items:center;gap:8px}
+#daynight{all:unset;cursor:pointer;position:relative;display:flex;height:38px;padding:4px;border-radius:25px;gap:2px}
+#daynight .opt{width:38px;height:38px;border-radius:19px;display:grid;place-items:center;color:var(--ink);transition:background .2s,color .2s}
+#daynight .opt svg{width:22px;height:22px}
+#daynight[aria-pressed="false"] .sun{background:var(--hay);color:#5a3820}
+#daynight[aria-pressed="true"] .moon{background:#2b3a66;color:#ffe9a8}
+#daynight:focus-visible{outline:3px solid #2f7de1;outline-offset:2px}
+#eggs{box-sizing:content-box;display:flex;align-items:center;gap:5px;height:46px;min-width:22px;padding:0 14px 0 10px;border-radius:23px;font-weight:800;font-size:20px;font-variant-numeric:tabular-nums}
+#eggs svg{width:26px;height:26px}
+#eggs.bump{animation:eggbump .35s ease-out}
+@keyframes eggbump{40%{transform:scale(1.18)}}
+.eggpop{position:absolute;left:0;top:0;z-index:4;pointer-events:none;font-size:54px;font-weight:800;line-height:1;color:#fff6e6;-webkit-text-stroke:3px var(--mud);paint-order:stroke fill;text-shadow:0 4px 0 var(--mud);will-change:transform,opacity}
+#card{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 96px);width:min(92vw,380px);padding:12px 44px 12px 16px;z-index:6;border-radius:20px}
+#card h2{margin:0;font-size:21px;font-weight:800;line-height:1.1}
+#card p{margin:3px 0 0;font-size:14px;line-height:1.3}
+#cardSub{opacity:.75} #cardDoing{font-weight:800}
+#cardClose{all:unset;cursor:pointer;position:absolute;right:8px;top:8px;width:32px;height:32px;display:grid;place-items:center;font-size:24px;border-radius:50%}
+#cardClose:focus-visible{outline:3px solid #2f7de1}
+.bar{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:13px}
+.bar span{width:52px} .bar i{flex:1;height:9px;border-radius:5px;background:rgba(107,68,40,.18);overflow:hidden} .bar b{display:block;height:100%;border-radius:5px}
+.bar.hunger b{background:#f2a33a} .bar.mud b{background:#7a5434} .bar.fright b{background:#e8483f}
+.facts{display:flex;gap:14px;margin-top:6px;font-size:13px}
+#press{position:fixed;width:84px;height:84px;margin:-42px 0 0 -42px;pointer-events:none;z-index:7}
+#press svg{width:100%;height:100%;transform:rotate(-90deg)}
+#press circle{fill:rgba(255,252,248,.35);stroke:rgba(107,68,40,.35);stroke-width:7}
+#press circle.fill{fill:none;stroke:var(--snout);stroke-dasharray:201;stroke-dashoffset:201;stroke-linecap:round}
+#press.go circle.fill{animation:fillring .75s linear forwards}
+@keyframes fillring{to{stroke-dashoffset:0}}
+#drive{display:none}
+body.driving #drive{display:block} body.driving #tools, body.driving #card{display:none} body.driving #hint{bottom:calc(env(safe-area-inset-bottom,0px) + 170px)}
+#stick{position:absolute;left:calc(env(safe-area-inset-left,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);width:132px;height:132px;border-radius:50%;z-index:6;touch-action:none;display:grid;place-items:center}
+#knob{width:56px;height:56px;border-radius:50%;background:var(--pink);box-shadow:inset 0 0 0 3px var(--snout);pointer-events:none}
+#driveBtns{position:absolute;right:calc(env(safe-area-inset-right,0px) + 16px);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);display:flex;flex-direction:column;align-items:flex-end;gap:12px;z-index:6}
+#horn{width:66px;height:66px;background:var(--hay)}
+#exit{all:unset;cursor:pointer;padding:10px 16px;border-radius:18px;font-weight:800;font-size:15px;color:var(--ink)}
+#exit:focus-visible,#horn:focus-visible{outline:3px solid #2f7de1;outline-offset:2px}
 #loading{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;font-weight:800;color:#5a3820;background:var(--sky);z-index:10}
-@media (prefers-reduced-motion: reduce){#hint,#tools button{transition:none}}
-@media (min-width:700px){</style>
+:is(#daynight,#bell,#exit,#horn).chunk{background:var(--panel);border:2.5px solid var(--mud);box-shadow:0 4px 0 var(--mud)}
+#bell.chunk,#horn.chunk{background:var(--hay)}
+@media (prefers-reduced-motion: reduce){#hint,#tools button{transition:none} #eggs.bump{animation:none}}
+@media (min-width:700px){#tools button{width:80px;font-size:15px}}
+</style>
 </head>
 <body>
 <canvas id="c" aria-label="Farm with a herd of pigs"></canvas>
 <div id="top">
+  <div id="timecol">
+    <button id="daynight" class="chunk" aria-pressed="false" aria-label="Day. Switch to night">
+      <span class="opt sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></span>
+      <span class="opt moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></span>
+    </button>
+    <div id="eggs" class="chunk" aria-label="Eggs collected"><svg viewBox="0 0 24 24" fill="#fff6e6" stroke="currentColor" stroke-width="2"><path d="M12 3c3.5 0 6.5 5.5 6.5 10a6.5 6.5 0 0 1-13 0C5.5 8.5 8.5 3 12 3z"/></svg><span id="eggCount">0</span></div>
+  </div>
   <button id="bell" class="round chunk" aria-label="Ring the dinner bell">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M12 5V3.5"/></svg>
-  </button>
-  <button id="mute" class="round chunk" aria-pressed="false" aria-label="Turn sound off">
-    <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
-    <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
   </button>
 </div>
 <div id="hint" class="chunk" role="status" aria-live="polite"></div>
 <nav id="tools" class="chunk" aria-label="Tools">
-  <button data-tool="shoo" aria-pressed="true">
+  <button data-tool="hand" aria-pressed="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 9.5a1.5 1.5 0 0 1 3 0V11"/><path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.6a5 5 0 0 1-4-2l-3-4a1.5 1.5 0 0 1 2.3-1.9L9 15"/><path d="M5 4.5 3.5 3M14.5 3 16 1.5"/></svg>Hand</button>
+  <button data-tool="shoo" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="16" rx="4.6" ry="3.8"/><ellipse cx="6" cy="10.5" rx="2" ry="2.5"/><ellipse cx="10" cy="6.8" rx="2" ry="2.6"/><ellipse cx="14.5" cy="6.8" rx="2" ry="2.6"/><ellipse cx="18.5" cy="10.5" rx="2" ry="2.5"/></svg>Shoo</button>
   <button data-tool="feed" aria-pressed="false"><span id="snacks" aria-hidden="true">5</span>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.5c-2-1.6-6.5-1.4-7 3.2-.5 4.4 2.6 9.8 5.2 9.8 1 0 1.3-.5 1.8-.5s.8.5 1.8.5c2.6 0 5.7-5.4 5.2-9.8-.5-4.6-5-4.8-7-3.2z"/><path d="M12 7.5c0-2 .8-3.5 2.5-4.3"/></svg>Feed</button>
@@ -86,9 +129,19 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20c2.5 0 4-1.2 4-3.5V13a2 2 0 0 1 2-2h3"/><path d="M12 9h3.5l2 1.2v1.6l-2 1.2H12z"/><path d="M20 8.5v.01M21.5 11v.01M20 13.5v.01"/></svg>Hose</button>
   <button data-tool="grab" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5"/><path d="M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13"/><path d="M8 11.5l-1.2-1.4a1.6 1.6 0 0 0-2.5 2L8 17.5a6 6 0 0 0 5 3h.5a5 5 0 0 0 5-5V12a1.5 1.5 0 0 0-3 0"/></svg>Grab</button>
-  <button data-tool="look" aria-pressed="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 0 1-13.7 5.6"/><path d="M4 12a8 8 0 0 1 13.7-5.6"/><path d="M17.5 3v3.8h-3.8"/><path d="M6.5 21v-3.8h3.8"/><circle cx="12" cy="12" r="2.2"/></svg>Look</button>
 </nav>
+<section id="card" class="chunk" hidden aria-live="polite">
+  <button id="cardClose" aria-label="Close">&times;</button>
+  <h2 id="cardName"></h2><p id="cardSub"></p><p id="cardDoing"></p><div id="cardBars"></div>
+</section>
+<div id="press" hidden aria-hidden="true"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="32"/><circle class="fill" cx="40" cy="40" r="32"/></svg></div>
+<div id="drive" aria-label="Driving controls">
+  <div id="stick" class="chunk" aria-label="Steering stick"><div id="knob"></div></div>
+  <div id="driveBtns">
+    <button id="horn" class="round chunk" aria-label="Horn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4h3l6 4V6L6 10z"/><path d="M15 9.5c1 .7 1.5 1.6 1.5 2.5s-.5 1.8-1.5 2.5M18 7c2 1.4 3 3.1 3 5s-1 3.6-3 5"/></svg></button>
+    <button id="exit" class="chunk">Get out</button>
+  </div>
+</div>
 <div id="loading">Waking the pigs…</div>
 <script>
 // No page zoom: iOS ignores user-scalable=no, so block WebKit's pinch gestures directly.
