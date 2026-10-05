@@ -311,7 +311,7 @@ The tractor drives like a car. The chase camera (V-1) always stays behind the tr
 
 | ID | Item | Description |
 |---|---|---|
-| V-1 | Type | A high chase camera behind the tractor. Approximately 40° down. The player must see animals ahead and the trailer behind. |
+| V-1 | Type | A chase camera behind and above the tractor. Approximately 22° down, with the look point approximately 11 m ahead, so the player sees far ahead (changed after playtest 1). The trailer shows behind the tractor. |
 | V-2 | Turns | The camera stays behind the tractor and turns with it, with a short lag. In a slide, the camera follows the direction of travel more than the tractor nose, so the view does not swing. In reverse, the camera stays behind the tractor. |
 | V-3 | Launch | The camera does not follow the animal. The arc must stay in the view. |
 
