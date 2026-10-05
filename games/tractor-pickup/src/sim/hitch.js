@@ -1,11 +1,11 @@
 // Trailer and wagon: dynamic bodies on two-wheel ray-cast controllers, joined by spherical joints (D-4, D-10, D-11).
 import { G, groups } from './physics.js';
-import { quatAxes, TP } from './tractor.js';
+import { quatAxes } from './tractor.js';
 
 export const TR = {
   half: { x: 1.4, y: 0.15, z: 1.0 }, mass: 260, wheelR: 0.45, axleX: -0.25, track: 0.95, suspRest: 0.35,
   tongue: { x: 2.35, y: -0.2, z: 0 }, rear: { x: -1.55, y: -0.2, z: 0 }, bedTop: 0.15,
-  limit: 75 * Math.PI / 180, limitK: 100000, limitC: 15000,
+  limit: 75 * Math.PI / 180, limitBeta: 1, rightK: 6000, rightC: 300, rightTarget: 0.9,
 };
 export const TRACTOR_HITCH = { x: -1.75, y: 0.62, z: 0 };
 
@@ -46,16 +46,25 @@ export function createTrain(phys, tractor) {
       for (const c of cars) {
         for (let i = 0; i < 2; i++) c.vc.setWheelBrake(i, parked ? 20 : 0.2);
         c.vc.updateVehicle(dt, undefined, rayGroups);
-        // D-10 soft jackknife limit on each joint
+        // D-10 jackknife limit, applied as a velocity-level impulse pair (equal and opposite on the car and its front body),
+        // split by yaw inertia, so it stays stable at any stiffness and the tractor cannot overpower it.
         const a = angle(c.index), over = Math.abs(a) - TR.limit;
-        if (over > 0) {
-          const rel = c.body.angvel().y - c.front.angvel().y;
-          const tau = (-Math.sign(a) * TR.limitK * over - TR.limitC * rel) * dt;
-          c.body.applyTorqueImpulse({ x: 0, y: tau, z: 0 }, true);
+        {
+          const s = Math.sign(a), rel = s * (c.body.angvel().y - c.front.angvel().y);
+          // fastest outward yaw rate allowed: just reach the limit this step, or (past it) pull back with a Baumgarte bias
+          const want = over < 0 ? -over / dt : -TR.limitBeta * over / dt;
+          if (rel > want) {
+            const J = s * (want - rel) / (1 / c.body.effectiveAngularInertia().m22 + 1 / c.front.effectiveAngularInertia().m22);
+            c.body.applyTorqueImpulse({ x: 0, y: J, z: 0 }, true);
+            c.front.applyTorqueImpulse({ x: 0, y: -J, z: 0 }, true);
+          }
         }
-        // D-11 soft self-righting past 45 degrees
+        // D-11 soft self-righting past 45 degrees, with roll damping
         const { u } = quatAxes(c.body.rotation());
-        if (u.y < Math.cos(Math.PI / 4)) { const k = 1200 * (0.9 - u.y) * dt; c.body.applyTorqueImpulse({ x: -u.z * k, y: 0, z: u.x * k }, true); }
+        if (u.y < Math.cos(Math.PI / 4)) {
+          const k = TR.rightK * (TR.rightTarget - u.y) * dt, w = c.body.angvel();
+          c.body.applyTorqueImpulse({ x: -u.z * k - TR.rightC * w.x * dt, y: 0, z: u.x * k - TR.rightC * w.z * dt }, true);
+        }
       }
     },
   };
