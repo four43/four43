@@ -7,3 +7,4 @@ _site/
 vendor/
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
+.superpowers/
