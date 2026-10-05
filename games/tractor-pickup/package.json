@@ -1,0 +1,21 @@
+{
+  "name": "tractor-pickup",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/",
+    "bake": "node bake.mjs",
+    "build": "python3 build.py"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "esbuild": "^0.28.2",
+    "pngjs": "^7.0.0"
+  }
+}
