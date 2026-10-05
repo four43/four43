@@ -1,6 +1,6 @@
 // Offline support. The game is a single HTML file, so caching it (plus icons and
 // the Google Font) is enough to play with no connection.
-const CACHE = 'pig-pens-1.2.1-f3f031485f74';
+const CACHE = 'pig-pens-1.2.1-8f413b7c43a0';
 const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -28,7 +28,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 1.2.1-f3f031485f74), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 1.2.1-8f413b7c43a0), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
