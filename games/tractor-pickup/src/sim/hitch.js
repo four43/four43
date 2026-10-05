@@ -3,7 +3,7 @@ import { G, groups } from './physics.js';
 import { quatAxes } from './tractor.js';
 
 export const TR = {
-  half: { x: 1.4, y: 0.15, z: 1.0 }, mass: 260, wheelR: 0.45, axleX: -0.25, track: 0.95, suspRest: 0.35,
+  half: { x: 1.4, y: 0.15, z: 1.0 }, mass: 260, wheelR: 0.45, axleX: -0.25, track: 1.25, suspRest: 0.35,
   tongue: { x: 2.35, y: -0.2, z: 0 }, rear: { x: -1.55, y: -0.2, z: 0 }, bedTop: 0.15,
   limit: 75 * Math.PI / 180, limitBeta: 1, rightK: 6000, rightC: 300, rightTarget: 0.9,
 };

@@ -5,7 +5,7 @@ import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
 import { createSandbox } from './sim/sandbox.js';
 import { createScene } from './render/scene.js';
-import { createChaseCam } from './render/camera.js';
+import { createChaseCam, CAM } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
 
@@ -54,6 +54,7 @@ function buildTunePanel(game) {
     ['vmax', () => t.P.vmax, v => t.P.vmax = v, 3, 15, 0.5], ['force', () => t.P.force, v => t.P.force = v, 2000, 15000, 100],
     ['rearSide', () => t.P.rearSide, v => t.P.rearSide = v, 0.2, 1.2, 0.01], ['slideMax', () => t.P.slideMax, v => t.P.slideMax = v, 0.2, 1.2, 0.01],
     ['loose', () => t.P.loose, v => t.P.loose = v, 0, 0.3, 0.005],
+    ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5],
     ['slip', () => TP.slip, v => TP.slip = v, 0.5, 6, 0.1], ['steerMax', () => TP.steerMax, v => TP.steerMax = v, 0.3, 0.9, 0.01],
     ['stiffness (reload)', () => TP.stiffness, v => TP.stiffness = v, 8, 40, 1], ['trailer limitBeta', () => TR.limitBeta, v => TR.limitBeta = v, 0.1, 2, 0.05],
   ];

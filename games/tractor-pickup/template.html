@@ -48,9 +48,9 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #stickKnob{width:64px;height:64px;border-radius:50%;background:#f6a9bd;box-shadow:inset 0 0 0 3px #d9667f}
 #horn{all:unset;position:absolute;right:calc(env(safe-area-inset-right,0px) + 24px);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);width:110px;height:110px;border-radius:50%;background:#f5c84c;border:4px solid #6b4428;box-shadow:0 5px 0 #6b4428;font-size:56px;display:grid;place-items:center;z-index:6;cursor:pointer}
 #horn:active{transform:translateY(3px);box-shadow:0 2px 0 #6b4428}
-#tune{position:absolute;top:8px;left:8px;z-index:9;background:rgba(255,255,255,.9);padding:8px;border-radius:10px;font:15px system-ui;max-height:80vh;overflow:auto;touch-action:pan-y;width:min(420px,60vw)}
+#tune{position:absolute;top:8px;left:8px;z-index:9;background:rgba(255,255,255,.9);padding:8px;border-radius:10px;font:15px system-ui;max-height:80vh;overflow:auto;touch-action:pan-y;width:max-content;max-width:min(420px,60vw)}
 #tune button{font:inherit;padding:6px 14px;border-radius:8px}
-#tune label{display:grid;grid-template-columns:130px 1fr 52px;gap:8px;align-items:center;min-height:44px}
+#tune label{width:min(400px,56vw);display:grid;grid-template-columns:130px 1fr 52px;gap:8px;align-items:center;min-height:44px}
 #tune input[type=range]{width:100%;height:36px;touch-action:pan-y}
 #tune select{font:inherit;min-height:44px;margin-top:6px}
 </style>
