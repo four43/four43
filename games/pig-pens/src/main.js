@@ -411,9 +411,9 @@ if (vMud.x > 0.002) {
 
   const pointers = new Map(); let gesture = null, toolActive = false, downInfo = null, lastToss = 0;
   // with a finger the target would be hidden under it, so touch aims a little above the finger
-  const TOUCH_LIFT = 80; let touch = false;
+  const TOUCH_LIFT = 80, SPRAY_LIFT = 55; let touch = false;
   const grabAim = { x: 0, y: 0, lift: 0, goal: 0 };
-  const sprayY = y => touch ? y - TOUCH_LIFT : y;
+  const sprayY = y => touch ? y - SPRAY_LIFT : y;
   const moveGrabTo = () => { const h = planeHit(rayAt(grabAim.x, grabAim.y - grabAim.lift), 1.7); if (h) sim.moveGrab(h.x, 1.7, h.z); };
   const twoInfo = () => { const [a, b] = [...pointers.values()]; return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x) }; };
   function toolDown(x, y, btn) {
