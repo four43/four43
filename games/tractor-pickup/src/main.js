@@ -17,8 +17,9 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const game = createSandbox(RAPIER, { power: params.get('power') || 'medium' });
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#cdb38a' }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: groundTexture(renderer) }));
   ground.receiveShadow = true; scene.add(ground);
+  addMarkers(scene, game);
   for (const m of game.mud) { const g = new THREE.Mesh(new THREE.CircleGeometry(m.r, 32).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#7a5233', shininess: 60 })); g.position.set(m.x, 0.02, m.z); scene.add(g); }
   for (const r of game.ramps) { // simple visual for the sandbox kicker
     const s = new THREE.Shape([[-5, 0], [0, 0.6], [1, 0.6], [4, 0]].map(([a, y]) => new THREE.Vector2(a, y)));
@@ -44,6 +45,33 @@ async function main() {
   });
 }
 
+// Procedural gravel tile (8 m): speckle, darker patches and a faint 2 m grid so motion reads at speed.
+function groundTexture(renderer) {
+  const N = 512, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
+  g.fillStyle = '#cdb38a'; g.fillRect(0, 0, N, N);
+  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < 14; i++) { g.fillStyle = `rgba(120,90,50,${0.08 + rnd() * 0.08})`; g.beginPath(); g.ellipse(rnd() * N, rnd() * N, 30 + rnd() * 60, 20 + rnd() * 40, rnd() * 3, 0, 7); g.fill(); }
+  for (let i = 0; i < 2500; i++) { const l = rnd() < 0.5; g.fillStyle = l ? 'rgba(245,230,200,.5)' : 'rgba(80,60,35,.45)'; g.fillRect(rnd() * N, rnd() * N, 2 + rnd() * 2, 2 + rnd() * 2); }
+  g.strokeStyle = 'rgba(90,65,35,.35)'; g.lineWidth = 3;
+  for (let i = 0; i < 4; i++) { const p = i * N / 4 + 1; g.beginPath(); g.moveTo(p, 0); g.lineTo(p, N); g.moveTo(0, p); g.lineTo(N, p); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(50, 50); t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+// Cones scattered every ~12 m for parallax. Keeps the lane to the ramp and the mud patch clear.
+function addMarkers(scene, game) {
+  const spots = []; let seed = 3; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let x = -150; x <= 150; x += 12) for (let z = -150; z <= 150; z += 12) {
+    const px = x + (rnd() - 0.5) * 8, pz = z + (rnd() - 0.5) * 8;
+    if (Math.abs(px) < 10 && pz > -15 && pz < 70) continue;
+    if (game.mud.some(m => Math.hypot(px - m.x, pz - m.z) < m.r + 2)) continue;
+    spots.push([px, pz]);
+  }
+  const cone = new THREE.ConeGeometry(0.35, 1, 10).translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(cone, new THREE.MeshLambertMaterial({ color: '#ff7a1a' }), spots.length), M = new THREE.Matrix4();
+  spots.forEach(([x, z], i) => { const s = 0.8 + rnd() * 0.8; M.makeScale(s, s, s).setPosition(x, 0, z); mesh.setMatrixAt(i, M); });
+  mesh.castShadow = true; scene.add(mesh);
+}
+
 // ?tune: sliders for live feel tuning during the playtest. Values print to the console to copy into tractor.js.
 function buildTunePanel(game) {
   const el = document.createElement('div'); el.id = 'tune'; document.body.appendChild(el);
@@ -54,7 +82,7 @@ function buildTunePanel(game) {
     ['vmax', () => t.P.vmax, v => t.P.vmax = v, 3, 15, 0.5], ['force', () => t.P.force, v => t.P.force = v, 2000, 15000, 100],
     ['rearSide', () => t.P.rearSide, v => t.P.rearSide = v, 0.2, 1.2, 0.01], ['slideMax', () => t.P.slideMax, v => t.P.slideMax = v, 0.2, 1.2, 0.01],
     ['loose', () => t.P.loose, v => t.P.loose = v, 0, 0.3, 0.005],
-    ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5],
+    ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5], ['cam ahead', () => CAM.AHEAD, v => CAM.AHEAD = v, 2, 24, 0.5],
     ['slip', () => TP.slip, v => TP.slip = v, 0.5, 6, 0.1], ['steerMax', () => TP.steerMax, v => TP.steerMax = v, 0.3, 0.9, 0.01],
     ['stiffness (reload)', () => TP.stiffness, v => TP.stiffness = v, 8, 40, 1], ['trailer limitBeta', () => TR.limitBeta, v => TR.limitBeta = v, 0.1, 2, 0.05],
   ];

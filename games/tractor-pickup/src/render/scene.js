@@ -4,7 +4,7 @@ export function createScene(canvas) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene(), SKY = new THREE.Color('#bfe6f5');
   scene.background = SKY; scene.fog = new THREE.Fog(SKY, 90, 220);
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 500);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 500);
   scene.add(new THREE.HemisphereLight('#eef7ff', '#b9a27c', 1.3));
   const sun = new THREE.DirectionalLight('#fff3dc', 2.1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 5, far: 120 });
