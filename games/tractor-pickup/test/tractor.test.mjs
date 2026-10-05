@@ -23,19 +23,41 @@ for (const p of ['low', 'medium', 'high']) test(`top speed matches the ${p} pres
 });
 test('mud halves the top speed', () => {
   const { t, run } = make('medium', 'mud'); run(1, 0, 0); run(10, 1, 0);
-  assert.ok(t.speed < POWER.medium.vmax * 0.55, `speed ${t.speed}`);
+  assert.ok(t.speed < POWER.medium.vmax * 0.55 && t.speed > POWER.medium.vmax * 0.3, `speed ${t.speed}`);
 });
 test('positive steer turns left (yaw increases)', () => {
   const { t, run } = make(); run(1, 0, 0); run(2, 0.6, 0); const y0 = t.yaw; run(1.5, 0.6, 1);
   let d = t.yaw - y0; d = Math.atan2(Math.sin(d), Math.cos(d)); assert.ok(d > 0.3, `yaw change ${d}`);
 });
-test('slides are bounded and it never spins out (high power, full lock)', () => {
-  const { t, run } = make('high'); run(1, 0, 0); run(5, 1, 0);
+// full throttle at speed, then full lock for 6 s on gravel
+const slideRun = p => {
+  const { t, run } = make(p); run(1, 0, 0); run(5, 1, 0);
   let maxSlip = 0, maxRate = 0;
   run(6, 1, 1, () => { if (t.speed > 3) maxSlip = Math.max(maxSlip, Math.abs(t.slip)); maxRate = Math.max(maxRate, Math.abs(t.body.angvel().y)); });
-  assert.ok(maxSlip > 0.15, `no slide at all: ${maxSlip}`);           // it should feel like rally
-  assert.ok(maxSlip < POWER.high.slideMax + 0.12, `slip ${maxSlip}`);   // D-7
-  assert.ok(maxRate < 2.8, `yaw rate ${maxRate}`);
+  return { maxSlip, maxRate };
+};
+test('rear grip is lower than front for every preset (D-6)', () => {
+  for (const p of ['low', 'medium', 'high']) { assert.ok(POWER[p].rearSide < 1, p); assert.ok(POWER[p].loose < POWER[p].rearSide, p); }
+});
+test('slides scale with the power preset and never spin out (P-7, D-7)', () => {
+  const r = { low: slideRun('low'), medium: slideRun('medium'), high: slideRun('high') };
+  assert.ok(r.low.maxSlip >= 0.15, `low should still slide: ${r.low.maxSlip}`);
+  assert.ok(r.low.maxSlip < r.medium.maxSlip - 0.05, `low ${r.low.maxSlip} < medium ${r.medium.maxSlip}`);
+  assert.ok(r.medium.maxSlip < r.high.maxSlip - 0.15, `medium ${r.medium.maxSlip} < high ${r.high.maxSlip}`);
+  assert.ok(r.high.maxSlip >= 0.6, `high should slide big: ${r.high.maxSlip}`);
+  for (const p of ['low', 'medium', 'high']) {
+    assert.ok(r[p].maxSlip <= POWER[p].slideMax + 0.1, `${p} slip ${r[p].maxSlip}`);
+    assert.ok(r[p].maxRate < 2.8, `${p} yaw rate ${r[p].maxRate}`);
+  }
+});
+test('the slide limiter pulls a big sideways slide back under slideMax', () => {
+  const { t, run } = make('high'); run(1, 0, 0); run(4, 1, 0);
+  const { r, f } = quatAxes(t.body.rotation());
+  const v = 8, sv = 14; // ~60 degree slide, well past slideMax
+  t.body.setLinvel({ x: f.x * v + r.x * sv, y: 0, z: f.z * v + r.z * sv }, true);
+  t.step(DT); assert.ok(Math.abs(t.slip) > POWER.high.slideMax + 0.1, `setup slip ${t.slip}`);
+  run(0.4, 1, 0); // tyres alone take ~0.6 s to recover from this; the limiter must do it faster
+  assert.ok(Math.abs(t.slip) < 0.3, `slip after 0.4 s ${t.slip}`);
 });
 test('brakes then reverses slowly', () => {
   const { t, run } = make(); run(1, 0, 0); run(3, 1, 0); run(5, -1, 0);

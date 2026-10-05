@@ -3,15 +3,15 @@
 import { G, groups } from './physics.js';
 
 export const POWER = {
-  low:    { vmax: 6,  force: 5200,  rearSide: 1.1, slideMax: 0.35 },
-  medium: { vmax: 9,  force: 7600,  rearSide: 0.9, slideMax: 0.6 },
-  high:   { vmax: 12, force: 10000, rearSide: 0.7, slideMax: 0.78 },
+  low:    { vmax: 6,  force: 5200,  rearSide: 0.85, slideMax: 0.35, loose: 0.08 },
+  medium: { vmax: 9,  force: 7600,  rearSide: 0.62, slideMax: 0.6, loose: 0.03 },
+  high:   { vmax: 12, force: 10000, rearSide: 0.48, slideMax: 0.78, loose: 0.02 },
 };
 export const SURFACE = { gravel: { grip: 1, vmul: 1 }, grass: { grip: 0.8, vmul: 0.7 }, mud: { grip: 0.55, vmul: 0.5 } };
 export const TP = {
   scale: 1.6, mass: 1400, revForce: 3200, vrev: 3, brake: 30, handbrake: 60, roll: 1.5,
   steerMax: 0.62, steerRate: 2.8, inputRate: 4, suspRest: 0.32, stiffness: 18, compression: 2.0, relaxation: 2.6,
-  slip: 5, travel: 0.45, yawRateMax: 2.6, slideK: 6, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 9000,
+  slip: 2.4, travel: 0.45, yawRateMax: 2.6, slideK: 6, yawInertia: 2200, slideTorque: 30, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 9000,
 };
 export function quatAxes(q) {
   const { x, y, z, w } = q;
@@ -51,7 +51,7 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
 
   const t = {
     body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, assist: 0,
-    x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, surface: 'gravel', tilted: 0,
+    x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, surface: 'gravel',
     setPower(name) { this.power = name; this.P = POWER[name]; },
     setInput(thr, steer) { this.inThr = Math.max(-1, Math.min(1, thr)); this.inSteer = Math.max(-1, Math.min(1, steer)); },
     setAssist(bias) { this.assist = bias; },
@@ -70,20 +70,26 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
       else if (this.thr < -0.05) { if (v > 0.3) brake = TP.brake * -this.thr; else force = -TP.revForce * -this.thr * Math.max(0, 1 + v / TP.vrev); }
       else brake = this.speed < 0.3 ? TP.handbrake : TP.roll;
       this.engine = Math.abs(force) / P.force;
+      // D-6 rally drift: steering hard at speed with throttle lets the rear tyres let go (rear side stiffness
+      // falls from P.rearSide to P.loose); the D-7 limiter below keeps the slide bounded.
+      const drift = Math.abs(this.steer / maxSteer) * Math.min(1, this.speed / (0.5 * P.vmax)) * Math.max(0, this.thr);
+      const rearSide = P.rearSide + (P.loose - P.rearSide) * drift;
       for (let i = 0; i < 4; i++) {
         const w = W[i];
         vc.setWheelSteering(i, w.front ? this.steer : 0);
         vc.setWheelEngineForce(i, w.front ? 0 : force / 2);
         vc.setWheelBrake(i, brake);
         vc.setWheelFrictionSlip(i, TP.slip * SF.grip);
-        vc.setWheelSideFrictionStiffness(i, (w.front ? 1 : P.rearSide) * SF.grip);
+        vc.setWheelSideFrictionStiffness(i, (w.front ? 1 : rearSide) * SF.grip);
       }
       vc.updateVehicle(dt, undefined, rayGroups, c => !own.has(c.handle));
       // D-7 slide help: past slideMax, push the slide back toward the direction of travel
       const excess = Math.abs(this.slip) - P.slideMax;
-      if (this.speed > 2 && excess > 0) {
+      if (this.speed > 1 && excess > 0) {
         const k = -Math.sign(side) * excess * TP.slideK * TP.mass * dt;
         body.applyImpulse({ x: r.x * k, y: 0, z: r.z * k }, true);
+        const tq = -Math.sign(this.slip) * excess * TP.slideTorque * TP.yawInertia * dt; // swing the nose back toward travel
+        body.applyTorqueImpulse({ x: u.x * tq, y: u.y * tq, z: u.z * tq }, true);
       }
       const av = body.angvel();
       if (Math.abs(av.y) > TP.yawRateMax) body.setAngvel({ x: av.x, y: Math.sign(av.y) * TP.yawRateMax, z: av.z }, true);
