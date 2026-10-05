@@ -528,7 +528,7 @@ export function createSim(RAPIER, opts = {}) {
         let ax = p.px - hose.x, az = p.pz - hose.z; if (Math.hypot(ax, az) < 0.2) { ax = p.px - hose.sx; az = p.pz - hose.sz; }
         dropClaims(p); p.threatX = p.px - ax; p.threatZ = p.pz - az; p.wa = Math.atan2(ax, az);
         setState(p, ST.ZOOM, 2.5 + rng() * 2.5);
-        if (was >= 0.03) emit('oink', { i: p.i, x: p.px, z: p.pz, happy: 1, zoom: 1 });
+        if (was >= 0.03) { emit('oink', { i: p.i, x: p.px, z: p.pz, happy: 1, zoom: 1 }); emit('clean', { i: p.i, x: p.px, z: p.pz }); }
       }
     }
 

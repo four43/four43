@@ -31,6 +31,17 @@ export class Sound {
   bark() { if (!this.ok) return; this.voice(420, 260, 0.1, 0.5, [900, 1800]); this.noise(0.08, 0.25, 1500); this.voice(440, 270, 0.1, 0.45, [900, 1800], 0.16); }
   whoosh() { if (!this.ok) return; this.noise(0.25, 0.25, 900, 0, 0.7); }
   munch() { if (!this.ok) return; for (let i = 0; i < 4; i++) this.noise(0.05, 0.4, 2200 + Math.random() * 800, i * 0.12, 2); }
+  // a pig comes out sparkling clean: quick rising chime arpeggio with a little shimmer on top
+  sparkle(vol = 0.5) {
+    if (!this.ok) return; const c = this.ctx;
+    [1568, 2093, 2637, 3136, 4186].forEach((f, k) => {
+      const t = c.currentTime + k * 0.055 + Math.random() * 0.01, o = c.createOscillator(), g = c.createGain();
+      o.type = 'triangle'; o.frequency.value = f * (0.995 + Math.random() * 0.01);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16 * vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+      o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.5);
+    });
+    this.noise(0.3, 0.12 * vol, 7000, 0.05, 3);
+  }
   bell() {
     if (!this.ok) return; const c = this.ctx;
     for (let k = 0; k < 4; k++) for (const [f, a] of [[880, 0.25], [1320, 0.12], [2210, 0.07]]) {
@@ -57,6 +68,7 @@ export class Sound {
     const vol = Math.max(0.05, Math.min(0.6, 18 / (d + 10)));
     if (ev.type === 'squeal') this.squeal();
     else if (ev.type === 'munch') this.munch();
+    else if (ev.type === 'clean') { if (now - (this.lastSparkle || 0) < 150) return; this.lastSparkle = now; this.sparkle(Math.min(1, vol * 2)); }
     else if (ev.type === 'oink') { if (now - this.lastOink < (ev.zoom ? 120 : 250)) return; this.lastOink = now; this.oink(vol, ev.zoom ? 1.7 : ev.scared ? 1.35 : 1); }
   }
 }

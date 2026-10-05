@@ -135,8 +135,17 @@ async function main() {
     // food heap slots
     const kinds = ['cob', 'cabbage', 'carrot', 'apple'];
     for (let k = 0; k < 9; k++) {
-      const kind = kinds[(k + t.id) % 4], fx = -w / 2 + 0.25 + (k / 8) * (w - 0.5), fz = ((k * 37) % 5 - 2) * 0.06;
-      const local = new THREE.Matrix4().compose(v3.set(fx, 0.1, fz), q.setFromEuler(new THREE.Euler(kind === 'carrot' ? Math.PI / 2 : 0, k * 1.7, kind === 'cob' ? 1.3 : 0)), s3.setScalar(kind === 'cabbage' ? 1.0 : 1.2));
+      const kind = kinds[(k + t.id) % 4], fz = ((k * 37) % 5 - 2) * 0.06;
+      let fx = -w / 2 + 0.25 + (k / 8) * (w - 0.5);
+      let local;
+      if (kind === 'carrot') {
+        // the model stands 0.72 tall from its base; lay it lengthways down the trough, centred on
+        // its slot and kept clear of the end boards, with a little yaw so the row isn't too neat
+        const s = 0.8, half = 0.72 * s / 2, cz = fz * 0.3; fx = Math.max(-w / 2 + 0.1 + half, Math.min(w / 2 - 0.1 - half, fx));
+        const yaw = ((k * 53) % 7 - 3) * 0.03, lie = new THREE.Matrix4().makeRotationZ(-Math.PI / 2).multiply(new THREE.Matrix4().makeRotationY(k * 1.7));
+        local = new THREE.Matrix4().makeTranslation(fx - Math.cos(yaw) * half, 0.1 + 0.17 * s, cz + Math.sin(yaw) * half)
+          .multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(lie).multiply(new THREE.Matrix4().makeScale(s, s, s));
+      } else local = new THREE.Matrix4().compose(v3.set(fx, 0.1, fz), q.setFromEuler(new THREE.Euler(0, k * 1.7, kind === 'cob' ? 1.3 : 0)), s3.setScalar(kind === 'cabbage' ? 1.0 : 1.2));
       troughFood[kind].push({ t, k, m: mm.clone().multiply(local) });
     }
   }
@@ -351,8 +360,9 @@ if (vMud.x > 0.002) {
         pipeKey = key; if (pipe) { pipe.geometry.dispose(); scene.remove(pipe); }
         const b = new THREE.Vector3(H.bx, 0, H.bz), sd = new THREE.Vector3(-H.bz, 0, H.bx), n = new THREE.Vector3(H.nx, H.ny, H.nz), back = nozzle.getWorldDirection(new THREE.Vector3()).multiplyScalar(-0.28);
         const out = sd.clone().multiplyScalar(0.8).addScaledVector(b, 0.6).normalize();
-        const curve = new THREE.CatmullRomCurve3([n.clone().add(back), n.clone().add(back).addScaledVector(out, 0.6).add(new THREE.Vector3(0, -0.7, 0)), n.clone().setY(0.06).addScaledVector(out, 1.8), n.clone().setY(0.06).addScaledVector(out, 5).addScaledVector(b, 1), n.clone().setY(0.06).addScaledVector(out, 12).addScaledVector(b, 8), n.clone().setY(0.06).addScaledVector(out, 40).addScaledVector(b, 40)]);
-        pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.075, 6, false), pipeMat); pipe.castShadow = true; scene.add(pipe);
+        const gy = 0.16, g = () => n.clone().setY(gy);   // ground run sits clear of the grass
+        const curve = new THREE.CatmullRomCurve3([n.clone().add(back), n.clone().add(back).addScaledVector(out, 0.6).add(new THREE.Vector3(0, -0.6, 0)), g().addScaledVector(out, 1.8), g().addScaledVector(out, 5).addScaledVector(b, 1), g().addScaledVector(out, 12).addScaledVector(b, 8), g().addScaledVector(out, 40).addScaledVector(b, 40), g().addScaledVector(out, 100).addScaledVector(b, 100), g().addScaledVector(out, 200).addScaledVector(b, 200)]);
+        pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 160, 0.075, 6, false), pipeMat); pipe.castShadow = true; scene.add(pipe);
       }
     } else if (pipe) { pipe.geometry.dispose(); scene.remove(pipe); pipe = null; pipeKey = ''; }
     hoseState.on = active;
@@ -400,6 +410,11 @@ if (vMud.x > 0.002) {
   addEventListener('keydown', e => { const k = { 1: 'shoo', 2: 'feed', 3: 'hose', 4: 'grab', 5: 'look' }[e.key]; if (k) setTool(k); if (e.key === 'b') ringBell(); });
 
   const pointers = new Map(); let gesture = null, toolActive = false, downInfo = null, lastToss = 0;
+  // with a finger the target would be hidden under it, so touch aims a little above the finger
+  const TOUCH_LIFT = 80; let touch = false;
+  const grabAim = { x: 0, y: 0, lift: 0, goal: 0 };
+  const sprayY = y => touch ? y - TOUCH_LIFT : y;
+  const moveGrabTo = () => { const h = planeHit(rayAt(grabAim.x, grabAim.y - grabAim.lift), 1.7); if (h) sim.moveGrab(h.x, 1.7, h.z); };
   const twoInfo = () => { const [a, b] = [...pointers.values()]; return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x) }; };
   function toolDown(x, y, btn) {
     downInfo = { x, y, t: performance.now(), btn };
@@ -407,10 +422,10 @@ if (vMud.x > 0.002) {
     if (btn === 1) { gesture = { kind: 'pan', x, y }; return; }
     toolActive = true;
     if (tool === 'shoo') { const h = planeHit(rayAt(x, y), 0); if (h) { sim.setDog(h.x, h.z, true); ring.position.set(h.x, 0.04, h.z); ring.visible = true; sound.bark(); } }
-    if (tool === 'hose') { const h = planeHit(rayAt(x, y), 0); if (h) { aimHose(h.x, h.z); sound.hose(true); } }
+    if (tool === 'hose') { const h = planeHit(rayAt(x, sprayY(y)), 0); if (h) { aimHose(h.x, h.z); sound.hose(true); } }
     if (tool === 'grab') {
       const r = rayAt(x, y); const i = sim.pick(r.origin.x, r.origin.y, r.origin.z, r.direction.x, r.direction.y, r.direction.z);
-      if (i >= 0) { sim.grab(i); const h = planeHit(r, 1.7); if (h) sim.moveGrab(h.x, 1.7, h.z); }
+      if (i >= 0) { sim.grab(i); Object.assign(grabAim, { x, y, lift: 0, goal: touch ? TOUCH_LIFT : 0 }); moveGrabTo(); }
       else showHint('Touch a pig to pick it up.', 1.8);
     }
   }
@@ -419,8 +434,8 @@ if (vMud.x > 0.002) {
     if (gesture?.kind === 'pan') { panBy(x - gesture.x, y - gesture.y); gesture.x = x; gesture.y = y; return; }
     if (!toolActive) return;
     if (tool === 'shoo') { const h = planeHit(rayAt(x, y), 0); if (h) { sim.setDog(h.x, h.z, true); ring.position.set(h.x, 0.04, h.z); } }
-    if (tool === 'hose') { const h = planeHit(rayAt(x, y), 0); if (h) aimHose(h.x, h.z); }
-    if (tool === 'grab' && sim.grabbed >= 0) { const h = planeHit(rayAt(x, y), 1.7); if (h) sim.moveGrab(h.x, 1.7, h.z); }
+    if (tool === 'hose') { const h = planeHit(rayAt(x, sprayY(y)), 0); if (h) aimHose(h.x, h.z); }
+    if (tool === 'grab' && sim.grabbed >= 0) { grabAim.x = x; grabAim.y = y; moveGrabTo(); }
   }
   function toolUp(x, y) {
     const wasTap = downInfo && Math.hypot(x - downInfo.x, y - downInfo.y) < 12 && performance.now() - downInfo.t < 450;
@@ -449,6 +464,7 @@ if (vMud.x > 0.002) {
   canvas.addEventListener('pointerdown', e => {
     sound.unlock(); canvas.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    touch = e.pointerType !== 'mouse';
     if (pointers.size === 1) toolDown(e.clientX, e.clientY, e.pointerType === 'mouse' ? e.button : 0);
     else if (pointers.size === 2) { if (toolActive) toolUp(-1e4, -1e4); toolActive = false; gesture = { kind: 'two', ...twoInfo() }; }
   });
@@ -491,6 +507,7 @@ if (vMud.x > 0.002) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (!paused) { acc += dt; let n = 0; while (acc >= DT && n < 4) { sim.step(); acc -= DT; n++; } if (n === 4) acc = 0; }
     for (const ev of sim.events.splice(0)) sound.event(ev, camera);
+    if (toolActive && tool === 'grab' && sim.grabbed >= 0 && grabAim.lift !== grabAim.goal) { grabAim.lift = Math.min(grabAim.goal, grabAim.lift + dt * TOUCH_LIFT / 0.18); moveGrabTo(); }
     updatePigs(dt); updateDog(dt); updateHose(dt); updateFoods(); updateBadge(); if ((frames & 7) === 0) updateTroughFood();
     if (ring.visible) { ring.rotation.y += dt; ring.scale.setScalar(1 + 0.08 * Math.sin(now * 0.01)); }
     applyCam(); renderer.render(scene, camera);

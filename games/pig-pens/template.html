@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Pig Pens</title>
+<title>Piggie Game</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#bfe6f5">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Pig Pens">
+<meta name="apple-mobile-web-app-title" content="Piggie Game">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sniglet:wght@400;800&display=swap" rel="stylesheet">
@@ -79,10 +79,12 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, e => e.preventDefault(), { passive: false });
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 // iOS home-screen apps with a translucent status bar report a viewport about one status bar
-// short, leaving a gap at the bottom. When the window spans the full screen width, use the
-// full screen height instead.
+// short, leaving a gap at the bottom. When installed and spanning the full screen width, use the
+// full screen height instead. In the browser the window height is right (its toolbars are real).
 (function fitHeight() {
+  const installed = navigator.standalone || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
   const set = () => {
+    if (!installed) { document.documentElement.style.setProperty('--app-h', innerHeight + 'px'); return; }
     const sw = screen.width, sh = screen.height, land = innerWidth > innerHeight;
     const fullW = land ? Math.max(sw, sh) : Math.min(sw, sh), fullH = land ? Math.min(sw, sh) : Math.max(sw, sh);
     const h = Math.abs(innerWidth - fullW) < 2 ? Math.max(innerHeight, fullH) : innerHeight;

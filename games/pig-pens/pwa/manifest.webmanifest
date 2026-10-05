@@ -1,6 +1,6 @@
 {
-  "name": "Pig Pens",
-  "short_name": "Pig Pens",
+  "name": "Piggie Game",
+  "short_name": "Piggie Game",
   "description": "Herd, feed and hose down a field full of pigs.",
   "id": "/exp/piggie-game/",
   "start_url": "/exp/piggie-game/",
