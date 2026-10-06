@@ -10,12 +10,14 @@ export class Sound {
     if (!this.ctx) {
       try {
         const C = window.AudioContext || window.webkitAudioContext; this.ctx = new C();
-        this.master = this.ctx.createGain(); this.master.gain.value = 0.55; this.master.connect(this.ctx.destination);
+        this.master = this.ctx.createGain(); this.master.gain.value = 0.55; const lim = this.ctx.createDynamicsCompressor(); // R-8: a soft limiter so nothing ever gets loud
+        lim.threshold.value = -14; lim.knee.value = 24; lim.ratio.value = 4; lim.attack.value = 0.005; lim.release.value = 0.2;
+        this.master.connect(lim); lim.connect(this.ctx.destination);
         this.musicBus = this.ctx.createGain(); this.musicBus.gain.value = 0; this.musicBus.connect(this.master);
         this.buildLoops();
-      } catch (e) { this.ctx = null; return; }
+      } catch (e) { this.ctx = null; return Promise.resolve(); }
     }
-    if (this.ctx.state !== 'running') this.ctx.resume?.();
+    return this.ctx.state !== 'running' ? Promise.resolve(this.ctx.resume?.()).catch(() => {}) : Promise.resolve();
   }
   get ok() { return !!this.ctx && !this.muted && this.ctx.state === 'running'; }
   noiseBuffer() {
@@ -38,12 +40,12 @@ export class Sound {
   // S-1: the pulse rate (putt-putt) climbs from 18 to 58 pulses a second with speed; S-2: crunch on gravel, softer swish on grass, nothing in mud
   engine(level, speed, surface) {
     if (!this.loops || this.ctx.state !== 'running') return;
-    const { eng, crunch } = this.loops, s = Math.max(0, Math.min(1, speed)), f = 18 + 40 * s, t = this.ctx.currentTime;
-    eng.o.frequency.setTargetAtTime(f, t, 0.1); eng.o2.frequency.setTargetAtTime(f / 2, t, 0.1); eng.lp.frequency.setTargetAtTime(300 + level * 500, t, 0.1);
-    this.ramp(eng.g.gain, 0.07 + 0.07 * level, 0.15);
-    const grass = surface === 'grass';
-    crunch.f.frequency.setTargetAtTime(grass ? 900 : 2200, t, 0.1);
-    this.ramp(crunch.g.gain, surface === 'mud' ? 0 : s * (grass ? 0.1 : 0.25), 0.1);
+    const { eng, crunch } = this.loops, s = Math.max(0, Math.min(1, speed)), f = 18 + 40 * s, t = this.ctx.currentTime, last = this.last || (this.last = {}), grass = surface === 'grass';
+    const set = (key, param, v, tc, eps) => { if (Math.abs(v - (last[key] ?? -1e9)) < eps) return; last[key] = v; param.setTargetAtTime(v, t, tc); }; // skip writes that change nothing you can hear
+    set('f', eng.o.frequency, f, 0.1, 0.3); set('f2', eng.o2.frequency, f / 2, 0.1, 0.15); set('lp', eng.lp.frequency, 300 + level * 500, 0.1, 10);
+    set('eg', eng.g.gain, this.muted ? 0 : 0.07 + 0.07 * level, 0.15, 0.003);
+    set('cf', crunch.f.frequency, grass ? 900 : 2200, 0.1, 1);
+    set('cg', crunch.g.gain, this.muted ? 0 : surface === 'mud' ? 0 : s * (grass ? 0.1 : 0.25), 0.1, 0.003);
   }
   skid(amount) { if (this.loops && this.ctx.state === 'running') this.ramp(this.loops.skid.g.gain, amount * 0.3, 0.05); }
   spray(on) { if (this.loops && this.ctx.state === 'running') this.ramp(this.loops.spray.g.gain, on ? 0.2 : 0, on ? 0.05 : 0.15); }
@@ -86,7 +88,7 @@ export class Sound {
   boing(v = 0.5) { if (this.ok) this.tone(180, 720, 0.35, v, 'triangle'); }
   plop() { if (this.ok) { this.tone(500, 160, 0.12, 0.5); this.noise(0.05, 0.2, 400); } }
   whee() { if (this.ok) this.tone(400, 1400, 0.6, 0.3, 'triangle'); }
-  horn() { if (!this.ok) return; for (const w of [0, 0.32]) { this.tone(392, 392, 0.24, 0.35, 'square', w); this.tone(494, 494, 0.24, 0.25, 'square', w); } }
+  horn() { if (!this.ok) return; for (const w of [0, 0.32]) { this.tone(392, 392, 0.24, 0.15, 'triangle', w); this.tone(494, 494, 0.24, 0.1, 'triangle', w); } }
   bells() { if (this.ok) [1319, 1568, 1976, 2637].forEach((f, i) => this.tone(f, f, 0.8, 0.25, 'sine', i * 0.12)); }
   squelch() { if (this.ok) { this.noise(0.2, 0.35, 300, 0, 2); this.tone(220, 90, 0.2, 0.25, 'sine', 0.05); } }
   // quick rising chime arpeggio with a little shimmer on top
@@ -96,7 +98,7 @@ export class Sound {
     this.noise(0.3, 0.12 * vol, 7000, 0.05, 3);
   }
   squeaky() { if (this.ok) { this.tone(1800, 3200, 0.15, 0.25); this.sparkle(0.6); } }
-  clunk() { if (this.ok) { this.tone(140, 60, 0.15, 0.6, 'square'); this.noise(0.08, 0.3, 800); } }
+  clunk() { if (this.ok) { this.tone(140, 70, 0.15, 0.3, 'triangle'); this.noise(0.08, 0.2, 800); } }
   // T-34 / R-8: a happy crunch-pop: woody crunch, a bright pop on top, then a few leaf rustles. Nothing low or loud.
   treePop() {
     if (!this.ok) return;

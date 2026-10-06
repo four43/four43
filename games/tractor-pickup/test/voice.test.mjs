@@ -25,3 +25,17 @@ test('stop() ends the line that is playing at once and say never rejects', async
   assert.equal(done, true); assert.equal(cancelled, 1);
   delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
 });
+
+test('name-line backlog: with 2 land lines waiting a third is dropped, trip lines never are', async () => {
+  const spoken = [], ends = [];
+  globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+  globalThis.speechSynthesis = { speak: u => { spoken.push(u.text); ends.push(u.onend); }, cancel: () => {} };
+  const { createVoice } = await import('../src/audio/voice.js');
+  const v = createVoice({ ctx: null });
+  v.say(['pig'], { low: true }); v.say(['cow'], { low: true }); v.say(['duck'], { low: true }); // pig plays, cow waits, duck waits: all 3 counted until each starts
+  v.say(['sheep'], { low: true });
+  v.say(['great-job', 'go-to-barn']);
+  for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 120)); ends.shift()?.(); }
+  assert.ok(!spoken.includes('Sheep'), 'fourth name line is dropped'); assert.ok(spoken.includes('Great job! Go to the barn!'));
+  v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
+});

@@ -43,13 +43,17 @@ export function createVoice(sound) {
     speechSynthesis.speak(u);
     return () => speechSynthesis.cancel();
   }, 2500 + 450 * text.length);
-  let chain = Promise.resolve();
+  let chain = Promise.resolve(), lowPending = 0;
+  const MAX_LOW = 2;
   const v = {
     enabled: true,
-    say(ids) {
-      if (!v.enabled) return Promise.resolve();
+    // opts.low marks a name line (a landing): when 2 low lines are already waiting it is dropped so trip and show lines are never delayed
+    say(ids, opts = {}) {
+      if (!v.enabled || (opts.low && lowPending >= MAX_LOW)) return Promise.resolve();
+      if (opts.low) lowPending++;
       const my = gen, plan = planUtterances(ids, new Set(Object.keys(src)));
       chain = chain.then(async () => {
+        if (opts.low) lowPending--;
         for (const p of plan) {
           if (my !== gen) return;
           try { if (p.clip && sound.ctx) await playClip(p.clip); else await speak(p.clip ? textOf(p.clip) : p.tts); } catch (e) { console.warn('voice', e); }
@@ -59,7 +63,9 @@ export function createVoice(sound) {
       return chain;
     },
     // a tap on the show cuts the current line (F-8); queued lines from before are dropped
-    stop() { gen++; const c = current; current = null; c?.cancel(); for (const f of [...pending]) f(); },
+    // iOS only speaks later, non-gesture lines once speech was started inside a gesture: call this from the gesture handler
+    prime() { try { if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') return; const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { console.warn('voice prime', e); } },
+    stop() { lowPending = 0; gen++; const c = current; current = null; c?.cancel(); for (const f of [...pending]) f(); },
   };
   return v;
 }

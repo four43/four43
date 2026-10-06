@@ -42,13 +42,16 @@ async function main() {
   console.log('farm 3d build ms', Math.round(performance.now() - t1));
   const vehicles = createVehicles3D(scene, game.tractor, game.train);
   const gibs = createGibs(scene), sound = new Sound();
-  // iOS plays no sound before a gesture: the first touch, click or key anywhere unlocks audio and starts the music (Task 14's start screen tap does the same)
-  const unlock = () => { sound.unlock(); sound.music(true); for (const n of ['pointerdown', 'keydown']) removeEventListener(n, unlock, true); };
-  for (const n of ['pointerdown', 'keydown']) addEventListener(n, unlock, true);
+  const voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
+  // iOS: audio and speech only start inside a gesture, and the context can be interrupted later. Try on every kind of gesture and on coming back to the page,
+  // and stop listening only once the context is really running. (Task 14's start tap can call the same unlock.)
+  const GEST = ['pointerup', 'touchend', 'click', 'keydown'];
+  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(true); for (const n of GEST) removeEventListener(n, unlock, true); } }); };
+  for (const n of GEST) addEventListener(n, unlock, true);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sound.ctx && sound.ctx.state !== 'running') { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); } });
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
   const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = null; // Task 13 replaces `fx` with the stars and puffs
   const hud = game.herd ? createHud(document.getElementById('ui'), { icons: renderIcons(renderer) }) : null;
-  const voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
   const trip = game.herd ? createTrip() : null, show = game.herd ? createShow({ root: document.getElementById('ui'), camera, game, voice, sound, fx }) : null;
   const sparkles = fx?.sparkleTrail ? fx : createSparkleTrail(scene); // Task 13 swaps in fx.sparkleTrail
   let showDone = false, rewardDone = false, riders = [], guideToBarn = false, helpTarget = null, pathT = 0, camBlend = 1;
@@ -71,7 +74,7 @@ async function main() {
         if (e.type === 'horn') sound.horn();
         if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx?.stars(e.animal.x, 1, e.animal.z); booped = true; }
         if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
-        if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
+        if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
       }
       stepSounds(game, sound, sfx);
       if (trip) { // spec 3.1: intro, drive, show, reward
