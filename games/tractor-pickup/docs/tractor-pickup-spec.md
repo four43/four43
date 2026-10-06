@@ -1,6 +1,6 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.6 (after review 2: model fixes, stop in the barn, running sum, farmyard wash)
+Version: 1.7 (drive buttons, sticker book with die-cut stickers, hats on or off)
 Date: 6 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
@@ -50,6 +50,14 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - New looks: the duck is a mallard, the chicken is white, the sheep has round black ears (5.1).
 - The farmyard has no fixed posts (T-31). It has more trees and bushes, and the trees are larger. Trees and bushes also stand along the routes. All of them burst (T-34, T-35).
 - All 3D models are GLB files in one folder, so a person can edit them by hand (X-8).
+
+### 1.2.7 Change in version 1.7
+
+- While driving, two buttons stacked at the bottom left open the paint screen and the sticker book (U-6).
+- Stickers are die-cut: a 3D picture of the animal in one of 6 poses, seen from one of 5 camera angles, with a clear background and a white sticker border (W-1).
+- The sticker book has pages with a farm picture. The player drags stickers from a tray onto a page, and can move them again later (W-2).
+- The paint screen has a row of the unlocked hats: each hat can be turned off or on (W-4).
+- The parent gear is at the top left. Every close button is a red X at the top right (U-3, U-7).
 
 ### 1.2.6 Change in version 1.6 (after review 2)
 
@@ -131,7 +139,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 3. The player drives out on a route and boops animals. Each boop fills one slot.
 4. The player comes back to the farmyard and drives into the barn, from either end. When the tractor is 3/4 of the way through the barn (at any speed) and at least one animal rides in the trailer or the wagon, the show starts (3.4). If no animal rides, nothing occurs and the tractor drives on. **[F-1]**
 5. When all 12 slots are full, the voice says "Great job! Go to the barn!". An arrow and a path of sparkles show the way to the barn. The path goes to a point on the barn axis outside the nearer opening, then straight along the axis into the barn. At the opening, a sparkle frame shows the full width and height of the door opening. The arrow points to the center of that opening. **[F-2]**
-6. After the show, the delivered animals walk into the barn and do not come back. The player gets a sticker (W-1). The sticker card shows "New sticker!" above the sticker, which stamps on with a small bounce; the voice says "You did it! You got a sticker!". The sticker book button shows the number of stickers in the book. **[F-3]**
+6. After the show, the delivered animals walk into the barn and do not come back. The player gets a sticker (W-1). The sticker card shows "New sticker!" above the new die-cut sticker (W-1), which stamps on with a small bounce; the voice says "You did it! You got a sticker!". The sticker book button shows the number of stickers in the book. **[F-3]**
 7. The player drives again with an empty trailer and wagon, on the same farm. **[F-9]** The sticker card has one large green "go" button (a play triangle). Only the parent menu makes a new farm (P-8).
 
 | ID | Item | Description |
@@ -161,7 +169,7 @@ The show starts when the tractor is 3/4 of the way through the barn with at leas
 | F-7 | Add together | After the last group, a running sum shows at the top of the screen, one stage per group, from zero: "0 + 3 = 3", then "3 + 2 = 5", then "5 + 1 = 6", and so on. The terms light up one at a time from left to right while the voice says them ("Zero plus three makes three! Three plus two makes five!"), with a 0.45 s pause after each term and 1.2 s between stages. The tally count (F-14) glows with the first term and the group label with the second. After each stage, that group moves into the tally circle (F-14) and its label fades. Then all animals jump together. The voice says "Six animals! Hooray!". Confetti. If there is only one group, there is no sum: the total shows alone. |
 | F-8 | Speed | Each step waits 0.8 s. A tap on the screen goes to the next step immediately, so a parent can make it faster. |
 | F-14 | Tally circle | With two or more groups, a circle on the ground at the left of the blocks (screen left): a pale disc with a yellow rim, sized so that every animal of the show fits with no overlap. Above it, a large number: the animals in the circle, starting at 0. After each stage of the sum (F-7), the animals of that group move into the circle one after another (0.25 s apart, a short hop each), and the number goes up by one as each lands. The circle fills from the middle out, so the groups stand together. The camera moves back so that the circle and all blocks are in view. The farmyard keeps the ground for the circle clear of obstacles (T-29). |
-| F-13 | Skip | A skip button (a fast-forward picture) at the top right, under the parent gear, ends the whole show at once. The sticker card comes next. |
+| F-13 | Skip | A skip button (a fast-forward picture) at the top right ends the whole show at once. The sticker card comes next. |
 | F-10 | Into the barn | After the show, the animals walk, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. |
 | F-12 | Line-up layout | Each group has its own block in the line-up area. A block has rows of up to 4 animals. Animals in a row stand side by side with a gap of 0.4 m. Rows in a block are 0.6 m apart (from body edge to body edge). The first row is nearest to the barn axis, and later rows are nearer to the camera. The blocks stand side by side with a 1.5 m gap. If the blocks are wider than the line-up area, a block has fewer animals in a row, then the blocks go on a second line of blocks. No two animals overlap. The camera moves back so that all blocks are in view. |
 
@@ -381,9 +389,11 @@ The tractor drives like a car. The chase camera (V-1) always stays behind the tr
 |---|---|---|
 | U-1 | Slot bar | Top center. 12 slots: 6 for the trailer, a small gap, then 6 for the wagon. Each slot fills with the animal picture and name. The bar empties after the show. |
 | U-2 | Horn | Bottom right |
-| U-3 | Parent menu | Top right. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
+| U-3 | Parent menu | Top left. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
 | U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4) and "New sticker!" on the sticker card (F-3). The voice says each of them (R-2). The parent menu can use text. |
-| U-5 | Skip | During the show only: top right, under the gear. A fast-forward picture (F-13). |
+| U-5 | Skip | During the show only: top right. A fast-forward picture (F-13). |
+| U-7 | Close buttons | Every close button is a red X in the top right corner of what it closes: the paint screen and the sticker book (top right of the screen) and the parent menu (top right of its panel). |
+| U-6 | Drive buttons | While driving only (not during the start screen, the show or the sticker card): two round buttons stacked at the bottom left, clear of the slot bar. The upper button (a paint pot) opens the paint screen (W-3); the lower button (a book) opens the sticker book (W-2). A tap on a button never moves the stick. While either screen is open, the tractor is held (like the sticker card) and nothing is booped; a close button (a red X, top right) goes back to driving. |
 
 ### 8.2 Sounds
 
@@ -412,10 +422,11 @@ All items in this section are accepted for the first version.
 
 | ID | Item | Description |
 |---|---|---|
-| W-1 | Sticker | One sticker after each show. The sticker shows the golden animal (if found) or the animal type with the most boops. |
+| W-1 | Sticker | One sticker after each show. The sticker shows the golden animal (if found) or the animal type with the most boops. A sticker is die-cut: a 3D picture of the animal (gold for a golden animal) with a clear background, a thick white border that follows the animal's outline, and a soft shadow, not a circle. Each sticker has a pose (standing, walking, running, dancing, eating or shaking its head: a frame of that animation) and a camera angle (one of 5: from the front left or right, three-quarter left or right, or a little from above). The pose and the angle come from the show number and the animal type, so each new sticker usually looks different, and a sticker always looks the same each time it is drawn. Stickers from version 1.6 and before get a pose and an angle the same way. |
+| W-2 | Sticker book | The sticker book has pages. Each page is a farm picture (sky, hills, grass; the pictures take turns: day farm, pond, sunset). Stickers that are not on a page wait in a tray along the bottom of the screen, newest first; a new sticker bounces once. The player drags a sticker from the tray onto the page, where it stays where it is dropped, slightly tilted. A sticker on the page can be dragged again to move it; it comes to the front. Dragging a sticker back onto the tray takes it off the page. Arrows at the left and right edges turn the pages; there is always one empty page after the last page that has a sticker. The page, the position (as a part of the page width and height, so it fits any screen) and the tilt of each sticker are kept in the browser storage. A close button (a red X, top right) closes the book. Dragging works with a finger or a mouse. |
 | W-2 | Sticker book | A screen with all stickers. Data stays in the browser storage. |
 | W-3 | Paint | The tractor has two paint areas: the body (the cab, the hood and the frame) and the trim (the fenders and the roof). The windows, the wheels, the exhaust and the lamps are never painted. The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
-| W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. Each animal model has an empty node named `hat` on its head; the hat hangs on it, so it bobs with the head in every animation. |
+| W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. Each animal model has an empty node named `hat` on its head; the hat hangs on it, so it bobs with the head in every animation. Below the paint rows, the paint screen (W-3) has a row of the unlocked hats, starting with a small pig in a hat. A tap turns a hat off (pale and grey) or on (in color, with a gold ring), with a "plop"; the animals change their hats at once. The animals wear only the hats that are on, taking turns among them; with all hats off, no animal wears a hat. A newly unlocked hat starts on. The choice is kept in the browser storage. |
 
 ---
 
@@ -427,6 +438,7 @@ All items in this section are accepted for the first version.
 | P-4 | Music | On, Off | On |
 | P-5 | Farm seed | A number | Random |
 | P-8 | New farm | Button | — |
+| P-9 | Apply and close | An Apply button saves the settings and closes the menu. The red X at the top right of the panel (U-7) closes it without saving. | — |
 | P-6 | Clear stickers | Button with a confirmation | — |
 | P-7 | Power | Low (6 m/s, small slides), Medium (9 m/s), High (12 m/s, large slides) | Medium |
 
@@ -477,7 +489,7 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 
 ## 13. Test results
 
-State at version 1.6 (`npm test`: 485 tests, all pass). Version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.7 (`npm test`: 488 tests, all pass). Version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|
@@ -513,6 +525,9 @@ State at version 1.6 (`npm test`: 485 tests, all pass). Version 1.5 had 475, rel
 | 1.6 F-7, F-13, F-14 Running sum, tally circle, skip | `showSteps.test.mjs` (stages from zero, circle packing with no overlap, 12 cows fit), `show.test.mjs` (words in order, takes over 3 s, the count goes 0 to 4, all animals end in the circle, skip ends the show), `track.test.mjs` (300 seeds: the circle's ground is in the yard and clear of obstacles and the pond) | 7 animals in 4 groups: "0 + 2 = 2" ... "6 + 1 = 7", each group moves into the circle at the left, count above it; skip button | Pace with recorded voice clips |
 | 1.6 W-3, W-4, 5.1 Model fixes | `assets.test.mjs` (tractor parts and paint areas, hat node height in every walk frame, sheep muzzle) | Tractor red and yellow with clear glass and grey wheels; hats on riders; cow spots; stickers with snouts and legs | Hand edits of the split tractor in Blender |
 | 1.6 T-36 Farmyard wash | `track.test.mjs` (300 seeds: in the yard, clear of lanes, line-up, pond and obstacles), `dirt.test.mjs` (cleans in one pass, posts are solid) | Drive through: spray, brushes spin, canopy fades, tractor clean | Frame rate with the extra water particles |
+| 1.7 U-6 Drive buttons | None (UI) | Both buttons at the bottom left only while driving (hidden in the show); each opens its screen, the tractor is held, the X gives driving back; a paint tap repaints and is saved | Button size and the stick near them on the iPad |
+| 1.7 W-4 Hats on or off | `progress.test.mjs` (toggle, all off, a new hat starts on, locked hats cannot be toggled, storage and old saves) | Paint screen with 3 hats: straw turned off, the animals wear only cowboy and party; the choice is saved | Hat buttons read as on and off to a 4-year-old |
+| 1.7 W-1, W-2 Die-cut stickers and the book | `progress.test.mjs` (pose and angle from show and type, varied and stable; place, move to the front, back to the tray, one empty page at the end; old saves and damaged places) | 10 stickers: die-cut renders in 6 poses and 5 angles; dragged 4 onto a page, moved one (it came to the front); placements kept after a reload; the sticker card shows the new die-cut sticker | Dragging with a small finger; sticker size on the page |
 | 12 Voice | `voice.test.mjs` | Build prints the clip count (0 now) | Record the clips, check loudness |
 | T-34 Breakable trees | `trees.test.mjs`, `game.test.mjs` | Burst, stump and regrow seen | Crunch-pop sound level |
 
