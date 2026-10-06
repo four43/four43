@@ -21,6 +21,9 @@ import { createChaseCam, CAM } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
 import { makeGravelTexture, worldUV } from './render/textures.js';
+import { createTrip, stepTrip } from './sim/trip.js';
+import { buildShowSteps } from './sim/showSteps.js';
+import { createShow } from './ui/show.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -40,6 +43,13 @@ async function main() {
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
   const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = null; // Task 13 replaces `fx` with the stars and puffs
   const hud = game.herd ? createHud(document.getElementById('ui'), { icons: renderIcons(renderer) }) : null;
+  // Task 12 replaces this stub with the recorded voice (speech fallback). It resolves after ~0.6 s per word, so the show keeps a real pace.
+  const voice = { say: ids => { ids = [].concat(ids); console.log('say', ids.join(' ')); return new Promise(res => setTimeout(res, 600 * ids.length)); } };
+  const trip = game.herd ? createTrip() : null, show = game.herd ? createShow({ root: document.getElementById('ui'), camera, game, voice, sound, fx }) : null;
+  const sparkles = fx?.sparkleTrail ? fx : createSparkleTrail(scene); // Task 13 swaps in fx.sparkleTrail
+  let showDone = false, rewardDone = false, riders = [], guideToBarn = false, helpTarget = null, pathT = 0, camBlend = 1;
+  const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
+  const showReward = () => { rewardDone = true; }; // Task 14: the sticker card
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
   const slow = createSlowMo(); let booped = false; // B-7: half speed at the top of the arc of the first animal each boop launches
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
@@ -57,15 +67,80 @@ async function main() {
         if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
         if (e.type === 'land') { const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
       }
+      if (trip) { // spec 3.1: intro, drive, show, reward
+        const cues = stepTrip(trip, { dt: DT, landed: game.load.landed(), booped: ev.some(e => e.type === 'boop'), barnPass: ev.some(e => e.type === 'barnPass'), showDone, rewardDone });
+        showDone = rewardDone = false;
+        for (const c of cues) {
+          if (c === 'say-intro') voice.say(['lets-find', 'animals']);
+          if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
+          if (c === 'help') { const h = game.herd.callHelp(game.tractor); if (h) helpTarget = { a: h, t: 10 }; }
+          if (c === 'show') {
+            guideToBarn = false; helpTarget = null; sparkles.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow();
+            show.play(riders, buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden })))).then(() => { showDone = true; });
+          }
+          if (c === 'reward') { showQuat.copy(camera.quaternion); camBlend = 0; show.end(); game.finishShow(riders); hud.reset(); showReward(riders); }
+        }
+      }
     }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
     gibs.update(dt); farm3d?.update(view[0].p); animals3d?.update(dt, game, { cars: view.slice(1), alpha: a });
     vehicles.update({ tractor: view[0], cars: view.slice(1) });
     const t = game.tractor, lv = t.body.linvel();
-    chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });
+    if (show?.active) show.update(dt);
+    else {
+      chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });
+      if (camBlend < 1) { camBlend = Math.min(1, camBlend + dt); const k = camBlend * camBlend * (3 - 2 * camBlend); chaseQuat.copy(camera.quaternion); camera.quaternion.slerpQuaternions(showQuat, chaseQuat, k); } // F-10: turn back smoothly
+    }
+    if (trip) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
+      if (helpTarget && ((helpTarget.t -= dt) <= 0 || !game.herd.free().includes(helpTarget.a))) helpTarget = null;
+      if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.5; sparkles.sparkleTrail(barnPath(game, t.x, t.z)); }
+      sparkles.update?.(dt);
+      const b = game.farm.yard.barn, aim = show.active ? null : helpTarget ? { x: helpTarget.a.x, y: 1, z: helpTarget.a.z } : guideToBarn ? { x: b.x, y: 3, z: b.z } : null;
+      hud.arrowTo(aim && edgeArrow(camera, aim));
+    }
     follow(view[0].p.x, view[0].p.z);
     renderer.render(scene, camera);
   });
+}
+
+// F-2: points every 3 m to the nearer barn end: along the route to its nearer end (the gate), then straight across the farmyard
+function barnPath(game, x, z) {
+  const { road, farm, terrain } = game, b = farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], pts = [];
+  const nearEnd = p => [b.half, -b.half].map(k => ({ x: b.x + f[0] * k, z: b.z + f[1] * k })).sort((u, w) => Math.hypot(u.x - p.x, u.z - p.z) - Math.hypot(w.x - p.x, w.z - p.z))[0];
+  let from = { x, z };
+  if (!road.inYard(x, z)) {
+    const n = road.nearest(x, z), R = road.routes[n.pt.r], dir = n.pt.s < R.length - n.pt.s ? -1 : 1;
+    for (let i = n.pt.n; i >= 0 && i < R.pts.length && pts.length < 40; i += dir * 3) pts.push(R.pts[i]);
+    from = R.pts[dir < 0 ? 0 : R.pts.length - 1];
+  }
+  const to = nearEnd(from), m = Math.max(1, Math.round(Math.hypot(to.x - from.x, to.z - from.z) / 3));
+  for (let i = pts.length ? 1 : 0; i <= m && pts.length < 40; i++) pts.push({ x: from.x + (to.x - from.x) * i / m, z: from.z + (to.z - from.z) * i / m });
+  return pts.map(p => ({ x: p.x, y: terrain.height(p.x, p.z) + 0.6, z: p.z }));
+}
+
+// Fallback sparkles until Task 13's fx.sparkleTrail: 40 small yellow sprites that twinkle in a wave toward the barn
+function createSparkleTrail(scene) {
+  const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, '#fff'); gr.addColorStop(0.35, '#ffe14a'); gr.addColorStop(1, 'rgba(255,210,60,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false });
+  const sprites = Array.from({ length: 40 }, () => { const s = new THREE.Sprite(mat); s.visible = false; scene.add(s); return s; });
+  let t = 0;
+  return {
+    sparkleTrail(points) { sprites.forEach((s, i) => { const p = points[i]; s.visible = !!p; if (p) s.position.set(p.x, p.y, p.z); }); },
+    update(dt) { t += dt; sprites.forEach((s, i) => { const k = 0.5 + 0.2 * Math.sin(t * 6 - i * 0.8); s.scale.set(k, k, k); }); },
+  };
+}
+
+// F-2, F-4: a point off screen (or behind the camera) gives an arrow on a screen ellipse inset by 70 px, pointing toward it; on screen gives null
+const _v = new THREE.Vector3();
+function edgeArrow(camera, p) {
+  const behind = _v.set(p.x, p.y, p.z).applyMatrix4(camera.matrixWorldInverse).z > 0;
+  _v.set(p.x, p.y, p.z).project(camera);
+  if (!behind && Math.abs(_v.x) <= 1 && Math.abs(_v.y) <= 1) return null;
+  let dx = _v.x * innerWidth / 2, dy = -_v.y * innerHeight / 2; if (behind) { dx = -dx; dy = -dy; }
+  if (Math.hypot(dx, dy) < 1) dy = 1; // straight behind: point down
+  const e = Math.hypot(dx / (innerWidth / 2 - 70), dy / (innerHeight / 2 - 70));
+  return { x: innerWidth / 2 + dx / e, y: innerHeight / 2 + dy / e, angle: Math.atan2(dy, dx) };
 }
 
 function buildSandbox3D(scene, game, anisotropy) {
