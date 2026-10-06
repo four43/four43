@@ -9,8 +9,8 @@ export function createScene(canvas) {
   const sun = new THREE.DirectionalLight('#fff3dc', 2.1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 5, far: 120 });
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03; scene.add(sun, sun.target);
-  const resize = () => {
-    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); renderer.setSize(innerWidth, innerHeight, false);
+  const resize = () => { // iPad (touch): pixel ratio capped at 1.5 to hold 60 fps (X-4)
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, navigator.maxTouchPoints > 1 ? 1.5 : 2)); renderer.setSize(innerWidth, innerHeight, false);
     camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   };
   addEventListener('resize', resize); resize();

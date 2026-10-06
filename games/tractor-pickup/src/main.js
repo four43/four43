@@ -42,7 +42,7 @@ async function main() {
   let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
   let powerNow = params.get('power') || settings.power;
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
-  const aniso = renderer.capabilities.getMaxAnisotropy();
+  const aniso = renderer.capabilities.getMaxAnisotropy(), perf = params.has('fps') ? createFpsMeter(renderer) : null;
   const sound = new Sound(), voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
   voice.enabled = settings.voice;
   // iOS: audio and speech only start inside a gesture, and the context can be interrupted later. Try on every kind of gesture and on coming back to the page,
@@ -170,6 +170,7 @@ async function main() {
     { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
     follow(view[0].p.x, view[0].p.z);
     renderer.render(scene, camera);
+    perf?.tick(dt);
   };
   menus?.showStart(progress);
   renderer.setAnimationLoop(frame);
@@ -288,3 +289,17 @@ function buildTunePanel(game) {
   if (game.trees) { const r = document.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = () => { game.yardProps.reset(); game.trees.reset(); }; body.appendChild(r); }
 }
 main();
+
+// ?fps: a small corner readout of frames per second (now, and the lowest over the last 5 s), draw calls and triangles
+function createFpsMeter(renderer) {
+  const el = Object.assign(document.createElement('div'), { id: 'fps' });
+  el.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99;font:12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;white-space:pre';
+  document.body.appendChild(el);
+  const win = []; let shown = 0;
+  return { tick(dt) {
+    win.push(dt); if (win.length > 300) win.shift();
+    if ((shown += dt) < 0.5) return; shown = 0;
+    const avg = win.reduce((a, b) => a + b, 0) / win.length, worst = Math.max(...win), i = renderer.info.render;
+    el.textContent = `${(1 / dt).toFixed(0)} fps (avg ${(1 / avg).toFixed(0)}, min ${(1 / worst).toFixed(0)})\n${i.calls} draws, ${(i.triangles / 1000).toFixed(0)}k tris`;
+  } };
+}

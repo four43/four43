@@ -45,7 +45,33 @@ function buildGround(terrain) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('rock', new THREE.Float32BufferAttribute(rock, 1)); g.setIndex(idx);
-  return g;
+  return splitGround(g, F);
+}
+
+// Split the ground into CHUNKS x CHUNKS meshes over the farm square so frustum culling drops what the camera cannot see.
+// Each triangle goes to the chunk holding its centre (the skirt joins its nearest edge chunk). Vertices are copied as they are
+// (same positions and normals), so the seams between chunks stay crack-free.
+const CHUNKS = 6;
+function splitGround(g, F) {
+  const P = g.attributes, ix = g.index.array, cs = 2 * F / CHUNKS, buckets = new Map();
+  const cell = v => Math.max(0, Math.min(CHUNKS - 1, Math.floor((v + F) / cs)));
+  for (let t = 0; t < ix.length; t += 3) {
+    let cx = 0, cz = 0; for (let k = 0; k < 3; k++) { cx += P.position.getX(ix[t + k]); cz += P.position.getZ(ix[t + k]); }
+    const key = cell(cx / 3) * CHUNKS + cell(cz / 3); if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(t);
+  }
+  const out = [];
+  for (const tris of buckets.values()) {
+    const remap = new Map(), src = [], idx = [];
+    for (const t of tris) for (let k = 0; k < 3; k++) { const v = ix[t + k]; if (!remap.has(v)) { remap.set(v, src.length); src.push(v); } idx.push(remap.get(v)); }
+    const c = new THREE.BufferGeometry();
+    for (const [name, a] of Object.entries(P)) {
+      const sz = a.itemSize, arr = new Float32Array(src.length * sz);
+      src.forEach((v, i) => { for (let k = 0; k < sz; k++) arr[i * sz + k] = a.array[v * sz + k]; });
+      c.setAttribute(name, new THREE.BufferAttribute(arr, sz));
+    }
+    c.setIndex(idx); out.push(c);
+  }
+  g.dispose(); return out;
 }
 
 // Lambert with the grass map, blended toward a triplanar rock map by the vertex `rock` weight (steep cut faces).
@@ -58,7 +84,11 @@ function groundMaterial(grassMap, anisotropy) {
     sh.fragmentShader = 'uniform sampler2D rockMap;\nvarying float vRock;\nvarying vec3 vGP;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
       vec4 grassC = texture2D( map, vMapUv );
       vec3 tw = pow( abs( normalize( vGN ) ), vec3( 4.0 ) ); tw /= tw.x + tw.y + tw.z;
-      vec4 rockC = texture2D( rockMap, vGP.zy * 0.33 ) * tw.x + texture2D( rockMap, vGP.xz * 0.33 ) * tw.y + texture2D( rockMap, vGP.xy * 0.33 ) * tw.z;
+      vec3 p3 = vGP * 0.33, dx3 = dFdx( p3 ), dy3 = dFdy( p3 ); // gradients outside the branch keep the mip level right
+      vec4 rockC = vec4( 1.0 );
+      if ( vRock > 0.001 ) { // flat grass skips the three triplanar reads
+        rockC = textureGrad( rockMap, p3.zy, dx3.zy, dy3.zy ) * tw.x + textureGrad( rockMap, p3.xz, dx3.xz, dy3.xz ) * tw.y + textureGrad( rockMap, p3.xy, dx3.xy, dy3.xy ) * tw.z;
+      }
       diffuseColor *= mix( grassC, rockC, vRock );`);
   };
   return m;
@@ -71,7 +101,7 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), p3 = new THREE.Vector3(), s3 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
   const speckle = (g, a, b) => { const n = g.attributes.position.count, col = new Float32Array(n * 3), A = new THREE.Color(a), B = new THREE.Color(b), c = new THREE.Color(); for (let i = 0; i < n; i++) { c.copy(A).lerp(B, Math.random()); col.set([c.r, c.g, c.b], i * 3); } g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g; };
   // ground: high and low land with the route cuttings (T-17), one mesh from the terrain grid
-  { const g = buildGround(terrain); worldUV(g, TEX_M * 2); const m = new THREE.Mesh(g, groundMaterial(matGrass.map, anisotropy)); m.receiveShadow = true; scene.add(m); }
+  { const mat = groundMaterial(matGrass.map, anisotropy); for (const g of buildGround(terrain)) { worldUV(g, TEX_M * 2); const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m); } }
   // farmyard: packed gravel square
   { const g = speckle(new THREE.PlaneGeometry(YARD_HALF * 2, YARD_HALF * 2, 60, 60).rotateX(-Math.PI / 2), '#ffffff', '#ebe3d6'); g.translate(0, 0.015, 0); worldUV(g, TEX_M); const m = new THREE.Mesh(g, matGravel); m.receiveShadow = true; scene.add(m); }
   // ribbons along a route between two signed offsets o0 < o1 from the centerline (open ends meet the yard edge)

@@ -1,7 +1,7 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.3 (high and low terrain, fences and banks, no stage)
-Date: 5 October 2026
+Version: 1.4 (test results in section 13; icons, share image, performance pass)
+Date: 6 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
 Status of items: Each design item has an ID (for example, **[C-1]**). All items in this document are accepted for the first version.
@@ -34,6 +34,10 @@ Everything is larger. Routes are 14 m wide and have rock edges, so the tractor c
 ### 1.2.3 Change in version 1.3 (after playtest 2b)
 
 The ground is in large high and low areas. Where the ground next to a route is high, the route goes through a cutting with a rock bank. Where the ground is low, a fence keeps the tractor on the route. The farmyard and the area around it are low. The stage is removed: the animals stand on the ground for the show.
+
+### 1.2.4 Change in version 1.4 (release 1.0.0)
+
+Section 13 now holds the test results, not open questions. The game has PWA icons, a share image and a `?fps` meter. No design item changed.
 
 ### 1.3 Design rules for a 4-year-old player
 
@@ -426,6 +430,42 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, or
 
 ---
 
-## 13. Open questions
+## 13. Test results
 
-None.
+State at release 1.0.0 (`npm test`: 464 tests, all pass). "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+
+| Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
+|---|---|---|---|
+| 3.1 Trip flow, 3.3 Help | `trip.test.mjs`, `game.test.mjs` | Full trip with seeds 1 to 4: intro, boops, barn pass, help arrow after 20 s | Feel of the pace for a 4-year-old |
+| 3.2 Animals and slots | `slots.test.mjs`, `game.test.mjs` | HUD slots fill in order | Slot icons are readable at arm length |
+| 3.4 Show | `show.test.mjs`, `showSteps.test.mjs`, `trip.test.mjs` | Show with 3, 4, 7 and 12 animals, tap to skip | Timing of the count with the voice |
+| 4.1 to 4.5 Layout, tiles, routes, rules | `track.test.mjs`, `road.test.mjs`, `terrain.test.mjs` | Routes on seeds 1 to 4 (screenshots in the SDD notes) | None known |
+| 4.6 Scenery, 4.7 Farmyard | `yard.test.mjs`, `trees.test.mjs`, `terrain.test.mjs` (T-29 line-up) | Yard, barn, props, tree bursts | None known |
+| 5.1 Animal types | `assets.test.mjs`, `herd.test.mjs` | Every type seen | None known |
+| 5.2 Behavior (A-7 to A-16) | `herd.test.mjs`, `game.test.mjs` | Flee, horn, chick line, pig mud seen | Horn response feels right |
+| 6.1 Boop, 6.2 Launch, 6.3 In the trailer | `launch.test.mjs`, `slowmo.test.mjs`, `game.test.mjs`, `slots.test.mjs` | Flights over the cab (`pwa/og-image.jpg`) | Slow motion (B-7) is pleasant, not confusing |
+| 7.1 Drive model | `tractor.test.mjs`, `hitch.test.mjs`, `terrain.test.mjs`, `dirt.test.mjs`, `sandbox.test.mjs` | Keyboard driving on gravel, mud, banks and ramps | Slides and grip (D-6, D-7) on the touch stick |
+| 7.2 Control, 7.3 Inputs | `input.test.mjs` (circle to square stick) | Keyboard and mouse. Gamepad not tested. | Touch stick, horn button, multi-touch, no page zoom |
+| 7.4 Camera | None (visual) | Chase camera and the turn back after the show | Camera height and comfort |
+| 8.1 Screen items | `trip.test.mjs`, `showSteps.test.mjs` | HUD and arrows in screenshots | Text size on the iPad, safe areas, landscape lock |
+| 8.2 Sounds | `voice.test.mjs` (word list, fallback, backlog) | None: headless has no sound | All sounds, speech fallback, engine and skid levels |
+| 8.3 Reading aid | `showSteps.test.mjs` (R-2 labels) | Letters glow in the show (screenshots) | Andika and Sniglet fonts load on the iPad |
+| 9 Rewards | `progress.test.mjs` | Sticker and card after a show | Card buttons are easy to tap |
+| 10 Parent menu | `progress.test.mjs` (settings limits) | Menu opens and saves | Opening it with the gesture the spec names |
+| 11 X-1 Libraries, fixed step | `rng.test.mjs`, `game.test.mjs` | Runs in the browser | None |
+| 11 X-2 Assets | `assets.test.mjs` | Build is 5.87 MB | None |
+| 11 X-3 Devices | None | Desktop only | The whole game on an iPad in landscape |
+| 11 X-4 Frame rate | None | `?fps` meter, desktop (see below) | **60 fps on a 2020 or newer iPad: not measured** |
+| 11 X-5 Offline | None | Service worker installs, caches the page, icons and fonts. The page loads offline (Playwright offline mode). | Install to the Home Screen and play in airplane mode |
+| 11 X-6, X-7 Source and output | None | `npm run build` writes `site/exp/tractor-pickup/` | None |
+| 12 Voice | `voice.test.mjs` | Build prints the clip count (0 now) | Record the clips, check loudness |
+| T-34 Breakable trees | `trees.test.mjs`, `game.test.mjs` | Burst, stump and regrow seen | Crunch-pop sound level |
+
+Performance (X-4), desktop proxy: an RTX 5070 Ti is too fast to show an iPad limit, so the numbers are mainly the draw calls and triangles. Seed 1, start position, 1280 by 800:
+
+| Change | GPU time per frame | Draw calls | Triangles |
+|---|---|---|---|
+| Before | 0.39 ms | 111 | 1.85 M |
+| After: grass skips rock samples, ground in 6 by 6 chunks | 0.35 ms | 124 | 1.66 M |
+
+At 2360 by 1640 the time went from 0.63 ms to 0.54 ms. The shadow pass is about 40 % of the triangles and of the GPU time. The shadow map and the shadow box were not reduced, because the desktop frame time gives no reason. They are the next step if the iPad drops below 55 fps: map 1024 and box 22 m.
