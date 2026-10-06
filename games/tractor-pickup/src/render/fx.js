@@ -24,7 +24,7 @@ export function createFx(scene, groundY = () => 0) {
     stars(x, y, z) { for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; emit(x, y, z, Math.cos(a) * 5, 3, Math.sin(a) * 5, 0.22, 0.6, '#ffd84a', 2); } },
     gravel(x, z, dx, dz, n = 3) { const gy = groundY(x, z); for (let i = 0; i < n; i++) emit(x + R(0.4), gy + 0.2, z + R(0.4), -dx * 4 + R(3), 2 + Math.random() * 2.5, -dz * 4 + R(3), 0.09, 0.7, Math.random() < 0.5 ? '#bfa57a' : '#8d7656'); },
     dust(x, z) { emit(x + R(0.6), groundY(x, z) + 0.3, z + R(0.6), R(0.6), 0.6, R(0.6), 0.5, 1.2, '#e3d2b0', -0.2, 1.5); },
-    mudSplash(x, z) { const gy = groundY(x, z); for (let i = 0; i < 10; i++) emit(x + R(1), gy + 0.3, z + R(1), R(6), 2.5 + Math.random() * 3.5, R(6), 0.24, 0.9, Math.random() < 0.5 ? '#8a5c34' : '#4d311c'); },
+    mudSplash(x, z) { const gy = groundY(x, z); for (let i = 0; i < 10; i++) emit(x + R(1), gy + 0.3, z + R(1), R(6), 2.5 + Math.random() * 3.5, R(6), 0.24, 0.9, Math.random() < 0.5 ? '#8a5c34' : '#7a5230'); },
     // water falls from the arch (y is the start height above the ground; depth spreads it along the road); yaw is the arch's yaw: its width runs along (cos yaw, -sin yaw)
     water(x, z, yaw, y = 4.1, n = 5, spread = 14, depth = 0) { const gy = groundY(x, z) + y; for (let i = 0; i < n; i++) { const o = R(spread), d = R(depth); emit(x + o * Math.cos(yaw) + d * Math.sin(yaw), gy, z - o * Math.sin(yaw) + d * Math.cos(yaw), R(1), -1, R(1), 0.15, 0.9, '#a8e2ff', 9, 0.2); } },
     sparkles(x, y, z) { for (let i = 0; i < 12; i++) emit(x + R(2), y + R(1.5), z + R(2), R(1), 1.5, R(1), 0.2, 1, i % 2 ? '#ffffff' : '#fff1a0', -0.5); },

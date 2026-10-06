@@ -5,7 +5,7 @@ const TUNE = [0, 2, 4, 2, 5, 4, 2, 1, 0, 2, 4, 5, 7, 5, 4, 2]; // 16 steps, inde
 const BPM = 110, STEP = 60 / BPM / 2, AHEAD = 0.4;
 
 export class Sound {
-  constructor() { this.ctx = null; this.master = null; this.muted = false; this.loops = null; this.musicOn = false; this.musicTimer = 0; this.nextNote = 0; this.step = 0; }
+  constructor() { this.ctx = null; this.master = null; this.muted = false; this.loops = null; this.musicTimer = 0; this.nextNote = 0; this.step = 0; }
   unlock() {
     if (!this.ctx) {
       try {
@@ -47,7 +47,11 @@ export class Sound {
     set('cf', crunch.f.frequency, grass ? 900 : 2200, 0.1, 1);
     set('cg', crunch.g.gain, this.muted ? 0 : surface === 'mud' ? 0 : s * (grass ? 0.1 : 0.25), 0.1, 0.003);
   }
-  skid(amount) { if (this.loops && this.ctx.state === 'running') this.ramp(this.loops.skid.g.gain, amount * 0.3, 0.05); }
+  skid(amount) { // same dedupe as engine(): no write when nothing audible changes
+    if (!this.loops || this.ctx.state !== 'running') return;
+    const v = this.muted ? 0 : amount * 0.3, last = this.last || (this.last = {});
+    if (Math.abs(v - (last.sk ?? -1e9)) < 0.003) return; last.sk = v; this.loops.skid.g.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+  }
   spray(on) { if (this.loops && this.ctx.state === 'running') this.ramp(this.loops.spray.g.gain, on ? 0.2 : 0, on ? 0.05 : 0.15); }
   // voiced grunt: sawtooth through formant filters with a pitch glide
   voice(f0, f1, dur, vol, formants = [600, 1300], when = 0) {
@@ -111,7 +115,7 @@ export class Sound {
   // S-5: a light 16-step loop, scheduled a little ahead of the clock
   music(on) {
     if (!this.ctx) return;
-    this.musicOn = on; this.ramp(this.musicBus.gain, on ? 1 : 0, 0.3);
+    this.ramp(this.musicBus.gain, on ? 1 : 0, 0.3);
     if (on && !this.musicTimer) { this.nextNote = this.ctx.currentTime + 0.1; this.musicTimer = setInterval(() => this.schedule(), 100); }
     if (!on && this.musicTimer) { clearInterval(this.musicTimer); this.musicTimer = 0; }
   }

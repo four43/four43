@@ -29,7 +29,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     const n = env.roadNearest(x, z); if (n.d <= WALK_HALF) return { x, z };
     const k = WALK_HALF / n.d; return { x: n.pt.x + (x - n.pt.x) * k, z: n.pt.z + (z - n.pt.z) * k };
   };
-  const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, lookT: 0, tx: at.x, tz: at.z, trail: [], penOrder: 0 }; animals.push(a); return a; };
+  const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, lookT: 0, tx: at.x, tz: at.z, trail: [] }; animals.push(a); return a; };
   for (const t of MAIN_TYPES) add(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad(), t === 'duck' ? 'yard' : 'route');
   const hen = add('chicken', spawnNearRoad());
   for (let i = 1; i <= 2; i++) { const c = add('chick', { x: hen.x - i * 0.8, z: hen.z }); c.leader = hen.id; c.line = i; c.state = 'follow'; }
@@ -117,7 +117,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
         if (!NOT_FREE.has(a.state)) clampHome(a);
         const last = a.trail[0]; if (!last || Math.hypot(last.x - a.x, last.z - a.z) > 0.25) { a.trail.unshift({ x: a.x, z: a.z }); if (a.trail.length > 12) a.trail.pop(); }
       }
-      // separation (free animals only; not the ones in flight, riding, on stage, walking into the barn or gone)
+      // separation (free animals only; not the ones in flight, riding, walking into the barn or gone)
       const live = animals.filter(a => !NOT_FREE.has(a.state) && !a.hidden);
       for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
         const p = live[i], q = live[j], dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz), m = TYPES[p.type].r + TYPES[q.type].r;

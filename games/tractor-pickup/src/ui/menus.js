@@ -95,7 +95,7 @@ export function createMenus(root, { icons, onPlay, onKeepDriving, onNewFarm, onS
       const a = e.target.dataset?.a; if (!a) return;
       if (a === 'apply') { onSettings(values()); done(); }
       else if (a === 'close') done();
-      else if (a === 'new') { onSettings(values()); done(); const atStart = screen?.classList.contains('start'); close(); onNewFarm(); if (atStart) onPlay(); } // a screen left open would hide the new farm; from the start screen this also starts play
+      else if (a === 'new') { onSettings(values()); done(); close(); onNewFarm(); } // a screen left open would hide the new farm; onNewFarm itself brings back the start screen when play has not begun
       else if (a === 'clear' && confirm('Clear all stickers? This cannot be undone.')) { onClearStickers(); done(); }
     });
     p.addEventListener('pointerdown', e => e.stopPropagation());

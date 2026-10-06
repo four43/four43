@@ -120,3 +120,13 @@ test('in the reward state the tractor is held: full throttle goes nowhere, a coa
   for (let i = 0; i < 120; i++) g.step({ thr: 1, steer: 0, horn: false });
   assert.ok(Math.hypot(g.tractor.x - x0, g.tractor.z - z0) > 3, 'driving works again after the card');
 });
+
+test('tractorLocal is fresh outside a step (the per-step axes cache is dropped) and the unused air event is gone', () => {
+  const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g);
+  const ev = []; for (let i = 0; i < 30; i++) ev.push(...g.step(STILL));
+  assert.equal(ev.filter(e => e.type === 'air').length, 0);
+  const p = g.tractor.body.translation(), before = g.tractorLocal(p.x + 3, p.y, p.z + 1, {});
+  const a = 0.7 + 2 * Math.atan2(g.tractor.body.rotation().y, g.tractor.body.rotation().w); g.tractor.body.setRotation({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, true); // turn the tractor by 0.7 rad
+  const after = g.tractorLocal(p.x + 3, p.y, p.z + 1, {});
+  assert.ok(Math.abs(before.x - after.x) + Math.abs(before.z - after.z) > 1, `local ${before.x},${before.z} -> ${after.x},${after.z}`);
+});

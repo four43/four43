@@ -13,7 +13,7 @@ export function planUtterances(ids, available) {
 
 // say(ids) resolves when the line has been spoken, or at once when stop() cuts it off. It never rejects (R-1).
 export function createVoice(sound) {
-  const src = (typeof window !== 'undefined' && window.__VOICE__) || {}, buffers = new Map(), pending = new Set();
+  const src = (typeof window !== 'undefined' && window.__VOICE__) || {}, buffers = new Map(), pending = new Set(), live = new Set();
   let gen = 0, current = null; // gen bumps on stop(); a line from an older gen quietly ends
   const decode = async id => {
     if (!buffers.has(id)) {
@@ -39,10 +39,12 @@ export function createVoice(sound) {
   };
   const speak = text => step(end => {
     if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') { setTimeout(end, 300 * text.split(' ').length); return; }
-    const u = new SpeechSynthesisUtterance(text); u.rate = 0.9; u.pitch = 1.1; u.onend = end; u.onerror = end;
+    const u = new SpeechSynthesisUtterance(text), release = () => { live.delete(u); end(); }; u.rate = 0.9; u.pitch = 1.1; u.onend = release; u.onerror = release;
+    live.add(u); // iOS and Chrome can drop an utterance (and its end event) once it is garbage collected: hold it until it ends
+    if (speechSynthesis.paused) speechSynthesis.resume();
     speechSynthesis.speak(u);
-    return () => speechSynthesis.cancel();
-  }, 2500 + 450 * text.length);
+    return () => { live.delete(u); speechSynthesis.cancel(); };
+  }, 1200 + 150 * text.length);
   let chain = Promise.resolve(), lowPending = 0;
   const MAX_LOW = 2;
   const v = {
@@ -53,7 +55,7 @@ export function createVoice(sound) {
       if (opts.low) lowPending++;
       const my = gen, plan = planUtterances(ids, new Set(Object.keys(src)));
       chain = chain.then(async () => {
-        if (opts.low) lowPending--;
+        if (opts.low) lowPending = Math.max(0, lowPending - 1); // stop() zeroed it: a dropped old line must not push it below 0 and raise the cap
         for (const p of plan) {
           if (my !== gen) return;
           try { if (p.clip && sound.ctx) await playClip(p.clip); else await speak(p.clip ? textOf(p.clip) : p.tts); } catch (e) { console.warn('voice', e); }

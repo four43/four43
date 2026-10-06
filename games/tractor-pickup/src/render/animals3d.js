@@ -32,7 +32,7 @@ export function createAnimals3D(scene, herd) {
   const base = new THREE.MeshLambertMaterial({ vertexColors: true });
   const gold = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.7, roughness: 0.3, emissive: '#6a4a00' });
   const geos = {}; for (const [type, m] of Object.entries(MODEL)) geos[type] = ASSETS[m].parts.map(p => geoFrom([type === 'chicken' ? copper(p) : p]));
-  const tmpL = {}, protos = {}; let hatMake = null;
+  const tmpL = {}, protos = {}, flightOf = new Map(); let hatMake = null;
   const hatOf = id => (protos[id] ||= buildHat(id)).clone(); // clones share one set of geometries and materials
   const applyHat = v => { v.hat.clear(); const h = hatMake(v.a); if (h) { h.position.set(0, (HAT_Y[v.a.type] ?? 1.32), 0.08); h.scale.setScalar(HAT_SCALE); v.hat.add(h); } };
   const makeView = a => {
@@ -53,7 +53,7 @@ export function createAnimals3D(scene, herd) {
     setHats(make) { hatMake = make; for (const v of views) applyHat(v); },
     // view: the interpolated car poses ({ p, q } per car) and the step alpha, so riders and fliers move with the drawn train (X-1)
     update(dt, game, view) {
-      const flightOf = new Map(game.flights.map(f => [f.animal, f]));
+      flightOf.clear(); for (const f of game.flights) flightOf.set(f.animal, f);
       while (views.length < herd.animals.length) views.push(makeView(herd.animals[views.length])); // respawned animals (G-3)
       for (const v of views) {
         const a = v.a; v.t += dt;
@@ -70,7 +70,8 @@ export function createAnimals3D(scene, herd) {
           v.g.position.set(a.x + dx / d * HIDE.out, HIDE.sink, a.z + dz / d * HIDE.out); v.g.rotation.set(0, Math.atan2(-dx, -dz), 0);
         }
         const kind = FLIGHT[a.type].flourish, ang = fl ? flourishAngle(kind, Math.max(0, fl.u)) : 0;
-        v.inner.rotation.set(kind === 'flip' ? ang : 0, kind === 'spin' ? ang : 0, 0);
+        const wiggle = fl && kind === 'ears' ? 0.4 * Math.sin(Math.max(0, fl.u) * Math.PI * 6) * (1 - Math.min(1, Math.max(0, fl.u))) : 0; // A-6: the bunny model has no ear part, so it wiggles happily in flight instead
+        v.inner.rotation.set(kind === 'flip' ? ang : 0, kind === 'spin' ? ang : 0, wiggle);
         const anim = fl ? 'run' : a.state === 'ride' ? (game.tractor.speed > game.tractor.P.vmax * 0.8 && PET_ANIMS[MODEL[a.type]].dance ? 'dance' : 'idle') : a.anim;
         const table = PET_ANIMS[MODEL[a.type]], name = table[anim] ? anim : 'idle';
         v.parts.forEach((m, i) => { sampleAnim(table, name, v.t, i, m.matrix); m.matrixWorldNeedsUpdate = true; });

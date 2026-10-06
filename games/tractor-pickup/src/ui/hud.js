@@ -4,12 +4,14 @@ export function createHud(root, { icons, onWordTap }) {
   const bar = document.createElement('div'); bar.id = 'slots'; root.appendChild(bar);
   const word = document.createElement('div'); word.id = 'word'; root.appendChild(word);
   const arrow = document.createElement('div'); arrow.id = 'arrow'; arrow.textContent = '➜'; arrow.hidden = true; root.appendChild(arrow);
-  let slots = [], wordTimer = 0, flyTimer = 0;
-  const reset = () => { bar.innerHTML = ''; slots = Array.from({ length: 12 }, (_, i) => { const s = document.createElement('div'); s.className = i === 6 ? 'slot wagon' : 'slot'; bar.appendChild(s); return s; }); };
-  reset();
+  let slots = [], wordTimer = 0, flyTimer = 0, lastIds = [];
   const clearFly = () => { word.style.transition = word.style.transform = word.style.opacity = ''; };
+  const reset = () => { clearTimeout(wordTimer); clearTimeout(flyTimer); clearFly(); word.classList.remove('on'); word.innerHTML = ''; lastIds = []; bar.innerHTML = ''; // a word still on its way must not fly into the next bar
+    slots = Array.from({ length: 12 }, (_, i) => { const s = document.createElement('div'); s.className = i === 6 ? 'slot wagon' : 'slot'; bar.appendChild(s); return s; }); };
+  reset();
   // W-5: the name pops in letter by letter, stays 2.5 s, then shrinks and flies into its slot (n: 1-12) in 0.5 s
-  const showWord = (text, n) => {
+  const showWord = (text, n, ids = []) => {
+    lastIds = ids;
     clearTimeout(wordTimer); clearTimeout(flyTimer); clearFly();
     word.innerHTML = ''; [...text].forEach((ch, i) => { const sp = document.createElement('span'); sp.textContent = ch === ' ' ? ' ' : ch; sp.style.animationDelay = `${i * 0.09}s`; word.appendChild(sp); });
     word.classList.remove('on'); void word.offsetWidth; word.classList.add('on');
@@ -22,7 +24,7 @@ export function createHud(root, { icons, onWordTap }) {
       flyTimer = setTimeout(() => { word.classList.remove('on'); clearFly(); }, 500);
     }, 2500);
   };
-  word.addEventListener('pointerdown', e => { e.stopPropagation(); onWordTap?.(word.textContent); }); // W-6
+  word.addEventListener('pointerdown', e => { e.stopPropagation(); onWordTap?.(lastIds); }); // W-6
   return {
     reset, showWord,
     fill(n, type, golden) {

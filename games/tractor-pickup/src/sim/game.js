@@ -36,12 +36,13 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   };
   const herd = createHerd({ rng, env });
   const tractorWorld = (l, out) => Object.assign(out, local2world(tractor.body, l));
-  const tractorLocal = (x, y, z, out) => { const p = tractor.body.translation(), { f, u, r } = quatAxes(tractor.body.rotation()), dx = x - p.x, dy = y - p.y, dz = z - p.z;
+  let axes = null; // the tractor's axes, computed twice per step (before and after physics) and reused by every tractorLocal call in it; outside a step they are fresh
+  const tractorLocal = (x, y, z, out) => { const p = tractor.body.translation(), { f, u, r } = axes || quatAxes(tractor.body.rotation()), dx = x - p.x, dy = y - p.y, dz = z - p.z;
     out.x = dx * f.x + dy * f.y + dz * f.z; out.y = dx * u.x + dy * u.y + dz * u.z; out.z = dx * r.x + dy * r.y + dz * r.z; return out; };
   const slotWorld = (sl, out) => Object.assign(out, local2world(train.cars[sl.car].body, slotPoint(sl.k, sl.animal.ride?.rider, TR.half.y, {})));
-  const prevVel = train.cars.map(c => ({ ...c.body.linvel() }));
-  const tmp = {}, tmp2 = {};
-  let pendingPass = false, lastSurface = 'gravel', lastAir = false, wasClean = true;
+  const prevVel = train.cars.map(c => { const v = c.body.linvel(); return { x: v.x, y: v.y, z: v.z }; });
+  const tmp = {}, tmp2 = {}, tmp3 = {}, tmp4 = {}, aw = {}, al = {};
+  let pendingPass = false, lastSurface = 'gravel', wasClean = true;
 
   const game = {
     farm, road, terrain, items, phys, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
@@ -56,6 +57,7 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
     },
     step(input) {
       const drive = game.mode === 'drive' ? input : STILL, load = game.load, events = [];
+      axes = quatAxes(tractor.body.rotation());
       if (drive.horn) { herd.horn(tractor); events.push({ type: 'horn' }); }
       // B-3 aim help: nudge steering toward a close animal ahead
       let assist = 0, best = AIM.range;
@@ -65,6 +67,7 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer); tractor.step(DT);
       train.step(DT, { parked: tractor.hold || (Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3) });
       events.push(...trees.step(DT, bodies, game.mode === 'drive')); phys.world.step(); // trees first: a broken trunk's collider is gone before contact resolves
+      axes = quatAxes(tractor.body.rotation());
       herd.step(DT, { tractor });
       // boops (B-1, B-2: any speed; A-13: a hider sits at its bush, so driving into the bush finds it) and the dog that jumps in by itself (A-7)
       if (game.mode === 'drive' && !load.full()) for (const a of herd.free()) {
@@ -78,15 +81,15 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       // flights
       for (let i = flights.length - 1; i >= 0; i--) {
         const fl = flights[i]; fl.u += DT / fl.dur; fl.prev.x = fl.pos.x; fl.prev.y = fl.pos.y; fl.prev.z = fl.pos.z; if (fl.u < 0) continue;
-        const sw = slotWorld(fl.slot, tmp2), sl = tractorLocal(sw.x, sw.y, sw.z, {});
-        const lp = launchLocal(Math.min(1, fl.u), fl.start, sl, {}); tractorWorld(lp, fl.pos);
+        const sw = slotWorld(fl.slot, tmp2), sl = tractorLocal(sw.x, sw.y, sw.z, tmp3);
+        const lp = launchLocal(Math.min(1, fl.u), fl.start, sl, tmp4); tractorWorld(lp, fl.pos);
         fl.animal.x = fl.pos.x; fl.animal.z = fl.pos.z; fl.animal.y = fl.pos.y;
         if (fl.u >= 1) { flights.splice(i, 1); const a = fl.animal; a.state = 'ride'; a.ride = { slot: fl.slot, rider: newRider() }; fl.load.land(fl.slot); events.push({ type: 'land', animal: a, slot: fl.slot, n: fl.load.landed() }); }
       }
       // riders: spring against the car's acceleration in its own frame (D-12)
       train.cars.forEach((c, k) => {
-        const v = c.body.linvel(), aw = { x: (v.x - prevVel[k].x) / DT, y: (v.y - prevVel[k].y) / DT, z: (v.z - prevVel[k].z) / DT }; prevVel[k] = { ...v };
-        const { f, u, r } = quatAxes(c.body.rotation()), al = { x: aw.x * f.x + aw.y * f.y + aw.z * f.z, y: aw.x * u.x + aw.y * u.y + aw.z * u.z, z: aw.x * r.x + aw.y * r.y + aw.z * r.z };
+        const v = c.body.linvel(), pv = prevVel[k]; aw.x = (v.x - pv.x) / DT; aw.y = (v.y - pv.y) / DT; aw.z = (v.z - pv.z) / DT; pv.x = v.x; pv.y = v.y; pv.z = v.z;
+        const { f, u, r } = quatAxes(c.body.rotation()); al.x = aw.x * f.x + aw.y * f.y + aw.z * f.z; al.y = aw.x * u.x + aw.y * u.y + aw.z * u.z; al.z = aw.x * r.x + aw.y * r.y + aw.z * r.z;
         for (const s2 of game.load.slots) if (s2.car === k && s2.landed && s2.animal.state === 'ride') { stepRider(s2.animal.ride.rider, al, DT); const w = slotWorld(s2, tmp2); s2.animal.x = w.x; s2.animal.y = w.y; s2.animal.z = w.z; }
       });
       // F-1: a pass through the barn with at least one rider starts the show (after any flight has landed)
@@ -102,9 +105,9 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       }
       if (tractor.surface === 'mud' && lastSurface !== 'mud') events.push({ type: 'mud-enter' });
       lastSurface = tractor.surface;
-      const air = [0, 1, 2, 3].every(i => !tractor.vc.wheelIsInContact(i)); if (air !== lastAir) events.push({ type: 'air', on: air }); lastAir = air;
       if (anyWash && !wasClean && game.dirt.tractor < 0.05 && train.cars.every(c => c.dirt === 0)) { events.push({ type: 'washed' }); wasClean = true; }
       if (game.dirt.tractor > 0.05) wasClean = false;
+      axes = null;
       return events;
     },
   };

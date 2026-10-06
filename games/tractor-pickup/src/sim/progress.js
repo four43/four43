@@ -33,3 +33,7 @@ export function clampSettings(s) {
     seed: Number.isInteger(s.seed) && s.seed >= 0 ? s.seed : null,
   };
 }
+
+// ?seed=… and ?power=… from the address bar: anything that is not a whole number / a power preset is ignored
+export const seedParam = v => { const n = v === null || v === undefined || String(v).trim() === '' ? NaN : Number(v); return Number.isInteger(n) && n >= 0 && n <= 0xffffffff ? n : null; };
+export const powerParam = (v, fallback) => ['low', 'medium', 'high'].includes(v) ? v : fallback;

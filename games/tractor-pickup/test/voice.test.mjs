@@ -39,3 +39,31 @@ test('name-line backlog: with 2 land lines waiting a third is dropped, trip line
   assert.ok(!spoken.includes('Sheep'), 'fourth name line is dropped'); assert.ok(spoken.includes('Great job! Go to the barn!'));
   v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
 });
+
+test('stop() with low lines queued never raises the cap above 2 afterwards', async () => {
+  const spoken = [], ends = [];
+  globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+  globalThis.speechSynthesis = { speak: u => { spoken.push(u.text); ends.push(u.onend); }, cancel: () => {} };
+  const { createVoice } = await import('../src/audio/voice.js');
+  const v = createVoice({ ctx: null });
+  v.say(['pig'], { low: true }); v.say(['cow'], { low: true }); v.say(['duck'], { low: true });
+  await new Promise(r => setTimeout(r, 20));
+  v.stop(); await new Promise(r => setTimeout(r, 50)); // the older queued lines end quietly
+  const before = spoken.length;
+  for (const n of ['sheep', 'dog', 'chick', 'bunny']) v.say([n], { low: true });
+  await new Promise(r => setTimeout(r, 60));
+  for (let i = 0; i < 8; i++) { await new Promise(r => setTimeout(r, 120)); ends.shift()?.(); }
+  assert.ok(!spoken.slice(before).includes('Bunny'), 'the cap is still 2 waiting lines');
+  v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
+});
+
+test('speech: an utterance is held until it ends, and a paused engine is resumed', async () => {
+  let resumed = 0, u0;
+  globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+  globalThis.speechSynthesis = { paused: true, resume() { resumed++; }, speak: u => { u0 = u; }, cancel: () => {} };
+  const { createVoice } = await import('../src/audio/voice.js');
+  const v = createVoice({ ctx: null });
+  const p = v.say(['pig']); await new Promise(r => setTimeout(r, 20));
+  assert.equal(resumed, 1); u0.onend(); await p;
+  v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
+});

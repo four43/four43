@@ -20,7 +20,6 @@ export function geoFrom(parts, xf) {
   if (xf) g.applyMatrix4(xf);
   return g;
 }
-export const modelGeo = (name, xf) => geoFrom(Object.values(ASSETS[name]), xf);
 export const colorGeo = (g, hex) => { const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 export function mergeGeos(list) {
   const parts = list.map(g => { const ng = g.index ? g.toNonIndexed() : g; return ng; });
@@ -41,7 +40,6 @@ export function sampleAnim(anims, name, t, partIdx, out) {
   for (let k = 0; k < 16; k++) o[k] = A[k] + (B[k] - A[k]) * u;
   return out;
 }
-export const lerpM = (a, b, u, out) => { const A = a.elements, B = b.elements, o = out.elements; for (let k = 0; k < 16; k++) o[k] = A[k] + (B[k] - A[k]) * u; return out; };
 
 // One Matrix4 table per pet, built once.
 export const PET_ANIMS = Object.fromEntries(['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck'].map(p => [p, animM(p)]));

@@ -7,7 +7,6 @@ const C = (SIZE - 1) / 2;
 export const GATES = { E: { i: C + 2, j: C, out: 0 }, S: { i: C, j: C + 2, out: 1 }, W: { i: C - 2, j: C, out: 2 }, N: { i: C, j: C - 2, out: 3 } };
 const GATE_POINT = { E: [YARD_HALF, 0], S: [0, YARD_HALF], W: [-YARD_HALF, 0], N: [0, -YARD_HALF] };
 export const tileCenter = (i, j) => ({ x: (i - C) * TILE, z: (j - C) * TILE });
-export const dirYaw = d => Math.atan2(DIRS[d][0], DIRS[d][1]);
 const inYard = (i, j) => Math.abs(i - C) <= 1 && Math.abs(j - C) <= 1;
 const FEATURES = ['mud', 'ramp', 'sprinkler'];
 const dirOf = (a, b) => DIRS.findIndex(([di, dj]) => di === b[0] - a[0] && dj === b[1] - a[1]);

@@ -34,3 +34,10 @@ test('saved progress that is damaged falls back to clean values; a locked color 
   assert.deepEqual(clampProgress({ shows: 1, color: 'rainbow', stickers: [{ type: 'pig', show: 1 }, { type: 'dragon', show: 2 }, null] }, types), { shows: 1, color: 'red', stickers: [{ type: 'pig', golden: false, show: 1 }] });
   assert.equal(clampProgress({ shows: 3, color: 'green', stickers: [] }, types).color, 'green');
 });
+
+import { seedParam, powerParam } from '../src/sim/progress.js';
+test('?seed and ?power guard invalid values', () => {
+  assert.equal(seedParam('42'), 42); assert.equal(seedParam('0'), 0);
+  for (const bad of [null, '', 'abc', '-1', '1.5', 'NaN', 'Infinity', '99999999999']) assert.equal(seedParam(bad), null, String(bad));
+  assert.equal(powerParam('high', 'medium'), 'high'); assert.equal(powerParam('turbo', 'low'), 'low'); assert.equal(powerParam(null, 'medium'), 'medium');
+});

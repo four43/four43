@@ -30,9 +30,10 @@ import { createVoice } from './audio/voice.js';
 import { createMenus } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
-import { DEFAULT_SETTINGS, clampSettings, clampProgress, completeShow, unlockedHats, emptyProgress } from './sim/progress.js';
+import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, unlockedHats, emptyProgress } from './sim/progress.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
+const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
 
 async function main() {
@@ -40,7 +41,7 @@ async function main() {
   const params = new URLSearchParams(location.search), sandbox = params.has('sandbox'), ui = document.getElementById('ui');
   const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } }; // no storage content may stop the game starting
   let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
-  let powerNow = params.get('power') || settings.power;
+  let powerNow = powerParam(params.get('power'), settings.power);
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
   const aniso = renderer.capabilities.getMaxAnisotropy(), perf = params.has('fps') ? createFpsMeter(renderer) : null;
   const sound = new Sound(), voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
@@ -52,14 +53,15 @@ async function main() {
   for (const n of GEST) addEventListener(n, unlock, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sound.ctx && sound.ctx.state !== 'running') { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); } });
   const input = createInput(ui);
-  const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons });
+  const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons, onWordTap: ids => voice.say(ids) });
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
   // Everything below `world` belongs to one farm. startFarm throws it all away and builds the next one; trips on the same farm rebuild nothing.
-  let world, game, farm3d, vehicles, gibs, animals3d, fx, chase, trip, show, slow, sprinklers, fxs, wheelPt, prev, curr, view, seed, gen = 0;
+  let world, game, farm3d, vehicles, gibs, animals3d, fx, chase, trip, show, slow, sprinklers, fxs, wheelPt, prev, curr, view, viewCars, bodyList, seed, gen = 0;
+  const stepIn = { thr: 0, steer: 0, horn: false }, animView = { cars: null, alpha: 0 }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every step/frame: nothing allocated in the loop
   let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, camBlend, booped, acc = 0, last = performance.now();
   const sfx = { surface: 'gravel', air: 0, whee: false };
-  const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
+  const bodies = () => bodyList;
   const applyHats = () => { const ids = unlockedHats(progress); animals3d?.setHats(a => ids.length ? animals3d.hat(ids[a.id % ids.length]) : null); }; // W-4
 
   function build(newSeed, power) {
@@ -77,35 +79,41 @@ async function main() {
     trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx }) : null;
     showDone = rewardDone = booped = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
-    prev = bodies().map(snapOf); curr = prev; view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
+    bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
+    prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
     document.getElementById('tune')?.remove();
     if (params.has('tune')) { buildTunePanel(game); Object.assign(window, { game, fx, renderer, tp: { get game() { return game; }, get trip() { return trip; }, get progress() { return progress; }, get animals3d() { return animals3d; }, get seed() { return seed; }, sound, voice, startFarm } }); }
   }
   function dispose() {
     gen++; show?.end(); document.getElementById('show')?.remove(); voice.stop?.(); hud?.arrowTo(null);
+    sound.spray(false); sound.skid(0); sfx.surface = 'gravel'; sfx.air = 0; sfx.whee = false; // no loop of the old farm (a sprinkler, a skid) keeps sounding
     scene.remove(world); disposeTree(world); // geometries, materials, textures, instance buffers
     game.phys.world.free(); // the Rapier world, with the terrain heightfield, trees, props and vehicles
   }
   function startFarm({ seed: s, power }) {
     renderer.setAnimationLoop(null);
     try {
-      dispose(); build(s ?? randomSeed(), power ?? powerNow);
+      dispose();
+      try { build(s ?? randomSeed(), power ?? powerNow); } catch (e) { console.error('new farm failed, retrying with a fresh seed', e); try { world && (scene.remove(world), disposeTree(world)); } catch { /* half built */ } build(randomSeed(), power ?? powerNow); }
       hud?.reset();
       const t = game.tractor, p = t.body.translation(); chase.update(1, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); // the camera starts behind the new tractor
     } catch (e) { console.error('new farm', e); } finally { acc = 0; last = performance.now(); renderer.setAnimationLoop(frame); }
   }
-  const showReward = rs => { // W-1, W-3, W-4: the sticker, a new color or hat, then the card
-    const r = completeShow(progress, rs.map(x => x.animal)); progress = r.progress;
-    if (r.newHat) applyHats();
-    save('tp-progress', progress);
-    if (r.newColor || r.newHat) sound.bells();
-    menus.showReward({ sticker: r.sticker, newColor: r.newColor, newHat: r.newHat, progress });
+  const showReward = rs => { // W-1, W-3, W-4: the sticker, a new color or hat, then the card. R-1: a failure here never leaves the game held
+    try {
+      const r = completeShow(progress, rs.map(x => x.animal)); progress = r.progress;
+      if (r.newHat) applyHats();
+      save('tp-progress', progress);
+      if (r.newColor || r.newHat) sound.bells();
+      menus.showReward({ sticker: r.sticker, newColor: r.newColor, newHat: r.newHat, progress });
+      voice.say(['you-did-it']);
+    } catch (e) { console.error('reward', e); menus.hide(); rewardDone = true; }
   };
   const menus = sandbox ? null : createMenus(ui, {
     icons,
     onPlay() { voice.prime(); started = true; game.mode = 'drive'; Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }, // a real gesture: unlock audio and speech here
     onKeepDriving() { rewardDone = true; },
-    onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); },
+    onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); if (!started) menus.showStart(progress); }, // R-1: from the start screen (or its sticker book) the new farm waits for the Play tap; otherwise it is driving
     onColor(c) { progress.color = c; vehicles.setColor(c); save('tp-progress', progress); },
     onSettings(s) { // power, voice and music apply at once; a seed applies with the next new farm
       settings = s; save('tp-settings', s); powerNow = s.power; game.tractor.setPower?.(s.power);
@@ -116,21 +124,24 @@ async function main() {
     onParent() { menus.openParent(settings, seed); },
   });
 
-  build(params.has('seed') ? +params.get('seed') : settings.seed ?? randomSeed(), powerNow);
+  build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
   const frame = now => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * slow.scale();
     const inp = input.read();
     while (acc >= DT) {
-      prev = curr; const ev = game.step({ ...inp, horn: hornQueued }) || []; hornQueued = false; slow.step(DT); curr = bodies().map(snapOf); acc -= DT;
+      stepIn.thr = inp.thr; stepIn.steer = inp.steer; stepIn.horn = hornQueued;
+      const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
+      const ev = game.step(stepIn) || []; hornQueued = false; slow.step(DT); for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
       for (const e of ev) {
         if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); }
         if (e.type === 'horn') sound.horn();
+        if (e.type === 'treeBump') sound.clunk(); // T-34: a soft bump when a tree holds
         if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx.stars(e.animal.x, 1, e.animal.z); booped = true; }
         if (e.type === 'launch' && e.animal.type === 'duck' && game.farm && Math.hypot(e.animal.x - game.farm.yard.pond.x, e.animal.z - game.farm.yard.pond.z) < game.farm.yard.pond.r + 3) fxs.drip.add(e.animal); // A-5: a duck from the pond drips
         if (e.type === 'mud-enter') { fx.mudSplash(game.tractor.x, game.tractor.z); sound.squelch(); } // T-13
         if (e.type === 'washed') { const t = game.tractor; for (let k = 0; k < 3; k++) fx.sparkles(t.x, 1.8, t.z); sound.squeaky(); } // T-15
         if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
-        if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
+        if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n, e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); }
       }
       stepSounds(game, sound, sfx);
       if (trip && started) { // spec 3.1: intro, drive, show, reward
@@ -140,7 +151,7 @@ async function main() {
           if (c === 'drive') game.mode = 'drive'; // the card is gone: driving and boops work again
           if (c === 'say-intro') voice.say(['lets-find', 'animals']);
           if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
-          if (c === 'help') { const h = game.herd.callHelp(game.tractor); if (h) helpTarget = { a: h, t: 10 }; }
+          if (c === 'help') { const h = game.herd.callHelp(game.tractor); if (h) { helpTarget = { a: h, t: 10 }; sound.animal(h.type); } } // F-4: the helper calls out
           if (c === 'show') {
             const myGen = gen;
             guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow();
@@ -153,12 +164,12 @@ async function main() {
     }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
     stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt * slow.scale());
-    gibs.update(dt); farm3d?.update(view[0].p); animals3d?.update(dt, game, { cars: view.slice(1), alpha: a });
-    vehicles.update({ tractor: view[0], cars: view.slice(1), dirt: game.dirt?.tractor });
+    gibs.update(dt); farm3d?.update(view[0].p); animView.alpha = a; animals3d?.update(dt, game, animView);
+    vehSnap.dirt = game.dirt?.tractor; vehicles.update(vehSnap);
     const t = game.tractor, lv = t.body.linvel();
     if (show?.active) show.update(dt);
     else {
-      chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });
+      chaseIn.x = view[0].p.x; chaseIn.y = view[0].p.y; chaseIn.z = view[0].p.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); chase.update(dt, chaseIn);
       if (camBlend < 1) { camBlend = Math.min(1, camBlend + dt); const k = camBlend * camBlend * (3 - 2 * camBlend); chaseQuat.copy(camera.quaternion); camera.quaternion.slerpQuaternions(showQuat, chaseQuat, k); } // F-10: turn back smoothly
     }
     if (trip && started) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
