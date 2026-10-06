@@ -56,6 +56,16 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #tune label{width:min(400px,56vw);display:grid;grid-template-columns:130px 1fr 52px;gap:8px;align-items:center;min-height:44px}
 #tune input[type=range]{width:100%;height:36px;touch-action:pan-y}
 #tune select{font:inherit;min-height:44px;margin-top:6px}
+#slots{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5;pointer-events:none}
+.slot{width:54px;height:70px;border-radius:14px;background:rgba(255,255,255,.45);border:3px dashed rgba(107,68,40,.55);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.slot.full{background:rgba(255,252,248,.92);border:3px solid #6b4428;animation:pop .35s ease-out}
+.slot.wagon{margin-left:18px}
+.slot img{width:50px;height:50px}.slot span{font:700 13px Andika,system-ui;color:#5a3820;line-height:1}
+#word{position:absolute;top:110px;left:50%;transform:translateX(-50%);font:700 96px/1 Andika,system-ui;color:#fff;-webkit-text-stroke:4px #6b4428;paint-order:stroke;z-index:6;opacity:0;pointer-events:none}
+#word.on{opacity:1;pointer-events:auto}
+#word span{display:inline-block;transform:scale(0);animation:pop .3s ease-out forwards}
+#arrow{position:absolute;z-index:6;font-size:64px;color:#f5c84c;-webkit-text-stroke:3px #6b4428;pointer-events:none}
+@keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
 </style>
 </head>
 <body>

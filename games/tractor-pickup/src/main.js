@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT } from './sim/physics.js';
-import { createTractor } from './sim/tractor.js';
-import { createTrain } from './sim/hitch.js';
-import { generateFarm } from './sim/track.js';
-import { buildRoad } from './sim/road.js';
-import { scatterScenery, addFarmColliders, addYardProps } from './sim/scenery.js';
-import { createTrees, TREE } from './sim/trees.js';
+import { DT } from './sim/physics.js';
+import { createGame } from './sim/game.js';
+import { TYPES } from './sim/herd.js';
+import { TREE } from './sim/trees.js';
 import { createGibs } from './render/gibs.js';
-import { createTerrain } from './sim/terrain.js';
-import { makeRng, randomSeed } from './sim/rng.js';
+import { randomSeed } from './sim/rng.js';
+import { createAnimals3D } from './render/animals3d.js';
+import { renderIcons } from './ui/icons.js';
+import { createHud } from './ui/hud.js';
 import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
@@ -27,7 +26,7 @@ async function main() {
   await RAPIER.init();
   const params = new URLSearchParams(location.search);
   const power = params.get('power') || 'medium', seed = params.has('seed') ? +params.get('seed') : randomSeed();
-  const t0 = performance.now(), game = params.has('sandbox') ? createSandbox(RAPIER, { power }) : createFarmDrive(RAPIER, seed, power);
+  const t0 = performance.now(), game = params.has('sandbox') ? createSandbox(RAPIER, { power }) : createGame(RAPIER, { seed, power });
   console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0));
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
   const aniso = renderer.capabilities.getMaxAnisotropy();
@@ -36,16 +35,28 @@ async function main() {
   const vehicles = createVehicles3D(scene, game.tractor, game.train);
   const gibs = createGibs(scene), sound = null; // Task 12 replaces `sound` with the synth: sound?.treePop?.() is the cheerful crunch-pop
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
+  const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = null; // Task 13 replaces `fx` with the stars and puffs
+  const hud = game.herd ? createHud(document.getElementById('ui'), { icons: renderIcons(renderer) }) : null;
+  let hornQueued = false; input.onHorn(() => { hornQueued = true; });
+  let slowT = 0; // B-7: 50% speed for 0.3 s at the top of the first arc
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
   let prev = bodies().map(snapOf), curr = prev, view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
   if (params.has('tune')) { buildTunePanel(game); window.game = game; }
   let acc = 0, last = performance.now();
   renderer.setAnimationLoop(now => {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * (slowT > 0 ? 0.5 : 1); slowT -= dt;
     const inp = input.read();
-    while (acc >= DT) { prev = curr; for (const e of game.step({ ...inp, horn: false }) || []) if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); } curr = bodies().map(snapOf); acc -= DT; }
+    while (acc >= DT) {
+      prev = curr; const ev = game.step({ ...inp, horn: hornQueued }) || []; hornQueued = false; curr = bodies().map(snapOf); acc -= DT;
+      for (const e of ev) {
+        if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); }
+        if (e.type === 'boop') { chase.shake(0.35); fx?.stars(e.animal.x, 1, e.animal.z); }
+        if (e.type === 'launch' && game.flights.length === 1) setTimeout(() => { slowT = 0.3; }, 450);
+        if (e.type === 'land') { hud.fill(e.n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word); }
+      }
+    }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
-    gibs.update(dt); farm3d?.update(view[0].p);
+    gibs.update(dt); farm3d?.update(view[0].p); animals3d?.update(dt, game);
     vehicles.update({ tractor: view[0], cars: view.slice(1) });
     const t = game.tractor, lv = t.body.linvel();
     chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });
@@ -64,22 +75,6 @@ function buildSandbox3D(scene, game, anisotropy) {
     const g = new THREE.ExtrudeGeometry(s, { depth: 7, bevelEnabled: false }); g.translate(0, 0, -3.5); g.rotateY(-Math.PI / 2);
     const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#b89a70' })); m.position.set(r.x, 0, r.z); m.rotation.y = r.yaw; m.receiveShadow = m.castShadow = true; scene.add(m);
   }
-}
-
-function createFarmDrive(RAPIER, seed, power) {
-  const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1));
-  const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
-  const phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
-  const yardProps = addYardProps(phys, farm), trees = createTrees(phys, farm), s = farm.start;
-  const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
-  const train = createTrain(phys, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
-  return { phys, farm, road, terrain, items, yardProps, trees, tractor, train,
-    reset() { yardProps.reset(); trees.reset(); }, // Task 10's startShow must call this (T-32): props back, broken trees grow again
-    step(input) {
-      tractor.setInput(input.thr, input.steer); tractor.step(DT);
-      train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 });
-      const events = trees.step(DT, bodies); phys.world.step(); return events; // trees first: a broken trunk's collider is gone before contact resolves
-    } };
 }
 
 // Cones scattered every ~12 m for parallax. Keeps the lane to the ramp and the mud patch clear.
@@ -120,6 +115,6 @@ function buildTunePanel(game) {
   }
   const sel = document.createElement('select'); sel.innerHTML = Object.keys(POWER).map(k => `<option ${k === t.power ? 'selected' : ''}>${k}</option>`).join('');
   sel.onchange = () => t.setPower(sel.value); body.appendChild(sel);
-  if (game.reset) { const r = document.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = () => game.reset(); body.appendChild(r); }
+  if (game.trees) { const r = document.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = () => { game.yardProps.reset(); game.trees.reset(); }; body.appendChild(r); }
 }
 main();
