@@ -1,5 +1,5 @@
 // Field scenery outside the edges (4.6), the farmyard fence and props (4.7), and the static colliders for the farm.
-import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, TREE_R } from './track.js';
+import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, TREE_R, WASH } from './track.js';
 import { ROAD_HALF, CORRIDOR } from './road.js';
 import { CUT } from './terrain.js';
 import { G, groups } from './physics.js';
@@ -97,6 +97,13 @@ export function addFarmColliders(phys, farm, road, terrain) {
     world.createCollider(RAPIER.ColliderDesc.cuboid(0.3, 2.5, b.half).setTranslation(b.x + ox, 2.5, b.z + oz).setRotation(yawQ(b.yaw)).setFriction(0.1).setCollisionGroups(wall));
     for (const end of [-1, 1]) { const a = end * (b.half + b.leaf / 2);
       world.createCollider(RAPIER.ColliderDesc.cuboid(0.15, 2.3, b.leaf / 2).setTranslation(b.x + ox + fx * a, 2.3, b.z + oz + fz * a).setRotation(yawQ(b.yaw)).setFriction(0.1).setCollisionGroups(wall)); }
+  }
+  if (y.wash) { // T-36: the wash's corner posts and side brushes
+    const w = y.wash, wf = [Math.sin(w.yaw), Math.cos(w.yaw)], wr = [Math.cos(w.yaw), -Math.sin(w.yaw)], at = (a, s) => ({ x: w.x + wf[0] * a + wr[0] * s, y: WASH.h / 2, z: w.z + wf[1] * a + wr[1] * s });
+    for (const sd of [-1, 1]) {
+      for (const e of [-1, 1]) world.createCollider(RAPIER.ColliderDesc.cuboid(0.25, WASH.h / 2, 0.25).setTranslation(...Object.values(at(e * WASH.half, sd * (WASH.width + 0.3)))).setFriction(0.1).setCollisionGroups(wall));
+      world.createCollider(RAPIER.ColliderDesc.cylinder(1.6, 0.5).setTranslation(...Object.values(at(0, sd * (WASH.width + 0.3)))).setFriction(0.1).setCollisionGroups(wall));
+    }
   }
   for (const seg of yardWalls(farm)) addWall(phys, seg, 1.0, wall);
   for (const seg of terrain.fences) { // T-17 route fences, 1.2 m above the ground; where a fence runs onto the cut foot it reaches down into the slope

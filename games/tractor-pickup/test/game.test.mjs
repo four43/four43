@@ -153,3 +153,28 @@ test('a boop does not slow the tractor (B-7 removed)', () => {
   const v0 = g.tractor.speed, ev = []; for (let i = 0; i < 20; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
   assert.ok(ev.some(e => e.type === 'boop')); assert.ok(g.tractor.speed >= v0 - 0.05, `slowed from ${v0} to ${g.tractor.speed}`);
 });
+test('3/4 of the way through the barn with a rider, the train stops by itself, at any speed, and the show starts (F-1, F-5)', () => {
+  for (const power of ['medium', 'high']) {
+    const g = createGame(RAPIER, { seed: 14, power }); quiet(g);
+    for (let i = 0; i < 60; i++) g.step(STILL);
+    place(g, pickable(g)[0]); assert.equal(g.load.landed(), 1);
+    const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], back = 40; // run up from 40 m out along the barn axis
+    moveTrain(g, b.x - f[0] * back, b.z - f[1] * back, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
+    const along = () => { const t = g.tractor.body.translation(); return (t.x - b.x) * f[0] + (t.z - b.z) * f[1]; };
+    let pass = null, top = 0;
+    for (let i = 0; i < 60 * 12 && !pass; i++) { const ev = g.step({ thr: 1, steer: 0, horn: false }); top = Math.max(top, g.tractor.speed); if (ev.some(e => e.type === 'barnPass')) pass = along(); }
+    assert.ok(pass !== null, `${power}: no barn pass`); assert.ok(top > g.tractor.P.vmax * 0.8, `${power}: only ${top.toFixed(1)} m/s`);
+    assert.ok(Math.abs(pass - b.half * 0.5) < 1, `${power}: show started at ${pass.toFixed(2)} m, not 3/4 through`);
+    assert.equal(g.mode, 'arrive');
+    for (let i = 0; i < 60; i++) g.step({ thr: 1, steer: 0, horn: false }); // full throttle is ignored
+    assert.ok(g.tractor.speed < 0.3 && g.train.cars.every(c => Math.hypot(c.body.linvel().x, c.body.linvel().z) < 0.3), `${power}: still moving at ${g.tractor.speed.toFixed(2)} m/s`);
+    assert.ok(along() < b.half + 1, `${power}: rolled out of the barn to ${along().toFixed(2)} m`);
+  }
+});
+test('an empty train drives on through the barn (F-1)', () => {
+  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g);
+  const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
+  moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
+  const ev = []; for (let i = 0; i < 60 * 8; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
+  assert.ok(!ev.some(e => e.type === 'barnPass')); assert.equal(g.mode, 'drive');
+});

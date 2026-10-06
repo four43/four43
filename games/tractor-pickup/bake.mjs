@@ -43,6 +43,8 @@ async function bakePet(file) {
   const order = ['body', 'Group', 'leg-front-left', 'leg-front-right', 'leg-back-left', 'leg-back-right', 'wing-left', 'wing-right', 'tail'];
   meshNodes.sort((a, b) => order.indexOf(a.getName()) - order.indexOf(b.getName()));
   const parts = meshNodes.map(n => ({ name: n.getName(), ...geom(n, mIdent()) }));
+  const mountNodes = root.listNodes().filter(n => !n.getMesh() && MOUNTS.includes(n.getName())), mounts = mountNodes.map(n => n.getName()); // W-4: frames rows after the parts
+  const frameNodes = [...meshNodes, ...mountNodes];
   const anims = {}; const FPS = 30;
   for (const a of root.listAnimations()) {
     const name = a.getName(); if (!['idle', 'walk', 'run', 'eat', 'dance', 'gesture-negative'].includes(name)) continue;
@@ -66,12 +68,13 @@ async function bakePet(file) {
     const frames = [];
     for (let f = 0; f < nf; f++) {
       const t = (f / nf) * dur;
-      frames.push(meshNodes.map(n => chainM(n, t).map(v => +v.toFixed(3))));
+      frames.push(frameNodes.map(n => chainM(n, t).map(v => +v.toFixed(3))));
     }
     anims[name] = { dur: +dur.toFixed(4), frames };
   }
-  return { parts, anims };
+  return { parts, mounts, anims };
 }
+const MOUNTS = ['hat']; // empty nodes the game hangs things on: frames hold their pet-space matrices too
 const PETS = ['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck', 'chicken']; // animated Cube Pets (and the ones made from them)
 const out = {};
 for (const f of fs.readdirSync(MODELS).filter(f => f.endsWith('.glb')).sort()) {
@@ -82,6 +85,7 @@ for (const f of fs.readdirSync(MODELS).filter(f => f.endsWith('.glb')).sort()) {
   out[name] = parts;
 }
 for (const need of PETS) if (!out[need]) throw new Error(`bake: ${MODELS}/${need}.glb is missing`);
+for (const pet of PETS) if (!out[pet].mounts.includes('hat')) throw new Error(`bake: ${MODELS}/${pet}.glb has no "hat" node (run node models.mjs)`);
 fs.writeFileSync('src/assets.json', JSON.stringify(out));
 console.log('bytes', fs.statSync('src/assets.json').size);
-for (const pet of PETS) console.log(pet, out[pet].parts.map(p => p.name).join(','), Object.keys(out[pet].anims).join(','));
+for (const pet of PETS) console.log(pet, out[pet].parts.map(p => p.name).join(','), out[pet].mounts.join(','), Object.keys(out[pet].anims).join(','));

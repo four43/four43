@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShowSteps, showLayout, LINEUP } from '../src/sim/showSteps.js';
+import { buildShowSteps, showLayout, LINEUP, tallyLayout, TALLY } from '../src/sim/showSteps.js';
 import { TYPES } from '../src/sim/herd.js';
 
 test('show steps: each type is counted as its own group, in order of first landing, then the sum and the total (F-6, F-7)', () => {
@@ -11,7 +11,11 @@ test('show steps: each type is counted as its own group, in order of first landi
   assert.deepEqual(s.filter(x => x.kind === 'hop').map(x => x.say), [['one'], ['two', 'golden'], ['one'], ['one']]);
   assert.deepEqual(s.filter(x => x.kind === 'group').map(x => [x.type, x.n, x.word, x.say]), [['pig', 2, 'Pigs', ['two', 'pigs']], ['cow', 1, 'Cow', ['one', 'cow']], ['chick', 1, 'Chick', ['one', 'chick']]]);
   const sum = s.find(x => x.kind === 'sum'); assert.deepEqual(sum.terms, [2, 1, 1]); assert.equal(sum.total, 4);
-  assert.deepEqual(sum.say, ['two', 'plus', 'one', 'plus', 'one', 'makes', 'four']);
+  assert.deepEqual(sum.stages, [ // a running sum from zero, one group at a time: each stage is said in full
+    { from: 0, add: 2, to: 2, group: 0, say: ['zero', 'plus', 'two', 'makes', 'two'] },
+    { from: 2, add: 1, to: 3, group: 1, say: ['two', 'plus', 'one', 'makes', 'three'] },
+    { from: 3, add: 1, to: 4, group: 2, say: ['three', 'plus', 'one', 'makes', 'four'] }]);
+  assert.deepEqual(sum.say, sum.stages.flatMap(st => st.say));
   assert.deepEqual(s.at(-1).say, ['four', 'animals', 'hooray']); assert.equal(s.at(-1).n, 4);
 });
 test('one group has no sum; a single animal ends with just a hooray', () => {
@@ -59,4 +63,15 @@ test('line-up layout: blocks stay apart so each group reads as one group', () =>
   const groups = LOADS[0], L = showLayout(groups);
   const span = gi => [Math.min(...L.spots[gi].map((p) => p.x - TYPES[groups[gi].type].r)), Math.max(...L.spots[gi].map(p => p.x + TYPES[groups[gi].type].r))];
   for (let i = 1; i < groups.length; i++) assert.ok(span(i)[0] - span(i - 1)[1] >= LINEUP.blockGap - 1e-9);
+});
+
+test('the tally circle holds every animal with no overlap, filling from the middle, and 12 cows fit the room the farmyard keeps (F-14)', () => {
+  for (const types of [['cow'], ['pig', 'cow', 'chicken'], Array(12).fill('cow'), ['chick', 'cow', 'bunny', 'cow', 'duck', 'pig', 'cow', 'dog', 'sheep', 'chicken', 'cow', 'cow']]) {
+    const rs = types.map(t => TYPES[t].r), L = tallyLayout(rs);
+    assert.equal(L.spots.length, rs.length);
+    L.spots.forEach((p, i) => assert.ok(Math.hypot(p.x, p.d) + rs[i] <= L.r - 0.2 + 1e-9, `${types[i]} ${i} sticks out of the circle`));
+    for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) assert.ok(Math.hypot(L.spots[i].x - L.spots[j].x, L.spots[i].d - L.spots[j].d) >= rs[i] + rs[j] + TALLY.pad - 1e-9, `${i} and ${j} overlap`);
+    assert.ok(L.r <= TALLY.rMax, `circle ${L.r.toFixed(2)} m is wider than the farmyard keeps clear`);
+  }
+  assert.deepEqual(tallyLayout([0.5]).spots, [{ x: 0, d: 0 }]); // the first animal stands in the middle
 });

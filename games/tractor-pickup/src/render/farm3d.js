@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ASSETS, geoFrom } from './gfx.js';
 import { ROAD_HALF, CORRIDOR, FARM_HALF, MUD_HALF } from '../sim/road.js';
-import { YARD_HALF } from '../sim/track.js';
+import { YARD_HALF, WASH } from '../sim/track.js';
 import { makeGravelTexture, makeGrassTexture, makePlankTexture, makeShingleTexture, makeRockTexture, worldUV } from './textures.js';
 import { yardWalls } from '../sim/scenery.js';
 
@@ -141,7 +141,8 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
       const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#c9ad7f' })); m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = m.receiveShadow = true; scene.add(m);
     }
     if (t.type === 'sprinkler') {
-      const m = new THREE.Mesh(geoFrom(Object.values(ASSETS.sprinkler)), matV); // sprinkler.glb: the arch across the road (x) m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = true; scene.add(m); sprinklers.push({ mesh: m, ...c });
+      const m = new THREE.Mesh(geoFrom(Object.values(ASSETS.sprinkler)), matV); // sprinkler.glb: the arch across the road (x)
+      m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = true; scene.add(m); sprinklers.push({ mesh: m, ...c });
     }
   }));
   // duck pond in a farmyard corner (T-29, A-5), with a sandy rim
@@ -164,6 +165,16 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
   // gate arches (T-8): gate.glb (x across the opening) at each farmyard gate
   { const g = geoFrom(Object.values(ASSETS.gate));
     for (const [gx, gz] of [[YARD_HALF, 0], [0, YARD_HALF], [-YARD_HALF, 0], [0, -YARD_HALF]]) { const m = new THREE.Mesh(g, matV); m.position.set(gx, 0, gz); m.rotation.y = gx === 0 ? 0 : Math.PI / 2; m.castShadow = true; scene.add(m); } }
+  // farmyard wash (T-36): wash.glb's frame, and its brush at each side of the opening; water falls from the canopy like a sprinkler
+  const w = farm.yard.wash, brushes = []; let washTop = null;
+  if (w) {
+    const wg = new THREE.Group(); wg.position.set(w.x, 0, w.z); wg.rotation.y = w.yaw; scene.add(wg);
+    const frame = new THREE.Mesh(geoFrom([ASSETS.wash.frame]), matV); frame.castShadow = frame.receiveShadow = true; wg.add(frame);
+    washTop = new THREE.Mesh(geoFrom([ASSETS.wash.canopy]), new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true })); washTop.castShadow = true; wg.add(washTop);
+    const bg = geoFrom([ASSETS.wash.brush]);
+    for (const sd of [-1, 1]) { const m = new THREE.Mesh(bg, matV); m.position.set(sd * (WASH.width + 0.3), 0, 0); m.castShadow = true; wg.add(m); brushes.push(m); }
+    sprinklers.push({ x: w.x, z: w.z, yaw: w.yaw, h: WASH.h - 0.2, spread: WASH.width * 2 - 1, depth: WASH.half * 2 - 1 });
+  }
   // drive-through barn (T-28); the roof group fades out while the tractor is near (the chase camera looks down through it)
   const b = farm.yard.barn, { group: barn, roofMats, roof } = buildBarn(b, anisotropy, matV); scene.add(barn); const L = b.half;
   // props (T-31): bale.glb, cone.glb and barrel.glb, centered on their bodies
@@ -190,6 +201,10 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
       bushOnes.forEach((t, i) => { const g = t.state === 'growing' ? Math.max(0.001, easeOutBack(t.grow)) : 1, k = BUSH_K * t.scale * g;
         bushes.setMatrixAt(i, t.state === 'broken' ? hidden : mtx.compose(p3.set(t.x, 0, t.z), q.setFromAxisAngle(UP, t.yaw), s3.set(k, k * BUSH_SY, k))); });
       for (const m of [oaks, stumps, bushes]) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
+      if (focus && w) { // the brushes whirl while the tractor is near; the canopy fades while it is close (the chase camera looks down through it)
+        const d = Math.hypot(focus.x - w.x, focus.z - w.z); brushes.forEach((m, i) => { m.rotation.y += (i ? -1 : 1) * (d < 15 ? 0.35 : 0.04); });
+        const m = washTop.material; m.opacity += ((d < WASH.half + 8 ? 0.15 : 1) - m.opacity) * 0.15; m.depthWrite = m.opacity > 0.9; washTop.castShadow = m.opacity > 0.5;
+      }
       if (focus) {
         const a = Math.hypot(focus.x - b.x, focus.z - b.z), o = roofMats[0].opacity + ((a < L + 20 ? 0 : 1) - roofMats[0].opacity) * 0.15;
         for (const m of roofMats) m.opacity = o; roof.visible = o > 0.03; roof.traverse(m => { m.castShadow = o > 0.5; });

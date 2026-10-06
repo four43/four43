@@ -1,6 +1,6 @@
 // Render one portrait per animal type to a data URL for the slot bar and the sticker card.
 import * as THREE from 'three';
-import { ASSETS, geoFrom } from '../render/gfx.js';
+import { ASSETS, geoFrom, PET_ANIMS, sampleAnim } from '../render/gfx.js';
 import { MODEL } from '../render/animals3d.js';
 import { paintable } from '../render/vehicles3d.js';
 export function renderIcons(renderer) {
@@ -10,7 +10,7 @@ export function renderIcons(renderer) {
   const out = { golden: {} }, mat = new THREE.MeshLambertMaterial({ vertexColors: true }), gold = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.7, roughness: 0.3, emissive: '#6a4a00' });
   const clear = new THREE.Color(); renderer.getClearColor(clear); const clearA = renderer.getClearAlpha();
   for (const [type, model] of Object.entries(MODEL)) for (const golden of [false, true]) {
-    const g = new THREE.Group(); ASSETS[model].parts.forEach(p => g.add(new THREE.Mesh(geoFrom([p]), golden ? gold : mat))); g.rotation.y = -0.5; scene.add(g);
+    const g = new THREE.Group(); ASSETS[model].parts.forEach((p, i) => { const m = new THREE.Mesh(geoFrom([p]), golden ? gold : mat); m.matrixAutoUpdate = false; sampleAnim(PET_ANIMS[model], 'idle', 0, i, m.matrix); g.add(m); }); g.rotation.y = -0.5; scene.add(g); // each part in its idle pose: part geometry is in its own node space (the snout sits on the face, the legs under the body)
     renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, cam); renderer.readRenderTargetPixels(rt, 0, 0, N, N, px); renderer.setRenderTarget(null);
     const img = cv.getContext('2d').createImageData(N, N); for (let y = 0; y < N; y++) img.data.set(px.subarray((N - 1 - y) * N * 4, (N - y) * N * 4), y * N * 4);
     cv.getContext('2d').putImageData(img, 0, 0); (golden ? out.golden : out)[type] = cv.toDataURL(); scene.remove(g);

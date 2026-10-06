@@ -3,7 +3,8 @@ import { NUMBER_WORDS, PLURAL } from './words.js';
 import { TYPES } from './herd.js';
 
 // F-6, F-7: one group per type in order of first landing; each group's animals hop out and are counted 1, 2, 3 ..., then the
-// group label ("3 Pigs") is read. With two or more groups the sum is read ("3 plus 2 makes 5"); then all jump for the total.
+// group label ("3 Pigs") is read. With two or more groups the running sum is read from zero ("0 plus 3 makes 3", "3 plus 2 makes 5"), each
+// group moving into the tally circle after its stage; then all jump for the total.
 export function buildShowSteps(animals) {
   const groups = [];
   animals.forEach((a, i) => { let g = groups.find(x => x.type === a.type); if (!g) groups.push(g = { type: a.type, members: [] }); g.members.push(i); });
@@ -14,7 +15,11 @@ export function buildShowSteps(animals) {
     steps.push({ kind: 'group', group: gi, type: g.type, n, word: n === 1 ? TYPES[g.type].word : TYPES[g.type].plural, say: [NUMBER_WORDS[n], n === 1 ? g.type : PLURAL[g.type]] });
   });
   const total = animals.length, terms = groups.map(g => g.members.length);
-  if (groups.length > 1) steps.push({ kind: 'sum', terms, total, say: [...terms.flatMap((t, i) => i ? ['plus', NUMBER_WORDS[t]] : [NUMBER_WORDS[t]]), 'makes', NUMBER_WORDS[total]] });
+  if (groups.length > 1) { // F-7, F-14: a running sum from zero: "0 + 3 = 3", "3 + 2 = 5", ... one group added (and moved into the tally circle) at a time
+    const stages = []; let run = 0;
+    terms.forEach((t, g) => { const to = run + t; stages.push({ from: run, add: t, to, group: g, say: [NUMBER_WORDS[run], 'plus', NUMBER_WORDS[t], 'makes', NUMBER_WORDS[to]] }); run = to; });
+    steps.push({ kind: 'sum', terms, total, stages, say: stages.flatMap(st => st.say) });
+  }
   steps.push({ kind: 'all', n: total, groups: groups.map(g => ({ type: g.type, n: g.members.length })), say: total === 1 ? ['hooray'] : [NUMBER_WORDS[total], 'animals', 'hooray'] });
   return steps;
 }
@@ -51,4 +56,14 @@ export function showLayout(groups, { len = LINEUP.len } = {}) { // groups: [{ ty
     d0 += lh + LINEUP.lineGap;
   }
   return { spots, labels, width, depth: d0 - LINEUP.lineGap + 0.5 };
+}
+
+// F-14: the tally circle, left of the blocks: the animals of each group move into it after their stage of the running sum. Spots are
+// relative to the circle's center (x along the line-up, d toward the camera), in arrival order, each at the free point nearest the
+// middle; r is the circle's radius. rMax: the room the farmyard keeps clear for it (12 cows), gap: from the blocks.
+export const TALLY = { pad: 0.3, edge: 0.45, gap: 1.5, rMax: 4.8 };
+export function tallyLayout(radii) {
+  const spots = [], cand = Array.from({ length: 3000 }, (_, k) => { const rho = 0.09 * Math.sqrt(k), th = k * 2.399963; return { x: k ? rho * Math.cos(th) : 0, d: k ? rho * Math.sin(th) : 0 }; });
+  radii.forEach((r, i) => spots.push(cand.find(c => spots.every((p, j) => Math.hypot(c.x - p.x, c.d - p.d) >= r + radii[j] + TALLY.pad))));
+  return { spots, r: Math.max(...spots.map((p, i) => Math.hypot(p.x, p.d) + radii[i])) + TALLY.edge };
 }

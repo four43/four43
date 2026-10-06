@@ -74,7 +74,7 @@ async function main() {
     animals3d = game.herd ? createAnimals3D(world, game.herd) : null; applyHats();
     fx = createFx(world, game.terrain ? (x, z) => game.terrain.height(x, z) : undefined);
     fxs = { dust: 0, mud: 0, mark: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
-    trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx }) : null;
+    trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world }) : null;
     showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
     bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
@@ -104,7 +104,7 @@ async function main() {
       save('tp-progress', progress);
       if (r.newPaint || r.newHat) sound.bells();
       menus.showReward({ sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat, progress });
-      voice.say(['you-did-it']);
+      voice.say(['you-did-it', 'new-sticker']);
     } catch (e) { console.error('reward', e); menus.hide(); rewardDone = true; }
   };
   // The trip starts on a real gesture: it unlocks audio and speech (iOS). F-11: the start screen shows only when there is a
@@ -245,7 +245,7 @@ function stepFx(game, fx, sound, s, w, sprinklers, dt) {
   if (t.speed > 4 && t.surface === 'gravel' && s.dust <= 0) { s.dust = 0.1; fx.dust(t.x - hx * 2, t.z - hz * 2); }
   if (t.surface === 'mud' && t.speed > 2 && s.mud <= 0) { s.mud = 0.15; for (const i of [2, 3]) { game.tractorWorld({ x: t.W[i].cx, y: 0, z: t.W[i].cz }, w); fx.mudSplash(w.x, w.z); } }
   let near = false;
-  for (const sp2 of sprinklers) if (Math.hypot(sp2.x - t.x, sp2.z - t.z) < 15) { near = true; fx.water(sp2.x, sp2.z, sp2.yaw, 4.1, 8, 14, 18); }
+  for (const sp2 of sprinklers) if (Math.hypot(sp2.x - t.x, sp2.z - t.z) < 15) { near = true; fx.water(sp2.x, sp2.z, sp2.yaw, sp2.h ?? 4.1, 8, sp2.spread ?? 14, sp2.depth ?? 18); } // route sprinklers and the farmyard wash (T-36)
   if (near !== s.spray) { s.spray = near; sound.spray(near); }
   for (const f of game.flights) {
     if (f.u < 0) continue;

@@ -9,6 +9,7 @@ import { io, toVertexColors, readTris, writeTris, clip, centroid, faceNormal, pa
 import { TR } from './src/sim/hitch.js';
 import { ROAD_HALF } from './src/sim/road.js';
 import { GATE_W } from './src/sim/scenery.js';
+import { WASH } from './src/sim/track.js';
 
 const BARN = { width: 5, half: 6, leaf: 5 }; // as layoutYard (src/sim/track.js) places it
 
@@ -27,7 +28,7 @@ const PLAIN = {
   oak: NK('tree_oak'), tree: NK('tree_default'), treeFat: NK('tree_fat'), bush: NK('plant_bushLarge'), bushS: NK('plant_bush'),
   fence: NK('fence_simple'), rock: NK('rock_smallC'), pumpkin: NK('crop_pumpkin'), corn: NK('crops_cornStageD'), grass: NK('grass_large'),
   flowerY: NK('flower_yellowB'), flowerR: NK('flower_redA'), log: NK('log'), stump: NK('stump_old'), hay: `${KENNEY}/Graveyard Kit/Models/GLB format/hay-bale.glb`,
-  pig: PET('pig'), cow: PET('cow'), chick: PET('chick'), bunny: PET('bunny'), dog: PET('dog'),
+  pig: PET('pig'), chick: PET('chick'), bunny: PET('bunny'), dog: PET('dog'),
 };
 for (const [name, file] of Object.entries(PLAIN)) await kenney(name, file);
 
@@ -36,12 +37,13 @@ const isEye = c => Math.abs(c[0] - c[1]) < 8 && Math.abs(c[2] - c[1]) < 18; // w
 const shape = (geo, rgb) => trisFromGeometry(geo).map(t => paint(t, rgb));
 const ellipsoid = (r, at, rot = [0, 0, 0], detail = 1) => new THREE.IcosahedronGeometry(1, detail).scale(...r).rotateX(rot[0]).rotateY(rot[1]).rotateZ(rot[2]).translate(...at);
 
-// Sheep: the pig without its snout and pointed ears; cream wool with a tuft, a dark face, round black ears, dark legs.
-const WOOL = [244, 238, 226], FACE = [70, 64, 62], EAR = [38, 36, 38], HOOF = [44, 40, 38];
+// Sheep: the pig without its pointed ears; cream wool with a tuft, a dark face with a short dark muzzle (the pig's snout), round
+// black ears, dark legs.
+const WOOL = [244, 238, 226], FACE = [70, 64, 62], EAR = [38, 36, 38], HOOF = [44, 40, 38], MUZZLE = [96, 88, 84], NOSTRIL = [30, 28, 30];
 if (wanted('sheep')) {
   const doc = await io.read(PET('pig'));
-  { const snout = doc.getRoot().listNodes().find(n => n.getName() === 'Group'); snout.getMesh().dispose(); snout.dispose(); } // the snout
   toVertexColors(doc, (tris, node) => {
+    if (node === 'Group') return tris.map(t => { t.p = t.p.map(([x, y, z]) => [x, y, z * 0.7]); return paint(t, t.c[0][0] < 120 ? NOSTRIL : MUZZLE); }); // the pig's snout, shorter, as a dark muzzle
     if (node.startsWith('leg')) return tris.map(t => paint(t, t.c[0][1] < 140 && t.c[0][0] > 200 ? HOOF : FACE)); // orange-ish hoof band, pink leg
     if (node !== 'body') return tris;
     const ear = t => centroid(t)[1] > 1.125 || t.p.some(p => p[1] > 0.95 && p[1] < 1.12); // the ears grow out of the head cap (whose only vertex rows are y 0.938 and 1.125): the cap goes, a clean one replaces it
@@ -92,6 +94,19 @@ if (wanted('chicken')) {
   await write('chicken', doc);
 } else console.log('kept', 'chicken');
 
+// Cow: Kenney's cow has spots on its left side only; more on the right side, the back and the top (flat patches 1.5 cm off the
+// faces of the body cube, which spans x and z -0.63..0.63 and y up to 1.25 in body space)
+const SPOT = [72, 75, 88];
+await kenney('cow', PET('cow'), (tris, node) => {
+  if (node !== 'body') return tris;
+  const spot = (r, rot, at) => { const g = new THREE.CircleGeometry(1, 7); const p = g.attributes.position; for (let i = 1; i < p.count; i++) { const k = 0.8 + 0.4 * (((i * 2654435761) >>> 0) % 100) / 100; p.setXY(i, p.getX(i) * k, p.getY(i) * k); } return shape(g.scale(r[0], r[1], 1).rotateX(rot[0]).rotateY(rot[1]).translate(...at), SPOT); };
+  const o = 0.63 + 0.015;
+  return [...tris,
+    ...spot([0.3, 0.24], [0, -Math.PI / 2], [-o, 0.62, -0.18]), ...spot([0.16, 0.13], [0, -Math.PI / 2], [-o, 1.0, 0.3]),   // right side
+    ...spot([0.24, 0.2], [0, Math.PI], [0.2, 0.8, -o]),                                                                   // back
+    ...spot([0.22, 0.18], [-Math.PI / 2, 0], [-0.22, 1.25 + 0.015, -0.25]), ...spot([0.12, 0.1], [-Math.PI / 2, 0], [0.28, 1.265, 0.1])]; // top
+});
+
 // ---- Kenney models with changes
 // Edge rocks (T-17): the Nature Kit's orange rock with a teal top -> natural greys (body mid grey with a little per-vertex variation,
 // top mossy grey-green, white parts light grey)
@@ -101,19 +116,44 @@ for (const k of ['rockA', 'rockB', 'rockC']) await kenney(k, NK({ rockA: 'rock_l
   return tris;
 });
 
-// Tractor (W-3): split into two paint areas by material. paint-body: Kenney's grey-blue bodywork (cab, fenders, frame);
-// paint-trim: the yellow hood and the wheel rims. The game puts each area's paint on the shading it finds there.
-const isHood = ([r, g, b]) => r > 200 && g > 110 && b < 130, isPaint = ([r, g, b]) => b > r * 1.1 && r > 60;
+// Tractor (W-3): Kenney's tractor cut into parts by shape, one node each. "body" (the cab, the hood and the frame) has material
+// paint-body; "fenders" (front and back) and "roof" have paint-trim; "glass" (windows and the hood vents) and "details" (exhaust,
+// lamps, the front weight) keep their colors, and so do the wheels (light grey rims). A paint area's vertex colors are greys that
+// keep the model's shading: the game puts the paint on top of them.
+const isGlass = ([r, g, b]) => b > 240 && r > 200, isYellow = ([r, g, b]) => r > 200 && g > 110 && b < 130, isBlueGrey = ([r, g, b]) => b > r * 1.1 && r > 60 && r < 140;
+const lum = ([r, g, b]) => 0.3 * r + 0.6 * g + 0.1 * b;
+export function tractorPart(t) { // t: a triangle of the body node, in that node's space (+z forward, +x left, y up from the frame)
+  const c = t.c[0], [x, y, z] = centroid(t), n = faceNormal(t), ax = Math.abs(x);
+  if (isGlass(c)) return 'glass';
+  if (isYellow(c)) return ax < 0.32 ? 'body' : 'details';                                                   // the hood; the side lamps
+  if (!isBlueGrey(c)) return 'details';                                                                      // the white front weight
+  if (ax < 0.2 && y > 0.7 && z > 0.15 && z < 0.85) return 'details';                                         // exhaust and the cap on the hood
+  if (y > 1.3) return 'roof';
+  if (z < -0.1 && y > 0.45 && y < 1.0 && (ax > 0.5 || (ax >= 0.38 && Math.abs(n[0]) < 0.5))) return 'fenders'; // the arched back fenders (the cab side at x 0.44 stays body)
+  if (ax >= 0.35 && z > 0.15 && z < 0.85 && y > 0.3) return 'fenders';                                        // the boxes over the front wheels
+  return 'body';
+}
 if (wanted('tractor')) {
   const doc = await io.read(`${KENNEY}/Car Kit/Models/GLB format/tractor.glb`);
   toVertexColors(doc);
   const mats = { 'paint-body': vcMaterial(doc, 'paint-body'), 'paint-trim': vcMaterial(doc, 'paint-trim'), tractor: vcMaterial(doc, 'tractor') };
-  for (const node of doc.getRoot().listNodes()) {
-    const mesh = node.getMesh(); if (!mesh) continue;
-    const tris = mesh.listPrimitives().flatMap(readTris), wheel = node.getName().startsWith('wheel'), by = new Map(Object.keys(mats).map(k => [k, []]));
-    for (const t of tris) { const c = t.c[0]; by.get(!wheel && isHood(c) || wheel && isPaint(c) ? 'paint-trim' : isPaint(c) ? 'paint-body' : 'tractor').push(t); }
+  const bodyNode = doc.getRoot().listNodes().find(n => n.getName() === 'body'), tris = bodyNode.getMesh().listPrimitives().flatMap(readTris);
+  // paint areas to greys: each source color family (blue-grey bodywork, yellow hood) is scaled by its own brightest vertex
+  const top = { grey: 1, yellow: 1 }; for (const t of tris) for (const c of t.c) { if (isBlueGrey(c)) top.grey = Math.max(top.grey, lum(c)); if (isYellow(c)) top.yellow = Math.max(top.yellow, lum(c)); }
+  const toGrey = t => { t.c = t.c.map(c => { const v = Math.round(215 * lum(c) / (isYellow(c) ? top.yellow : top.grey)); return [v, v, v]; }); return t; };
+  const parts = { body: [], fenders: [], roof: [], glass: [], details: [] };
+  for (const t of tris) parts[tractorPart(t)].push(t);
+  const AREA = { body: 'paint-body', fenders: 'paint-trim', roof: 'paint-trim' }, parent = bodyNode.getParentNode() || doc.getRoot().listScenes()[0], at = bodyNode.getTranslation();
+  bodyNode.getMesh().dispose(); bodyNode.dispose();
+  for (const [name, list] of Object.entries(parts)) {
+    const byMat = AREA[name] ? [[mats[AREA[name]], list.map(toGrey)]] : [[mats.tractor, name === 'details' ? list.map(t => (centroid(t)[1] > 0.7 && !isYellow(t.c[0]) ? paint(t, [72, 72, 78]) : t)) : list]];
+    addNode(doc, parent, name, byMat, { translation: at });
+  }
+  for (const node of doc.getRoot().listNodes()) { // wheels: dark tires, light grey rims, all fixed colors
+    if (!node.getName().startsWith('wheel')) continue;
+    const mesh = node.getMesh(), wt = mesh.listPrimitives().flatMap(readTris).map(t => { t.c = t.c.map(c => { if (lum(c) < 90) return c; const v = Math.min(235, Math.round(lum(c) * 1.2)); return [v, v, v + 4]; }); return t; });
     for (const p of mesh.listPrimitives()) { mesh.removePrimitive(p); p.dispose(); }
-    for (const [k, list] of by) if (list.length) mesh.addPrimitive(writeTris(doc, doc.createPrimitive().setMaterial(mats[k]), list));
+    mesh.addPrimitive(writeTris(doc, doc.createPrimitive().setMaterial(mats.tractor), wt));
   }
   for (const m of doc.getRoot().listMaterials()) if (!m.listParents().some(p => p.propertyType === 'Primitive')) m.dispose();
   await write('tractor', doc);
@@ -161,6 +201,25 @@ await built('sprinkler', (doc, scene, add) => add(scene, 'arch', tris(box(0.3, 4
 // Gate arch (T-8): two tall posts and a cross bar over a gate GATE_W wide, x across the opening
 await built('gate', (doc, scene, add) => { const o = GATE_W / 2 + 0.2; add(scene, 'arch', tris(box(0.5, 4, 0.5, -o, 2, 0, '#8a6240'), box(0.5, 4, 0.5, o, 2, 0, '#8a6240'), box(o * 2 + 0.6, 0.35, 0.35, 0, 3.85, 0, '#8a6240'))); });
 
+// Farmyard wash (T-36), in wash space: +z along the drive-through axis, x across, ground at y = 0, sized by WASH. Node "frame":
+// a concrete pad and four corner posts; node "canopy" (fades while the tractor is under it): the roof with a striped band at each
+// end and rows of nozzles; node "brush": one tall round brush
+// (centered on x = z = 0, standing up y), drawn at each side of the opening and spun by the game.
+await built('wash', (doc, scene, add) => {
+  const { half: H2, width: W2, h: HT } = WASH, px = W2 + 0.3, list = [];
+  list.push(box(W2 * 2 + 2.6, 0.06, H2 * 2 + 2, 0, 0.03, 0, '#c9c4ba'));                                                            // pad
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) list.push(box(0.5, HT, 0.5, sx * px, HT / 2, sz * H2, '#3d7fd1'));          // posts
+  add(scene, 'frame', tris(...list));
+  const top = [box(px * 2 + 1.2, 0.5, H2 * 2 + 1.0, 0, HT + 0.25, 0, '#3d7fd1')];                                                    // canopy
+  for (const sz of [-1, 1]) for (let i = 0; i < 8; i++) top.push(box((px * 2 + 1.24) / 8, 0.42, 0.04, -(px + 0.62) + (i + 0.5) * (px * 2 + 1.24) / 8, HT + 0.25, sz * (H2 + 0.52), i % 2 ? '#ffffff' : '#e84a4a')); // striped band at each end
+  for (let i = -3; i <= 3; i++) for (const z of [-1.5, 0, 1.5]) top.push(col(new THREE.CylinderGeometry(0.08, 0.12, 0.2, 8).translate(i * 1.2, HT - 0.1, z), '#9aa3ad')); // nozzles
+  add(scene, 'canopy', tris(...top));
+  const brush = []; // stripes of bristles up the brush, with a grey cap on each end
+  for (let i = 0; i < 6; i++) brush.push(cyl(0.5, 0.5, 0.56, 12, 0.6 + i * 0.56 + 0.28, ['#3fa9f5', '#ffd24a', '#ff5fa2'][i % 3]));
+  brush.push(cyl(0.2, 0.2, 0.2, 10, 0.5, '#7f7a72'), cyl(0.2, 0.2, 0.2, 10, 4.0, '#7f7a72'));
+  add(scene, 'brush', tris(...brush));
+});
+
 // Drive-through barn (T-28), in barn space: +z along the drive-through axis, +x across, ground at y = 0, sized for the sim's barn
 // (10 m wide and 12 m long inside, door leaves standing open in line with the walls). Nodes: "walls" (planks: walls and door
 // leaves), "trim" (white trim and the door frames), and under "roof" the parts that fade when the tractor is near:
@@ -183,7 +242,7 @@ await built('barn', (doc, scene, add) => {
   const walls = [], trim = [];
   for (const sx of [-1, 1]) {
     walls.push(boardUV(bx(0.4, H, L * 2, sx * W, H / 2, 0), 'z'));
-    for (const sz of [-1, 1]) walls.push(boardUV(bx(0.12, 4.3, LEAF - GAP, sx * W, 2.25, sz * (L + (LEAF + GAP) / 2)), 'z')); // open door leaf; top and bottom 5 cm inside its frame (coplanar faces flicker)
+    for (const sz of [-1, 1]) walls.push(boardUV(bx(0.12, 4.3, LEAF - GAP - 0.1, sx * W, 2.25, sz * (L + (LEAF + GAP) / 2)), 'z')); // open door leaf; all four edges 5 cm inside its frame (coplanar faces flicker)
     trim.push(box(0.62, 0.44, L * 2 + 0.4, sx * W, H - 0.18, 0, WHITE));                                               // eave band
     for (const sz of [-1, 1]) {
       trim.push(box(0.55, H - 0.06, 0.32, sx * W, (H - 0.06) / 2, sz * (L - 0.06), WHITE));                             // corner trim
@@ -222,3 +281,13 @@ await built('barn', (doc, scene, add) => {
   rt.push(box(0.06, 0.7, 0.06, 0, ridgeY + 2.4, 0, '#3b3b3b'), box(0.06, 0.06, 0.8, 0, ridgeY + 2.6, 0, '#3b3b3b'));   // weather vane
   add(roof, 'roof-trim', tris(...rt));
 });
+
+// Hat mounts (W-4): an empty node "hat" under each animal's "body" node, where the base of a hat sits. The animations move the
+// body, so a hat parented here bobs with the head. This step only adds the node when a file has none, so it is safe on edited files.
+const HAT_AT = { bunny: [0, 1.37, 0.08], sheep: [0, 1.2, 0.08] }; // body space; the default is just under the top of the head cube
+for (const pet of ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick']) {
+  const file = `${OUT}/${pet}.glb`, doc = await io.read(file), nodes = doc.getRoot().listNodes();
+  if (nodes.some(n => n.getName() === 'hat')) continue;
+  nodes.find(n => n.getName() === 'body').addChild(doc.createNode('hat').setTranslation(HAT_AT[pet] || [0, 1.14, 0.08]));
+  await write(pet, doc);
+}

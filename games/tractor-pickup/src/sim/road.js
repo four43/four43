@@ -60,13 +60,15 @@ export function buildRoad(farm, step = 1) {
   };
 }
 
-// F-1: remembers which end the tractor came in by; true once when it leaves by the other end.
+// F-1: remembers which end the tractor came in by; true once when it is DELIVER_AT of the way to the other end. Leaving the barn resets it.
+export const DELIVER_AT = 0.75; // F-1: the show starts when the tractor is this far through the barn, at any speed
 export function makeBarnPass(barn) {
-  let entered = 0;
+  let entered = 0, fired = false;
   return (x, z) => {
     const { a, s } = barnLocal(barn, x, z), inside = Math.abs(a) < barn.half && Math.abs(s) < barn.width;
-    if (inside) { if (!entered) entered = Math.sign(a) || 1; return false; }
-    if (!entered) return false;
-    const passed = Math.sign(a) === -entered; entered = 0; return passed;
+    if (!inside) { entered = 0; fired = false; return false; }
+    if (!entered) entered = Math.sign(a) || 1;
+    if (fired || -entered * a < barn.half * (2 * DELIVER_AT - 1)) return false;
+    fired = true; return true;
   };
 }

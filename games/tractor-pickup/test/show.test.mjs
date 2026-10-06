@@ -3,12 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createShow } from '../src/ui/show.js';
-import { buildShowSteps } from '../src/sim/showSteps.js';
+import { buildShowSteps, TALLY } from '../src/sim/showSteps.js';
 
 class El {
   constructor() { this.children = []; this.style = {}; this.on = {}; this.hidden = false; this.className = ''; this.innerHTML = ''; this.textContent = ''; this.classList = { add() {}, remove() {} }; }
   appendChild(c) { this.children.push(c); return c; }
   addEventListener(t, f) { (this.on[t] ||= []).push(f); }
+  setAttribute() {}
   remove() {}
   tap() { for (const f of this.on.pointerdown || []) f({ stopPropagation() {} }); }
 }
@@ -24,13 +25,13 @@ const steps = r => buildShowSteps(r.map(x => ({ type: x.animal.type, golden: fal
 const within = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`not done in ${ms} ms`)), ms))]);
 
 for (const [name, say] of [['rejects', () => Promise.reject(new Error('no audio'))], ['throws', () => { throw new Error('no audio'); }]]) {
-  test(`a voice that ${name} never stalls the show; every animal ends on the line-up ground`, async () => {
+  test(`a voice that ${name} never stalls the show; every animal ends on the ground of the line-up or the tally circle`, async () => {
     const { show, el, stop } = setup({ say }), r = riders(['pig', 'cow']);
     const taps = setInterval(() => el.tap(), 20); // skip the 0.8 s waits
     const warn = console.warn, warned = []; console.warn = (...a) => warned.push(a);
     try { await within(show.play(r, steps(r)), 3000); } finally { clearInterval(taps); stop(); console.warn = warn; }
     assert.ok(warned.length > 0 && warned.every(w => w[0] === 'voice'), 'the voice failure is reported, not swallowed');
-    for (const { animal: a } of r) { assert.equal(a.state, 'show'); assert.equal(a.y, 0); assert.ok(a.x >= 8.5 && a.x <= 15.5 && a.z >= -24 && a.z <= -8, `${a.x}, ${a.z}`); }
+    for (const { animal: a } of r) { assert.equal(a.state, 'show'); assert.equal(a.y, 0); assert.ok(a.x >= 8.5 - TALLY.rMax && a.x <= 15.5 + TALLY.rMax && a.z >= -24 && a.z <= -8 + TALLY.gap + 2 * TALLY.rMax, `${a.x}, ${a.z}`); } // on the line-up, or in the tally circle past its end (F-14)
   });
 }
 test('one tap finishes the whole step: the voice, the 0.8 s wait and any hop in flight (F-8)', async () => {
@@ -63,4 +64,28 @@ test('a hop shows the count in its group above the animal; then the group label 
   assert.deepEqual([...nums], [1, 2]);
   assert.ok(group, 'no group label'); assert.match(group.innerHTML, /<span class="gn">2<\/span>/);
   assert.equal(group.innerHTML.match(/<b[^>]*>(.)<\/b>/g).map(b => b.replace(/<[^>]+>/g, '')).join(''), 'Cows');
+});
+test('the skip button ends the whole show at once, with no animal left mid-hop (F-13)', async () => {
+  const { show, el, stop } = setup({ say: () => new Promise(() => {}) }), r = riders(['pig', 'cow', 'pig', 'duck']); // a voice that never ends
+  const skip = el.children.find(c => c.className === 'skip'); assert.ok(skip, 'no skip button');
+  let done = false; const p = show.play(r, steps(r)).then(() => { done = true; });
+  try { await new Promise(res => setTimeout(res, 60)); skip.tap(); await within(p, 300); } finally { stop(); }
+  assert.ok(done);
+  for (const { animal: a } of r) assert.ok(a.state === 'ride' || (a.state === 'show' && a.y === 0), `${a.type} left mid-hop`);
+});
+test('the running sum starts at zero; after each stage the group moves into the tally circle at the left, and the count goes up (F-7, F-14)', { timeout: 30000 }, async () => {
+  const said = [], { show, el, stop } = setup({ say: ids => { said.push(...ids); return Promise.resolve(); } }), r = riders(['pig', 'pig', 'cow', 'duck']);
+  const taps = setInterval(() => { if (said.includes('duck')) clearInterval(taps); else el.tap(); }, 30); // hurry to the sum, then let it play at its own pace
+  let tSum = 0, tally = null; const counts = [];
+  const watch = setInterval(() => { if (!tSum && said.includes('plus')) tSum = Date.now(); tally ||= el.children.find(c => c.className === 'tally');
+    if (tally && counts.at(-1) !== tally.innerHTML) counts.push(tally.innerHTML); }, 2);
+  try { await within(show.play(r, steps(r)), 25000); } finally { clearInterval(taps); clearInterval(watch); stop(); }
+  assert.ok(Date.now() - tSum > 3000, `the sum went by in ${Date.now() - tSum} ms: too fast to follow`);
+  const from = said.indexOf('plus') - 1;
+  assert.deepEqual(said.slice(from, from + 15), ['zero', 'plus', 'two', 'makes', 'two', 'two', 'plus', 'one', 'makes', 'three', 'three', 'plus', 'one', 'makes', 'four']);
+  assert.deepEqual(counts.map(String), ['0', '1', '2', '3', '4']);
+  // this fake yard's line-up runs z -24..-8 along the barn axis, on side +x: screen left is +z, so the circle is past its z = -8 end
+  const zs = r.map(x => x.animal.z), cz = zs.reduce((a, b) => a + b) / zs.length;
+  assert.ok(r.every(x => x.animal.z > -8), `animals not past the line-up end: ${zs.map(z => z.toFixed(1))}`);
+  for (const { animal: a } of r) assert.ok(Math.hypot(a.x - r[0].animal.x, a.z - cz) < 6, 'not together in one circle');
 });

@@ -2,7 +2,7 @@
 import { createPhysics, DT } from './physics.js';
 import { createTractor, quatAxes } from './tractor.js';
 import { createTrain, local2world, TR } from './hitch.js';
-import { generateFarm, YARD_HALF, yardFree } from './track.js';
+import { generateFarm, YARD_HALF, yardFree, inWash } from './track.js';
 import { buildRoad, FARM_HALF, makeBarnPass } from './road.js';
 import { scatterScenery, addFarmColliders, addYardProps, roadside } from './scenery.js';
 import { createTrees } from './trees.js';
@@ -11,12 +11,13 @@ import { createHerd, TYPES } from './herd.js';
 import { createLoad, slotPoint, newRider, stepRider } from './slots.js';
 import { launchLocal, FLIGHT } from './launch.js';
 import { makeRng } from './rng.js';
-import { stepDirt, stepRiderDirt } from './dirt.js';
+import { stepDirt, stepRiderDirt, WASH_RATE } from './dirt.js';
 
 export const CAPACITY = 12;                            // G-1: 6 in the trailer + 6 in the wagon
 export const CATCH = { x0: 1.6, x1: 4.0, half: 1.6 }; // B-1: box in front of the nose, 1.5 x tractor width
 const AIM = { range: 6, cone: 30 * Math.PI / 180, gain: 1.2, max: 0.35 }; // B-3
 const STILL = { thr: 0, steer: 0, horn: false };
+const STOP = 0.88; // F-5: speed kept per step while the train stops in the barn (stopped from full speed in about half a second)
 
 export function createGame(RAPIER, { seed, power = 'medium' }) {
   const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1)), rng = makeRng(seed ^ 0x51ed);
@@ -104,14 +105,16 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
         for (const s2 of game.load.slots) if (s2.car === k && s2.landed && s2.animal.state === 'ride') { stepRider(s2.animal.ride.rider, al, DT); const w = slotWorld(s2, tmp2); s2.animal.x = w.x; s2.animal.y = w.y; s2.animal.z = w.z; }
       });
       // F-1: a pass through the barn with at least one rider starts the show (after any flight has landed)
-      if (game.mode === 'drive' && barnPass(tractor.x, tractor.z)) pendingPass = true;
-      if (pendingPass && flights.length === 0) { pendingPass = false; if (game.load.landed() > 0) events.push({ type: 'barnPass' }); }
-      // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler washes
-      const sf = tractor.speed / tractor.P.vmax, washing = road.inSprinkler(tractor.x, tractor.z); let anyWash = washing;
+      // F-1, F-5: 3/4 of the way through the barn with a rider (or one still flying in), the tractor and the wagons stop where they are
+      if (game.mode === 'drive' && barnPass(tractor.x, tractor.z) && (load.landed() > 0 || flights.length > 0)) { pendingPass = true; game.mode = 'arrive'; }
+      if (pendingPass && flights.length === 0) { pendingPass = false; events.push({ type: 'barnPass' }); }
+      if (game.mode === 'arrive' || game.mode === 'show') for (const b of bodies) { const v = b.linvel(); if (Math.hypot(v.x, v.z) > 0.05) b.setLinvel({ x: v.x * STOP, y: v.y, z: v.z * STOP }, true); }
+      // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler and the farmyard wash (T-36) clean
+      const sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;
       game.dirt.tractor = stepDirt(game.dirt.tractor, { surface: tractor.surface, speedFrac: sf, washing }, DT);
       for (const c of train.cars) {
-        const p = c.body.translation(), w = road.inSprinkler(p.x, p.z), surf = road.surfaceAt(p.x, p.z);
-        anyWash ||= w; c.dirt = stepDirt(c.dirt, { surface: surf, speedFrac: sf, washing: w }, DT);
+        const p = c.body.translation(), w = washAt(p.x, p.z), surf = road.surfaceAt(p.x, p.z);
+        anyWash ||= w > 0; c.dirt = stepDirt(c.dirt, { surface: surf, speedFrac: sf, washing: w }, DT);
         for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: surf === 'mud', speed: tractor.speed, washing: w }, DT);
       }
       if (tractor.surface === 'mud' && lastSurface !== 'mud') events.push({ type: 'mud-enter' });

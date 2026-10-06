@@ -53,6 +53,12 @@ test('barn pass: through counts, backing out and passing beside do not (F-1)', (
   assert.equal(drive([...line(0, -12, 0), ...line(0, 0, -12)]), 0);
   assert.equal(drive(line(9, -12, 12)), 0);
 });
+test('barn pass fires 3/4 of the way in, once, and again only after leaving (F-1)', () => {
+  const barn = { x: 0, z: 0, yaw: 0, half: 6, width: 5 }, pass = makeBarnPass(barn), at = z => pass(0, z);
+  assert.equal(at(-12), false); assert.equal(at(-5.9), false); assert.equal(at(0), false); assert.equal(at(2.9), false); // entered at -6: 3/4 is z = 3
+  assert.equal(at(3.1), true); assert.equal(at(3.5), false); assert.equal(at(-1), false);                             // once while inside
+  assert.equal(at(-12), false); assert.equal(at(5.9), false); assert.equal(at(-3.1), true);                            // out, then in from the other end
+});
 test('scenery stays outside the edges and the yard, and hide bushes sit on the shoulder', () => {
   for (const seed of [1, 2, 3]) {
     const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed)), items = scatterScenery(farm, road, makeRng(seed), terrain);

@@ -12,7 +12,7 @@ const WING = new THREE.Matrix4();
 // W-4: hats for riders, from the model files hat-<id>.glb (about 0.7 m wide, base at y = 0)
 const hatMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 function buildHat(id) { const g = new THREE.Group(), m = new THREE.Mesh(geoFrom(Object.values(ASSETS['hat-' + id])), hatMat); m.castShadow = true; g.add(m); return g; }
-const HAT_Y = { bunny: 1.55 }, HAT_SCALE = 1.2; // Cube Pets are head-sized cubes about 1.3 wide whose top is at y = 1.4 in model units (the bunny's ears reach 1.8); hats sit on that top, in the animal's own scale
+const HAT_SCALE = 1.2; // hats sit on the "hat" node of each animal's model file (W-4), in the animal's own scale; the node moves with the head
 const HIDE = { sink: -0.35, out: 0.55 }; // A-13: deep in the bush, nudged toward the road so the tail pokes out
 const UP = new THREE.Vector3(0, 1, 0), FACE_CAR = new THREE.Quaternion().setFromAxisAngle(UP, Math.PI / 2); // model +z -> car +x
 
@@ -22,16 +22,16 @@ export function createAnimals3D(scene, herd) {
   const geos = {}; for (const [type, m] of Object.entries(MODEL)) geos[type] = ASSETS[m].parts.map(p => geoFrom([p]));
   const tmpL = {}, protos = {}, flightOf = new Map(); let hatMake = null;
   const hatOf = id => (protos[id] ||= buildHat(id)).clone(); // clones share one set of geometries and materials
-  const applyHat = v => { v.hat.clear(); const h = hatMake(v.a); if (h) { h.position.set(0, (HAT_Y[v.a.type] ?? 1.32), 0.08); h.scale.setScalar(HAT_SCALE); v.hat.add(h); } };
+  const applyHat = v => { v.hat.clear(); const h = hatMake(v.a); if (h) { h.scale.setScalar(HAT_SCALE); v.hat.add(h); } };
   const makeView = a => {
     const g = new THREE.Group(), s = SCALE[a.type], st = STRETCH[a.type] || [1, 1, 1];
     const inner = new THREE.Group(); inner.scale.set(s * st[0], s * st[1], s * st[2]); g.add(inner);
     const mat = (a.golden ? gold : base).clone(), dirt = dirtify(mat).uniforms.uDirt; // one clone per animal, one shared program (T-16)
     const wings = ASSETS[MODEL[a.type]].parts.flatMap((p, i) => p.name.startsWith('wing') ? [i] : []);
     const parts = geos[a.type].map(geo => { const m = new THREE.Mesh(geo, mat); m.matrixAutoUpdate = false; m.castShadow = true; inner.add(m); return m; });
-    const hat = new THREE.Group(); hat.visible = false; inner.add(hat); scene.add(g);
+    const hat = new THREE.Group(); hat.visible = false; hat.matrixAutoUpdate = false; inner.add(hat); scene.add(g);
     if (hatMake) applyHat({ a, hat });
-    return { a, g, inner, parts, hat, dirt, wings, t: Math.random() * 3 };
+    return { a, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
   };
   const views = herd.animals.map(makeView);
   return {
@@ -63,6 +63,7 @@ export function createAnimals3D(scene, herd) {
         const anim = fl ? 'run' : a.state === 'ride' ? (game.tractor.speed > game.tractor.P.vmax * 0.8 && PET_ANIMS[MODEL[a.type]].dance ? 'dance' : 'idle') : a.anim;
         const table = PET_ANIMS[MODEL[a.type]], name = table[anim] ? anim : 'idle';
         v.parts.forEach((m, i) => { sampleAnim(table, name, v.t, i, m.matrix); m.matrixWorldNeedsUpdate = true; });
+        if (v.hat.visible) { sampleAnim(table, name, v.t, v.hatRow, v.hat.matrix); v.hat.matrixWorldNeedsUpdate = true; } // W-4: the hat node's frame, so the hat bobs with the head
         v.dirt.value = a.dirt || 0;
         if (fl && kind === 'flap') { WING.makeScale(1, 1 + 0.4 * Math.sin(v.t * 30), 1); for (const i of v.wings) v.parts[i].matrix.multiply(WING); } // A-6: wings flap in flight
       }

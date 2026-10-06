@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateFarm, findRoute, checkRules, GATES, DIRS, SIZE, TILE, YARD_HALF, segDist, barnLocal, tileCenter } from '../src/sim/track.js';
+import { generateFarm, findRoute, checkRules, GATES, DIRS, SIZE, TILE, YARD_HALF, segDist, barnLocal, tileCenter, WASH, inWash } from '../src/sim/track.js';
 import { makeRng } from '../src/sim/rng.js';
+import { LINEUP, TALLY } from '../src/sim/showSteps.js';
 const SEEDS = Array.from({ length: 300 }, (_, i) => i * 7919 + 1);
 const FEATURES = ['mud', 'ramp', 'sprinkler'];
 assert.equal(TILE, 36); assert.equal(YARD_HALF, 54);
@@ -70,4 +71,39 @@ test('checkRules flags adjacent features and a ramp next to a curve', () => {
   const b = clone().map(r => ({ ...r, tiles: r.tiles.map(t => FEATURES.includes(t.type) ? { ...t, type: 'straight' } : t) }));
   const U = b[0].tiles, s = U.findIndex((t, i) => t.type === 'straight' && U[i + 1]?.type === 'straight');
   if (s >= 0) { U[s].type = 'mud'; U[s + 1].type = 'mud'; assert.ok(checkRules(b).includes('T-21')); }
+});
+
+test('the farmyard wash stands in the yard, parallel to the barn, with both ends and its approaches clear (T-36)', () => {
+  for (const seed of SEEDS) {
+    const y = generateFarm(seed).yard, w = y.wash;
+    assert.equal(w.yaw, y.barn.yaw);
+    for (const [a, s] of [[WASH.half + 8, WASH.width + 1], [-WASH.half - 8, WASH.width + 1], [WASH.half + 8, -WASH.width - 1], [-WASH.half - 8, -WASH.width - 1]]) {
+      const x = w.x + Math.sin(w.yaw) * a + Math.cos(w.yaw) * s, z = w.z + Math.cos(w.yaw) * a - Math.sin(w.yaw) * s; // the corners of the wash and 8 m of approach at each end
+      assert.ok(Math.abs(x) < YARD_HALF - 2 && Math.abs(z) < YARD_HALF - 2, `seed ${seed}: wash runs out of the yard`);
+    }
+    for (const o of y.obstacles) { const l = barnLocal(w, o.x, o.z); assert.ok(Math.abs(l.a) > WASH.half + 4 + o.r - 1e-9 || Math.abs(l.s) > WASH.width + 3 + o.r - 1e-9, `seed ${seed}: ${o.kind} at the wash`); }
+    const b = barnLocal(y.barn, w.x, w.z); assert.ok(Math.abs(b.s) > y.barn.width + WASH.width + 4, `seed ${seed}: wash against the barn`);
+    for (const l of y.lanes) for (const sd of [-1, 1]) for (const e of [-1, 1]) { const x = w.x + Math.sin(w.yaw) * e * WASH.half + Math.cos(w.yaw) * sd * (WASH.width + 0.3), z = w.z + Math.cos(w.yaw) * e * WASH.half - Math.sin(w.yaw) * sd * (WASH.width + 0.3);
+      assert.ok(segDist(x, z, l) > 3, `seed ${seed}: a wash post in a lane`); }
+    const L = y.lineup; assert.ok(!(w.x > L.x0 - WASH.width - 2 && w.x < L.x1 + WASH.width + 2 && w.z > L.z0 - WASH.width - 2 && w.z < L.z1 + WASH.width + 2), `seed ${seed}: wash on the line-up`);
+    assert.ok(Math.hypot(w.x - y.pond.x, w.z - y.pond.z) > y.pond.r + WASH.half + WASH.width, `seed ${seed}: wash in the pond`);
+    assert.ok(inWash(y, w.x, w.z) && !inWash(y, w.x + 30, w.z + 30));
+  }
+});
+
+test('the ground left of the line-up (screen left in the show) stays clear for the tally circle (F-14)', () => {
+  for (const seed of SEEDS) {
+    const y = generateFarm(seed).yard, b = y.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], rt = [Math.cos(b.yaw), -Math.sin(b.yaw)];
+    // the show camera looks back along -side, so layout x (screen right) runs along -side * f: the circle sits at +side * f past the line-up
+    const reach = LINEUP.len / 2 + TALLY.gap + 2 * TALLY.rMax, mid = 3.5;
+    for (const a of [LINEUP.len / 2, reach]) for (const d of [mid - TALLY.rMax, mid + TALLY.rMax]) {
+      const A = y.end * 16 + y.side * a, S = y.side * (8.5 + d), x = f[0] * A + rt[0] * S, z = f[1] * A + rt[1] * S;
+      assert.ok(Math.abs(x) < YARD_HALF - 2 && Math.abs(z) < YARD_HALF - 2, `seed ${seed}: circle room out of the yard`);
+      assert.ok(Math.hypot(x - y.pond.x, z - y.pond.z) > y.pond.r, `seed ${seed}: circle room in the pond`);
+    }
+    for (const o of y.obstacles) {
+      const l = barnLocal(b, o.x, o.z), a = (l.a - y.end * 16) * y.side, d = l.s * y.side - 8.5;
+      assert.ok(!(a > LINEUP.len / 2 - o.r && a < reach + o.r && d > mid - TALLY.rMax - o.r && d < mid + TALLY.rMax + o.r), `seed ${seed}: ${o.kind} in the tally circle room`);
+    }
+  }
 });

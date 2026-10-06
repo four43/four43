@@ -27,6 +27,7 @@ test('riders get splashed in mud only while moving, and washed too', () => {
 import RAPIER from '@dimforge/rapier3d-compat';
 import { createGame } from '../src/sim/game.js';
 import { quatAxes } from '../src/sim/tractor.js';
+import { WASH } from '../src/sim/track.js';
 await RAPIER.init();
 const GO = { thr: 1, steer: 0, horn: false };
 const moveTrain = (g, x, z, yaw) => {
@@ -54,4 +55,15 @@ test('driving through the sprinkler washes the tractor and the cars (the gravel 
   const ev = []; for (let i = 0; i < 60 * 9; i++) ev.push(...g.step(GO));
   assert.equal(ev.filter(e => e.type === 'washed').length, 1);
   assert.ok(g.dirt.tractor < 0.1 && g.train.cars.every(c => c.dirt < 0.1), `${g.dirt.tractor} ${g.train.cars.map(c => c.dirt)}`);
+});
+test('driving through the farmyard wash cleans the tractor and the cars, and its posts are solid (T-36)', () => {
+  const g = createGame(RAPIER, { seed: 1, power: 'medium' }), w = g.farm.yard.wash, c = { x: w.x, z: w.z, yaw: w.yaw };
+  approach(g, c, 16); g.dirt.tractor = 1; g.train.cars.forEach(car => { car.dirt = 1; });
+  const ev = []; for (let i = 0; i < 60 * 6; i++) ev.push(...g.step(GO));
+  assert.equal(ev.filter(e => e.type === 'washed').length, 1);
+  assert.ok(g.dirt.tractor < 0.1 && g.train.cars.every(car => car.dirt < 0.1), `${g.dirt.tractor} ${g.train.cars.map(car => car.dirt)}`);
+  const post = { x: w.x + Math.cos(w.yaw) * (WASH.width + 0.3), z: w.z - Math.sin(w.yaw) * (WASH.width + 0.3) }; // drive straight at a side post
+  approach(g, { ...post, yaw: w.yaw }, 14 + WASH.half); for (let i = 0; i < 60 * 4; i++) g.step(GO);
+  const t = g.tractor.body.translation(), l = { a: (t.x - w.x) * Math.sin(w.yaw) + (t.z - w.z) * Math.cos(w.yaw) };
+  assert.ok(l.a < -WASH.half, `drove through a post (${l.a.toFixed(2)} m along)`);
 });

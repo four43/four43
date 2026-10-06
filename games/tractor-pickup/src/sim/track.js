@@ -1,6 +1,7 @@
 // Farm generator (spec 4.1-4.7): a 3x3-tile farmyard at the center, two routes that leave by one gate and come back
 // by the next gate around, features on route straights, and the farmyard layout (barn, line-up, pond, lanes, obstacles).
 import { makeRng } from './rng.js';
+import { LINEUP, TALLY } from './showSteps.js';
 export const TILE = 36, SIZE = 11, YARD_HALF = 54;
 export const TREE_R = { single: 1.5, young: 0.8, bush: 0.9 }; // canopy radius of a breakable tree or bush (T-34)
 export const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
@@ -94,11 +95,15 @@ export const barnLocal = (barn, x, z) => {
   const fx = Math.sin(barn.yaw), fz = Math.cos(barn.yaw), dx = x - barn.x, dz = z - barn.z;
   return { a: dx * fx + dz * fz, s: dx * fz - dz * fx };
 };
+// T-36: the drive-through wash in the farmyard: open at both ends along its axis (yaw like the barn's), `half` m from its center to
+// each end and `width` m from its center line to each side of the opening; posts stand at the four corners, a brush at each side.
+export const WASH = { half: 3.5, width: 4.5, h: 4.4 };
+export const inWash = (yard, x, z) => { if (!yard.wash) return false; const { a, s } = barnLocal(yard.wash, x, z); return Math.abs(a) < WASH.half + 1 && Math.abs(s) < WASH.width; };
 const inRect = (x, z, R, m) => x > R.x0 - m && x < R.x1 + m && z > R.z0 - m && z < R.z1 + m;
 export function yardFree(yard, x, z, r) {
   const b = barnLocal(yard.barn, x, z);
   return Math.abs(x) < YARD_HALF - 2 - r && Math.abs(z) < YARD_HALF - 2 - r && !(Math.abs(b.a) < yard.barn.half + yard.barn.leaf + 2 + r && Math.abs(b.s) < 7 + r)
-    && !inRect(x, z, yard.lineup, 2 + r) && Math.hypot(x - yard.pond.x, z - yard.pond.z) > yard.pond.r + 2 + r && yard.lanes.every(l => segDist(x, z, l) > 5 + r);
+    && !inRect(x, z, yard.lineup, 2 + r) && !(yard.tally && inRect(x, z, yard.tally, 1 + r)) && !(yard.wash && Math.abs(barnLocal(yard.wash, x, z).a) < WASH.half + 4 + r && Math.abs(barnLocal(yard.wash, x, z).s) < WASH.width + 3 + r) && Math.hypot(x - yard.pond.x, z - yard.pond.z) > yard.pond.r + 2 + r && yard.lanes.every(l => segDist(x, z, l) > 5 + r);
 }
 
 // Farmyard (4.7): drive-through barn at the center, the line-up (bare ground, T-29) beside one exit, the duck pond in a corner, clear lanes
@@ -110,12 +115,15 @@ export function layoutYard(rng) {
   const rect = (a0, a1, s0, s1) => { const p = W(a0, s0), q = W(a1, s1); return { x0: Math.min(p.x, q.x), x1: Math.max(p.x, q.x), z0: Math.min(p.z, q.z), z1: Math.max(p.z, q.z) }; };
   const barn = { x: 0, z: 0, yaw, half: 6, width: 5, leaf: 5 }; // leaf: the open door leaves stand this far out from each end, in line with the walls
   const lineup = rect(end * 8, end * 24, side * 8.5, side * 15.5); // where the animals stand for the show (16 x 7 m, F-12): ground only
+  // F-14: room for the tally circle, past the line-up on the show's screen-left (the show camera looks back along -side, so screen left is +side along the axis)
+  const reach = LINEUP.len / 2 + TALLY.gap + 2 * TALLY.rMax, tally = rect(end * 16 + side * LINEUP.len / 2, end * 16 + side * reach, side * (12 - TALLY.rMax), side * (12 + TALLY.rMax));
   const lanes = Object.entries(GATE_POINT).map(([gate, [gx, gz]]) => {
     const along = gx * f[0] + gz * f[1], e = W(Math.abs(along) > 1 ? Math.sign(along) * 6 : -end * 6, 0); // side gates use the far end, away from the line-up
     return { gate, ax: gx, az: gz, bx: e.x, bz: e.z };
   });
   const pc = YARD_HALF - 14, pond = { x: (rng.chance(0.5) ? 1 : -1) * pc, z: (rng.chance(0.5) ? 1 : -1) * pc, r: 7 }; // A-5: a corner, 7 m in from the fence
-  const yard = { half: YARD_HALF, barn, end, side, lineup, pond, lanes, obstacles: [] };
+  const wp = W(end * 12, -side * 16), wash = { x: wp.x, z: wp.z, yaw }; // T-36: beside the barn on the side away from the line-up, parallel to it, clear of the lanes
+  const yard = { half: YARD_HALF, barn, end, side, lineup, tally, pond, wash, lanes, obstacles: [] };
   for (const [kind, n, rad] of [['bale', 8, 0.9], ['cone', 16, 0.3], ['barrel', 8, 0.45]]) { // no fixed posts (T-31)
     for (let m = 0, placed = 0; placed < n && m < 2000; m++) {
       const x = rng.range(-YARD_HALF, YARD_HALF), z = rng.range(-YARD_HALF, YARD_HALF);

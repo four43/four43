@@ -4,7 +4,7 @@ import { planUtterances } from '../src/audio/voice.js';
 import { WORDS } from '../src/sim/words.js';
 
 test('word list matches spec section 12.1', () => {
-  for (const w of ['one', 'twelve', 'pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick', 'golden', 'lets-find', 'animals', 'great-job', 'go-to-barn', 'lets-count', 'hooray', 'you-did-it', 'pigs', 'cows', 'chickens', 'ducks', 'bunnies', 'dogs', 'chicks', 'plus', 'makes']) assert.ok(WORDS.includes(w), w);
+  for (const w of ['zero', 'one', 'twelve', 'pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick', 'golden', 'lets-find', 'animals', 'great-job', 'go-to-barn', 'lets-count', 'hooray', 'you-did-it', 'new-sticker', 'pigs', 'cows', 'chickens', 'ducks', 'bunnies', 'dogs', 'chicks', 'plus', 'makes']) assert.ok(WORDS.includes(w), w);
   assert.equal(new Set(WORDS).size, WORDS.length, 'a word listed twice (sheep is its own plural)');
 });
 test('recorded clips play; missing words fall back to speech, merged', () => {

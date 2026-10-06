@@ -2,7 +2,7 @@
 
 Record one word or phrase per file. Save it here as `<id>.mp3`. Any missing file uses the browser's voice.
 
-Numbers: one two three four five six seven eight nine ten eleven twelve
+Numbers: zero one two three four five six seven eight nine ten eleven twelve
 Animals: pig cow chicken sheep duck bunny dog chick golden
 Plurals (the show counts each group): pigs cows chickens ducks bunnies dogs chicks (sheep is the same word)
 Phrases:
@@ -13,6 +13,7 @@ Phrases:
 - lets-count: "Let's count!"
 - hooray: "Hooray!"
 - you-did-it: "You did it!"
+- new-sticker: "You got a sticker!"
 - plus: "plus" (the show adds the groups: "three plus two makes five")
 - makes: "makes"
 

@@ -8,7 +8,7 @@ import { dirtify } from './dirtMat.js';
 // W-3: the paints, in unlock order (sim/progress.js). rainbow runs through the hues along the tractor.
 export const PAINTS = { red: '#d8342c', yellow: '#f2c230', green: '#3f9b3a', blue: '#2f6fd6', pink: '#f07aa8', orange: '#f28a1e', purple: '#8a4fd0', white: '#f4f1ea', rainbow: null };
 const S = TP.scale;
-// The two paint areas (material paint-body / paint-trim in tractor.glb) keep their own shading: each vertex gets the paint times
+// The two paint areas (material paint-body: the body node; paint-trim: the fenders and roof nodes of tractor.glb) keep their own shading: each vertex gets the paint times
 // its brightness relative to the brightest vertex of its area.
 export function paintable(parts) {
   const g = geoFrom(parts), area = parts.flatMap(p => p.area || Array(p.pos.length / 3).fill(0)), src = g.attributes.color.array.slice(), lum = [], top = [0, 0, 0];
@@ -30,7 +30,7 @@ export function createVehicles3D(scene, tractor, train) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const dirty = base => { const m = base.clone(), d = dirtify(m); m.userData.dirt = d.uniforms.uDirt; return m; }; // one clone per thing that gets dirty on its own (T-16)
   const modelRot = new THREE.Matrix4().makeRotationY(Math.PI / 2).multiply(new THREE.Matrix4().makeScale(S, S, S));
-  const bodyMat = dirty(mat), wheelsMat = dirty(mat), body = new THREE.Mesh(paintable([ASSETS.tractor.body]), bodyMat); body.castShadow = true; body.matrixAutoUpdate = false; scene.add(body);
+  const bodyMat = dirty(mat), wheelsMat = dirty(mat), body = new THREE.Mesh(paintable(Object.entries(ASSETS.tractor).filter(([k]) => !k.startsWith('wheel')).map(([, p]) => p)), bodyMat); body.castShadow = true; body.matrixAutoUpdate = false; scene.add(body);
   const wheels = tractor.W.map(w => { const g = paintable([ASSETS.tractor[w.name]]); g.translate(-w.mx, -w.my, -w.mz); const m = new THREE.Mesh(g, wheelsMat); m.castShadow = true; m.matrixAutoUpdate = false; scene.add(m); return m; });
   const setPaint = p => { for (const m of [body, ...wheels]) m.geometry.userData.paint(p); };
   setPaint({ body: 'red', trim: 'yellow' });
