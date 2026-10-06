@@ -87,3 +87,19 @@ test('driving into a hiding bush boops the animal hidden there (A-13)', () => {
   assert.ok(boop, 'the hidden animal was not booped');
   assert.equal(h.state, 'fly');
 });
+test('flights keep their previous step position for render interpolation (X-1)', () => {
+  const g = createGame(RAPIER, { seed: 18, power: 'medium' }); quiet(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  g.step(STILL); const fl = g.flights.find(f => f.animal === a); assert.ok(fl);
+  for (let i = 0; i < 20; i++) { const before = { ...fl.pos }; g.step({ thr: 1, steer: 0, horn: false }); assert.deepEqual(fl.prev, before); }
+  assert.ok(Math.hypot(fl.pos.x - fl.prev.x, fl.pos.y - fl.prev.y, fl.pos.z - fl.prev.z) > 0);
+});
+test('a boop always launches: no boop event without a launch (load full)', () => {
+  const g = createGame(RAPIER, { seed: 19, power: 'medium' }); quiet(g); unhide(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const ev = []; for (const a of pickable(g).slice(0, 14)) { const p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; for (let i = 0; i < 90; i++) ev.push(...g.step(STILL)); }
+  const boops = ev.filter(e => e.type === 'boop'), launches = ev.filter(e => e.type === 'launch');
+  assert.equal(launches.length, CAPACITY); assert.ok(boops.length <= launches.length);
+  for (const b of boops) assert.ok(launches.some(l => l.animal === b.animal || l.animal.leader === b.animal.id || b.animal.leader === l.animal.id));
+});

@@ -4,13 +4,23 @@ export function createHud(root, { icons, onWordTap }) {
   const bar = document.createElement('div'); bar.id = 'slots'; root.appendChild(bar);
   const word = document.createElement('div'); word.id = 'word'; root.appendChild(word);
   const arrow = document.createElement('div'); arrow.id = 'arrow'; arrow.textContent = '➜'; arrow.hidden = true; root.appendChild(arrow);
-  let slots = [], wordTimer = 0;
+  let slots = [], wordTimer = 0, flyTimer = 0;
   const reset = () => { bar.innerHTML = ''; slots = Array.from({ length: 12 }, (_, i) => { const s = document.createElement('div'); s.className = i === 6 ? 'slot wagon' : 'slot'; bar.appendChild(s); return s; }); };
   reset();
-  const showWord = text => {
+  const clearFly = () => { word.style.transition = word.style.transform = word.style.opacity = ''; };
+  // W-5: the name pops in letter by letter, stays 2.5 s, then shrinks and flies into its slot (n: 1-12) in 0.5 s
+  const showWord = (text, n) => {
+    clearTimeout(wordTimer); clearTimeout(flyTimer); clearFly();
     word.innerHTML = ''; [...text].forEach((ch, i) => { const sp = document.createElement('span'); sp.textContent = ch === ' ' ? ' ' : ch; sp.style.animationDelay = `${i * 0.09}s`; word.appendChild(sp); });
-    word.classList.remove('on'); void word.offsetWidth; word.classList.add('on'); clearTimeout(wordTimer);
-    wordTimer = setTimeout(() => word.classList.remove('on'), 2500);
+    word.classList.remove('on'); void word.offsetWidth; word.classList.add('on');
+    wordTimer = setTimeout(() => {
+      const s = slots[n - 1]; if (!s) { word.classList.remove('on'); return; }
+      const a = word.getBoundingClientRect(), b = s.getBoundingClientRect();
+      const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height * 0.85 - (a.top + a.height / 2), k = 12 / a.height;
+      word.style.transition = 'transform .5s ease-in, opacity .5s ease-in';
+      word.style.transform = `translate(calc(-50% + ${dx}px), ${dy}px) scale(${k})`; word.style.opacity = '0.3';
+      flyTimer = setTimeout(() => { word.classList.remove('on'); clearFly(); }, 500);
+    }, 2500);
   };
   word.addEventListener('pointerdown', e => { e.stopPropagation(); onWordTap?.(word.textContent); }); // W-6
   return {

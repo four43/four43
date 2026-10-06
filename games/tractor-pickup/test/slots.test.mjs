@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLoad, slotLocal, newRider, stepRider, RIDER, CAR_SLOTS } from '../src/sim/slots.js';
+import { createLoad, slotLocal, slotPoint, slotIndex, newRider, stepRider, RIDER, CAR_SLOTS } from '../src/sim/slots.js';
 
 test('fills the trailer first, then the wagon, up to the capacity', () => {
   const L = createLoad(12), s = [];
@@ -25,4 +25,12 @@ test('riders bounce but never leave the slot (R-4)', () => {
   const r = newRider(); let max = 0;
   for (let i = 0; i < 600; i++) { const a = i < 30 ? { x: 0, y: -9.81, z: 0 } : i < 33 ? { x: 0, y: 80, z: 0 } : { x: Math.sin(i * 0.3) * 15, y: 0, z: Math.cos(i * 0.2) * 15 }; stepRider(r, a, 1 / 60); max = Math.max(max, Math.hypot(r.ox, r.oy, r.oz)); assert.ok(r.oy >= 0); }
   assert.ok(max <= RIDER.max + 1e-9); assert.ok(max > 0.1, 'no bounce at all');
+});
+test('slotPoint: the slot on the bed plus the rider offset, in car axes (renderer and sim share it)', () => {
+  const l = slotLocal(3), r = { ...newRider(), ox: 0.1, oy: 0.2, oz: -0.3 };
+  assert.deepEqual(slotPoint(3, r, 0.15, {}), { x: l.x + 0.1, y: l.y + 0.15 + 0.2, z: l.z - 0.3 });
+  assert.deepEqual(slotPoint(3, null, 0.15, {}), { x: l.x, y: l.y + 0.15, z: l.z });
+});
+test('slotIndex: trailer slots 0-5, wagon slots 6-11, in reserve order', () => {
+  const L = createLoad(12); for (let i = 0; i < 12; i++) assert.equal(slotIndex(L.reserve({})), i);
 });

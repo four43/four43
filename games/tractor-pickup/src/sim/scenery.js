@@ -59,7 +59,10 @@ export function scatterScenery(farm, road, rng, terrain) {
       items.push(it); const k = key(Math.floor(x / B), Math.floor(z / B)); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(it);
     }
   }
-  for (const h of farm.hideSpots) items.push({ kind: 'bush', x: h.x, z: h.z, y: 0, yaw: 0, scale: 1.3, r: 0.9, hide: true }); // in front of the bank, tail visible from the road
+  // A-13: a clump of big bushes (about 2 m wide, 1.7 m tall) on the shoulder in front of the bank; the hider's tail pokes out toward the road
+  for (const h of farm.hideSpots) { const { pt } = road.nearest(h.x, h.z), sd = Math.sign((h.x - pt.x) * -pt.tz + (h.z - pt.z) * pt.tx);
+    for (const [along, out, yaw, sc] of [[0, 0.3, 0, 5], [-0.6, 0, 1.2, 4.2], [0.6, 0, 2.4, 4.2], [0, -0.15, 3.7, 3.6]])
+      items.push({ kind: 'bush', x: h.x + pt.tx * along - pt.tz * sd * out, z: h.z + pt.tz * along + pt.tx * sd * out, y: 0, yaw, scale: sc, sy: 1.8, r: 0.95, hide: true }); }
   return items;
 }
 

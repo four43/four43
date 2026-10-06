@@ -1,6 +1,9 @@
 // Trailer and wagon slots (2 rows x 3 per car, B-13) and the spring that holds a riding animal in its slot (D-12).
 export const CAR_SLOTS = 6;
 export const slotLocal = k => ({ x: 0.9 - Math.floor(k / 2) * 0.9, y: 0.15, z: k % 2 ? -0.48 : 0.48 });
+// The point a rider sits at, in its car's axes: the slot on the bed (bed = height of the bed top above the car center) plus the rider's spring offset.
+export const slotPoint = (k, rider, bed, out) => { const l = slotLocal(k); out.x = l.x + (rider?.ox || 0); out.y = l.y + bed + (rider?.oy || 0); out.z = l.z + (rider?.oz || 0); return out; };
+export const slotIndex = s => s.car * CAR_SLOTS + s.k; // 0-5 trailer, 6-11 wagon: the slot bar position (U-1)
 export function createLoad(capacity) {
   const slots = [];
   return {

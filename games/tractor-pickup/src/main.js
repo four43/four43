@@ -9,6 +9,9 @@ import { randomSeed } from './sim/rng.js';
 import { createAnimals3D } from './render/animals3d.js';
 import { renderIcons } from './ui/icons.js';
 import { createHud } from './ui/hud.js';
+import { createSlowMo } from './sim/slowmo.js';
+import { slotIndex } from './sim/slots.js';
+import { FLIGHT } from './sim/launch.js';
 import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
@@ -38,25 +41,25 @@ async function main() {
   const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = null; // Task 13 replaces `fx` with the stars and puffs
   const hud = game.herd ? createHud(document.getElementById('ui'), { icons: renderIcons(renderer) }) : null;
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
-  let slowT = 0; // B-7: 50% speed for 0.3 s at the top of the first arc
+  const slow = createSlowMo(); let booped = false; // B-7: half speed at the top of the arc of the first animal each boop launches
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
   let prev = bodies().map(snapOf), curr = prev, view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
   if (params.has('tune')) { buildTunePanel(game); window.game = game; }
   let acc = 0, last = performance.now();
   renderer.setAnimationLoop(now => {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * (slowT > 0 ? 0.5 : 1); slowT -= dt;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * slow.scale();
     const inp = input.read();
     while (acc >= DT) {
-      prev = curr; const ev = game.step({ ...inp, horn: hornQueued }) || []; hornQueued = false; curr = bodies().map(snapOf); acc -= DT;
+      prev = curr; const ev = game.step({ ...inp, horn: hornQueued }) || []; hornQueued = false; slow.step(DT); curr = bodies().map(snapOf); acc -= DT;
       for (const e of ev) {
         if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); }
-        if (e.type === 'boop') { chase.shake(0.35); fx?.stars(e.animal.x, 1, e.animal.z); }
-        if (e.type === 'launch' && game.flights.length === 1) setTimeout(() => { slowT = 0.3; }, 450);
-        if (e.type === 'land') { hud.fill(e.n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word); }
+        if (e.type === 'boop') { chase.shake(0.35); fx?.stars(e.animal.x, 1, e.animal.z); booped = true; }
+        if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
+        if (e.type === 'land') { const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
       }
     }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
-    gibs.update(dt); farm3d?.update(view[0].p); animals3d?.update(dt, game);
+    gibs.update(dt); farm3d?.update(view[0].p); animals3d?.update(dt, game, { cars: view.slice(1), alpha: a });
     vehicles.update({ tractor: view[0], cars: view.slice(1) });
     const t = game.tractor, lv = t.body.linvel();
     chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });

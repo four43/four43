@@ -8,7 +8,7 @@ import { scatterScenery, addFarmColliders, addYardProps } from './scenery.js';
 import { createTrees } from './trees.js';
 import { createTerrain } from './terrain.js';
 import { createHerd, TYPES } from './herd.js';
-import { createLoad, slotLocal, newRider, stepRider } from './slots.js';
+import { createLoad, slotPoint, newRider, stepRider } from './slots.js';
 import { launchLocal, FLIGHT } from './launch.js';
 import { makeRng } from './rng.js';
 
@@ -37,7 +37,7 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   const tractorWorld = (l, out) => Object.assign(out, local2world(tractor.body, l));
   const tractorLocal = (x, y, z, out) => { const p = tractor.body.translation(), { f, u, r } = quatAxes(tractor.body.rotation()), dx = x - p.x, dy = y - p.y, dz = z - p.z;
     out.x = dx * f.x + dy * f.y + dz * f.z; out.y = dx * u.x + dy * u.y + dz * u.z; out.z = dx * r.x + dy * r.y + dz * r.z; return out; };
-  const slotWorld = (sl, out) => { const c = train.cars[sl.car], l = slotLocal(sl.k), rd = sl.animal.ride?.rider; return Object.assign(out, local2world(c.body, { x: l.x + (rd?.ox || 0), y: l.y + TR.half.y + (rd?.oy || 0), z: l.z + (rd?.oz || 0) })); };
+  const slotWorld = (sl, out) => Object.assign(out, local2world(train.cars[sl.car].body, slotPoint(sl.k, sl.animal.ride?.rider, TR.half.y, {})));
   const prevVel = train.cars.map(c => ({ ...c.body.linvel() }));
   const tmp = {}, tmp2 = {};
   let pendingPass = false;
@@ -45,7 +45,7 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   const game = {
     farm, road, terrain, items, phys, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
     load: createLoad(CAPACITY), mode: 'drive',
-    // F-5: the show takes over. Riders in landing order; obstacles go back to their places and broken trees regrow (T-32, T-34).
+    // F-5: the show takes over. Riders in slot order (trailer then wagon, the order they were booped in); obstacles go back to their places and broken trees regrow (T-32, T-34).
     startShow() { game.mode = 'show'; yardProps.reset(); trees.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
     // F-10, A-16, G-3: delivered animals walk into the barn and are gone, new ones appear on the routes, the trailer and wagon are empty again.
     finishShow(riders) {
@@ -76,7 +76,7 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       }
       // flights
       for (let i = flights.length - 1; i >= 0; i--) {
-        const fl = flights[i]; fl.u += DT / fl.dur; if (fl.u < 0) continue;
+        const fl = flights[i]; fl.u += DT / fl.dur; fl.prev.x = fl.pos.x; fl.prev.y = fl.pos.y; fl.prev.z = fl.pos.z; if (fl.u < 0) continue;
         const sw = slotWorld(fl.slot, tmp2), sl = tractorLocal(sw.x, sw.y, sw.z, {});
         const lp = launchLocal(Math.min(1, fl.u), fl.start, sl, {}); tractorWorld(lp, fl.pos);
         fl.animal.x = fl.pos.x; fl.animal.z = fl.pos.z; fl.animal.y = fl.pos.y;
@@ -97,14 +97,14 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   function launch(a, events, delay = 0) {
     const sl = game.load.reserve(a); if (!sl) return false;
     a.state = 'fly'; a.hidden = false;
-    flights.push({ animal: a, slot: sl, load: game.load, u: -delay, dur: FLIGHT[a.type].dur, start: tractorLocal(a.x, 0, a.z, {}), pos: { x: a.x, y: 0, z: a.z } });
+    flights.push({ animal: a, slot: sl, load: game.load, u: -delay, dur: FLIGHT[a.type].dur, start: tractorLocal(a.x, 0, a.z, {}), pos: { x: a.x, y: 0, z: a.z }, prev: { x: a.x, y: 0, z: a.z } }); // prev: last step's pos, for render interpolation (X-1)
     events.push({ type: 'launch', animal: a }); return true;
   }
   function boop(a, events) {
-    events.push({ type: 'boop', animal: a });
     // A-12: booping any member of a hen-and-chicks line launches the whole line, one after the other
     const leaderId = a.leader ?? a.id, line = herd.animals.filter(x => (x.id === leaderId || x.leader === leaderId) && herd.free().includes(x)).sort((p, q) => p.line - q.line);
-    line.forEach((x, i) => launch(x, events, i * 0.25));
+    const launched = []; line.forEach((x, i) => launch(x, launched, i * 0.25));
+    if (launched.length) events.push({ type: 'boop', animal: a }, ...launched); // no boop without a launch (load full)
   }
   return game;
 }

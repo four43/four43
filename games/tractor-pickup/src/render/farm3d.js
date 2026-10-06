@@ -122,7 +122,7 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
   const byKind = new Map(); for (const it of items) { if (!byKind.has(it.kind)) byKind.set(it.kind, []); byKind.get(it.kind).push(it); }
   for (const [kind, list] of byKind) {
     const m = new THREE.InstancedMesh(geoFrom(Object.values(ASSETS[kind])), matV, list.length);
-    list.forEach((it, i) => m.setMatrixAt(i, mtx.compose(p3.set(it.x, it.y, it.z), q.setFromAxisAngle(UP, it.yaw), s3.setScalar(it.scale))));
+    list.forEach((it, i) => m.setMatrixAt(i, mtx.compose(p3.set(it.x, it.y, it.z), q.setFromAxisAngle(UP, it.yaw), s3.set(it.scale, it.scale * (it.sy || 1), it.scale))));
     m.castShadow = m.receiveShadow = true; scene.add(m);
   }
   // fences: the route fences on low ground (T-17), the yard (with gate gaps) and the farm edge, all from the Kenney fence

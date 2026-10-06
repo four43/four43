@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { ASSETS, geoFrom } from '../render/gfx.js';
 import { MODEL, copper } from '../render/animals3d.js';
 export function renderIcons(renderer) {
-  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50); cam.position.set(1.6, 1.4, 2.6); cam.lookAt(0, 0.45, 0);
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50); cam.position.set(1.9, 2.2, 3.1); cam.lookAt(0, 0.6, 0); // the whole animal (Cube Pets stand about 1.7 m, the bunny's ears 2.1 m)
   scene.add(new THREE.HemisphereLight('#ffffff', '#b9a27c', 2.2)); const d = new THREE.DirectionalLight('#ffffff', 1.5); d.position.set(2, 4, 3); scene.add(d);
   const rt = new THREE.WebGLRenderTarget(128, 128), px = new Uint8Array(128 * 128 * 4), cv = document.createElement('canvas'); cv.width = cv.height = 128;
   const out = { golden: {} }, mat = new THREE.MeshLambertMaterial({ vertexColors: true }), gold = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.7, roughness: 0.3, emissive: '#6a4a00' });
