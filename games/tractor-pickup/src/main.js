@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { DT } from './sim/physics.js';
+import { createPhysics, DT } from './sim/physics.js';
+import { createTractor } from './sim/tractor.js';
+import { createTrain } from './sim/hitch.js';
+import { generateFarm } from './sim/track.js';
+import { buildRoad } from './sim/road.js';
+import { scatterScenery, addSceneryColliders, addFarmColliders, addYardProps } from './sim/scenery.js';
+import { makeRng, randomSeed } from './sim/rng.js';
+import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
 import { createSandbox } from './sim/sandbox.js';
@@ -8,6 +15,7 @@ import { createScene } from './render/scene.js';
 import { createChaseCam, CAM } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
+import { makeGravelTexture, worldUV } from './render/textures.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -15,28 +23,24 @@ function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQua
 async function main() {
   await RAPIER.init();
   const params = new URLSearchParams(location.search);
-  const game = createSandbox(RAPIER, { power: params.get('power') || 'medium' });
+  const power = params.get('power') || 'medium', seed = params.has('seed') ? +params.get('seed') : randomSeed();
+  const game = params.has('sandbox') ? createSandbox(RAPIER, { power }) : createFarmDrive(RAPIER, seed, power);
+  console.log('seed', seed);
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: groundTexture(renderer) }));
-  ground.receiveShadow = true; scene.add(ground);
-  addMarkers(scene, game);
-  for (const m of game.mud) { const g = new THREE.Mesh(new THREE.CircleGeometry(m.r, 32).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#7a5233', shininess: 60 })); g.position.set(m.x, 0.02, m.z); scene.add(g); }
-  for (const r of game.ramps) { // simple visual for the sandbox kicker
-    const s = new THREE.Shape([[-5, 0], [0, 0.6], [1, 0.6], [4, 0]].map(([a, y]) => new THREE.Vector2(a, y)));
-    const g = new THREE.ExtrudeGeometry(s, { depth: 7, bevelEnabled: false }); g.translate(0, 0, -3.5); g.rotateY(-Math.PI / 2);
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#b89a70' })); m.position.set(r.x, 0, r.z); m.rotation.y = r.yaw; m.receiveShadow = m.castShadow = true; scene.add(m);
-  }
+  const aniso = renderer.capabilities.getMaxAnisotropy();
+  const farm3d = game.farm ? buildFarm3D(scene, game.farm, game.road, game.items, game.yardProps.props, { anisotropy: aniso }) : (buildSandbox3D(scene, game, aniso), null);
   const vehicles = createVehicles3D(scene, game.tractor, game.train);
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
   let prev = bodies().map(snapOf), curr = prev, view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
-  if (params.has('tune')) buildTunePanel(game);
+  if (params.has('tune')) { buildTunePanel(game); window.game = game; }
   let acc = 0, last = performance.now();
   renderer.setAnimationLoop(now => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
     const inp = input.read();
     while (acc >= DT) { prev = curr; game.step({ ...inp, horn: false }); curr = bodies().map(snapOf); acc -= DT; }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
+    farm3d?.update(view[0].p);
     vehicles.update({ tractor: view[0], cars: view.slice(1) });
     const t = game.tractor, lv = t.body.linvel();
     chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });
@@ -45,18 +49,31 @@ async function main() {
   });
 }
 
-// Procedural gravel tile (8 m): speckle, darker patches and a faint 2 m grid so motion reads at speed.
-function groundTexture(renderer) {
-  const N = 512, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
-  g.fillStyle = '#cdb38a'; g.fillRect(0, 0, N, N);
-  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  for (let i = 0; i < 14; i++) { g.fillStyle = `rgba(120,90,50,${0.08 + rnd() * 0.08})`; g.beginPath(); g.ellipse(rnd() * N, rnd() * N, 30 + rnd() * 60, 20 + rnd() * 40, rnd() * 3, 0, 7); g.fill(); }
-  for (let i = 0; i < 2500; i++) { const l = rnd() < 0.5; g.fillStyle = l ? 'rgba(245,230,200,.5)' : 'rgba(80,60,35,.45)'; g.fillRect(rnd() * N, rnd() * N, 2 + rnd() * 2, 2 + rnd() * 2); }
-  g.strokeStyle = 'rgba(90,65,35,.35)'; g.lineWidth = 3;
-  for (let i = 0; i < 4; i++) { const p = i * N / 4 + 1; g.beginPath(); g.moveTo(p, 0); g.lineTo(p, N); g.moveTo(0, p); g.lineTo(N, p); g.stroke(); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(50, 50); t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+function buildSandbox3D(scene, game, anisotropy) {
+  const ground = new THREE.Mesh(worldUV(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), 8), new THREE.MeshLambertMaterial({ map: makeGravelTexture({ anisotropy }) }));
+  ground.receiveShadow = true; scene.add(ground);
+  addMarkers(scene, game);
+  for (const m of game.mud) { const g = new THREE.Mesh(new THREE.CircleGeometry(m.r, 32).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#7a5233', shininess: 60 })); g.position.set(m.x, 0.02, m.z); scene.add(g); }
+  for (const r of game.ramps) { // simple visual for the sandbox kicker
+    const s = new THREE.Shape([[-5, 0], [0, 0.6], [1, 0.6], [4, 0]].map(([a, y]) => new THREE.Vector2(a, y)));
+    const g = new THREE.ExtrudeGeometry(s, { depth: 7, bevelEnabled: false }); g.translate(0, 0, -3.5); g.rotateY(-Math.PI / 2);
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#b89a70' })); m.position.set(r.x, 0, r.z); m.rotation.y = r.yaw; m.receiveShadow = m.castShadow = true; scene.add(m);
+  }
 }
+
+function createFarmDrive(RAPIER, seed, power) {
+  const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9));
+  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); addSceneryColliders(phys, items);
+  const yardProps = addYardProps(phys, farm), s = farm.start;
+  const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
+  const train = createTrain(phys, tractor);
+  return { phys, farm, road, items, yardProps, tractor, train, step(input) {
+    tractor.setInput(input.thr, input.steer); tractor.step(DT);
+    const e = road.edgePush(tractor.x, tractor.z); if (e.x || e.z) tractor.body.applyImpulse({ x: e.x * 1400 * DT, y: 0, z: e.z * 1400 * DT }, true);
+    train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 }); phys.world.step();
+  } };
+}
+
 // Cones scattered every ~12 m for parallax. Keeps the lane to the ramp and the mud patch clear.
 function addMarkers(scene, game) {
   const spots = []; let seed = 3; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
