@@ -24,6 +24,8 @@ import { makeGravelTexture, worldUV } from './render/textures.js';
 import { createTrip, stepTrip } from './sim/trip.js';
 import { buildShowSteps } from './sim/showSteps.js';
 import { createShow } from './ui/show.js';
+import { Sound } from './audio/sound.js';
+import { createVoice } from './audio/voice.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -39,18 +41,21 @@ async function main() {
   const t1 = performance.now(), farm3d = game.farm ? buildFarm3D(scene, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso, trees: game.trees }) : (buildSandbox3D(scene, game, aniso), null);
   console.log('farm 3d build ms', Math.round(performance.now() - t1));
   const vehicles = createVehicles3D(scene, game.tractor, game.train);
-  const gibs = createGibs(scene), sound = null; // Task 12 replaces `sound` with the synth: sound?.treePop?.() is the cheerful crunch-pop
+  const gibs = createGibs(scene), sound = new Sound();
+  // iOS plays no sound before a gesture: the first touch, click or key anywhere unlocks audio and starts the music (Task 14's start screen tap does the same)
+  const unlock = () => { sound.unlock(); sound.music(true); for (const n of ['pointerdown', 'keydown']) removeEventListener(n, unlock, true); };
+  for (const n of ['pointerdown', 'keydown']) addEventListener(n, unlock, true);
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
   const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = null; // Task 13 replaces `fx` with the stars and puffs
   const hud = game.herd ? createHud(document.getElementById('ui'), { icons: renderIcons(renderer) }) : null;
-  // Task 12 replaces this stub with the recorded voice (speech fallback). It resolves after ~0.6 s per word, so the show keeps a real pace.
-  const voice = { say: ids => { ids = [].concat(ids); console.log('say', ids.join(' ')); return new Promise(res => setTimeout(res, 600 * ids.length)); } };
+  const voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
   const trip = game.herd ? createTrip() : null, show = game.herd ? createShow({ root: document.getElementById('ui'), camera, game, voice, sound, fx }) : null;
   const sparkles = fx?.sparkleTrail ? fx : createSparkleTrail(scene); // Task 13 swaps in fx.sparkleTrail
   let showDone = false, rewardDone = false, riders = [], guideToBarn = false, helpTarget = null, pathT = 0, camBlend = 1;
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
   const showReward = () => { rewardDone = true; }; // Task 14: the sticker card
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
+  const sfx = { surface: 'gravel', air: 0, whee: false };
   const slow = createSlowMo(); let booped = false; // B-7: half speed at the top of the arc of the first animal each boop launches
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
   let prev = bodies().map(snapOf), curr = prev, view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
@@ -63,10 +68,12 @@ async function main() {
       prev = curr; const ev = game.step({ ...inp, horn: hornQueued }) || []; hornQueued = false; slow.step(DT); curr = bodies().map(snapOf); acc -= DT;
       for (const e of ev) {
         if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); }
-        if (e.type === 'boop') { chase.shake(0.35); fx?.stars(e.animal.x, 1, e.animal.z); booped = true; }
+        if (e.type === 'horn') sound.horn();
+        if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx?.stars(e.animal.x, 1, e.animal.z); booped = true; }
         if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
-        if (e.type === 'land') { const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
+        if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
       }
+      stepSounds(game, sound, sfx);
       if (trip) { // spec 3.1: intro, drive, show, reward
         const cues = stepTrip(trip, { dt: DT, landed: game.load.landed(), booped: ev.some(e => e.type === 'boop'), barnPass: ev.some(e => e.type === 'barnPass'), showDone, rewardDone });
         showDone = rewardDone = false;
@@ -99,9 +106,21 @@ async function main() {
       const b = game.farm.yard.barn, aim = show.active ? null : helpTarget ? { x: helpTarget.a.x, y: 1, z: helpTarget.a.z } : guideToBarn ? { x: b.x, y: 3, z: b.z } : null;
       hud.arrowTo(aim && edgeArrow(camera, aim));
     }
+    { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
     follow(view[0].p.x, view[0].p.z);
     renderer.render(scene, camera);
   });
+}
+
+// Per-step sound cues: the squelch when the wheels enter mud (T-13); whee and a cheer when all four wheels leave the ground for over 0.15 s (T-14)
+function stepSounds(game, sound, s) {
+  const t = game.tractor;
+  if (t.surface === 'mud' && s.surface !== 'mud') sound.squelch();
+  s.surface = t.surface;
+  const air = [0, 1, 2, 3].every(i => !t.vc.wheelIsInContact(i));
+  s.air = air ? s.air + DT : 0;
+  if (!air) s.whee = false;
+  else if (s.air > 0.15 && !s.whee) { s.whee = true; sound.whee(); if (game.load?.landed() > 0) sound.cheer(); }
 }
 
 // F-2: points every 3 m to the nearer barn end: along the route to its nearer end (the gate), then straight across the farmyard

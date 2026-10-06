@@ -11,7 +11,7 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
   const camFrom = new THREE.Vector3(), camTo = new THREE.Vector3(), look = new THREE.Vector3(), lookFrom = new THREE.Vector3(), lookTo = new THREE.Vector3(), v = new THREE.Vector3();
   // F-8: one tap finishes the current step: hops in flight land at once, and the voice and the 0.8 s wait end together
   const newStep = () => { fast = false; let fire; const p = new Promise(r => { fire = r; }); cut = { p, fire }; };
-  el.addEventListener('pointerdown', () => { if (!cut) return; fast = true; for (const tw of tweens) tw.t = tw.dur; cut.fire(); });
+  el.addEventListener('pointerdown', () => { if (!cut) return; fast = true; for (const tw of tweens) tw.t = tw.dur; voice?.stop?.(); cut.fire(); });
   const wait = ms => fast ? Promise.resolve() : Promise.race([new Promise(res => setTimeout(res, ms)), cut.p]);
   // R-1: a voice that throws or rejects must never stall the show
   const speak = ids => Promise.resolve().then(() => voice.say(ids)).catch(e => console.warn('voice', e));
