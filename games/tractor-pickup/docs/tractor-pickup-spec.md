@@ -1,6 +1,6 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.5 (after review 1: show by groups, paint, more trees, model files)
+Version: 1.6 (after review 2: model fixes, stop in the barn, running sum, farmyard wash)
 Date: 6 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
@@ -25,7 +25,7 @@ This document gives the design for Tractor Pickup. Tractor Pickup is a 3D browse
 
 ### 1.2.1 Change in version 1.1
 
-The farm has a large open farmyard at the center, with the barn. Two roads (routes) go out from the farmyard, turn through the fields and come back to the farmyard. The player drives a route, boops animals and comes back. When the tractor drives through the barn, the animals hop out and the game shows them, counts them and says their names. The farmyard is also an open area to drive, slide and push obstacles.
+The farm has a large open farmyard at the center, with the barn. Two roads (routes) go out from the farmyard, turn through the fields and come back to the farmyard. The player drives a route, boops animals and comes back. When the tractor drives into the barn, it stops, the animals hop out and the game shows them, counts them and says their names. The farmyard is also an open area to drive, slide and push obstacles, with a drive-through wash.
 
 ### 1.2.2 Change in version 1.2 (after playtest 2)
 
@@ -51,6 +51,15 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - The farmyard has no fixed posts (T-31). It has more trees and bushes, and the trees are larger. Trees and bushes also stand along the routes. All of them burst (T-34, T-35).
 - All 3D models are GLB files in one folder, so a person can edit them by hand (X-8).
 
+### 1.2.6 Change in version 1.6 (after review 2)
+
+- The show starts when the tractor is 3/4 of the way through the barn, at any speed. The tractor and the wagons stop in the barn by themselves (F-1, F-5).
+- The sum is a running sum from zero, one group at a time and slowly: "0 + 3 = 3", then "3 + 2 = 5" (F-7). After each stage, that group's animals move into a tally circle at the left, and the count above the circle goes up (F-14). A skip button ends the show (F-13).
+- The sticker card says "New sticker!" (and the voice says "You got a sticker!"), and the sticker book button shows how many stickers are in the book (F-3).
+- Paint: the body paint goes on the cab and the hood; the trim paint goes on the fenders and the roof. The windows and the wheels are never painted (W-3).
+- Each animal model has a hat node; the hat moves with the head (W-4). The sheep has a short dark muzzle. The cow has spots on both sides, the back and the top (5.1).
+- The open barn door leaves no longer flicker (T-28). The farmyard has a drive-through wash (T-36).
+
 ### 1.3 Design rules for a 4-year-old player
 
 These rules apply to all items in this document. If an item does not obey a rule, change the item.
@@ -58,7 +67,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 | ID | Rule |
 |---|---|
 | R-1 | The player cannot fail. No item can stop a trip. |
-| R-2 | The player does not need to read to play. Use pictures, sounds and a voice. The only text in the game is animal names, as a reading aid. The voice always says each word that shows (W-5). |
+| R-2 | The player does not need to read to play. Use pictures, sounds and a voice. The only text in the game is animal names and the show's numbers, as a reading aid, and "New sticker!" on the sticker card. The voice always says each word that shows (W-5). |
 | R-3 | Each action must give a large and fast response: a sound, a movement and a visual effect. |
 | R-4 | The game must not remove a thing that the player got. An animal in the trailer stays in the trailer. |
 | R-5 | A trip must be short: approximately 1 to 4 minutes. The player decides when to go back to the barn. |
@@ -94,12 +103,13 @@ These rules apply to all items in this document. If an item does not obey a rule
 | Obstacle | TN | A hay bale, cone, barrel, tree or bush in the farmyard. |
 | Paint | TN | A color that the player can put on the body or on the trim of the tractor. |
 | Paint pot | TN | The picture of a paint on the paint screen. |
-| Trip | TN | One drive from the barn, out on the routes and back through the barn. |
+| Trip | TN | One drive from the barn, out on the routes and back into the barn. |
 | Show | TN | The sequence after a trip. The animals hop out, the game counts them and says their names. |
 | Line-up | TN | The area of ground next to the barn exit where the animals stand during the show. |
 | Trailer | TN | The cart that the tractor tows. Animals ride in it. |
 | Wagon | TN | One more trailer that the game attaches behind the last trailer. |
-| Barn | TN | The drive-through building at the center of the farmyard. The player drives through it to deliver the animals. |
+| Barn | TN | The drive-through building at the center of the farmyard. The player drives into it to deliver the animals; the tractor stops inside. |
+| Wash | TN | The drive-through wash in the farmyard. Driving through it cleans the tractor, the trailers and the animals in them. |
 | Boop | TV | Hit an animal with the tractor so that it flies. |
 | Launch | TN | The flight of an animal from the tractor to the trailer. |
 | Catch zone | TN | The area in front of the tractor where a boop occurs. It is larger than the tractor. |
@@ -119,9 +129,9 @@ These rules apply to all items in this document. If an item does not obey a rule
 1. The game makes a new farm. See section 4.
 2. The tractor starts in the farmyard, at the barn exit, with an empty trailer and wagon. If the player has a paint to choose, the start screen shows first (F-11). The voice says "Let's find animals!" after the first touch or key press.
 3. The player drives out on a route and boops animals. Each boop fills one slot.
-4. The player comes back to the farmyard and drives through the barn, in either direction. If at least one animal rides in the trailer or the wagon, the show starts (3.4). If no animal rides, nothing occurs. **[F-1]**
+4. The player comes back to the farmyard and drives into the barn, from either end. When the tractor is 3/4 of the way through the barn (at any speed) and at least one animal rides in the trailer or the wagon, the show starts (3.4). If no animal rides, nothing occurs and the tractor drives on. **[F-1]**
 5. When all 12 slots are full, the voice says "Great job! Go to the barn!". An arrow and a path of sparkles show the way to the barn. The path goes to a point on the barn axis outside the nearer opening, then straight along the axis into the barn. At the opening, a sparkle frame shows the full width and height of the door opening. The arrow points to the center of that opening. **[F-2]**
-6. After the show, the delivered animals walk into the barn and do not come back. The player gets a sticker (W-1). **[F-3]**
+6. After the show, the delivered animals walk into the barn and do not come back. The player gets a sticker (W-1). The sticker card shows "New sticker!" above the sticker, which stamps on with a small bounce; the voice says "You did it! You got a sticker!". The sticker book button shows the number of stickers in the book. **[F-3]**
 7. The player drives again with an empty trailer and wagon, on the same farm. **[F-9]** The sticker card has one large green "go" button (a play triangle). Only the parent menu makes a new farm (P-8).
 
 | ID | Item | Description |
@@ -142,14 +152,16 @@ These rules apply to all items in this document. If an item does not obey a rule
 
 ### 3.4 Show
 
-The show starts when the tractor comes out of the barn with at least one animal. It helps the child count and read.
+The show starts when the tractor is 3/4 of the way through the barn with at least one animal. It helps the child count and read.
 
 | ID | Item | Description |
 |---|---|---|
-| F-5 | Stop | The tractor stops softly after the barn exit. The camera moves to a position at the side of the line-up area. |
+| F-5 | Stop | The tractor and the wagons stop in the barn by themselves, in about half a second, at any speed. The controls do nothing until the show ends. If an animal is still in flight, it lands first. The camera moves to a position at the side of the line-up area. |
 | F-6 | Count each group | The show counts one animal type at a time, in the order of the first landing of each type. The animals of that type hop out of the trailer and the wagon one at a time and stand in their group's place in the line-up area (F-12). When an animal lands, a large number shows above it: the count in its group (1, 2, 3 ...). The voice says the number. After the last animal of the group, the numbers go away and the group label shows below the group: the number and the name ("3 Pigs"). The voice says it ("Three pigs!"). Plural names: Pigs, Cows, Chickens, Sheep, Ducks, Bunnies, Dogs, Chicks. One animal uses the singular name ("1 Cow"). A golden animal counts in the group of its type. Its label shows "Golden" above the number while it is counted. |
-| F-7 | Add together | After the last group, a sum shows at the top of the screen, for example "3 + 2 + 1 = 6". The terms light up one at a time from left to right while the voice says them ("Three plus two plus one makes six!"). At the same time, the label of each group glows. Then all animals jump together. The voice says "Six animals! Hooray!". Confetti. If there is only one group, there is no sum: the total shows alone. |
+| F-7 | Add together | After the last group, a running sum shows at the top of the screen, one stage per group, from zero: "0 + 3 = 3", then "3 + 2 = 5", then "5 + 1 = 6", and so on. The terms light up one at a time from left to right while the voice says them ("Zero plus three makes three! Three plus two makes five!"), with a 0.45 s pause after each term and 1.2 s between stages. The tally count (F-14) glows with the first term and the group label with the second. After each stage, that group moves into the tally circle (F-14) and its label fades. Then all animals jump together. The voice says "Six animals! Hooray!". Confetti. If there is only one group, there is no sum: the total shows alone. |
 | F-8 | Speed | Each step waits 0.8 s. A tap on the screen goes to the next step immediately, so a parent can make it faster. |
+| F-14 | Tally circle | With two or more groups, a circle on the ground at the left of the blocks (screen left): a pale disc with a yellow rim, sized so that every animal of the show fits with no overlap. Above it, a large number: the animals in the circle, starting at 0. After each stage of the sum (F-7), the animals of that group move into the circle one after another (0.25 s apart, a short hop each), and the number goes up by one as each lands. The circle fills from the middle out, so the groups stand together. The camera moves back so that the circle and all blocks are in view. The farmyard keeps the ground for the circle clear of obstacles (T-29). |
+| F-13 | Skip | A skip button (a fast-forward picture) at the top right, under the parent gear, ends the whole show at once. The sticker card comes next. |
 | F-10 | Into the barn | After the show, the animals walk, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. |
 | F-12 | Line-up layout | Each group has its own block in the line-up area. A block has rows of up to 4 animals. Animals in a row stand side by side with a gap of 0.4 m. Rows in a block are 0.6 m apart (from body edge to body edge). The first row is nearest to the barn axis, and later rows are nearer to the camera. The blocks stand side by side with a 1.5 m gap. If the blocks are wider than the line-up area, a block has fewer animals in a row, then the blocks go on a second line of blocks. No two animals overlap. The camera moves back so that all blocks are in view. |
 
@@ -204,7 +216,7 @@ Road tiles have connection points at the center of a tile edge. The road surface
 | T-13 | Mud | The mud decreases the maximum speed by 50 % and decreases grip. The wheels throw brown splashes. A "squelch" sound. The tractor gets very dirty fast (T-16). |
 | T-14 | Ramp | A gravel kicker across the full road width: 5 m up to 0.6 m, a 1 m flat top, 3 m down. The tractor jumps approximately 4 m. Driven in the other direction, it is a bump. The trailer and the wagon follow over the ramp. The animals bounce up and land in their slots again (B-11). A "whee" sound and a cheer from the animals. |
 | T-15 | Sprinkler | A sprinkler arch over the road. Water sprays when the tractor comes near. The tractor drives through the spray and becomes clean in 1.5 s. Sparkles and a "squeaky clean" sound. |
-| T-16 | Dirt | The tractor, the trailer, the wagon and each animal have a dirt level from 0 (clean) to 1 (very dirty). The level increases slowly on gravel and grass, and fast in mud. Brown spots and dust show on the tractor body, the wheels, the trailers and the animals. Animals in the trailers get dirt from the mud splashes. More dirt gives more spots. Only the sprinkler removes the dirt. It washes the tractor, the trailers and all animals in them. |
+| T-16 | Dirt | The tractor, the trailer, the wagon and each animal have a dirt level from 0 (clean) to 1 (very dirty). The level increases slowly on gravel and grass, and fast in mud. Brown spots and dust show on the tractor body, the wheels, the trailers and the animals. Animals in the trailers get dirt from the mud splashes. More dirt gives more spots. Only the sprinkler (T-15) and the farmyard wash (T-36) remove the dirt. They wash the tractor, the trailers and all animals in them. |
 | T-17 | Edges | The farm has large areas of high ground (4 m) and low ground (0 m), with smooth slopes between them (approximately 20 m wide). The farmyard and the ground within 20 m of it are low. The road is always at 0 m. Where the ground beside a route is high, the route goes through a cutting: a steep rocky bank (approximately 50°) up to the high ground, with rocks along the top. Where the ground is low, a wood fence 1.2 m high stands at the outer side of the shoulder. Where the ground changes, the fence and the bank overlap by at least 6 m, so there is no gap and no bank stops suddenly. The tractor cannot pass an edge. The route and the farmyard are one closed area. The shoulder is grass: it decreases the maximum speed by 30 % and decreases grip. |
 
 ### 4.5 Placement rules
@@ -227,12 +239,13 @@ Outside the edges: dense forest, crops and fields, on the high and the low groun
 | ID | Item | Description |
 |---|---|---|
 | T-27 | Surface | Packed gravel. Grip and speed are the same as on the road. |
-| T-28 | Barn | A drive-through barn at the farmyard center, 12 m long and 10 m wide inside. It is open at both ends. Its axis points to two opposite gates. The player can drive through it in either direction. Look: a classic red barn with a gambrel roof, white trim, X-braced doors that stand open at both ends, a hay-loft door and a small cupola. The roof fades out when the tractor comes near, so the player can see inside. |
-| T-29 | Line-up and pond | The line-up is an area of farmyard ground 16 m long and 7 m deep, 8 m past one barn exit, at the side of the drive line. It has no platform. The duck pond is in a corner of the farmyard. |
+| T-28 | Barn | A drive-through barn at the farmyard center, 12 m long and 10 m wide inside. It is open at both ends. Its axis points to two opposite gates. The player can drive through it in either direction. Look: a classic red barn with a gambrel roof, white trim, X-braced doors that stand open at both ends, a hay-loft door and a small cupola. The roof fades out when the tractor comes near, so the player can see inside. No two faces of the barn share a plane (they flicker): each door leaf stops 5 cm inside its frame on all four edges. |
+| T-29 | Line-up and pond | The line-up is an area of farmyard ground 16 m long and 7 m deep, 8 m past one barn exit, at the side of the drive line. It has no platform. Past the line-up's end on the show's screen-left, the ground for the tally circle (F-14) is also kept clear of obstacles: 11 m along and about 10 m deep. The duck pond is in a corner of the farmyard. |
 | T-30 | Lanes | Keep a 10 m wide lane clear of obstacles from each gate to the nearest barn end. |
 | T-31 | Obstacles | 8 round hay bales (they roll when the tractor pushes them), 16 cones and 8 barrels (they tip over and slide), 18 trees and 16 bushes (T-34). There are no fixed posts. Put them at random outside the lanes. |
 | T-32 | Reset | When a show starts, all moved obstacles go back to their start positions with a small "poof". |
 | T-34 | Breakable trees and bushes | The farmyard has 18 trees: 10 large single trees and young trees in small groups. Trees are 2.6 times the oak model size (young trees 1.6 times). When the tractor hits a tree at 4 m/s or faster, the tree bursts into pieces: wood chunks and leaf cubes fly up, bounce and stay on the ground for a few seconds, then fade. A happy "crunch-pop" sound plays. A stump stays. The tractor loses only a little speed. Below 4 m/s the tree is solid: it wobbles and the tractor bumps it. The parent menu and the tune panel can change the break speed. Bushes are never solid: when the tractor touches a bush at any speed above 0.5 m/s, it bursts into leaf cubes with a softer "pop" and the tractor does not slow down. A broken bush leaves nothing. The trailer and the wagon go through trees and bushes; only the tractor hits them. At the reset (T-32), broken trees and bushes grow back with a short grow animation. |
+| T-36 | Farmyard wash | A drive-through wash beside the barn, on the side away from the line-up, parallel to the barn: a concrete pad, four blue corner posts, a blue canopy with red and white stripes, and a tall striped brush at each side. The opening is 9 m wide and 7 m long. Water falls from the canopy when the tractor comes near, and the brushes spin. Driving through cleans the tractor, the wagons and the riders 3 times as fast as the sprinkler (T-15), so any pass comes out clean. The posts and the brushes are solid. The canopy fades while the tractor is under it, like the barn roof. Obstacles stay out of the wash and 4 m past each end. |
 | T-35 | Roadside trees and bushes | Breakable trees and bushes (T-34) also stand on the route shoulders, outside the road surface. On average each route tile has 1 tree and 2 bushes. Trees stand only on straight and gate tiles, or on the outer side of a curve (4.6). There are no trees or bushes on feature tiles (T-9 to T-11) or within 6 m of a hiding bush (A-13). |
 
 ---
@@ -241,11 +254,11 @@ Outside the edges: dense forest, crops and fields, on the high and the low groun
 
 ### 5.1 Types
 
-Use Kenney Cube Pets models for the pig, cow, bunny and dog. The pack has no sheep, no duck and no adult chicken. Make them from the pig and the chick models (X-8). Each keeps the body parts and the animations of its source model. Each type has a sound and a launch style.
+Use Kenney Cube Pets models for the pig, cow, bunny and dog. The cow gets more spots: on its right side, its back and its top (the Kenney cow has spots on its left side only). The pack has no sheep, no duck and no adult chicken. Make them from the pig and the chick models (X-8). Each keeps the body parts and the animations of its source model. Each type has a sound and a launch style.
 
 | Animal | Source | Look |
 |---|---|---|
-| Sheep | Pig | Cream wool body and a wool tuft on the head. A dark grey face with no pig snout. Round black ears that stand out at the sides of the head. Dark legs. |
+| Sheep | Pig | Cream wool body and a wool tuft on the head. A dark grey face with a short, dark muzzle (the pig snout, shorter and dark). Round black ears that stand out at the sides of the head. Dark legs. |
 | Duck | Chick | A mallard drake: a glossy green head, a thin white neck ring, a chestnut-brown chest, a grey body and grey-brown wings. A wide, flat yellow bill. Orange feet. A flatter scale. |
 | Chicken | Chick | White feathers, a red comb on the head, an orange beak and orange feet. |
 | Chick | Chick | The Kenney yellow chick, smaller (A-12). |
@@ -369,7 +382,8 @@ The tractor drives like a car. The chase camera (V-1) always stays behind the tr
 | U-1 | Slot bar | Top center. 12 slots: 6 for the trailer, a small gap, then 6 for the wagon. Each slot fills with the animal picture and name. The bar empties after the show. |
 | U-2 | Horn | Bottom right |
 | U-3 | Parent menu | Top right. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
-| U-4 | Text | Only animal names (W-5) and the numbers and names in the show (section 3.4). The parent menu can use text. |
+| U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4) and "New sticker!" on the sticker card (F-3). The voice says each of them (R-2). The parent menu can use text. |
+| U-5 | Skip | During the show only: top right, under the gear. A fast-forward picture (F-13). |
 
 ### 8.2 Sounds
 
@@ -400,8 +414,8 @@ All items in this section are accepted for the first version.
 |---|---|---|
 | W-1 | Sticker | One sticker after each show. The sticker shows the golden animal (if found) or the animal type with the most boops. |
 | W-2 | Sticker book | A screen with all stickers. Data stays in the browser storage. |
-| W-3 | Paint | The tractor has two paint areas: the body (the cab, the fenders and the frame) and the trim (the hood and the wheel rims). The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
-| W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. |
+| W-3 | Paint | The tractor has two paint areas: the body (the cab, the hood and the frame) and the trim (the fenders and the roof). The windows, the wheels, the exhaust and the lamps are never painted. The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
+| W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. Each animal model has an empty node named `hat` on its head; the hat hangs on it, so it bobs with the head in every animation. |
 
 ---
 
@@ -429,7 +443,7 @@ All items in this section are accepted for the first version.
 | X-5 | Offline | The game operates offline after the first load (PWA). |
 | X-6 | Source | `games/tractor-pickup/` |
 | X-7 | Output | `site/exp/tractor-pickup/` |
-| X-8 | Model files | Every 3D model is a GLB file in `games/tractor-pickup/assets/models/`: the Kenney models (with their colors moved into vertex colors), the sheep, the duck and the chicken, and the models that version 1.4 made in code (the trailer, the barn, the hats, the props, the stump, the sprinkler arch and the gate arch). A person can edit these files by hand (for example in Blender: vertex paint for colors). The bake (`npm run bake`) reads only this folder and writes `src/assets.json`; the build embeds it. Model rules: colors are vertex colors (`COLOR_0`), or a base color texture. The material names `paint-body` and `paint-trim` mark the two paint areas of the tractor (W-3). The barn material names `planks` and `shingles` get the game's wood and roof textures. Node names are part names that the code uses; `assets/models/README.md` lists them. The script `models.mjs` made the first version of the files from the Kenney packs and does not overwrite a file that exists. |
+| X-8 | Model files | Every 3D model is a GLB file in `games/tractor-pickup/assets/models/`: the Kenney models (with their colors moved into vertex colors), the sheep, the duck and the chicken, and the models that version 1.4 made in code (the trailer, the barn, the hats, the props, the stump, the sprinkler arch and the gate arch), and the farmyard wash (version 1.6). A person can edit these files by hand (for example in Blender: vertex paint for colors). The bake (`npm run bake`) reads only this folder and writes `src/assets.json`; the build embeds it. Model rules: colors are vertex colors (`COLOR_0`), or a base color texture. The tractor is split into the nodes `body`, `fenders`, `roof`, `glass` and `details`; the material names `paint-body` and `paint-trim` mark the two paint areas (W-3). Each animal has an empty `hat` node (W-4). The barn material names `planks` and `shingles` get the game's wood and roof textures. Node names are part names that the code uses; `assets/models/README.md` lists them. The script `models.mjs` made the first version of the files from the Kenney packs and does not overwrite a file that exists; it only adds a `hat` node to an animal file that has none. |
 | X-9 | Ground and roads | The ground, the roads, the edges, the ramps, the fences along the routes and the pond are made in code from the farm layout. They are not model files. |
 
 ---
@@ -442,10 +456,10 @@ A parent records these words. Each word is one file.
 
 | Group | Files |
 |---|---|
-| Numbers | `one` to `twelve` |
+| Numbers | `zero` to `twelve` (`zero` starts the running sum, F-7) |
 | Animals | `pig`, `cow`, `chicken`, `sheep`, `duck`, `bunny`, `dog`, `chick`, `golden` |
 | Animal plurals | `pigs`, `cows`, `chickens`, `ducks`, `bunnies`, `dogs`, `chicks` (the plural of `sheep` is `sheep`) |
-| Phrases | `lets-find` ("Let's find..."), `animals` ("...animals!"), `great-job` ("Great job!"), `go-to-barn` ("Go to the barn!"), `lets-count` ("Let's count!"), `hooray` ("Hooray!"), `you-did-it` ("You did it!"), `plus` ("plus"), `makes` ("makes") |
+| Phrases | `lets-find` ("Let's find..."), `animals` ("...animals!"), `great-job` ("Great job!"), `go-to-barn` ("Go to the barn!"), `lets-count` ("Let's count!"), `hooray` ("Hooray!"), `you-did-it` ("You did it!"), `new-sticker` ("You got a sticker!"), `plus` ("plus"), `makes` ("makes") |
 
 The game joins files to make sentences. For example: `lets-find` + `animals`, `three` + `pigs`, or `three` + `plus` + `two` + `makes` + `five`.
 
@@ -463,7 +477,7 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 
 ## 13. Test results
 
-State at version 1.5 (`npm test`: 475 tests, all pass). Release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.6 (`npm test`: 485 tests, all pass). Version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|
@@ -495,6 +509,10 @@ State at version 1.5 (`npm test`: 475 tests, all pass). Release 1.0.0 had 464. "
 | 1.5 F-2 Sparkle path | None (visual) | Path along the barn axis into the opening, frame around the door | Readable at a distance |
 | 1.5 B-14 Full: out of the way, B-7 removed | `game.test.mjs` | Animals hop aside when full | Feels fair, not like a miss |
 | 1.5 T-34, T-35 Trees and bushes | `trees.test.mjs`, `track.test.mjs` | Yard and roadside trees and bushes; bushes pop | Gib count when many bushes pop on a route (frame rate) |
+| 1.6 F-1, F-5 Stop in the barn | `road.test.mjs` (3/4 point, once per entry), `game.test.mjs` (medium and high power: the train stops inside the barn; an empty train drives on) | Full speed into the barn with 7 riders: stopped 4.1 m past the middle, show started | Feels like arriving, not like a crash |
+| 1.6 F-7, F-13, F-14 Running sum, tally circle, skip | `showSteps.test.mjs` (stages from zero, circle packing with no overlap, 12 cows fit), `show.test.mjs` (words in order, takes over 3 s, the count goes 0 to 4, all animals end in the circle, skip ends the show), `track.test.mjs` (300 seeds: the circle's ground is in the yard and clear of obstacles and the pond) | 7 animals in 4 groups: "0 + 2 = 2" ... "6 + 1 = 7", each group moves into the circle at the left, count above it; skip button | Pace with recorded voice clips |
+| 1.6 W-3, W-4, 5.1 Model fixes | `assets.test.mjs` (tractor parts and paint areas, hat node height in every walk frame, sheep muzzle) | Tractor red and yellow with clear glass and grey wheels; hats on riders; cow spots; stickers with snouts and legs | Hand edits of the split tractor in Blender |
+| 1.6 T-36 Farmyard wash | `track.test.mjs` (300 seeds: in the yard, clear of lanes, line-up, pond and obstacles), `dirt.test.mjs` (cleans in one pass, posts are solid) | Drive through: spray, brushes spin, canopy fades, tractor clean | Frame rate with the extra water particles |
 | 12 Voice | `voice.test.mjs` | Build prints the clip count (0 now) | Record the clips, check loudness |
 | T-34 Breakable trees | `trees.test.mjs`, `game.test.mjs` | Burst, stump and regrow seen | Crunch-pop sound level |
 
