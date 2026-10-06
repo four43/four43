@@ -207,8 +207,9 @@ Outside the edges: dense forest, crops and fields, on the high and the low groun
 | T-28 | Barn | A drive-through barn at the farmyard center, 12 m long and 10 m wide inside. It is open at both ends. Its axis points to two opposite gates. The player can drive through it in either direction. Look: a classic red barn with a gambrel roof, white trim, X-braced doors that stand open at both ends, a hay-loft door and a small cupola. The roof fades out when the tractor comes near, so the player can see inside. |
 | T-29 | Line-up and pond | The line-up is an area of farmyard ground 8 m past one barn exit, at the side of the drive line. It has no platform. The duck pond is in a corner of the farmyard. |
 | T-30 | Lanes | Keep a 10 m wide lane clear of obstacles from each gate to the nearest barn end. |
-| T-31 | Obstacles | 8 round hay bales (they roll when the tractor pushes them), 16 cones and 8 barrels (they tip over and slide), 8 fixed posts and 4 trees (they do not move). Put them at random outside the lanes. |
+| T-31 | Obstacles | 8 round hay bales (they roll when the tractor pushes them), 16 cones and 8 barrels (they tip over and slide), 8 fixed posts and 10 trees (they do not move, but a fast tractor breaks a tree: T-34). Put them at random outside the lanes. |
 | T-32 | Reset | When a show starts, all moved obstacles go back to their start positions with a small "poof". |
+| T-34 | Breakable trees | The farmyard has 10 trees, some in small groups of young trees. When the tractor hits a tree at 4 m/s or faster, the tree bursts into pieces: wood chunks and leaf cubes fly up, bounce and stay on the ground for a few seconds, then fade. A happy "crunch-pop" sound plays. A stump stays. The tractor loses only a little speed. Below 4 m/s the tree is solid: it wobbles and the tractor bumps it. The parent menu and the tune panel can change the break speed. At the reset (T-32), broken trees grow back with a short grow animation. |
 
 ---
 
