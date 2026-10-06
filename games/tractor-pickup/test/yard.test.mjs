@@ -20,7 +20,8 @@ test('props: dynamic bales/cones/barrels, fixed posts/trees, and reset puts them
 
 test('the tractor cannot drive through the yard fence or up a barn wall', async () => {
   const { addFarmColliders } = await import('../src/sim/scenery.js'), { buildRoad } = await import('../src/sim/road.js'), { createTractor } = await import('../src/sim/tractor.js');
-  const phys = createPhysics(RAPIER), farm = generateFarm(5), road = buildRoad(farm); addFarmColliders(phys, farm, road);
+  const { createTerrain } = await import('../src/sim/terrain.js'), { makeRng } = await import('../src/sim/rng.js');
+  const farm = generateFarm(5), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(5)), phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain);
   const t = createTractor(phys, { x: -22, z: -44, yaw: Math.PI, power: 'medium', surfaceAt: () => 'gravel' });
   for (let i = 0; i < 60 * 8; i++) { t.setInput(1, 0); t.step(DT); phys.world.step(); }
   assert.ok(t.z > -54, `drove through the fence to z=${t.z}`);

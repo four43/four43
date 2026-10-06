@@ -2,26 +2,75 @@ import * as THREE from 'three';
 import { ASSETS, geoFrom, boxGeo, mergeGeos, colorGeo } from './gfx.js';
 import { ROAD_HALF, CORRIDOR, FARM_HALF, MUD_HALF } from '../sim/road.js';
 import { YARD_HALF } from '../sim/track.js';
-import { makeGravelTexture, makeGrassTexture, makePlankTexture, makeShingleTexture, worldUV } from './textures.js';
+import { makeGravelTexture, makeGrassTexture, makePlankTexture, makeShingleTexture, makeRockTexture, worldUV } from './textures.js';
 import { yardWalls, GATE_W } from '../sim/scenery.js';
-import { EDGE, edgeStrips, edgeRocks } from '../sim/edges.js';
-import { makeRng } from '../sim/rng.js';
 
 const TEX_M = 4; // one texture repeat per 4 m of ground
-export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } = {}) {
+const FENCE_SY = 1.2 / 0.345; // the Kenney fence piece is 0.345 m high
+
+// Ground mesh (T-17): the terrain grid sampled every 1 m over the farm, plus a flat skirt 60 m past the farm edge.
+// Normals come from the grid; each vertex gets a soft grass tint (Pig Pens recipe) and a `rock` weight from its slope.
+function buildGround(terrain) {
+  const { n: gn, step, heights } = terrain.grid, S = Math.max(1, Math.round(1 / step)), n = Math.floor((gn - 1) / S) + 1, cell = step * S, F = FARM_HALF, SK = 60;
+  const h = (i, j) => heights[Math.max(0, Math.min(n - 1, i)) * S * gn + Math.max(0, Math.min(n - 1, j)) * S];
+  const pos = [], nrm = [], col = [], rock = [], idx = [], A = new THREE.Color('#ffffff'), B = new THREE.Color('#f2ffe0'), Cc = new THREE.Color('#cfe8c4'), R = new THREE.Color('#f4f1ea'), c = new THREE.Color();
+  const vtx = (x, y, z, nx, ny, nz) => {
+    const v = Math.sin(x * 0.11 + Math.sin(z * 0.07) * 2) * 0.5 + Math.sin(z * 0.13 + x * 0.05) * 0.5, r = 1 - Math.max(0, Math.min(1, (ny - 0.7) / 0.18)), rw = r * r * (3 - 2 * r);
+    c.copy(A).lerp(v > 0 ? B : Cc, Math.abs(v) * 0.6).lerp(R, rw);
+    pos.push(x, y, z); nrm.push(nx, ny, nz); col.push(c.r, c.g, c.b); rock.push(rw); return pos.length / 3 - 1;
+  };
+  const tri = (a, b, d) => { // wind each triangle so it faces up
+    const P = k => [pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]], [pa, pb, pd] = [P(a), P(b), P(d)];
+    const ny = (pb[2] - pa[2]) * (pd[0] - pa[0]) - (pb[0] - pa[0]) * (pd[2] - pa[2]); idx.push(...(ny >= 0 ? [a, b, d] : [a, d, b]));
+  };
+  const quad = (a, b, c2, d) => { tri(a, b, c2); tri(a, c2, d); };   // a b c2 d around the quad
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const dx = (h(i + 1, j) - h(i - 1, j)) / (2 * cell), dz = (h(i, j + 1) - h(i, j - 1)) / (2 * cell), l = Math.hypot(dx, 1, dz);
+    vtx(-F + i * cell, h(i, j), -F + j * cell, -dx / l, 1 / l, -dz / l);
+  }
+  for (let i = 0; i + 1 < n; i++) for (let j = 0; j + 1 < n; j++) { const a = i * n + j; idx.push(a, a + 1, a + n, a + n, a + 1, a + n + 1); } // faces up
+  // skirt: each edge row pushed straight out at its own height, and the four corner squares
+  const L = n - 1;
+  for (const [fixI, ox, oz] of [[0, -1, 0], [L, 1, 0], [0, 0, -1], [L, 0, 1]]) {
+    for (let k = 0; k < L; k++) {
+      const at = m => ox ? [fixI, m] : [m, fixI], [i0, j0] = at(k), [i1, j1] = at(k + 1);
+      const e = (i, j, o) => vtx(-F + i * cell + ox * o, h(i, j), -F + j * cell + oz * o, 0, 1, 0);
+      quad(e(i0, j0, 0), e(i1, j1, 0), e(i1, j1, SK), e(i0, j0, SK));
+    }
+  }
+  for (const [i, j, sx, sz] of [[0, 0, -1, -1], [L, 0, 1, -1], [0, L, -1, 1], [L, L, 1, 1]]) {
+    const x = -F + i * cell, z = -F + j * cell, y = h(i, j), e = (ex, ez) => vtx(x + ex, y, z + ez, 0, 1, 0);
+    quad(e(0, 0), e(sx * SK, 0), e(sx * SK, sz * SK), e(0, sz * SK));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('rock', new THREE.Float32BufferAttribute(rock, 1)); g.setIndex(idx);
+  return g;
+}
+
+// Lambert with the grass map, blended toward a triplanar rock map by the vertex `rock` weight (steep cut faces).
+function groundMaterial(grassMap, anisotropy) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, map: grassMap }), rockMap = makeRockTexture({ anisotropy });
+  m.onBeforeCompile = sh => {
+    sh.uniforms.rockMap = { value: rockMap };
+    sh.vertexShader = 'attribute float rock;\nvarying float vRock;\nvarying vec3 vGP;\nvarying vec3 vGN;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vRock = rock; vGP = position; vGN = normal;');
+    sh.fragmentShader = 'uniform sampler2D rockMap;\nvarying float vRock;\nvarying vec3 vGP;\nvarying vec3 vGN;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+      vec4 grassC = texture2D( map, vMapUv );
+      vec3 tw = pow( abs( normalize( vGN ) ), vec3( 4.0 ) ); tw /= tw.x + tw.y + tw.z;
+      vec4 rockC = texture2D( rockMap, vGP.zy * 0.33 ) * tw.x + texture2D( rockMap, vGP.xz * 0.33 ) * tw.y + texture2D( rockMap, vGP.xy * 0.33 ) * tw.z;
+      diffuseColor *= mix( grassC, rockC, vRock );`);
+  };
+  return m;
+}
+export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotropy = 1 } = {}) {
   const matV = new THREE.MeshLambertMaterial({ vertexColors: true });
   // textured ground materials: the vertex colors tint on top of the tiling texture
   const matGrass = new THREE.MeshLambertMaterial({ vertexColors: true, map: makeGrassTexture({ anisotropy }) });
   const matGravel = new THREE.MeshLambertMaterial({ vertexColors: true, map: makeGravelTexture({ anisotropy, grid: false }) });
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), p3 = new THREE.Vector3(), s3 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
   const speckle = (g, a, b) => { const n = g.attributes.position.count, col = new Float32Array(n * 3), A = new THREE.Color(a), B = new THREE.Color(b), c = new THREE.Color(); for (let i = 0; i < n; i++) { c.copy(A).lerp(B, Math.random()); col.set([c.r, c.g, c.b], i * 3); } g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g; };
-  // grass ground with soft color variation (Pig Pens recipe)
-  {
-    const g = new THREE.PlaneGeometry(FARM_HALF * 2 + 120, FARM_HALF * 2 + 120, 140, 140).rotateX(-Math.PI / 2);
-    const n = g.attributes.position.count, col = new Float32Array(n * 3), A = new THREE.Color('#ffffff'), B = new THREE.Color('#f2ffe0'), Cc = new THREE.Color('#cfe8c4'), c = new THREE.Color();
-    for (let i = 0; i < n; i++) { const x = g.attributes.position.getX(i), z = g.attributes.position.getZ(i); const v = Math.sin(x * 0.11 + Math.sin(z * 0.07) * 2) * 0.5 + Math.sin(z * 0.13 + x * 0.05) * 0.5; c.copy(A).lerp(v > 0 ? B : Cc, Math.abs(v) * 0.6); col.set([c.r, c.g, c.b], i * 3); }
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); worldUV(g, TEX_M * 2); const m = new THREE.Mesh(g, matGrass); m.receiveShadow = true; scene.add(m);
-  }
+  // ground: high and low land with the route cuttings (T-17), one mesh from the terrain grid
+  { const g = buildGround(terrain); worldUV(g, TEX_M * 2); const m = new THREE.Mesh(g, groundMaterial(matGrass.map, anisotropy)); m.receiveShadow = true; scene.add(m); }
   // farmyard: packed gravel square
   { const g = speckle(new THREE.PlaneGeometry(YARD_HALF * 2, YARD_HALF * 2, 60, 60).rotateX(-Math.PI / 2), '#ffffff', '#ebe3d6'); g.translate(0, 0.015, 0); worldUV(g, TEX_M); const m = new THREE.Mesh(g, matGravel); m.receiveShadow = true; scene.add(m); }
   // ribbons along a route between two signed offsets o0 < o1 from the centerline (open ends meet the yard edge)
@@ -42,23 +91,12 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
     for (const [o0, o1] of [[-CORRIDOR, -ROAD_HALF], [ROAD_HALF, CORRIDOR]]) ribbon(R.pts, () => true, o0, o1, '#e2f2cf', '#cfe6bd', 0.018, matGrass, TEX_M * 2); // grass shoulder
     ribbon(R.pts, p => farm.routes[p.r].tiles[p.k].type === 'mud' && Math.abs(p.u - 0.5) < MUD_HALF, -ROAD_HALF, ROAD_HALF, '#7a5233', '#5f3e25', 0.04, mudMat);
   }
-  // edge banks (T-17): grey-brown gravel on the inner slope, grass on the crest and the outer slope; rocks along the crests
-  const bankRock = new THREE.MeshLambertMaterial({ map: matGravel.map, color: '#d2c3b2' }), bankGrass = new THREE.MeshLambertMaterial({ map: matGrass.map, color: '#e4f2d6' });
-  for (const R of road.routes) {
-    const { vertices, indices } = edgeStrips(R), parts = [[], []];
-    for (let t = 0; t < indices.length; t += 3) parts[Math.floor(t / 6) % 3 === 0 ? 0 : 1].push(indices[t], indices[t + 1], indices[t + 2]); // each quad is 6 indices; quad k = 0 is the inner slope
-    parts.forEach((idx, n) => {
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(vertices.slice(), 3)); g.setIndex(idx); g.computeVertexNormals(); worldUV(g, n ? TEX_M * 2 : TEX_M);
-      const m = new THREE.Mesh(g, n ? bankGrass : bankRock); m.receiveShadow = m.castShadow = true; scene.add(m);
-    });
-  }
+  // grey rocks along the crest of the high cuttings (T-17)
   {
-    const bankY = d => d < EDGE.crest ? EDGE.height * (d - EDGE.foot) / (EDGE.crest - EDGE.foot) : d > EDGE.crestOut ? EDGE.height * (EDGE.outFoot - d) / (EDGE.outFoot - EDGE.crestOut) : EDGE.height;
-    const rocks = edgeRocks(road, makeRng(farm.seed ^ 0x5eed)), byRock = new Map();
-    for (const k of rocks) { if (!byRock.has(k.kind)) byRock.set(k.kind, []); byRock.get(k.kind).push(k); }
+    const byRock = new Map(); for (const k of terrain.banks) { if (!byRock.has(k.kind)) byRock.set(k.kind, []); byRock.get(k.kind).push(k); }
     for (const [kind, list] of byRock) {
       const m = new THREE.InstancedMesh(geoFrom(Object.values(ASSETS[kind])), matV, list.length);
-      list.forEach((k, i) => m.setMatrixAt(i, mtx.compose(p3.set(k.x, bankY(road.nearest(k.x, k.z).d) - 0.15 * k.scale, k.z), q.setFromAxisAngle(UP, k.yaw), s3.setScalar(k.scale))));
+      list.forEach((k, i) => m.setMatrixAt(i, mtx.compose(p3.set(k.x, k.y - 0.15 * k.scale, k.z), q.setFromAxisAngle(UP, k.yaw), s3.setScalar(k.scale))));
       m.castShadow = m.receiveShadow = true; scene.add(m);
     }
   }
@@ -84,14 +122,15 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
   const byKind = new Map(); for (const it of items) { if (!byKind.has(it.kind)) byKind.set(it.kind, []); byKind.get(it.kind).push(it); }
   for (const [kind, list] of byKind) {
     const m = new THREE.InstancedMesh(geoFrom(Object.values(ASSETS[kind])), matV, list.length);
-    list.forEach((it, i) => m.setMatrixAt(i, mtx.compose(p3.set(it.x, 0, it.z), q.setFromAxisAngle(UP, it.yaw), s3.setScalar(it.scale))));
+    list.forEach((it, i) => m.setMatrixAt(i, mtx.compose(p3.set(it.x, it.y, it.z), q.setFromAxisAngle(UP, it.yaw), s3.setScalar(it.scale))));
     m.castShadow = m.receiveShadow = true; scene.add(m);
   }
-  // fences: farm edge and yard (with gate gaps), all from the Kenney fence piece every 1 m
-  const fenceGeo = geoFrom(Object.values(ASSETS.fence), new THREE.Matrix4().makeTranslation(0, 0.05, 0.465)), segs = [...yardWalls(farm)];
+  // fences: the route fences on low ground (T-17), the yard (with gate gaps) and the farm edge, all from the Kenney fence
+  // piece every 1 m on the ground, stretched to 1.2 m high
+  const fenceGeo = geoFrom(Object.values(ASSETS.fence), new THREE.Matrix4().makeTranslation(0, 0.05, 0.465)), segs = [...yardWalls(farm), ...terrain.fences];
   const E = FARM_HALF; segs.push([-E, -E, E, -E], [E, -E, E, E], [E, E, -E, E], [-E, E, -E, -E]);
   const pieces = []; for (const [ax, az, bx, bz] of segs) { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L)), yaw = Math.atan2(bx - ax, bz - az) - Math.PI / 2; for (let i = 0; i < n; i++) pieces.push([ax + (bx - ax) * (i + 0.5) / n, az + (bz - az) * (i + 0.5) / n, yaw]); }
-  { const m = new THREE.InstancedMesh(fenceGeo, matV, pieces.length); pieces.forEach(([x, z, yaw], i) => m.setMatrixAt(i, mtx.compose(p3.set(x, 0, z), q.setFromAxisAngle(UP, yaw), s3.setScalar(1)))); m.castShadow = true; scene.add(m); }
+  { const m = new THREE.InstancedMesh(fenceGeo, matV, pieces.length); pieces.forEach(([x, z, yaw], i) => m.setMatrixAt(i, mtx.compose(p3.set(x, terrain.height(x, z), z), q.setFromAxisAngle(UP, yaw), s3.set(1, FENCE_SY, 1)))); m.castShadow = true; scene.add(m); }
   // gate posts (T-8): two tall wood posts with a cross bar at each farmyard gate
   for (const [gx, gz] of [[YARD_HALF, 0], [0, YARD_HALF], [-YARD_HALF, 0], [0, -YARD_HALF]]) {
     const across = gx === 0 ? [1, 0] : [0, 1], parts = [];
@@ -102,8 +141,6 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
   }
   // drive-through barn (T-28); the roof group fades out while the tractor is near (the chase camera looks down through it)
   const b = farm.yard.barn, { group: barn, roofMats, roof } = buildBarn(b, anisotropy, matV); scene.add(barn); const L = b.half;
-  // stage: low wood platform (T-29)
-  { const s = farm.yard.stage, m = new THREE.Mesh(boxGeo(s.x1 - s.x0, s.y, s.z1 - s.z0, (s.x0 + s.x1) / 2, s.y / 2, (s.z0 + s.z1) / 2, '#b9874f'), matV); m.receiveShadow = m.castShadow = true; scene.add(m); }
   // props (T-31)
   const PROP_GEO = {
     bale: () => new THREE.CylinderGeometry(0.75, 0.75, 1.2, 20),

@@ -54,12 +54,12 @@ for (const seed of SEEDS) test(`farm ${seed} obeys the spec`, () => {
     assert.ok(leafGap > o.r + 1.5, `${o.kind} ${leafGap.toFixed(2)} m from a barn door leaf`);
   }
   assert.ok(Math.abs(f.start.x) < YARD_HALF && Math.abs(f.start.z) < YARD_HALF);
-  // T-29: the duck pond is in a farmyard corner, clear of the lanes, the barn and the stage
+  // T-29: the duck pond is in a farmyard corner, clear of the lanes, the barn and the line-up
   const p = y.pond; assert.equal(f.pond, p); assert.equal(p.r, 7);
   assert.ok(Math.abs(p.x) + p.r < YARD_HALF && Math.abs(p.z) + p.r < YARD_HALF && Math.abs(p.x) > YARD_HALF / 2 && Math.abs(p.z) > YARD_HALF / 2, 'pond not in a corner');
   for (const l of y.lanes) assert.ok(segDist(p.x, p.z, l) > 5 + p.r, 'pond in a lane');
   const pb = barnLocal(y.barn, p.x, p.z); assert.ok(Math.abs(pb.a) > 8 + p.r || Math.abs(pb.s) > 7 + p.r, 'pond at the barn');
-  const st = y.stage, gx = Math.max(st.x0 - p.x, 0, p.x - st.x1), gz = Math.max(st.z0 - p.z, 0, p.z - st.z1); assert.ok(Math.hypot(gx, gz) > p.r, 'pond on the stage');
+  const st = y.lineup, gx = Math.max(st.x0 - p.x, 0, p.x - st.x1), gz = Math.max(st.z0 - p.z, 0, p.z - st.z1); assert.ok(Math.hypot(gx, gz) > p.r, 'pond on the line-up');
   assert.equal(y.paddock, undefined);
   for (const o of y.obstacles) assert.ok(Math.hypot(o.x - p.x, o.z - p.z) > p.r + o.r, `${o.kind} in the pond`);
 });

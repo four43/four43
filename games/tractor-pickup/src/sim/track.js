@@ -1,5 +1,5 @@
 // Farm generator (spec 4.1-4.7): a 3x3-tile farmyard at the center, two routes that leave by one gate and come back
-// by the next gate around, features on route straights, and the farmyard layout (barn, stage, pond, lanes, obstacles).
+// by the next gate around, features on route straights, and the farmyard layout (barn, line-up, pond, lanes, obstacles).
 import { makeRng } from './rng.js';
 export const TILE = 36, SIZE = 11, YARD_HALF = 54;
 export const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
@@ -98,10 +98,10 @@ const inRect = (x, z, R, m) => x > R.x0 - m && x < R.x1 + m && z > R.z0 - m && z
 export function yardFree(yard, x, z, r) {
   const b = barnLocal(yard.barn, x, z);
   return Math.abs(x) < YARD_HALF - 2 - r && Math.abs(z) < YARD_HALF - 2 - r && !(Math.abs(b.a) < yard.barn.half + yard.barn.leaf + 2 + r && Math.abs(b.s) < 7 + r)
-    && !inRect(x, z, yard.stage, 2 + r) && Math.hypot(x - yard.pond.x, z - yard.pond.z) > yard.pond.r + 2 + r && yard.lanes.every(l => segDist(x, z, l) > 5 + r);
+    && !inRect(x, z, yard.lineup, 2 + r) && Math.hypot(x - yard.pond.x, z - yard.pond.z) > yard.pond.r + 2 + r && yard.lanes.every(l => segDist(x, z, l) > 5 + r);
 }
 
-// Farmyard (4.7): drive-through barn at the center, stage beside one exit, the duck pond in a corner, clear lanes
+// Farmyard (4.7): drive-through barn at the center, the line-up (bare ground, T-29) beside one exit, the duck pond in a corner, clear lanes
 // from each gate to a barn end, then obstacles placed at random outside all of those.
 export function layoutYard(rng) {
   const yaw = rng.chance(0.5) ? 0 : Math.PI / 2, f = [Math.sin(yaw), Math.cos(yaw)], r = [Math.cos(yaw), -Math.sin(yaw)];
@@ -109,13 +109,13 @@ export function layoutYard(rng) {
   const W = (a, s) => ({ x: f[0] * a + r[0] * s, z: f[1] * a + r[1] * s });
   const rect = (a0, a1, s0, s1) => { const p = W(a0, s0), q = W(a1, s1); return { x0: Math.min(p.x, q.x), x1: Math.max(p.x, q.x), z0: Math.min(p.z, q.z), z1: Math.max(p.z, q.z) }; };
   const barn = { x: 0, z: 0, yaw, half: 6, width: 5, leaf: 5 }; // leaf: the open door leaves stand this far out from each end, in line with the walls
-  const stage = { ...rect(end * 8.5, end * 21.5, side * 8.5, side * 11.5), y: 0.3 };
+  const lineup = rect(end * 8.5, end * 21.5, side * 8.5, side * 11.5); // where the animals stand for the show: ground only
   const lanes = Object.entries(GATE_POINT).map(([gate, [gx, gz]]) => {
-    const along = gx * f[0] + gz * f[1], e = W(Math.abs(along) > 1 ? Math.sign(along) * 6 : -end * 6, 0); // side gates use the far end, away from the stage
+    const along = gx * f[0] + gz * f[1], e = W(Math.abs(along) > 1 ? Math.sign(along) * 6 : -end * 6, 0); // side gates use the far end, away from the line-up
     return { gate, ax: gx, az: gz, bx: e.x, bz: e.z };
   });
   const pc = YARD_HALF - 14, pond = { x: (rng.chance(0.5) ? 1 : -1) * pc, z: (rng.chance(0.5) ? 1 : -1) * pc, r: 7 }; // A-5: a corner, 7 m in from the fence
-  const yard = { half: YARD_HALF, barn, end, side, stage, pond, lanes, obstacles: [] };
+  const yard = { half: YARD_HALF, barn, end, side, lineup, pond, lanes, obstacles: [] };
   for (const [kind, n, rad] of [['bale', 8, 0.9], ['cone', 16, 0.3], ['barrel', 8, 0.45], ['post', 8, 0.2], ['tree', 4, 1.2]]) {
     for (let m = 0, placed = 0; placed < n && m < 2000; m++) {
       const x = rng.range(-YARD_HALF, YARD_HALF), z = rng.range(-YARD_HALF, YARD_HALF);

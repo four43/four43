@@ -6,6 +6,7 @@ import { createTrain } from './sim/hitch.js';
 import { generateFarm } from './sim/track.js';
 import { buildRoad } from './sim/road.js';
 import { scatterScenery, addFarmColliders, addYardProps } from './sim/scenery.js';
+import { createTerrain } from './sim/terrain.js';
 import { makeRng, randomSeed } from './sim/rng.js';
 import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
@@ -24,11 +25,12 @@ async function main() {
   await RAPIER.init();
   const params = new URLSearchParams(location.search);
   const power = params.get('power') || 'medium', seed = params.has('seed') ? +params.get('seed') : randomSeed();
-  const game = params.has('sandbox') ? createSandbox(RAPIER, { power }) : createFarmDrive(RAPIER, seed, power);
-  console.log('seed', seed);
+  const t0 = performance.now(), game = params.has('sandbox') ? createSandbox(RAPIER, { power }) : createFarmDrive(RAPIER, seed, power);
+  console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0));
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
   const aniso = renderer.capabilities.getMaxAnisotropy();
-  const farm3d = game.farm ? buildFarm3D(scene, game.farm, game.road, game.items, game.yardProps.props, { anisotropy: aniso }) : (buildSandbox3D(scene, game, aniso), null);
+  const t1 = performance.now(), farm3d = game.farm ? buildFarm3D(scene, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso }) : (buildSandbox3D(scene, game, aniso), null);
+  console.log('farm 3d build ms', Math.round(performance.now() - t1));
   const vehicles = createVehicles3D(scene, game.tractor, game.train);
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
@@ -62,12 +64,13 @@ function buildSandbox3D(scene, game, anisotropy) {
 }
 
 function createFarmDrive(RAPIER, seed, power) {
-  const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9));
-  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); // routes are closed in by their edges and the yard fence (T-17)
+  const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1));
+  const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
+  const phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
   const yardProps = addYardProps(phys, farm), s = farm.start;
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
   const train = createTrain(phys, tractor);
-  return { phys, farm, road, items, yardProps, tractor, train, step(input) {
+  return { phys, farm, road, terrain, items, yardProps, tractor, train, step(input) {
     tractor.setInput(input.thr, input.steer); tractor.step(DT);
     train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 }); phys.world.step();
   } };

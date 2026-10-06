@@ -68,3 +68,28 @@ export function makeShingleTexture({ anisotropy = 1 } = {}) {
   g.fillStyle = 'rgba(25,10,8,.6)'; for (let r = 0; r < 8; r++) g.fillRect(0, r * H, N, 3);
   return finish(c, anisotropy);
 }
+
+// Rock for the cutting faces (T-17): grey layered stone with darker cracks and lighter chips. Rows run along u, so with
+// the triplanar mapping the layers lie level on the bank faces. Wraps seamlessly.
+export function makeRockTexture({ anisotropy = 1 } = {}) {
+  const N = 256, c = canvas(N), g = c.getContext('2d'), rnd = lcg(41);
+  g.fillStyle = '#9b968c'; g.fillRect(0, 0, N, N);
+  const wrap = fn => { for (const dx of [-N, 0, N]) for (const dy of [-N, 0, N]) fn(dx, dy); };
+  for (let y = 0; y < N;) { // layers of 18-40 px, each a slightly different grey
+    const h = 18 + rnd() * 22, k = 0.82 + rnd() * 0.3;
+    g.fillStyle = `rgb(${Math.round(150 * k)},${Math.round(145 * k)},${Math.round(136 * k)})`; g.fillRect(0, y, N, Math.min(h, N - y));
+    g.fillStyle = 'rgba(55,50,45,.55)'; g.fillRect(0, y, N, 2); y += h;
+  }
+  for (let i = 0; i < 40; i++) { // blotches
+    const x = rnd() * N, y = rnd() * N, rx = 8 + rnd() * 24, ry = 5 + rnd() * 12, light = rnd() < 0.5;
+    g.fillStyle = light ? 'rgba(215,210,200,.18)' : 'rgba(60,56,50,.16)';
+    wrap((dx, dy) => { g.beginPath(); g.ellipse(x + dx, y + dy, rx, ry, 0, 0, 7); g.fill(); });
+  }
+  g.strokeStyle = 'rgba(45,40,36,.6)'; g.lineWidth = 1.5;
+  for (let i = 0; i < 30; i++) { // short vertical cracks
+    const x = rnd() * N, y = rnd() * N, l = 8 + rnd() * 20, sx = (rnd() - 0.5) * 6;
+    wrap((dx, dy) => { g.beginPath(); g.moveTo(x + dx, y + dy); g.lineTo(x + dx + sx, y + dy + l); g.stroke(); });
+  }
+  for (let i = 0; i < 700; i++) { g.fillStyle = rnd() < 0.5 ? 'rgba(40,36,32,.35)' : 'rgba(230,226,218,.35)'; g.fillRect(rnd() * N, rnd() * N, 2, 2); }
+  return finish(c, anisotropy);
+}

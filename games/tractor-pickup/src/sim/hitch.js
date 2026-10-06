@@ -17,7 +17,7 @@ function createCar(phys, front, frontAnchor, index) {
   const cx = h.x - f.x * TR.tongue.x, cz = h.z - f.z * TR.tongue.x;
   const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(cx, h.y - TR.tongue.y, cz).setRotation(q)
     .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.6));
-  const cg = groups(G.TRAILER, G.GROUND | G.STATIC | G.PROP);
+  const cg = groups(G.TRAILER, G.GROUND | G.STATIC | G.PROP | G.WALL);
   world.createCollider(RAPIER.ColliderDesc.cuboid(TR.half.x, TR.half.y, TR.half.z).setMass(TR.mass).setFriction(0.2).setCollisionGroups(cg), body);
   world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.06, 0.08).setTranslation(TR.half.x + 0.9, -0.15, 0).setMass(5).setCollisionGroups(cg), body); // tongue
   const vc = world.createVehicleController(body);

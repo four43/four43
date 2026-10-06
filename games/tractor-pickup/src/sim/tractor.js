@@ -30,7 +30,7 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
   const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, 0.3, z).setRotation(yawQuat(yaw))
     .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.8)
     .setAdditionalMassProperties(TP.mass, { x: 0.15, y: 0.45, z: 0 }, { x: 900, y: 2200, z: 2000 }, { x: 0, y: 0, z: 0, w: 1 }));
-  const cg = groups(G.VEHICLE, G.GROUND | G.STATIC | G.PROP);
+  const cg = groups(G.VEHICLE, G.GROUND | G.STATIC | G.PROP | G.WALL);
   const cols = [
     world.createCollider(RAPIER.ColliderDesc.cuboid(1.55, 0.5, 1.0).setTranslation(0.27, 0.95, 0).setDensity(0.1).setFriction(0.2).setRestitution(0).setCollisionGroups(cg), body),
     world.createCollider(RAPIER.ColliderDesc.cuboid(0.55, 0.55, 0.62).setTranslation(-0.55, 1.95, 0).setDensity(0.1).setFriction(0.2).setCollisionGroups(cg), body),

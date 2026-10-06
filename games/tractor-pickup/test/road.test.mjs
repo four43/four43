@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateFarm, YARD_HALF } from '../src/sim/track.js';
 import { buildRoad, ROAD_HALF, SHOULDER, CORRIDOR, makeBarnPass } from '../src/sim/road.js';
-import { EDGE } from '../src/sim/edges.js';
-import { scatterScenery, yardWalls, curveCenters, TALL } from '../src/sim/scenery.js';
+import { scatterScenery, yardWalls, curveCenters, TALL, FIELD_D } from '../src/sim/scenery.js';
+import { createTerrain, CUT, FENCE_D } from '../src/sim/terrain.js';
 import { makeRng } from '../src/sim/rng.js';
 
 for (const seed of [1, 2, 3, 4, 5, 77, 1234]) test(`roads ${seed}: continuous, start and end at a yard gate`, () => {
@@ -55,11 +55,12 @@ test('barn pass: through counts, backing out and passing beside do not (F-1)', (
 });
 test('scenery stays outside the edges and the yard, and hide bushes sit on the shoulder', () => {
   for (const seed of [1, 2, 3]) {
-    const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed));
+    const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed)), items = scatterScenery(farm, road, makeRng(seed), terrain);
     const field = items.filter(it => !it.hide), tiles = farm.grid.flat().filter(g => g === 'field').length;
     assert.ok(field.length > tiles * 25, `only ${field.length} items on ${tiles} field tiles`);                   // dense forest (4.6)
     const wood = field.filter(it => it.kind !== 'corn'); assert.ok(wood.filter(it => TALL.includes(it.kind)).length > wood.length / 2, 'forest is mostly trees');
-    for (const it of field) { assert.ok(road.nearest(it.x, it.z).d > EDGE.outFoot + it.r, `${it.kind} inside the edges`); assert.ok(!road.inYard(it.x, it.z), `${it.kind} in yard`); }
+    assert.ok(FIELD_D > CUT.top && FIELD_D > FENCE_D);
+    for (const it of field) { assert.ok(road.nearest(it.x, it.z).d > FIELD_D + it.r, `${it.kind} inside the edges`); assert.equal(it.y, terrain.height(it.x, it.z), `${it.kind} not on the ground`); assert.ok(!road.inYard(it.x, it.z), `${it.kind} in yard`); }
     for (const it of items.filter(i => i.hide)) { const d = road.nearest(it.x, it.z).d; assert.ok(d > 7.3 && d < 8.3, `hide bush ${d} m out`); }  // A-13: on the shoulder, in front of the bank
   }
 });
@@ -74,7 +75,7 @@ test('yard fence has a 17 m opening at each gate', () => {
 
 test('tall scenery stays off the inside of curves (spec 4.6)', () => {
   for (const seed of [1, 2, 3]) {
-    const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed)), centers = curveCenters(farm);
+    const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed), createTerrain(farm, road, makeRng(seed))), centers = curveCenters(farm);
     assert.ok(centers.length > 0);
     for (const it of items.filter(i => TALL.includes(i.kind) && !i.hide)) for (const k of centers) assert.ok(Math.hypot(it.x - k.x, it.z - k.z) >= 10, `${it.kind} inside a curve, seed ${seed}`);
   }
