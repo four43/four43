@@ -2,7 +2,7 @@
 // bodies. A gib bounces on y = 0, slides to a stop, rests ~3 s, then shrinks away over 1 s.
 import * as THREE from 'three';
 
-export const GIB = { cap: 400, perBurst: 40, gravity: 9.8, restitution: 0.35, bounceFriction: 0.65, restTime: 3, fadeTime: 1, maxAge: 12 };
+export const GIB = { cap: 600, perBurst: 40, gravity: 9.8, restitution: 0.35, bounceFriction: 0.65, restTime: 3, fadeTime: 1, maxAge: 12 };
 const WOOD = ['#8a6240', '#a47850', '#6e4c30'], LEAF = ['#29c9ab', '#3fd6b4', '#1fa88f']; // wood: oak trunk tones; leaves: the oak canopy greens
 
 // One step of a gib: { x, y, z, vx, vy, vz, ax, ay, az, wx, wy, wz, size, scale, rest, age, alive }. y is the cube center, so it rests at size / 2.
@@ -32,11 +32,11 @@ export function createGibs(scene) {
   let next = 0, high = 0; // the ring index reuses the oldest gib once all 400 are live
   const rnd = (a, b) => a + Math.random() * (b - a), pick = l => l[(Math.random() * l.length) | 0];
   return {
-    burst(x, y, z, dir, scale = 1) {
+    burst(x, y, z, dir, scale = 1, leaves = false) { // leaves: a bush, no wood
       const n = Math.round(GIB.perBurst * scale), base = Math.atan2(dir.x, dir.z);
       for (let k = 0; k < n; k++) {
         const i = next; next = (next + 1) % GIB.cap; high = Math.max(high, i + 1);
-        const wood = Math.random() < 0.35, a = base + rnd(-1, 1) * Math.PI / 3, h = rnd(2, 6) * (0.6 + 0.4 * scale);
+        const wood = !leaves && Math.random() < 0.35, a = base + rnd(-1, 1) * Math.PI / 3, h = rnd(2, 6) * (0.6 + 0.4 * scale);
         Object.assign(pool[i], { alive: true, x: x + rnd(-0.4, 0.4) * scale, y: y + rnd(0, 0.8) * scale, z: z + rnd(-0.4, 0.4) * scale, vx: Math.sin(a) * h, vy: rnd(4, 8), vz: Math.cos(a) * h,
           ax: rnd(0, 6), ay: rnd(0, 6), az: rnd(0, 6), wx: rnd(-9, 9), wy: rnd(-9, 9), wz: rnd(-9, 9), size: wood ? rnd(0.15, 0.35) : rnd(0.2, 0.4), scale: 1, rest: 0, age: 0 });
         mesh.setColorAt(i, C.set(wood ? pick(WOOD) : pick(LEAF)));

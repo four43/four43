@@ -111,6 +111,8 @@ export class Sound {
     this.tone(700, 1500, 0.1, 0.3, 'sine', 0.06);
     for (let i = 0; i < 4; i++) this.noise(0.05, 0.14, 4500 + Math.random() * 2000, 0.14 + i * 0.07 + Math.random() * 0.03, 3);
   }
+  // T-34: a bush: a soft leafy pop, no crunch
+  bushPop() { if (this.ok) { this.tone(600, 1200, 0.08, 0.2, 'sine'); for (let i = 0; i < 3; i++) this.noise(0.05, 0.12, 4000 + Math.random() * 2000, i * 0.05, 3); } }
   cheer() { if (this.ok) for (let i = 0; i < 10; i++) this.voice(500 + Math.random() * 500, 700 + Math.random() * 600, 0.4, 0.12, [900, 2400], Math.random() * 0.5); }
   // S-5: a light 16-step loop, scheduled a little ahead of the clock
   music(on) {

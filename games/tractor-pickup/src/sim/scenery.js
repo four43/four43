@@ -1,5 +1,6 @@
 // Field scenery outside the edges (4.6), the farmyard fence and props (4.7), and the static colliders for the farm.
-import { TILE, SIZE, DIRS, tileCenter, YARD_HALF } from './track.js';
+import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, TREE_R } from './track.js';
+import { ROAD_HALF, CORRIDOR } from './road.js';
 import { CUT } from './terrain.js';
 import { G, groups } from './physics.js';
 import { addRamp } from './sandbox.js';
@@ -55,7 +56,7 @@ export function scatterScenery(farm, road, rng, terrain) {
       const kind = cornField ? 'corn' : placed < trees && m < trees * 4 ? rng.pick(TALL) : rng.pick(UNDER), r = R[kind], tall = TALL.includes(kind);
       const x = c.x + rng.range(-TILE / 2 + 1, TILE / 2 - 1), z = c.z + rng.range(-TILE / 2 + 1, TILE / 2 - 1);
       if (!ok(x, z, r, tall)) continue;
-      const it = { kind, x, z, y: terrain.height(x, z), yaw: rng.range(0, Math.PI * 2), scale: tall ? rng.range(1.1, 2.6) : rng.range(1, 1.5), r }; placed++;
+      const it = { kind, x, z, y: terrain.height(x, z), yaw: rng.range(0, Math.PI * 2), scale: tall ? rng.range(1.6, 3.4) : rng.range(1, 1.5), r }; placed++; // 4.6: forest trees 1.6 to 3.4 times the model
       items.push(it); const k = key(Math.floor(x / B), Math.floor(z / B)); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(it);
     }
   }
@@ -64,6 +65,27 @@ export function scatterScenery(farm, road, rng, terrain) {
     for (const [along, out, yaw, sc] of [[0, 0.3, 0, 5], [-0.6, 0, 1.2, 4.2], [0.6, 0, 2.4, 4.2], [0, -0.15, 3.7, 3.6]])
       items.push({ kind: 'bush', x: h.x + pt.tx * along - pt.tz * sd * out, z: h.z + pt.tz * along + pt.tx * sd * out, y: 0, yaw, scale: sc, sy: 1.8, r: 0.95, hide: true }); }
   return items;
+}
+
+// T-35: breakable trees and bushes on the route shoulders, outside the road surface. About 1 tree and 2 bushes per route tile.
+// Trees only on straight and gate tiles, or on the outer side of a curve (4.6); none on feature tiles or near a hiding bush.
+export const ROADSIDE = { tree: ROAD_HALF + 0.9, bush: ROAD_HALF + 0.75, gap: 4, hide: 6 }; // m from the centerline; spacing; m from a hide bush
+export function roadside(farm, road, rng) {
+  const inner = curveCenters(farm), out = [];
+  const ok = (x, z, r, tree) => Math.abs(x) > YARD_HALF + 3 || Math.abs(z) > YARD_HALF + 3 // clear of the yard fence and its gate posts
+    ? (!tree || inner.every(k => Math.hypot(k.x - x, k.z - z) >= TILE / 2)) && farm.hideSpots.every(h => Math.hypot(h.x - x, h.z - z) >= ROADSIDE.hide)
+      && out.every(o => Math.hypot(o.x - x, o.z - z) >= ROADSIDE.gap + (o.kind === 'tree' || tree ? 1 : 0)) && road.nearest(x, z).d > ROAD_HALF + 0.3 && road.nearest(x, z).d < CORRIDOR
+    : false;
+  road.routes.forEach((R, r) => farm.routes[r].tiles.forEach((t, k) => {
+    if (['mud', 'ramp', 'sprinkler'].includes(t.type)) return;
+    const pts = R.pts.filter(p => p.k === k && p.u > 0.1 && p.u < 0.9);
+    for (const [kind, n] of [['tree', rng.int(0, 2)], ['bush', rng.int(1, 3)]]) for (let i = 0, tries = 0; i < n && tries < 12; tries++) {
+      const p = rng.pick(pts), sd = rng.chance(0.5) ? 1 : -1, off = ROADSIDE[kind] * sd, x = p.x - p.tz * off, z = p.z + p.tx * off, tree = kind === 'tree';
+      if (!ok(x, z, TREE_R[tree ? 'single' : 'bush'], tree)) continue;
+      out.push({ kind, x, z, r: tree ? TREE_R.single : TREE_R.bush, scale: tree ? rng.range(0.9, 1.1) : rng.range(0.85, 1.15), yaw: rng.range(0, Math.PI * 2), roadside: true }); i++;
+    }
+  }));
+  return out;
 }
 
 export function addFarmColliders(phys, farm, road, terrain) {
@@ -83,15 +105,11 @@ export function addFarmColliders(phys, farm, road, terrain) {
   }
 }
 
-// T-31: bales roll (cylinder on its side), cones and barrels tip; posts are fixed; trees are in trees.js. T-32: reset() on each show.
+// T-31: bales roll (cylinder on its side), cones and barrels tip; trees and bushes are in trees.js. T-32: reset() on each show.
 export function addYardProps(phys, farm) {
-  const { RAPIER, world } = phys, cg = groups(G.PROP, 0xffff), fixed = groups(G.STATIC, 0xffff), props = [], S = Math.SQRT1_2;
+  const { RAPIER, world } = phys, cg = groups(G.PROP, 0xffff), props = [], S = Math.SQRT1_2;
   for (const o of farm.yard.obstacles) {
-    if (o.kind === 'tree') continue; // trees belong to the tree system (trees.js): a fast tractor breaks them (T-34)
-    if (o.kind === 'post') {
-      world.createCollider(RAPIER.ColliderDesc.cylinder(1.2, 0.18).setTranslation(o.x, 1.2, o.z).setFriction(0.1).setCollisionGroups(fixed));
-      props.push({ ...o, body: null }); continue;
-    }
+    if (o.kind === 'tree' || o.kind === 'bush') continue; // they belong to the tree system (trees.js): the tractor breaks them (T-34)
     const cy = Math.cos(o.yaw / 2), sy = Math.sin(o.yaw / 2);
     const q = o.kind === 'bale' ? { x: cy * S, y: sy * S, z: -sy * S, w: cy * S } : yawQ(o.yaw); // bale: yaw then 90 degrees about x
     const y = { bale: 0.75, cone: 0.35, barrel: 0.5 }[o.kind];

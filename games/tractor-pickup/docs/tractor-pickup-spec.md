@@ -400,7 +400,7 @@ All items in this section are accepted for the first version.
 |---|---|---|
 | W-1 | Sticker | One sticker after each show. The sticker shows the golden animal (if found) or the animal type with the most boops. |
 | W-2 | Sticker book | A screen with all stickers. Data stays in the browser storage. |
-| W-3 | Paint | The tractor has two paint areas: the body (the hood, the cab and the fenders) and the trim (the wheel rims and the dark frame parts). The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
+| W-3 | Paint | The tractor has two paint areas: the body (the cab, the fenders and the frame) and the trim (the hood and the wheel rims). The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
 | W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. |
 
 ---
@@ -463,7 +463,7 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 
 ## 13. Test results
 
-State at release 1.0.0 (`npm test`: 464 tests, all pass). "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.5 (`npm test`: 475 tests, all pass). Release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|
@@ -489,6 +489,12 @@ State at release 1.0.0 (`npm test`: 464 tests, all pass). "Desktop" means a manu
 | 11 X-4 Frame rate | None | `?fps` meter, desktop (see below) | **60 fps on a 2020 or newer iPad: not measured** |
 | 11 X-5 Offline | None | Service worker installs, caches the page, icons and fonts. The page loads offline (Playwright offline mode). | Install to the Home Screen and play in airplane mode |
 | 11 X-6, X-7 Source and output | None | `npm run build` writes `site/exp/tractor-pickup/` | None |
+| 11 X-8 Model files | `assets.test.mjs` (every model, the part names the code uses, paint areas, barn UVs, the sheep, duck and chicken colors) | All files in `tools/models.html`; the game drawn from them | Hand edits in Blender round-trip through `npm run bake` |
+| 1.5 F-6, F-7, F-12 Show by groups | `showSteps.test.mjs` (groups, sum words, no overlap, label room), `show.test.mjs` | Show with 9 animals in 7 groups: counts per group, labels clear, the sum lights up term by term | Pace of the sum with the voice |
+| 1.5 F-11, W-3 Start skip and paint | `progress.test.mjs` (paint unlocks, start screen rule, 1.0 saves) | Start skipped with no new paint; paint screen and sticker card with a new paint; a pot tap repaints | Pot size for small fingers |
+| 1.5 F-2 Sparkle path | None (visual) | Path along the barn axis into the opening, frame around the door | Readable at a distance |
+| 1.5 B-14 Full: out of the way, B-7 removed | `game.test.mjs` | Animals hop aside when full | Feels fair, not like a miss |
+| 1.5 T-34, T-35 Trees and bushes | `trees.test.mjs`, `track.test.mjs` | Yard and roadside trees and bushes; bushes pop | Gib count when many bushes pop on a route (frame rate) |
 | 12 Voice | `voice.test.mjs` | Build prints the clip count (0 now) | Record the clips, check loudness |
 | T-34 Breakable trees | `trees.test.mjs`, `game.test.mjs` | Burst, stump and regrow seen | Crunch-pop sound level |
 

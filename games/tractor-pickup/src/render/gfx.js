@@ -17,6 +17,7 @@ export function geoFrom(parts, xf) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+  if (parts.every(p => p.uv)) { const uv = new Float32Array(nv * 2); let o = 0; for (const p of parts) { uv.set(p.uv, o); o += p.uv.length; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); } // textured model parts (the barn)
   if (xf) g.applyMatrix4(xf);
   return g;
 }
@@ -42,4 +43,4 @@ export function sampleAnim(anims, name, t, partIdx, out) {
 }
 
 // One Matrix4 table per pet, built once.
-export const PET_ANIMS = Object.fromEntries(['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck'].map(p => [p, animM(p)]));
+export const PET_ANIMS = Object.fromEntries(['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck', 'chicken'].map(p => [p, animM(p)]));

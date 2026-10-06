@@ -4,7 +4,7 @@ import { createTractor, quatAxes } from './tractor.js';
 import { createTrain, local2world, TR } from './hitch.js';
 import { generateFarm, YARD_HALF, yardFree } from './track.js';
 import { buildRoad, FARM_HALF, makeBarnPass } from './road.js';
-import { scatterScenery, addFarmColliders, addYardProps } from './scenery.js';
+import { scatterScenery, addFarmColliders, addYardProps, roadside } from './scenery.js';
 import { createTrees } from './trees.js';
 import { createTerrain } from './terrain.js';
 import { createHerd, TYPES } from './herd.js';
@@ -22,7 +22,8 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1)), rng = makeRng(seed ^ 0x51ed);
   const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
   const phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
-  const yardProps = addYardProps(phys, farm), trees = createTrees(phys, farm), s = farm.start;
+  const yardProps = addYardProps(phys, farm), s = farm.start;
+  const trees = createTrees(phys, [...farm.yard.obstacles.filter(o => o.kind === 'tree' || o.kind === 'bush'), ...roadside(farm, road, makeRng(seed ^ 0x70adc0de))]); // T-34, T-35
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
   const train = createTrain(phys, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
   const flights = [], barnPass = makeBarnPass(farm.yard.barn);
@@ -78,6 +79,16 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
         if (inZone || dogJump) boop(a, events);
         if (load.full()) break;
       }
+      // B-14: full, so no boop: an animal in front of the tractor or beside a trailer hops out of the way, to the side away from it
+      if (game.mode === 'drive' && load.full()) for (const a of herd.free()) {
+        if (a.hidden || a.state === 'dodge') continue;
+        const r = TYPES[a.type].r, l = tractorLocal(a.x, 0, a.z, tmp);
+        if (l.x > -2.2 && l.x < CATCH.x1 + 1.5 && Math.abs(l.z) < CATCH.half + r + 0.3) { dodgeFrom(a, axes, l.z, CATCH.half + r + 2.5, events); continue; }
+        for (const c of train.cars) {
+          const p = c.body.translation(), ax = quatAxes(c.body.rotation()), dx = a.x - p.x, dz = a.z - p.z, lx = dx * ax.f.x + dz * ax.f.z, lz = dx * ax.r.x + dz * ax.r.z;
+          if (Math.abs(lx) < TR.half.x + 1 && Math.abs(lz) < TR.half.z + r + 0.4) { dodgeFrom(a, ax, lz, TR.half.z + r + 2.2, events); break; }
+        }
+      }
       // flights
       for (let i = flights.length - 1; i >= 0; i--) {
         const fl = flights[i]; fl.u += DT / fl.dur; fl.prev.x = fl.pos.x; fl.prev.y = fl.pos.y; fl.prev.z = fl.pos.z; if (fl.u < 0) continue;
@@ -111,6 +122,11 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       return events;
     },
   };
+  // hop sideways (along the body's right axis, on the side the animal already is) to `clear` metres from the body's center line
+  function dodgeFrom(a, ax, side, clear, events) {
+    const sd = Math.abs(side) > 0.05 ? Math.sign(side) : (a.id % 2 ? 1 : -1), hl = Math.hypot(ax.r.x, ax.r.z) || 1, move = clear - Math.abs(side);
+    if (herd.dodge(a, a.x + ax.r.x / hl * sd * move, a.z + ax.r.z / hl * sd * move)) events.push({ type: 'dodge', animal: a });
+  }
   function launch(a, events, delay = 0) {
     const sl = game.load.reserve(a); if (!sl) return false;
     a.state = 'fly'; a.hidden = false;

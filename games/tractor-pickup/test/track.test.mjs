@@ -44,7 +44,7 @@ for (const seed of SEEDS) test(`farm ${seed} obeys the spec`, () => {
     return Math.abs(along) < 1e-9 && Math.abs(Math.abs(across) - 7.8) < 1e-9; }), 'hide spot not 7.8 m beside a plain tile');
   // farmyard (4.7)
   const y = f.yard, count = k => y.obstacles.filter(o => o.kind === k).length;
-  assert.deepEqual([count('bale'), count('cone'), count('barrel'), count('post'), count('tree')], [8, 16, 8, 8, 10]);  // T-31
+  assert.deepEqual([count('bale'), count('cone'), count('barrel'), count('post'), count('tree'), count('bush')], [8, 16, 8, 0, 18, 16]);  // T-31: no posts
   for (const o of y.obstacles) {
     assert.ok(Math.abs(o.x) < YARD_HALF && Math.abs(o.z) < YARD_HALF);
     for (const l of y.lanes) assert.ok(segDist(o.x, o.z, l) > 5 + o.r - 1e-9, `${o.kind} in a lane`);                 // T-30

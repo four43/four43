@@ -1,41 +1,41 @@
 // Tractor, trailer and wagon meshes. Poses come from interpolated snapshots, not straight from Rapier.
 import * as THREE from 'three';
-import { ASSETS, geoFrom, boxGeo, mergeGeos } from './gfx.js';
+import { ASSETS, geoFrom } from './gfx.js';
 import { TP } from '../sim/tractor.js';
 import { TR } from '../sim/hitch.js';
 import { dirtify } from './dirtMat.js';
 
-export const TRACTOR_COLORS = { red: '#d8342c', green: '#3f9b3a', blue: '#2f6fd6', yellow: '#f2c230', pink: '#f07aa8', rainbow: null };
+// W-3: the paints, in unlock order (sim/progress.js). rainbow runs through the hues along the tractor.
+export const PAINTS = { red: '#d8342c', yellow: '#f2c230', green: '#3f9b3a', blue: '#2f6fd6', pink: '#f07aa8', orange: '#f28a1e', purple: '#8a4fd0', white: '#f4f1ea', rainbow: null };
 const S = TP.scale;
+// The two paint areas (material paint-body / paint-trim in tractor.glb) keep their own shading: each vertex gets the paint times
+// its brightness relative to the brightest vertex of its area.
+export function paintable(parts) {
+  const g = geoFrom(parts), area = parts.flatMap(p => p.area || Array(p.pos.length / 3).fill(0)), src = g.attributes.color.array.slice(), lum = [], top = [0, 0, 0];
+  for (let i = 0; i < area.length; i++) { const l = 0.3 * src[i * 3] + 0.6 * src[i * 3 + 1] + 0.1 * src[i * 3 + 2]; lum.push(l); top[area[i]] = Math.max(top[area[i]], l); }
+  const c = new THREE.Color();
+  g.userData.paint = ({ body, trim }) => {
+    const dst = g.attributes.color, pos = g.attributes.position;
+    for (let i = 0; i < area.length; i++) {
+      const a = area[i]; if (!a) continue;
+      const name = a === 1 ? body : trim, k = Math.min(1.1, 0.25 + 0.85 * lum[i] / top[a]);
+      if (name === 'rainbow') c.setHSL(((pos.getZ(i) + 1) * 0.5) % 1, 0.75, 0.5); else c.set(PAINTS[name] ?? PAINTS.red);
+      dst.setXYZ(i, c.r * k, c.g * k, c.b * k);
+    }
+    dst.needsUpdate = true;
+  };
+  return g;
+}
 export function createVehicles3D(scene, tractor, train) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const dirty = base => { const m = base.clone(), d = dirtify(m); m.userData.dirt = d.uniforms.uDirt; return m; }; // one clone per thing that gets dirty on its own (T-16)
   const modelRot = new THREE.Matrix4().makeRotationY(Math.PI / 2).multiply(new THREE.Matrix4().makeScale(S, S, S));
-  const baseBody = geoFrom([ASSETS.tractor.body]);
-  const isPaint = (r, g, b) => b > r * 1.1 && r > 0.08; // Kenney's grey-blue bodywork
-  const bodyMat = dirty(mat), wheelsMat = dirty(mat), body = new THREE.Mesh(baseBody.clone(), bodyMat); body.castShadow = true; body.matrixAutoUpdate = false; scene.add(body);
-  function setColor(name) {
-    const src = baseBody.attributes.color, dst = body.geometry.attributes.color, pos = body.geometry.attributes.position, c = new THREE.Color();
-    for (let i = 0; i < src.count; i++) {
-      const r = src.getX(i), g = src.getY(i), b = src.getZ(i);
-      if (!isPaint(r, g, b)) { dst.setXYZ(i, r, g, b); continue; }
-      const l = 0.3 * r + 0.6 * g + 0.1 * b;
-      if (name === 'rainbow') c.setHSL(((pos.getZ(i) + 1) * 0.5) % 1, 0.75, 0.5); else c.set(TRACTOR_COLORS[name]).convertSRGBToLinear();
-      dst.setXYZ(i, c.r * l * 2.6, c.g * l * 2.6, c.b * l * 2.6);
-    }
-    dst.needsUpdate = true;
-  }
-  setColor('red');
-  const wheels = tractor.W.map(w => { const g = geoFrom([ASSETS.tractor[w.name]]); g.translate(-w.mx, -w.my, -w.mz); const m = new THREE.Mesh(g, wheelsMat); m.castShadow = true; m.matrixAutoUpdate = false; scene.add(m); return m; });
-  // trailer bed: wooden box with rails, tongue and two wheels
-  const carGeo = mergeGeos([
-    boxGeo(TR.half.x * 2, TR.half.y * 2, TR.half.z * 2, 0, 0, 0, '#9a6a3f'),
-    boxGeo(TR.half.x * 2, 0.45, 0.08, 0, 0.37, TR.half.z, '#c08a55'), boxGeo(TR.half.x * 2, 0.45, 0.08, 0, 0.37, -TR.half.z, '#c08a55'),
-    boxGeo(0.08, 0.45, TR.half.z * 2, TR.half.x, 0.37, 0, '#c08a55'), boxGeo(0.08, 0.45, TR.half.z * 2, -TR.half.x, 0.37, 0, '#c08a55'),
-    boxGeo(1.9, 0.1, 0.12, TR.half.x + 0.95, -0.15, 0, '#555555'),
-  ]);
-  const wheelGeo = new THREE.CylinderGeometry(TR.wheelR, TR.wheelR, 0.3, 16).rotateX(Math.PI / 2);
-  const baseWheelMat = new THREE.MeshLambertMaterial({ color: '#333333' });
+  const bodyMat = dirty(mat), wheelsMat = dirty(mat), body = new THREE.Mesh(paintable([ASSETS.tractor.body]), bodyMat); body.castShadow = true; body.matrixAutoUpdate = false; scene.add(body);
+  const wheels = tractor.W.map(w => { const g = paintable([ASSETS.tractor[w.name]]); g.translate(-w.mx, -w.my, -w.mz); const m = new THREE.Mesh(g, wheelsMat); m.castShadow = true; m.matrixAutoUpdate = false; scene.add(m); return m; });
+  const setPaint = p => { for (const m of [body, ...wheels]) m.geometry.userData.paint(p); };
+  setPaint({ body: 'red', trim: 'yellow' });
+  // trailer and wagon: the bed (rails, tongue) and two wheels each
+  const carGeo = geoFrom([ASSETS.trailer.bed]), wheelGeo = geoFrom([ASSETS.trailer.wheel]), baseWheelMat = mat; // trailer.glb, in car space
   const cars = train.cars.map(() => {
     const carMat = dirty(mat), wheelMat = dirty(baseWheelMat), m = new THREE.Mesh(carGeo, carMat); m.castShadow = true; m.matrixAutoUpdate = false; scene.add(m);
     const ws = [0, 1].map(() => { const w = new THREE.Mesh(wheelGeo, wheelMat); w.castShadow = true; w.matrixAutoUpdate = false; scene.add(w); return w; });
@@ -43,7 +43,7 @@ export function createVehicles3D(scene, tractor, train) {
   });
   const M = new THREE.Matrix4(), T = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1);
   return {
-    setColor, bodyMesh: body, carMeshes: cars.map(c => c.m),
+    setPaint, bodyMesh: body, carMeshes: cars.map(c => c.m),
     update(snap) { // snap.tractor / snap.cars[i]: { p: Vector3, q: Quaternion }; snap.dirt: the tractor's dirt level (cars carry their own)
       const td = snap.dirt ?? 0; bodyMat.userData.dirt.value = wheelsMat.userData.dirt.value = td;
       M.compose(snap.tractor.p, snap.tractor.q, one);

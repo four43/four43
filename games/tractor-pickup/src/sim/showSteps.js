@@ -1,29 +1,54 @@
-// The barn show timeline (spec 3.4) and the line-up row layout
-import { NUMBER_WORDS } from './words.js';
+// The barn show timeline (spec 3.4) and the line-up layout (F-12)
+import { NUMBER_WORDS, PLURAL } from './words.js';
 import { TYPES } from './herd.js';
+
+// F-6, F-7: one group per type in order of first landing; each group's animals hop out and are counted 1, 2, 3 ..., then the
+// group label ("3 Pigs") is read. With two or more groups the sum is read ("3 plus 2 makes 5"); then all jump for the total.
 export function buildShowSteps(animals) {
+  const groups = [];
+  animals.forEach((a, i) => { let g = groups.find(x => x.type === a.type); if (!g) groups.push(g = { type: a.type, members: [] }); g.members.push(i); });
   const steps = [{ kind: 'intro', say: ['lets-count'] }];
-  animals.forEach((a, i) => steps.push({ kind: 'hop', index: i, n: i + 1, word: (a.golden ? 'Golden ' : '') + TYPES[a.type].word, say: [NUMBER_WORDS[i + 1], ...(a.golden ? ['golden'] : []), a.type] }));
-  const order = [], n = {}; for (const a of animals) { if (!(a.type in n)) { order.push(a.type); n[a.type] = 0; } n[a.type]++; }
-  // R-2: every word on screen is spoken, so each group label (number + name) is read after the total
-  steps.push({ kind: 'all', n: animals.length, groups: order.map(t => ({ type: t, n: n[t], word: TYPES[t].word, say: [NUMBER_WORDS[n[t]], t] })), say: [NUMBER_WORDS[animals.length], 'animals', 'hooray'] });
+  groups.forEach((g, gi) => {
+    g.members.forEach((index, k) => { const golden = !!animals[index].golden; steps.push({ kind: 'hop', index, group: gi, n: k + 1, golden, say: [NUMBER_WORDS[k + 1], ...(golden ? ['golden'] : [])] }); });
+    const n = g.members.length; // R-2: every word on screen is spoken
+    steps.push({ kind: 'group', group: gi, type: g.type, n, word: n === 1 ? TYPES[g.type].word : TYPES[g.type].plural, say: [NUMBER_WORDS[n], n === 1 ? g.type : PLURAL[g.type]] });
+  });
+  const total = animals.length, terms = groups.map(g => g.members.length);
+  if (groups.length > 1) steps.push({ kind: 'sum', terms, total, say: [...terms.flatMap((t, i) => i ? ['plus', NUMBER_WORDS[t]] : [NUMBER_WORDS[t]]), 'makes', NUMBER_WORDS[total]] });
+  steps.push({ kind: 'all', n: total, groups: groups.map(g => ({ type: g.type, n: g.members.length })), say: total === 1 ? ['hooray'] : [NUMBER_WORDS[total], 'animals', 'hooray'] });
   return steps;
 }
 
-// Neighbours stand r + r + pad apart (no overlap), groups get an extra gap; a row longer than the 13 m line-up is scaled down to fit.
-export const ROW = { pad: 0.15, groupGap: 0.45, len: 13 };
-// types: animal types in landing order. Returns x along the line-up (centred on 0) per animal for the hop row and the
-// regrouped row, each group's center, the uniform scale and the longest row's width (outer edge to outer edge).
-export function rowLayout(types, len = ROW.len) {
-  const place = (idx, gapAt) => { const xs = []; let x = 0;
-    idx.forEach((k, i) => { if (i) x += TYPES[types[idx[i - 1]]].r + TYPES[types[k]].r + ROW.pad + (gapAt(i) ? ROW.groupGap : 0); xs.push(x); });
-    const lo = xs[0] - TYPES[types[idx[0]]].r, hi = xs.at(-1) + TYPES[types[idx.at(-1)]].r; return { xs, lo, hi }; };
-  const order = [...new Set(types)], gidx = order.flatMap(t => types.flatMap((u, k) => u === t ? [k] : []));
-  const hop = place(types.map((_, k) => k), () => false), grp = place(gidx, i => types[gidx[i]] !== types[gidx[i - 1]]);
-  const raw = Math.max(hop.hi - hop.lo, grp.hi - grp.lo), scale = Math.min(1, len / raw);
-  const out = { hop: [], group: [], groups: [], scale, width: raw * scale };
-  hop.xs.forEach((x, i) => { out.hop[i] = (x - (hop.lo + hop.hi) / 2) * scale; });
-  grp.xs.forEach((x, i) => { out.group[gidx[i]] = (x - (grp.lo + grp.hi) / 2) * scale; });
-  for (const t of order) { const xs = types.flatMap((u, k) => u === t ? [out.group[k]] : []); out.groups.push({ type: t, x: (Math.min(...xs) + Math.max(...xs)) / 2 }); }
-  return out;
+// F-12: each group is a block of rows of up to `cols` animals, side by side 0.4 m apart, rows 0.6 m apart edge to edge. A block is at
+// least as wide as its label ("3 Chickens"), so labels never collide. Blocks stand side by side with a 1.5 m gap; if they are wider
+// than the line-up, the rows get shorter, then the blocks go on more lines, far enough apart that a line's animals do not hide the
+// labels of the line behind it.
+// x: along the line-up, centred on 0. d: depth from the line-up's barn-side edge toward the camera (the first row is deepest in).
+export const LINEUP = { len: 16, depth: 7, pad: 0.4, rowGap: 0.6, blockGap: 1.5, lineGap: 3.6, edge: 0.3, letter: 0.5 }; // letter: label width per letter ("3 Chickens" on one line), m
+export function showLayout(groups, { len = LINEUP.len } = {}) { // groups: [{ type, n }]
+  const block = (g, cols) => { const r = TYPES[g.type].r, c = Math.min(cols, g.n), rows = Math.ceil(g.n / c), word = g.n === 1 ? TYPES[g.type].word : TYPES[g.type].plural, aw = c * 2 * r + (c - 1) * LINEUP.pad;
+    return { g, r, c, rows, aw, w: Math.max(aw, (word.length + 2) * LINEUP.letter), h: rows * 2 * r + (rows - 1) * LINEUP.rowGap }; };
+  const pack = (cols, maxLines) => { // greedy: blocks in order, a new line when the next block does not fit
+    const lines = [[]]; let w = 0;
+    for (const b of groups.map(g => block(g, cols))) {
+      const add = (lines.at(-1).length ? LINEUP.blockGap : 0) + b.w;
+      if (lines.at(-1).length && w + add > len) { lines.push([]); w = 0; lines.at(-1).push(b); w = b.w; } else { lines.at(-1).push(b); w += add; }
+    }
+    return lines.length <= maxLines && lines.every(l => l.reduce((s, b, i) => s + b.w + (i ? LINEUP.blockGap : 0), 0) <= len + 1e-9) ? lines : null;
+  };
+  let lines = null;
+  for (let n = 1; n <= 3 && !lines; n++) for (const cols of [4, 3, 2]) if ((lines = pack(cols, n))) break;
+  lines ||= pack(1, groups.length);
+  const spots = groups.map(() => []), labels = []; let d0 = LINEUP.edge, width = 0;
+  for (const line of lines) {
+    const lw = line.reduce((s, b, i) => s + b.w + (i ? LINEUP.blockGap : 0), 0), lh = Math.max(...line.map(b => b.h)); let x0 = -lw / 2; width = Math.max(width, lw);
+    for (const b of line) {
+      const gi = groups.indexOf(b.g);
+      for (let k = 0; k < b.g.n; k++) { const row = Math.floor(k / b.c), col = k % b.c; spots[gi].push({ x: x0 + (b.w - b.aw) / 2 + b.r + col * (2 * b.r + LINEUP.pad), d: d0 + b.r + row * (2 * b.r + LINEUP.rowGap) }); }
+      labels[gi] = { x: x0 + b.w / 2, d: d0 + b.h + 0.5 }; // just in front of the block: below it on screen
+      x0 += b.w + LINEUP.blockGap;
+    }
+    d0 += lh + LINEUP.lineGap;
+  }
+  return { spots, labels, width, depth: d0 - LINEUP.lineGap + 0.5 };
 }

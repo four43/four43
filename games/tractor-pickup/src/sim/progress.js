@@ -1,8 +1,10 @@
 // src/sim/progress.js: rewards after each show (spec section 9) and parent settings (section 10)
-export const COLORS = ['red', 'green', 'blue', 'yellow', 'pink', 'rainbow'];
+// W-3: two start paints, then one new paint every 3 shows. Each paint can go on the body or the trim.
+export const START_PAINTS = ['red', 'yellow'], NEW_PAINTS = ['green', 'blue', 'pink', 'orange', 'purple', 'white', 'rainbow'];
 export const HATS = [{ id: 'straw', shows: 4 }, { id: 'cowboy', shows: 8 }, { id: 'party', shows: 12 }];
-export const emptyProgress = () => ({ shows: 0, stickers: [], color: 'red' });
-export const unlockedColors = p => COLORS.slice(0, Math.min(COLORS.length, 1 + Math.floor(p.shows / 3)));
+export const emptyProgress = () => ({ shows: 0, stickers: [], paint: { body: 'red', trim: 'yellow' } });
+export const unlockedPaints = p => [...START_PAINTS, ...NEW_PAINTS.slice(0, Math.floor(p.shows / 3))];
+export const hasPaintChoice = p => unlockedPaints(p).length > START_PAINTS.length; // F-11: the start screen shows only then
 export const unlockedHats = p => HATS.filter(h => p.shows >= h.shows).map(h => h.id);
 export function pickSticker(animals) {
   const g = animals.find(a => a.golden); if (g) return { type: g.type, golden: true };
@@ -13,16 +15,18 @@ export function pickSticker(animals) {
 export function completeShow(p, animals) {
   const shows = p.shows + 1, next = { ...p, shows }, sticker = { ...pickSticker(animals), show: shows };
   next.stickers = [...p.stickers, sticker];
-  const before = unlockedColors(p), after = unlockedColors(next), hatsBefore = unlockedHats(p), hatsAfter = unlockedHats(next);
-  return { progress: next, sticker, newColor: after.length > before.length ? after.at(-1) : null, newHat: hatsAfter.length > hatsBefore.length ? hatsAfter.at(-1) : null };
+  const before = unlockedPaints(p), after = unlockedPaints(next), hatsBefore = unlockedHats(p), hatsAfter = unlockedHats(next);
+  return { progress: next, sticker, newPaint: after.length > before.length ? after.at(-1) : null, newHat: hatsAfter.length > hatsBefore.length ? hatsAfter.at(-1) : null };
 }
-// Saved progress comes from browser storage: anything odd falls back to a clean value, and the color must be one the player has unlocked.
+// Saved progress comes from browser storage: anything odd falls back to a clean value, and each paint must be one the player has
+// unlocked. A save from version 1.0 has one tractor color instead of the paints: it becomes the body paint.
 export function clampProgress(p, types) {
   if (!p || typeof p !== 'object') return emptyProgress();
   const shows = Number.isInteger(p.shows) && p.shows >= 0 ? p.shows : 0;
   const stickers = (Array.isArray(p.stickers) ? p.stickers : []).filter(s => s && types.includes(s.type) && Number.isInteger(s.show)).map(s => ({ type: s.type, golden: !!s.golden, show: s.show }));
-  const out = { shows, stickers, color: 'red' };
-  return { ...out, color: unlockedColors(out).includes(p.color) ? p.color : 'red' };
+  const have = unlockedPaints({ shows }), saved = p.paint && typeof p.paint === 'object' ? p.paint : { body: p.color }, start = emptyProgress().paint;
+  const pick = area => have.includes(saved[area]) ? saved[area] : start[area];
+  return { shows, stickers, paint: { body: pick('body'), trim: pick('trim') } };
 }
 export const DEFAULT_SETTINGS = { power: 'medium', voice: true, music: true, seed: null };
 export function clampSettings(s) {

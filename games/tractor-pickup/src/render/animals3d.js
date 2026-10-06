@@ -5,25 +5,13 @@ import { FLIGHT, flourishAngle } from '../sim/launch.js';
 import { slotPoint } from '../sim/slots.js';
 import { TR } from '../sim/hitch.js';
 import { dirtify } from './dirtMat.js';
-export const MODEL = { pig: 'pig', cow: 'cow', chicken: 'chick', sheep: 'sheep', duck: 'duck', bunny: 'bunny', dog: 'dog', chick: 'chick' };
-const SCALE = { pig: 1.0, cow: 1.3, chicken: 0.95, sheep: 1.0, duck: 0.9, bunny: 0.8, dog: 0.95, chick: 0.55 };
+import { SCALE } from './petScale.js';
+export const MODEL = { pig: 'pig', cow: 'cow', chicken: 'chicken', sheep: 'sheep', duck: 'duck', bunny: 'bunny', dog: 'dog', chick: 'chick' }; // model files (spec 5.1, X-8)
 const STRETCH = { duck: [1.15, 0.85, 1.15] };
-// chicken = copper-brown recolor of the chick (Pig Pens "whiten" recipe with a brown target)
-export const copper = p => { const col = p.col.slice(); for (let i = 0; i < col.length; i += 3) if (col[i] >= 230 && col[i + 1] >= 140) { const s = col[i + 1] / 230; col[i] = 196 * s; col[i + 1] = 110 * s; col[i + 2] = 58 * s; } return { ...p, col }; };
 const WING = new THREE.Matrix4();
-// W-4: hats for riders. Each is a small Group built from Cylinder and Cone geometry, about 0.7 m wide, with its base at y = 0.
-const lam = c => new THREE.MeshLambertMaterial({ color: c });
-function buildHat(id) {
-  const g = new THREE.Group(), add = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = true; g.add(m); return m; };
-  if (id === 'straw') { add(new THREE.CylinderGeometry(0.5, 0.5, 0.05, 20), lam('#f2c85a'), 0.025); add(new THREE.CylinderGeometry(0.22, 0.26, 0.25, 16), lam('#e0b040'), 0.17); add(new THREE.CylinderGeometry(0.265, 0.265, 0.06, 16), lam('#c0392b'), 0.1); }
-  else if (id === 'cowboy') { add(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 20), lam('#7a4a26'), 0.025); add(new THREE.CylinderGeometry(0.2, 0.27, 0.42, 16), lam('#8a5530'), 0.25); }
-  else if (id === 'party') {
-    const c = add(new THREE.ConeGeometry(0.26, 0.6, 16), lam('#ff5fa2'), 0.3);
-    [0.12, 0.28, 0.44].forEach((y, i) => { const r = 0.26 * (1 - y / 0.6) + 0.012; add(new THREE.CylinderGeometry(r, r + 0.03, 0.06, 16), lam(i % 2 ? '#ffd24a' : '#3fa9f5'), y); });
-    add(new THREE.SphereGeometry(0.06, 8, 6), lam('#ffffff'), 0.62);
-  }
-  return g;
-}
+// W-4: hats for riders, from the model files hat-<id>.glb (about 0.7 m wide, base at y = 0)
+const hatMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+function buildHat(id) { const g = new THREE.Group(), m = new THREE.Mesh(geoFrom(Object.values(ASSETS['hat-' + id])), hatMat); m.castShadow = true; g.add(m); return g; }
 const HAT_Y = { bunny: 1.55 }, HAT_SCALE = 1.2; // Cube Pets are head-sized cubes about 1.3 wide whose top is at y = 1.4 in model units (the bunny's ears reach 1.8); hats sit on that top, in the animal's own scale
 const HIDE = { sink: -0.35, out: 0.55 }; // A-13: deep in the bush, nudged toward the road so the tail pokes out
 const UP = new THREE.Vector3(0, 1, 0), FACE_CAR = new THREE.Quaternion().setFromAxisAngle(UP, Math.PI / 2); // model +z -> car +x
@@ -31,7 +19,7 @@ const UP = new THREE.Vector3(0, 1, 0), FACE_CAR = new THREE.Quaternion().setFrom
 export function createAnimals3D(scene, herd) {
   const base = new THREE.MeshLambertMaterial({ vertexColors: true });
   const gold = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.7, roughness: 0.3, emissive: '#6a4a00' });
-  const geos = {}; for (const [type, m] of Object.entries(MODEL)) geos[type] = ASSETS[m].parts.map(p => geoFrom([type === 'chicken' ? copper(p) : p]));
+  const geos = {}; for (const [type, m] of Object.entries(MODEL)) geos[type] = ASSETS[m].parts.map(p => geoFrom([p]));
   const tmpL = {}, protos = {}, flightOf = new Map(); let hatMake = null;
   const hatOf = id => (protos[id] ||= buildHat(id)).clone(); // clones share one set of geometries and materials
   const applyHat = v => { v.hat.clear(); const h = hatMake(v.a); if (h) { h.position.set(0, (HAT_Y[v.a.type] ?? 1.32), 0.08); h.scale.setScalar(HAT_SCALE); v.hat.add(h); } };

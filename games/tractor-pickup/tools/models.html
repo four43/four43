@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tractor Pickup models</title>
+<!-- Look at the model files in assets/models/ (spec X-8). Serve games/tractor-pickup/ (for example: python3 -m http.server 8766)
+     and open /tools/models.html. ?m=sheep,duck shows only those; ?anim=walk plays an animation on the animals. Drag to turn. -->
+<style>
+  body { margin: 0; background: #cfe8f5; font: 14px system-ui, sans-serif; }
+  #labels div { position: absolute; transform: translate(-50%, 0); background: #fffd; padding: 1px 6px; border-radius: 4px; pointer-events: none; }
+</style>
+<script type="importmap">{ "imports": { "three": "../node_modules/three/build/three.module.js", "three/addons/": "../node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="labels"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const ALL = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick', 'tractor', 'trailer', 'barn', 'hat-straw', 'hat-cowboy', 'hat-party',
+  'bale', 'cone', 'barrel', 'stump-cut', 'shrub', 'sprinkler', 'gate', 'oak', 'tree', 'treeFat', 'bush', 'bushS', 'fence', 'rock', 'rockA', 'rockB', 'rockC',
+  'pumpkin', 'corn', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay'];
+const q = new URLSearchParams(location.search), names = q.get('m') ? q.get('m').split(',') : ALL, anim = q.get('anim');
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe8f5'); const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 500);
+scene.add(new THREE.HemisphereLight('#ffffff', '#b9a27c', 2.2)); const sun = new THREE.DirectionalLight('#ffffff', 1.5); sun.position.set(3, 6, 4); scene.add(sun);
+const controls = new OrbitControls(cam, renderer.domElement), loader = new GLTFLoader(), mixers = [], labels = [];
+const cols = Math.ceil(Math.sqrt(names.length)), gap = names.length === 1 ? 0 : 4;
+await Promise.all(names.map(async (n, i) => {
+  try {
+    const g = await loader.loadAsync(`../assets/models/${n}.glb`), root = g.scene, size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
+    const k = names.length === 1 ? 1 : Math.min(1, 3 / Math.max(size.x, size.y, size.z)); root.scale.setScalar(k);
+    root.position.set((i % cols) * gap, 0, Math.floor(i / cols) * gap); scene.add(root);
+    if (anim && g.animations.length) { const m = new THREE.AnimationMixer(root), clip = THREE.AnimationClip.findByName(g.animations, anim); if (clip) { m.clipAction(clip).play(); mixers.push(m); } }
+    const d = document.createElement('div'); d.textContent = n; document.getElementById('labels').appendChild(d); labels.push({ d, p: root.position.clone() });
+  } catch (e) { console.warn(n, e.message); }
+}));
+const mid = new THREE.Vector3((cols - 1) * gap / 2, 0.6, (Math.ceil(names.length / cols) - 1) * gap / 2);
+controls.target.copy(mid); cam.position.copy(mid).add(new THREE.Vector3(names.length === 1 ? 2.5 : cols * 2.2, names.length === 1 ? 1.8 : cols * 2, names.length === 1 ? 3.5 : cols * 3.2)); controls.update();
+const clock = new THREE.Clock(), v = new THREE.Vector3();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta(); for (const m of mixers) m.update(dt);
+  for (const L of labels) { v.copy(L.p).project(cam); L.d.style.left = (v.x + 1) / 2 * innerWidth + 'px'; L.d.style.top = (1 - v.y) / 2 * innerHeight + 8 + 'px'; }
+  renderer.render(scene, cam);
+});
+</script>
+</body>
+</html>

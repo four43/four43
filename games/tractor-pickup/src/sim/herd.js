@@ -2,18 +2,19 @@
 // farmyard animals (A-15), delivery into the barn (A-16) and respawning along the routes (G-3).
 // Route animals stay on the road between the edges: within WALK_HALF of the centerline.
 export const TYPES = {
-  pig:     { word: 'Pig',     speed: 0.9, r: 0.5,  flee: false, come: true },
-  cow:     { word: 'Cow',     speed: 0.6, r: 0.75, flee: false, come: true },
-  chicken: { word: 'Chicken', speed: 1.1, r: 0.35, flee: true,  come: false },
-  sheep:   { word: 'Sheep',   speed: 0.8, r: 0.5,  flee: true,  come: false },
-  duck:    { word: 'Duck',    speed: 0.8, r: 0.35, flee: false, come: true },
-  bunny:   { word: 'Bunny',   speed: 1.4, r: 0.3,  flee: true,  come: false },
-  dog:     { word: 'Dog',     speed: 1.6, r: 0.45, flee: false, come: true },
-  chick:   { word: 'Chick',   speed: 1.2, r: 0.2,  flee: false, come: false },
+  pig:     { word: 'Pig',     plural: 'Pigs',     speed: 0.9, r: 0.5,  flee: false, come: true },
+  cow:     { word: 'Cow',     plural: 'Cows',     speed: 0.6, r: 0.75, flee: false, come: true },
+  chicken: { word: 'Chicken', plural: 'Chickens', speed: 1.1, r: 0.35, flee: true,  come: false },
+  sheep:   { word: 'Sheep',   plural: 'Sheep',    speed: 0.8, r: 0.5,  flee: true,  come: false },
+  duck:    { word: 'Duck',    plural: 'Ducks',    speed: 0.8, r: 0.35, flee: false, come: true },
+  bunny:   { word: 'Bunny',   plural: 'Bunnies',  speed: 1.4, r: 0.3,  flee: true,  come: false },
+  dog:     { word: 'Dog',     plural: 'Dogs',     speed: 1.6, r: 0.45, flee: false, come: true },
+  chick:   { word: 'Chick',   plural: 'Chicks',   speed: 1.2, r: 0.2,  flee: false, come: false },
 };
 export const MAIN_TYPES = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog'];
 export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3, WALK_HALF = 6.5;
 const FILL = ['pig', 'cow', 'sheep', 'chicken', 'duck', 'bunny', 'pig', 'cow'];
+export const DODGE = { dur: 0.5, h: 0.9 }; // B-14: the hop out of the way of a full train: s, m high
 const FLEE_R = 7, FLEE_V = 2.2, HORN_R = 25, WALK = { walk: 'walk', flee: 'run', come: 'walk', follow: 'walk', help: 'run', toBarn: 'walk' };
 const SKIP = new Set(['fly', 'ride', 'show', 'gone']), NOT_FREE = new Set(['fly', 'ride', 'show', 'toBarn', 'gone']);
 const turn = (a, b, max) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + Math.max(-max, Math.min(max, d)); };
@@ -70,6 +71,8 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
       for (const a of free()) { if (a.hidden) continue; a.lookT = 1.5;
         if (TYPES[a.type].come && Math.hypot(a.x - t.x, a.z - t.z) < HORN_R && a.state !== 'help' && a.state !== 'wave') { a.state = 'come'; a.timer = 6; a.tx = t.x + Math.sin(t.yaw) * 6; a.tz = t.z + Math.cos(t.yaw) * 6; } }
     },
+    // B-14: hop to (tx, tz), out of the way of the full tractor and trailers; nothing else moves it meanwhile
+    dodge(a, tx, tz) { if (a.state === 'dodge' || a.hidden) return false; a.state = 'dodge'; a.leader = null; a.dodge = { t: 0, x0: a.x, z0: a.z, x1: tx, z1: tz }; a.yaw = Math.atan2(tx - a.x, tz - a.z); return true; },
     callHelp(t) {
       const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
       if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; return c;
@@ -94,7 +97,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
         if (SKIP.has(a.state)) continue;
         const def = TYPES[a.type], dT = Math.hypot(a.x - t.x, a.z - t.z);
         if (a.lookT > 0) { a.lookT -= dt; a.yaw = turn(a.yaw, Math.atan2(t.x - a.x, t.z - a.z), 6 * dt); }
-        if (!NOT_FREE.has(a.state) && def.flee && !a.hidden && a.state !== 'flee' && a.state !== 'help' && a.state !== 'wave' && dT < FLEE_R && t.speed > 0.5) { a.state = 'flee'; a.timer = 2; }
+        if (!NOT_FREE.has(a.state) && def.flee && !a.hidden && a.state !== 'flee' && a.state !== 'help' && a.state !== 'wave' && a.state !== 'dodge' && dT < FLEE_R && t.speed > 0.5) { a.state = 'flee'; a.timer = 2; }
         switch (a.state) {
           case 'idle': a.anim = a.anim === 'eat' || rng.chance(0.002) ? 'eat' : 'idle'; if ((a.timer -= dt) <= 0) pickTarget(a); break;
           case 'walk': if (moveToward(a, a.tx, a.tz, def.speed, dt)) { if (a.wallow) { a.state = 'wallow'; a.timer = rng.range(6, 10); a.wallow = false; } else { a.state = 'idle'; a.timer = rng.range(2, 5); } } break;
@@ -110,6 +113,9 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
           case 'help': if (moveToward(a, a.tx, a.tz, Math.max(def.speed * 2, 2.5), dt)) { a.state = 'wave'; a.timer = 10; } break;
           case 'wave': a.anim = 'dance'; a.yaw = turn(a.yaw, Math.atan2(t.x - a.x, t.z - a.z), 4 * dt); if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 2; } break;
           case 'hide': a.anim = 'idle'; break;
+          case 'dodge': { const d = a.dodge, u = Math.min(1, (d.t += dt) / DODGE.dur); a.anim = 'run';
+            a.x = d.x0 + (d.x1 - d.x0) * u; a.z = d.z0 + (d.z1 - d.z0) * u; a.y = DODGE.h * 4 * u * (1 - u);
+            if (u >= 1) { a.y = 0; a.state = 'idle'; a.timer = 1.5; a.lookT = 1.5; a.dodge = null; } break; }
           case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; }
             if (moveToward(a, a.tx, a.tz, 2.2, dt)) { if (a.inside) a.state = 'gone'; else { a.inside = true; a.tx = env.barn.x; a.tz = env.barn.z; } } break;
         }
@@ -118,7 +124,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
         const last = a.trail[0]; if (!last || Math.hypot(last.x - a.x, last.z - a.z) > 0.25) { a.trail.unshift({ x: a.x, z: a.z }); if (a.trail.length > 12) a.trail.pop(); }
       }
       // separation (free animals only; not the ones in flight, riding, walking into the barn or gone)
-      const live = animals.filter(a => !NOT_FREE.has(a.state) && !a.hidden);
+      const live = animals.filter(a => !NOT_FREE.has(a.state) && !a.hidden && a.state !== 'dodge');
       for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
         const p = live[i], q = live[j], dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz), m = TYPES[p.type].r + TYPES[q.type].r;
         if (d > 0 && d < m) { const k = (m - d) / d / 2; p.x -= dx * k; p.z -= dz * k; q.x += dx * k; q.z += dz * k; }

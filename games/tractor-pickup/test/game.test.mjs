@@ -130,3 +130,26 @@ test('tractorLocal is fresh outside a step (the per-step axes cache is dropped) 
   const after = g.tractorLocal(p.x + 3, p.y, p.z + 1, {});
   assert.ok(Math.abs(before.x - after.x) + Math.abs(before.z - after.z) > 1, `local ${before.x},${before.z} -> ${after.x},${after.z}`);
 });
+test('with a full train there is no boop: an animal ahead or beside a trailer hops out of the way (B-14)', () => {
+  const g = createGame(RAPIER, { seed: 12, power: 'medium' }); quiet(g); unhide(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const list = pickable(g); for (const a of list.slice(0, 12)) place(g, a);
+  assert.equal(g.load.landed(), 12); assert.ok(g.load.full());
+  const [ahead, beside] = list.slice(12);
+  const put = (a, l) => { const p = g.tractorWorld(l, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; };
+  put(ahead, { x: 2.5, y: 0, z: 0.3 });
+  const car = g.train.cars[0].body.translation(); beside.x = car.x; beside.z = car.z; beside.state = 'idle'; beside.timer = 99; // inside the first trailer's footprint
+  const ev = []; for (let i = 0; i < 40; i++) ev.push(...g.step(STILL));
+  assert.ok(!ev.some(e => e.type === 'boop' || e.type === 'launch'), 'booped while full');
+  for (const a of [ahead, beside]) assert.ok(ev.some(e => e.type === 'dodge' && e.animal === a), `${a.type} did not hop away`);
+  assert.ok(g.tractorLocal(ahead.x, 0, ahead.z, {}).z > 3, 'the animal ahead is not clear of the nose, on its own side');
+  assert.equal(ahead.y, 0); assert.notEqual(ahead.state, 'dodge', 'the hop ends');
+});
+test('a boop does not slow the tractor (B-7 removed)', () => {
+  const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g); unhide(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  for (let i = 0; i < 90; i++) g.step({ thr: 1, steer: 0, horn: false });
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 4, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  const v0 = g.tractor.speed, ev = []; for (let i = 0; i < 20; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
+  assert.ok(ev.some(e => e.type === 'boop')); assert.ok(g.tractor.speed >= v0 - 0.05, `slowed from ${v0} to ${g.tractor.speed}`);
+});

@@ -2,6 +2,7 @@
 // by the next gate around, features on route straights, and the farmyard layout (barn, line-up, pond, lanes, obstacles).
 import { makeRng } from './rng.js';
 export const TILE = 36, SIZE = 11, YARD_HALF = 54;
+export const TREE_R = { single: 1.5, young: 0.8, bush: 0.9 }; // canopy radius of a breakable tree or bush (T-34)
 export const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 const C = (SIZE - 1) / 2;
 export const GATES = { E: { i: C + 2, j: C, out: 0 }, S: { i: C, j: C + 2, out: 1 }, W: { i: C - 2, j: C, out: 2 }, N: { i: C, j: C - 2, out: 3 } };
@@ -108,28 +109,29 @@ export function layoutYard(rng) {
   const W = (a, s) => ({ x: f[0] * a + r[0] * s, z: f[1] * a + r[1] * s });
   const rect = (a0, a1, s0, s1) => { const p = W(a0, s0), q = W(a1, s1); return { x0: Math.min(p.x, q.x), x1: Math.max(p.x, q.x), z0: Math.min(p.z, q.z), z1: Math.max(p.z, q.z) }; };
   const barn = { x: 0, z: 0, yaw, half: 6, width: 5, leaf: 5 }; // leaf: the open door leaves stand this far out from each end, in line with the walls
-  const lineup = rect(end * 8.5, end * 21.5, side * 8.5, side * 11.5); // where the animals stand for the show: ground only
+  const lineup = rect(end * 8, end * 24, side * 8.5, side * 15.5); // where the animals stand for the show (16 x 7 m, F-12): ground only
   const lanes = Object.entries(GATE_POINT).map(([gate, [gx, gz]]) => {
     const along = gx * f[0] + gz * f[1], e = W(Math.abs(along) > 1 ? Math.sign(along) * 6 : -end * 6, 0); // side gates use the far end, away from the line-up
     return { gate, ax: gx, az: gz, bx: e.x, bz: e.z };
   });
   const pc = YARD_HALF - 14, pond = { x: (rng.chance(0.5) ? 1 : -1) * pc, z: (rng.chance(0.5) ? 1 : -1) * pc, r: 7 }; // A-5: a corner, 7 m in from the fence
   const yard = { half: YARD_HALF, barn, end, side, lineup, pond, lanes, obstacles: [] };
-  for (const [kind, n, rad] of [['bale', 8, 0.9], ['cone', 16, 0.3], ['barrel', 8, 0.45], ['post', 8, 0.2]]) {
+  for (const [kind, n, rad] of [['bale', 8, 0.9], ['cone', 16, 0.3], ['barrel', 8, 0.45]]) { // no fixed posts (T-31)
     for (let m = 0, placed = 0; placed < n && m < 2000; m++) {
       const x = rng.range(-YARD_HALF, YARD_HALF), z = rng.range(-YARD_HALF, YARD_HALF);
       if (!yardFree(yard, x, z, rad) || yard.obstacles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + rad + 2)) continue;
       yard.obstacles.push({ kind, x, z, yaw: rng.range(0, Math.PI * 2), r: rad }); placed++;
     }
   }
-  // T-31, T-34: 10 trees, five singles and two groups (3 + 2) of young trees close together (the groups are placed as one blob 2.4 m wide)
+  // T-31, T-34: 18 trees (10 large singles and young trees in groups of 3, 3 and 2, each group placed as one blob) and 16 bushes
   const spaced = (x, z, rad) => yardFree(yard, x, z, rad) && !yard.obstacles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + rad + 2);
   const find = rad => { for (let m = 0; m < 2000; m++) { const x = rng.range(-YARD_HALF, YARD_HALF), z = rng.range(-YARD_HALF, YARD_HALF); if (spaced(x, z, rad)) return { x, z }; } return null; };
-  for (let i = 0; i < 5; i++) { const c = find(1.2); if (c) yard.obstacles.push({ kind: 'tree', x: c.x, z: c.z, yaw: rng.range(0, Math.PI * 2), r: 1.2, scale: 1 }); }
-  for (const [g, n] of [[0, 3], [1, 2]]) {
-    const c = find(2.4), a0 = rng.range(0, Math.PI * 2); if (!c) continue;
-    for (let k = 0; k < n; k++) { const a = a0 + k * Math.PI * 2 / n; yard.obstacles.push({ kind: 'tree', young: true, group: g, x: c.x + Math.cos(a) * 0.9, z: c.z + Math.sin(a) * 0.9, yaw: rng.range(0, Math.PI * 2), r: 0.7, scale: 0.6 }); }
+  for (let i = 0; i < 10; i++) { const c = find(TREE_R.single); if (c) yard.obstacles.push({ kind: 'tree', x: c.x, z: c.z, yaw: rng.range(0, Math.PI * 2), r: TREE_R.single, scale: 1 }); }
+  for (const [g, n] of [[0, 3], [1, 3], [2, 2]]) {
+    const c = find(2.8), a0 = rng.range(0, Math.PI * 2); if (!c) continue;
+    for (let k = 0; k < n; k++) { const a = a0 + k * Math.PI * 2 / n; yard.obstacles.push({ kind: 'tree', young: true, group: g, x: c.x + Math.cos(a) * 1.1, z: c.z + Math.sin(a) * 1.1, yaw: rng.range(0, Math.PI * 2), r: TREE_R.young, scale: 0.62 }); }
   }
+  for (let i = 0; i < 16; i++) { const c = find(TREE_R.bush); if (c) yard.obstacles.push({ kind: 'bush', x: c.x, z: c.z, yaw: rng.range(0, Math.PI * 2), r: TREE_R.bush, scale: rng.range(0.85, 1.15) }); }
   const s0 = W(-end * 12, 0);
   yard.start = { x: s0.x, z: s0.z, yaw: Math.atan2(-end * f[0], -end * f[1]) }; // facing out of the far exit; the train sits in the barn
   return yard;

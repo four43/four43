@@ -69,11 +69,15 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #show .num,#show .name,#show .group{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font:700 44px Andika,system-ui;color:#fff;-webkit-text-stroke:3px #6b4428;paint-order:stroke;animation:popc .35s ease-out}
 #show .num{font-size:36px}
 #show .name{font-size:34px}
-#show .group{display:flex;flex-direction:column;align-items:center;font-size:36px}
+#show .group{display:flex;align-items:baseline;gap:.3em;font-size:36px}
 #show .gn{font-size:40px}
-#show .big{position:absolute;top:8%;left:50%;transform:translateX(-50%);font:700 150px Andika,system-ui;color:#fff;-webkit-text-stroke:5px #6b4428;paint-order:stroke;opacity:0}
+#show .big{position:absolute;top:calc(env(safe-area-inset-top,0px) + 96px);left:50%;transform:translateX(-50%);white-space:nowrap;font:700 150px Andika,system-ui;color:#fff;-webkit-text-stroke:5px #6b4428;paint-order:stroke;opacity:0}
 #show .big.on{opacity:1;animation:popx .4s ease-out}
 #show b{display:inline-block;animation:glow .5s ease-out both}
+#show .num small{display:block;font-size:24px;color:#ffe066;line-height:1}
+#show .big .t{display:inline-block;color:#fff;opacity:.45;transition:opacity .2s,transform .2s,color .2s}
+#show .big .t.lit{opacity:1;color:#fff1a0;transform:scale(1.12)}
+#show .group.glow .gn,#show .group.glow .gw{color:#fff1a0}
 /* start screen, sticker card, sticker book, parent gear and menu (Task 14) */
 .screen{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vh;background:rgba(191,230,245,.82);pointer-events:auto}
 .screen.reward{background:rgba(255,246,220,.9)}
@@ -81,25 +85,35 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .pic{all:unset;box-sizing:border-box;cursor:pointer;display:grid;place-items:center;border-radius:28px;background:#fffcf8;border:5px solid #6b4428;box-shadow:0 7px 0 #6b4428;-webkit-tap-highlight-color:transparent}
 .pic:active{transform:translateY(4px);box-shadow:0 3px 0 #6b4428}
 .pic svg{width:80%;height:80%}
-.pic.play{width:min(52vw,320px);height:min(36vw,220px)}
-.pic.play svg{animation:bob 1.6s ease-in-out infinite}
-.swatches{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;max-width:90vw}
-.pic.swatch{width:84px;height:62px;border-radius:18px;box-shadow:0 4px 0 #6b4428}
-.pic.swatch.on{border-color:#f5c84c;background:#fff3b0;transform:scale(1.12)}
+.go{position:absolute;right:calc(env(safe-area-inset-right,0px) + 28px);bottom:calc(env(safe-area-inset-bottom,0px) + 24px)}
+.pic.go{width:min(22vh,150px);height:min(22vh,150px);border-radius:50%;background:#3fae4a;border-color:#1f6b28;box-shadow:0 8px 0 #1f6b28;animation:pulse 1.6s ease-in-out infinite}
+.pic.go svg{width:62%;height:62%;margin-left:8%}
+.paintpanel{display:flex;align-items:center;gap:3vw;max-width:94vw}
+.paintpanel .preview{width:min(38vw,44vh,360px);aspect-ratio:4/3;border-radius:28px;background:radial-gradient(#fffcf8,#e9dcc6);border:5px solid #6b4428;display:grid;place-items:center;overflow:hidden}
+.paintpanel .preview img{width:100%;height:100%;object-fit:contain}
+.paintpanel .rows{display:flex;flex-direction:column;gap:3vh}
+.prow{display:flex;align-items:center;gap:14px}
+.prow .area{width:min(14vh,104px);flex:none}
+.prow .area svg{width:100%;height:auto;display:block}
+.pots{display:grid;grid-template-columns:repeat(5,auto);gap:10px}
+.pic.pot{width:min(10vh,74px);height:min(10vh,74px);border-radius:20px;border-width:4px;box-shadow:0 4px 0 #6b4428}
+.pic.pot svg{width:88%;height:88%}
+.pic.pot.on{border-color:#e6b422;background:#fff3b0;box-shadow:0 0 0 5px #f5c84c,0 4px 0 #6b4428}
+.pic.pot.fresh{animation:bounce .9s .5s ease-out both,glowpot 1.2s 1.4s ease-in-out 3}
+.rewardtop{display:flex;align-items:center;gap:28px}
+.screen.reward.withpaint .bigsticker .portrait{width:min(26vh,200px);height:min(26vh,200px)}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes glowpot{0%,100%{box-shadow:0 0 0 0 #fff1a0,0 4px 0 #6b4428}50%{box-shadow:0 0 22px 10px #fff1a0,0 4px 0 #6b4428}}
 .pic.bookbtn{position:absolute;left:calc(env(safe-area-inset-left,0px) + 24px);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);width:110px;height:88px}
 .pic.bookbtn.small{width:84px;height:68px}
 .bigsticker .portrait{width:min(40vh,300px);height:min(40vh,300px);animation:grow .7s cubic-bezier(.2,1.4,.4,1) both}
 .portrait{border-radius:50%;background:#fffcf8;border:8px solid #6b4428;display:grid;place-items:center;overflow:hidden}
 .portrait.golden{border-color:#e6b422;box-shadow:0 0 0 6px #fff1a0,0 0 26px 8px #f5c84c;background:#fff8d6}
 .portrait img{width:92%;height:92%;object-fit:contain}
-.extras{display:flex;gap:28px;align-items:center}
 .extra{width:min(22vh,150px);height:min(15vh,100px);animation:bounce .9s .5s ease-out both}
 .extra svg,.extra img{width:100%;height:100%}
-.pic.extra.swatch{width:min(22vh,150px);height:min(15vh,100px);border-radius:28px;box-shadow:0 5px 0 #6b4428}
 .extra.hatted{position:relative;width:min(16vh,110px);height:min(16vh,110px)}
 .extra.hatted span{position:absolute;left:22%;top:-8%;width:50%}
-.btns{display:flex;gap:6vw}
-.pic.keep,.pic.newfarm{width:min(30vw,200px);height:min(20vw,130px)}
 .pic.x{position:fixed;top:calc(env(safe-area-inset-top,0px) + 16px);left:calc(env(safe-area-inset-left,0px) + 16px);width:76px;height:76px;background:#d8342c;border-radius:50%;z-index:2}
 .pic.x svg{width:55%;height:55%}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,130px);justify-content:center;gap:18px;width:min(900px,92vw);margin:80px auto 0}

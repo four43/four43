@@ -30,6 +30,8 @@ export function createFx(scene, groundY = () => 0) {
     sparkles(x, y, z) { for (let i = 0; i < 12; i++) emit(x + R(2), y + R(1.5), z + R(2), R(1), 1.5, R(1), 0.2, 1, i % 2 ? '#ffffff' : '#fff1a0', -0.5); },
     confetti(x, y, z) { for (let i = 0; i < 120; i++) { hsl(Math.random()); emit(x + R(2), y, z + R(2), R(8), 6 + Math.random() * 6, R(8), 0.14, 2.5, null, 6, 1.2); } },
     rainbowTrail(x, y, z) { hsl((performance.now() / 600) % 1, 0.6); emit(x, y, z, 0, 0, 0, 0.25, 0.6, null, 0, 0); },
+    // F-2: the sparkle frame around the barn door opening: bigger, brighter and tight on the outline, so it reads as a doorway
+    sparkleFrame(points) { for (const [i, p] of points.entries()) if (Math.random() < 0.7) emit(p.x + R(0.2), p.y + R(0.2), p.z + R(0.2), 0, 0.2, 0, 0.3, 0.7, i % 3 ? '#ffe066' : '#ffffff', 0); },
     sparkleTrail(points) { for (const p of points) if (Math.random() < 0.5) emit(p.x + R(1), p.y + Math.random() * 0.6, p.z + R(1), 0, 0.5, 0, 0.18, 1, '#ffe066', -0.3); },
     // a flat quad on the ground along the heading; alpha 0..1 thins it
     tireMark(x, z, yaw, alpha = 1) {

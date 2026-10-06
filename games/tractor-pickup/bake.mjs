@@ -1,10 +1,8 @@
-// Bake Kenney GLBs into compact vertex-coloured geometry + pig animation tables.
-import { NodeIO } from '@gltf-transform/core';
-import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { PNG } from 'pngjs';
+// Bake the model files in assets/models/ (spec X-8) into compact vertex-colored geometry and Cube Pets animation tables
+// (src/assets.json, embedded by the build). Edit a model, then: npm run bake && npm run build.
 import fs from 'fs';
-const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-const lin2srgb = c => c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+import { io, vertexColors } from './tools/glb.mjs';
+const MODELS = 'assets/models';
 
 // --- tiny mat4 (column-major, like three/gl) ---
 const mIdent = () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
@@ -19,36 +17,19 @@ const xfN = (m, v) => { const r=[m[0]*v[0]+m[4]*v[1]+m[8]*v[2], m[1]*v[0]+m[5]*v
 async function load(file) {
   const doc = await io.read(file);
   const root = doc.getRoot();
-  const texCache = new Map();
-  function texel(tex) {
-    if (!texCache.has(tex)) texCache.set(tex, PNG.sync.read(Buffer.from(tex.getImage())));
-    return texCache.get(tex);
-  }
-  function primColors(prim) {
-    const mat = prim.getMaterial(); const n = prim.getAttribute('POSITION').getCount();
-    const f = mat ? mat.getBaseColorFactor() : [1,1,1,1]; const out = [];
-    const tex = mat && mat.getBaseColorTexture(); const uv = prim.getAttribute('TEXCOORD_0');
-    const e = [];
-    for (let i = 0; i < n; i++) {
-      let c = [f[0], f[1], f[2]]; // Kenney writes sRGB-looking values into the factor; use as-is
-      if (tex && uv) { const png = texel(tex); uv.getElement(i, e);
-        let u = ((e[0] % 1) + 1) % 1, v = ((e[1] % 1) + 1) % 1;
-        const px = Math.min(png.width-1, Math.floor(u*png.width)), py = Math.min(png.height-1, Math.floor(v*png.height));
-        const o = (py*png.width+px)*4; c = [png.data[o]/255*c[0], png.data[o+1]/255*c[1], png.data[o+2]/255*c[2]]; }
-      out.push(...c.map(x => Math.round(Math.max(0, Math.min(1, x)) * 255)));
-    }
-    return out;
-  }
   // mesh geometry of a node, transformed by matrix m
+  // mesh geometry of a node, transformed by matrix m. Paint areas (W-3) come from the material names paint-body / paint-trim
+  // (area 1 / 2 per vertex); a material marked keepUV (the barn's planks and shingles) keeps its UVs and gives the part its name.
   function geom(node, m) {
-    const pos = [], nrm = [], col = [], idx = []; const e = [];
+    const pos = [], nrm = [], col = [], idx = [], area = [], uv = [], e = []; let mat = null, hasArea = false;
     for (const prim of node.getMesh().listPrimitives()) {
-      const P = prim.getAttribute('POSITION'), N = prim.getAttribute('NORMAL'), base = pos.length / 3;
-      for (let i = 0; i < P.getCount(); i++) { P.getElement(i, e); pos.push(...xfP(m, e)); N.getElement(i, e); nrm.push(...xfN(m, e)); }
-      col.push(...primColors(prim));
+      const P = prim.getAttribute('POSITION'), N = prim.getAttribute('NORMAL'), UV = prim.getAttribute('TEXCOORD_0'), base = pos.length / 3, M = prim.getMaterial();
+      const a = { 'paint-body': 1, 'paint-trim': 2 }[M?.getName()] || 0, keepUV = !!M?.getExtras()?.keepUV; if (a) hasArea = true; if (keepUV) mat = M.getName();
+      for (let i = 0; i < P.getCount(); i++) { P.getElement(i, e); pos.push(...xfP(m, e)); N.getElement(i, e); nrm.push(...xfN(m, e)); area.push(a); if (keepUV && UV) { UV.getElement(i, e); uv.push(e[0], e[1]); } }
+      for (const c of vertexColors(prim)) col.push(...c);
       const I = prim.getIndices(); if (I) for (let i = 0; i < I.getCount(); i++) idx.push(base + I.getScalar(i)); else for (let i = 0; i < P.getCount(); i++) idx.push(base + i);
     }
-    return { pos: pos.map(v => +v.toFixed(3)), nrm: nrm.map(v => +v.toFixed(2)), col, idx };
+    return { pos: pos.map(v => +v.toFixed(3)), nrm: nrm.map(v => +v.toFixed(2)), col, idx, ...(hasArea ? { area } : {}), ...(mat ? { mat, uv: uv.map(v => +v.toFixed(3)) } : {}) };
   }
   return { doc, root, geom };
 }
@@ -91,38 +72,16 @@ async function bakePet(file) {
   }
   return { parts, anims };
 }
-const KENNEY = process.env.KENNEY || `${process.env.HOME}/Downloads/Kenney Game Assets All-in-1 3.7.0/3D assets`;
-const NK = f => `${KENNEY}/Nature Kit/Models/GLTF format/${f}.glb`;
-const PET = f => `${KENNEY}/Cube Pets/Models/GLB format/${f}.glb`;
-const statics = {
-  tractor: `${KENNEY}/Car Kit/Models/GLB format/tractor.glb`,
-  oak: NK('tree_oak'), tree: NK('tree_default'), treeFat: NK('tree_fat'), bush: NK('plant_bushLarge'), bushS: NK('plant_bush'),
-  fence: NK('fence_simple'), rock: NK('rock_smallC'), pumpkin: NK('crop_pumpkin'), corn: NK('crops_cornStageD'), grass: NK('grass_large'),
-  flowerY: NK('flower_yellowB'), flowerR: NK('flower_redA'), log: NK('log'), stump: NK('stump_old'), hay: `${KENNEY}/Graveyard Kit/Models/GLB format/hay-bale.glb`,
-  rockA: NK('rock_largeA'), rockB: NK('rock_largeB'), rockC: NK('rock_tallA'), // edge rocks (T-17)
-};
+const PETS = ['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck', 'chicken']; // animated Cube Pets (and the ones made from them)
 const out = {};
-for (const [k, f] of Object.entries(statics)) {
-  const { root, geom } = await load(f);
-  const parts = {};
-  for (const n of root.listNodes()) if (n.getMesh()) parts[n.getName()] = geom(n, worldOf(n));
-  out[k] = parts;
+for (const f of fs.readdirSync(MODELS).filter(f => f.endsWith('.glb')).sort()) {
+  const name = f.slice(0, -4), file = `${MODELS}/${f}`;
+  if (PETS.includes(name)) { out[name] = await bakePet(file); continue; }
+  const { root, geom } = await load(file), parts = {};
+  for (const n of root.listNodes()) if (n.getMesh()) parts[n.getName()] = geom(n, worldOf(n)); // world space of the file, keyed by node name
+  out[name] = parts;
 }
-for (const p of ['pig', 'cow', 'chick', 'bunny', 'dog']) out[p] = await bakePet(PET('animal-' + p));
-
-// Edge rocks: the Nature Kit's orange rock with a teal top -> natural greys (rock body mid/dark grey with a little
-// variation, top mossy grey-green, white parts light grey).
-for (const k of ['rockA', 'rockB', 'rockC']) for (const p of Object.values(out[k])) for (let i = 0; i < p.col.length; i += 3) {
-  const [r, g, b] = p.col.slice(i, i + 3), v = ((i * 2654435761) >>> 0) % 21 - 10; // deterministic per-vertex jitter, -10..10
-  const c = r > 200 && g < 160 ? [128, 124, 118] : g > r + 60 ? [122, 134, 108] : r > 240 && g > 240 && b > 240 ? [176, 174, 168] : [r, g, b];
-  p.col.splice(i, 3, ...c.map(x => Math.max(0, Math.min(255, x + v))));
-}
-
-// Sheep and duck are recolors of the pig and the chick (the pack has neither). Same parts, same anims.
-const mapCols = (pet, fn) => ({ ...pet, parts: pet.parts.map(p => { const col = p.col.slice(); for (let i = 0; i < col.length; i += 3) { const [r, g, b] = fn(col[i], col[i + 1], col[i + 2], p.name); col[i] = r; col[i + 1] = g; col[i + 2] = b; } return { ...p, col }; }) });
-const isPink = (r, g, b) => r > 180 && r - g > 40 && b > g - 10;
-out.sheep = mapCols(out.pig, (r, g, b) => isPink(r, g, b) ? (r - g > 90 ? [70, 62, 60] : [244, 238, 226]) : [r, g, b]); // snout/ears (deep pink) -> dark face, body -> wool
-out.duck = mapCols(out.chick, (r, g, b) => (r > 245 && g > 150 && b < 120) ? [246, 246, 240] : [r, g, b]);           // yellow down -> white, beak/feet stay orange
+for (const need of PETS) if (!out[need]) throw new Error(`bake: ${MODELS}/${need}.glb is missing`);
 fs.writeFileSync('src/assets.json', JSON.stringify(out));
 console.log('bytes', fs.statSync('src/assets.json').size);
-for (const pet of ['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck']) console.log(pet, out[pet].parts.map(p => p.name).join(','), Object.keys(out[pet].anims).join(','));
+for (const pet of PETS) console.log(pet, out[pet].parts.map(p => p.name).join(','), Object.keys(out[pet].anims).join(','));

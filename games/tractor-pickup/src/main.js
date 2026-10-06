@@ -8,11 +8,9 @@ import { createGibs } from './render/gibs.js';
 import { createFx } from './render/fx.js';
 import { randomSeed } from './sim/rng.js';
 import { createAnimals3D } from './render/animals3d.js';
-import { renderIcons } from './ui/icons.js';
+import { renderIcons, tractorPicture } from './ui/icons.js';
 import { createHud } from './ui/hud.js';
-import { createSlowMo } from './sim/slowmo.js';
 import { slotIndex } from './sim/slots.js';
-import { FLIGHT } from './sim/launch.js';
 import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
@@ -30,7 +28,7 @@ import { createVoice } from './audio/voice.js';
 import { createMenus } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
-import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, unlockedHats, emptyProgress } from './sim/progress.js';
+import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, unlockedHats, emptyProgress, hasPaintChoice } from './sim/progress.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
@@ -57,9 +55,9 @@ async function main() {
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
   // Everything below `world` belongs to one farm. startFarm throws it all away and builds the next one; trips on the same farm rebuild nothing.
-  let world, game, farm3d, vehicles, gibs, animals3d, fx, chase, trip, show, slow, sprinklers, fxs, wheelPt, prev, curr, view, viewCars, bodyList, seed, gen = 0;
+  let world, game, farm3d, vehicles, gibs, animals3d, fx, chase, trip, show, sprinklers, fxs, wheelPt, prev, curr, view, viewCars, bodyList, seed, gen = 0;
   const stepIn = { thr: 0, steer: 0, horn: false }, animView = { cars: null, alpha: 0 }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every step/frame: nothing allocated in the loop
-  let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, camBlend, booped, acc = 0, last = performance.now();
+  let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, pathK = false, barnWay = null, camBlend, acc = 0, last = performance.now();
   const sfx = { surface: 'gravel', air: 0, whee: false };
   const bodies = () => bodyList;
   const applyHats = () => { const ids = unlockedHats(progress); animals3d?.setHats(a => ids.length ? animals3d.hat(ids[a.id % ids.length]) : null); }; // W-4
@@ -71,13 +69,13 @@ async function main() {
     console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0));
     const t1 = performance.now(); farm3d = game.farm ? buildFarm3D(world, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso, trees: game.trees }) : (buildSandbox3D(world, game, aniso), null);
     console.log('farm 3d build ms', Math.round(performance.now() - t1));
-    vehicles = createVehicles3D(world, game.tractor, game.train); vehicles.setColor(progress.color);
-    gibs = createGibs(world); chase = createChaseCam(camera); slow = createSlowMo();
+    vehicles = createVehicles3D(world, game.tractor, game.train); vehicles.setPaint(progress.paint);
+    gibs = createGibs(world); chase = createChaseCam(camera);
     animals3d = game.herd ? createAnimals3D(world, game.herd) : null; applyHats();
     fx = createFx(world, game.terrain ? (x, z) => game.terrain.height(x, z) : undefined);
     fxs = { dust: 0, mud: 0, mark: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
     trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx }) : null;
-    showDone = rewardDone = booped = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
+    showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
     bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
     prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
@@ -104,17 +102,27 @@ async function main() {
       const r = completeShow(progress, rs.map(x => x.animal)); progress = r.progress;
       if (r.newHat) applyHats();
       save('tp-progress', progress);
-      if (r.newColor || r.newHat) sound.bells();
-      menus.showReward({ sticker: r.sticker, newColor: r.newColor, newHat: r.newHat, progress });
+      if (r.newPaint || r.newHat) sound.bells();
+      menus.showReward({ sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat, progress });
       voice.say(['you-did-it']);
     } catch (e) { console.error('reward', e); menus.hide(); rewardDone = true; }
   };
+  // The trip starts on a real gesture: it unlocks audio and speech (iOS). F-11: the start screen shows only when there is a
+  // paint to choose; otherwise the tractor can drive at once and the first touch or key press starts the trip.
+  function play() { if (started) return; voice.prime(); started = true; game.mode = 'drive'; Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }
+  function enterStart() {
+    if (!menus) return;
+    if (hasPaintChoice(progress)) { menus.showStart(progress); return; }
+    game.mode = 'drive';
+    const first = () => { removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); play(); };
+    addEventListener('pointerdown', first, true); addEventListener('keydown', first, true);
+  }
   const menus = sandbox ? null : createMenus(ui, {
-    icons,
-    onPlay() { voice.prime(); started = true; game.mode = 'drive'; Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }, // a real gesture: unlock audio and speech here
+    icons, tractorPic: sandbox ? null : tractorPicture(renderer),
+    onPlay: play,
     onKeepDriving() { rewardDone = true; },
-    onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); if (!started) menus.showStart(progress); }, // R-1: from the start screen (or its sticker book) the new farm waits for the Play tap; otherwise it is driving
-    onColor(c) { progress.color = c; vehicles.setColor(c); save('tp-progress', progress); },
+    onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); if (!started) enterStart(); }, // R-1: from the start screen (or its sticker book) the new farm waits for the go tap; otherwise it is driving
+    onPaint(p) { progress.paint = p; vehicles.setPaint(p); save('tp-progress', progress); sound.plop(); }, // W-3
     onSettings(s) { // power, voice and music apply at once; a seed applies with the next new farm
       settings = s; save('tp-settings', s); powerNow = s.power; game.tractor.setPower?.(s.power);
       voice.enabled = s.voice; if (!s.voice) voice.stop?.();
@@ -126,21 +134,21 @@ async function main() {
 
   build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
   const frame = now => {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * slow.scale();
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
     const inp = input.read();
     while (acc >= DT) {
       stepIn.thr = inp.thr; stepIn.steer = inp.steer; stepIn.horn = hornQueued;
       const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
-      const ev = game.step(stepIn) || []; hornQueued = false; slow.step(DT); for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
+      const ev = game.step(stepIn) || []; hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
       for (const e of ev) {
-        if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); }
+        if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', k = bush ? 0.7 : t.young ? 0.8 : 1.3; gibs.burst(t.x, (bush ? 0.8 : 1.6) * k, t.z, e.dir, k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
         if (e.type === 'horn') sound.horn();
+        if (e.type === 'dodge') sound.boing(0.2); // B-14
         if (e.type === 'treeBump') sound.clunk(); // T-34: a soft bump when a tree holds
-        if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx.stars(e.animal.x, 1, e.animal.z); booped = true; }
+        if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx.stars(e.animal.x, 1, e.animal.z); }
         if (e.type === 'launch' && e.animal.type === 'duck' && game.farm && Math.hypot(e.animal.x - game.farm.yard.pond.x, e.animal.z - game.farm.yard.pond.z) < game.farm.yard.pond.r + 3) fxs.drip.add(e.animal); // A-5: a duck from the pond drips
         if (e.type === 'mud-enter') { fx.mudSplash(game.tractor.x, game.tractor.z); sound.squelch(); } // T-13
         if (e.type === 'washed') { const t = game.tractor; for (let k = 0; k < 3; k++) fx.sparkles(t.x, 1.8, t.z); sound.squeaky(); } // T-15
-        if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
         if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n, e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); }
       }
       stepSounds(game, sound, sfx);
@@ -163,7 +171,7 @@ async function main() {
       }
     }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
-    stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt * slow.scale());
+    stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt);
     gibs.update(dt); farm3d?.update(view[0].p); animView.alpha = a; animals3d?.update(dt, game, animView);
     vehSnap.dirt = game.dirt?.tractor; vehicles.update(vehSnap);
     const t = game.tractor, lv = t.body.linvel();
@@ -174,8 +182,8 @@ async function main() {
     }
     if (trip && started) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
       if (helpTarget && ((helpTarget.t -= dt) <= 0 || !game.herd.free().includes(helpTarget.a))) helpTarget = null;
-      if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.5; fx.sparkleTrail(barnPath(game, t.x, t.z)); }
-      const b = game.farm.yard.barn, aim = show.active ? null : helpTarget ? { x: helpTarget.a.x, y: 1, z: helpTarget.a.z } : guideToBarn ? { x: b.x, y: 3, z: b.z } : null;
+      if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.25; barnWay = barnPath(game, t.x, t.z); if ((pathK = !pathK)) fx.sparkleTrail(barnWay.path); fx.sparkleFrame(barnWay.frame); } // the door frame twice as often
+      const aim = show.active ? null : helpTarget ? { x: helpTarget.a.x, y: 1, z: helpTarget.a.z } : guideToBarn && barnWay ? barnWay.aim : null;
       hud.arrowTo(aim && edgeArrow(camera, aim));
     }
     { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
@@ -183,7 +191,7 @@ async function main() {
     renderer.render(scene, camera);
     perf?.tick(dt);
   };
-  menus?.showStart(progress);
+  enterStart();
   renderer.setAnimationLoop(frame);
 }
 
@@ -198,19 +206,30 @@ function stepSounds(game, sound, s) {
   else if (s.air > 0.15 && !s.whee) { s.whee = true; sound.whee(); if (game.load?.landed() > 0) sound.cheer(); }
 }
 
-// F-2: points every 3 m to the nearer barn end: along the route to its nearer end (the gate), then straight across the farmyard
+// F-2: the way to the barn. Along the route to the yard gate, then to a point on the barn axis 16 m out from the opening that
+// faces the player (going around the side first if the player is beside the barn, clear of the open door leaves), then straight
+// in along the axis to the barn's middle: points every 3 m. frame: points around the whole door opening; aim: its center.
+const BARN_DOOR = { half: 4.6, h: 4.8 }; // the opening between the walls (m either side of the axis) and up to the header
 function barnPath(game, x, z) {
-  const { road, farm, terrain } = game, b = farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], pts = [];
-  const nearEnd = p => [b.half, -b.half].map(k => ({ x: b.x + f[0] * k, z: b.z + f[1] * k })).sort((u, w) => Math.hypot(u.x - p.x, u.z - p.z) - Math.hypot(w.x - p.x, w.z - p.z))[0];
+  const { road, farm, terrain } = game, b = farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], rt = [Math.cos(b.yaw), -Math.sin(b.yaw)], pts = [];
+  const at = (a, sd) => ({ x: b.x + f[0] * a + rt[0] * sd, z: b.z + f[1] * a + rt[1] * sd }), local = p => ({ a: (p.x - b.x) * f[0] + (p.z - b.z) * f[1], s: (p.x - b.x) * rt[0] + (p.z - b.z) * rt[1] });
+  const line = (p, q) => { const m = Math.max(1, Math.round(Math.hypot(q.x - p.x, q.z - p.z) / 3)); for (let i = pts.length ? 1 : 0; i <= m && pts.length < 60; i++) pts.push({ x: p.x + (q.x - p.x) * i / m, z: p.z + (q.z - p.z) * i / m }); };
   let from = { x, z };
   if (!road.inYard(x, z)) {
     const n = road.nearest(x, z), R = road.routes[n.pt.r], dir = n.pt.s < R.length - n.pt.s ? -1 : 1;
     for (let i = n.pt.n; i >= 0 && i < R.pts.length && pts.length < 40; i += dir * 3) pts.push(R.pts[i]);
     from = R.pts[dir < 0 ? 0 : R.pts.length - 1];
   }
-  const to = nearEnd(from), m = Math.max(1, Math.round(Math.hypot(to.x - from.x, to.z - from.z) / 3));
-  for (let i = pts.length ? 1 : 0; i <= m && pts.length < 40; i++) pts.push({ x: from.x + (to.x - from.x) * i / m, z: from.z + (to.z - from.z) * i / m });
-  return pts.map(p => ({ x: p.x, y: terrain.height(p.x, p.z) + 0.6, z: p.z }));
+  const L = local(from), end = L.a >= 0 ? 1 : -1, out = b.half + b.leaf + 5, q = at(end * out, 0), door = at(end * b.half, 0);
+  const way = [from];
+  if (Math.abs(L.a) < out && Math.abs(L.s) < b.width + 4) way.push(at(L.a, (L.s >= 0 ? 1 : -1) * (b.width + 4))); // beside the barn or a door leaf: step out to the side first
+  if (Math.abs(L.a) < out) way.push(at(end * out, local(way.at(-1)).s));                                          // then along the side, past the leaves
+  way.push(q, door, at(0, 0));
+  for (let i = 1; i < way.length; i++) line(way[i - 1], way[i]);
+  const frame = [], fa = end * (b.half + 0.4);
+  for (let k = -BARN_DOOR.half; k <= BARN_DOOR.half; k += 0.35) frame.push({ ...at(fa, k), y: BARN_DOOR.h });
+  for (const sd of [-1, 1]) for (let y = 0.2; y < BARN_DOOR.h; y += 0.35) frame.push({ ...at(fa, sd * BARN_DOOR.half), y });
+  return { path: pts.map(p => ({ x: p.x, y: terrain.height(p.x, p.z) + 0.6, z: p.z })), frame, aim: { ...door, y: BARN_DOOR.h / 2 } };
 }
 
 // Continuous effects, once per drawn frame (the one-off ones come from game events): D-9 gravel spray, tire marks and dust, T-13 mud splashes,

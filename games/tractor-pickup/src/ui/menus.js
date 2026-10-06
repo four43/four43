@@ -1,15 +1,24 @@
-// Start screen, sticker card (F-3, F-9), sticker book (W-2) and the parent menu (U-3, P-3..P-8).
+// Start screen (F-11), sticker card (F-3, F-9), paint screen (W-3), sticker book (W-2) and the parent menu (U-3, P-3..P-8).
 // Everything a child sees is a picture (R-2, U-4); only the parent panel has text. Buttons use `click` so iOS counts the tap as a gesture for audio.
-import { clampSettings, unlockedColors } from '../sim/progress.js';
-import { TRACTOR_COLORS } from '../render/vehicles3d.js';
+import { clampSettings, unlockedPaints } from '../sim/progress.js';
+import { PAINTS } from '../render/vehicles3d.js';
 
 const el = (cls, tag = 'div', parent) => { const e = document.createElement(tag); if (cls) e.className = cls; parent?.appendChild(e); return e; };
-const paint = c => c === 'rainbow' ? 'url(#rb)' : TRACTOR_COLORS[c];
-export const tractorSvg = color => `<svg viewBox="0 0 120 80" aria-hidden="true"><defs><linearGradient id="rb"><stop offset="0" stop-color="#e53935"/><stop offset=".25" stop-color="#fdd835"/><stop offset=".5" stop-color="#43a047"/><stop offset=".75" stop-color="#1e88e5"/><stop offset="1" stop-color="#8e24aa"/></linearGradient></defs>
-<rect x="8" y="30" width="66" height="22" rx="6" fill="${paint(color)}" stroke="#4a2c14" stroke-width="3"/><rect x="48" y="10" width="34" height="42" rx="6" fill="${paint(color)}" stroke="#4a2c14" stroke-width="3"/>
-<rect x="55" y="16" width="20" height="16" rx="3" fill="#cfeefc" stroke="#4a2c14" stroke-width="2"/><rect x="82" y="34" width="26" height="18" rx="5" fill="${paint(color)}" stroke="#4a2c14" stroke-width="3"/><rect x="92" y="18" width="6" height="16" fill="#555"/>
-<circle cx="30" cy="56" r="20" fill="#3b3b3b" stroke="#222" stroke-width="3"/><circle cx="30" cy="56" r="8" fill="#f5c84c"/><circle cx="96" cy="62" r="13" fill="#3b3b3b" stroke="#222" stroke-width="3"/><circle cx="96" cy="62" r="5" fill="#f5c84c"/></svg>`;
-export const mapSvg = () => `<svg viewBox="0 0 100 80" aria-hidden="true"><path d="M8 18 L36 8 L64 18 L92 8 V62 L64 72 L36 62 L8 72 Z" fill="#f4e3b0" stroke="#6b4428" stroke-width="4" stroke-linejoin="round"/><path d="M36 8 V62 M64 18 V72" stroke="#6b4428" stroke-width="3"/><path d="M14 52 C28 30 44 56 58 36 S78 28 86 24" fill="none" stroke="#d8342c" stroke-width="4" stroke-dasharray="2 8" stroke-linecap="round"/><circle cx="82" cy="24" r="6" fill="#d8342c"/></svg>`;
+const RB = '<linearGradient id="rb" x1="0" x2="1"><stop offset="0" stop-color="#e53935"/><stop offset=".25" stop-color="#fdd835"/><stop offset=".5" stop-color="#43a047"/><stop offset=".75" stop-color="#1e88e5"/><stop offset="1" stop-color="#8e24aa"/></linearGradient>';
+const fill = c => c === 'rainbow' ? 'url(#rb)' : PAINTS[c];
+// A paint pot: a tin with the paint on top and running down the front
+export const potSvg = c => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${RB}</defs><path d="M14 26 H66 L62 70 Q40 76 18 70 Z" fill="#c9ccd4" stroke="#4a3a2c" stroke-width="3" stroke-linejoin="round"/>
+<ellipse cx="40" cy="26" rx="26" ry="8" fill="${fill(c)}" stroke="#4a3a2c" stroke-width="3"/><path d="M24 30 Q24 44 29 44 Q34 44 33 31 Q40 52 46 52 Q51 52 50 31 Q55 40 58 30" fill="${fill(c)}"/>
+<path d="M18 22 Q40 2 62 22" fill="none" stroke="#4a3a2c" stroke-width="3"/></svg>`;
+// Which area a row paints (W-3): a side-view tractor outline with that area filled in its paint and the rest pale
+export const areaSvg = (area, c) => { const on = a => a === area ? fill(c) : '#f3eee6';
+  return `<svg viewBox="0 0 120 84" aria-hidden="true"><defs>${RB}</defs>
+<path d="M60 36 H110 Q114 36 114 40 V58 H60 Z" fill="${on('trim')}" stroke="#4a2c14" stroke-width="3" stroke-linejoin="round"/>
+<path d="M14 8 H54 V58 H14 Z" fill="${on('body')}" stroke="#4a2c14" stroke-width="3" stroke-linejoin="round"/><rect x="21" y="14" width="26" height="18" rx="3" fill="#cfeefc" stroke="#4a2c14" stroke-width="2"/>
+<path d="M6 46 Q34 22 62 46" fill="none" stroke="#4a2c14" stroke-width="10" stroke-linecap="round"/><path d="M6 46 Q34 22 62 46" fill="none" stroke="${on('body')}" stroke-width="5" stroke-linecap="round"/>
+<circle cx="34" cy="60" r="21" fill="#3b3b3b" stroke="#222" stroke-width="3"/><circle cx="34" cy="60" r="9" fill="${on('trim')}" stroke="#222" stroke-width="2"/>
+<circle cx="98" cy="66" r="13" fill="#3b3b3b" stroke="#222" stroke-width="3"/><circle cx="98" cy="66" r="6" fill="${on('trim')}" stroke="#222" stroke-width="2"/></svg>`; };
+const goSvg = () => '<svg viewBox="0 0 60 60" aria-hidden="true"><path d="M20 12 L48 30 L20 48 Z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg>';
 export const bookSvg = () => `<svg viewBox="0 0 100 80" aria-hidden="true"><path d="M50 14 C36 6 18 8 8 14 V68 C18 62 36 60 50 68 C64 60 82 62 92 68 V14 C82 8 64 6 50 14 Z" fill="#fff6dc" stroke="#6b4428" stroke-width="4" stroke-linejoin="round"/><path d="M50 14 V68" stroke="#6b4428" stroke-width="3"/><circle cx="29" cy="38" r="10" fill="#f6a9bd" stroke="#6b4428" stroke-width="2"/><path d="M62 46 l8 -14 l8 14 z" fill="#f5c84c" stroke="#6b4428" stroke-width="2"/></svg>`;
 const gearSvg = () => `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5a3820" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm9 4.4v-1.8l-2.2-.5a7 7 0 0 0-.7-1.7l1.2-1.9-1.3-1.3-1.9 1.2a7 7 0 0 0-1.7-.7L14.1 3h-1.8l-.5 2.2a7 7 0 0 0-1.7.7L8.2 4.7 6.9 6l1.2 1.9a7 7 0 0 0-.7 1.7L5.2 10.1v1.8l2.2.5c.2.6.4 1.2.7 1.7l-1.2 1.9 1.3 1.3 1.9-1.2c.5.3 1.1.5 1.7.7l.5 2.2h1.8l.5-2.2c.6-.2 1.2-.4 1.7-.7l1.9 1.2 1.3-1.3-1.2-1.9c.3-.5.5-1.1.7-1.7z"/></svg>`;
 export const hatSvg = id => ({
@@ -21,35 +30,45 @@ export const hatSvg = id => ({
 // A round portrait of a sticker; golden ones get a gold rim (F-3).
 const portrait = (icons, s) => { const d = el('portrait' + (s.golden ? ' golden' : '')); d.innerHTML = `<img alt="" src="${s.golden ? icons.golden[s.type] : icons[s.type]}">`; return d; };
 
-export function createMenus(root, { icons, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onColor, onParent }) {
+export function createMenus(root, { icons, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onParent }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
   const pic = (parent, cls, html, fn, label) => { const b = el('pic ' + cls, 'button', parent); b.innerHTML = html; b.setAttribute('aria-label', label); b.addEventListener('click', e => { e.stopPropagation(); fn(); }); return b; };
+  const go = (parent, fn) => pic(parent, 'go', goSvg(), () => { close(); fn(); }, 'Go');
 
+  // W-3: the tractor in 3D at the left; at the right a row of pots for the body and one for the trim. fresh: the paint just won.
+  function paintPanel(parent, progress, fresh) {
+    const box = el('paintpanel', 'div', parent), preview = el('preview', 'div', box), rows = el('rows', 'div', box);
+    const show = () => { preview.innerHTML = `<img alt="" src="${tractorPic(progress.paint)}">`; };
+    for (const area of ['body', 'trim']) {
+      const row = el('prow', 'div', rows), tag = el('area', 'div', row), pots = el('pots', 'div', row);
+      const mark = () => { tag.innerHTML = areaSvg(area, progress.paint[area]); [...pots.children].forEach(b => b.classList.toggle('on', b.dataset.c === progress.paint[area])); };
+      for (const c of unlockedPaints(progress)) {
+        const b = pic(pots, 'pot' + (c === fresh ? ' fresh' : ''), potSvg(c), () => { progress.paint = { ...progress.paint, [area]: c }; onPaint?.(progress.paint); mark(); show(); }, `${c} ${area}`);
+        b.dataset.c = c;
+      }
+      mark();
+    }
+    show(); return box;
+  }
+
+  // F-11: only when there is a paint to choose; the main code starts driving at once otherwise
   function showStart(progress) {
     const s = open('start');
-    const play = pic(s, 'play', tractorSvg(progress.color), () => { close(); onPlay(); }, 'Play');
-    const row = el('swatches', 'div', s);
-    for (const c of unlockedColors(progress)) {
-      const b = pic(row, 'swatch' + (c === progress.color ? ' on' : ''), tractorSvg(c), () => { progress.color = c; onColor?.(c); play.innerHTML = tractorSvg(c); [...row.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); }, c);
-    }
+    paintPanel(s, progress);
+    go(s, onPlay);
     pic(s, 'bookbtn', bookSvg(), () => showBook(progress, () => showStart(progress)), 'Sticker book');
   }
 
-  function showReward({ sticker, newColor, newHat, progress }) {
-    const s = open('reward');
-    const big = el('bigsticker', 'div', s); big.appendChild(portrait(icons, sticker));
-    const extras = el('extras', 'div', s);
-    if (newHat) { const h = el('extra hatted', 'div', extras); h.innerHTML = `<img alt="" src="${icons.pig}"><span>${hatSvg(newHat)}</span>`; }
-    const btns = el('btns', 'div', s);
-    const keep = pic(btns, 'keep', tractorSvg(progress.color), () => { close(); onKeepDriving(); }, 'Keep driving');
-    if (newColor) { // W-3: the new color is shown here; a tap on it is the player's choice
-      const c = pic(extras, 'extra swatch', tractorSvg(newColor), () => { progress.color = newColor; onColor?.(newColor); keep.innerHTML = tractorSvg(newColor); c.classList.add('on'); }, newColor);
-      extras.prepend(c);
-    }
-    pic(btns, 'newfarm', mapSvg(), () => { close(); onNewFarm(); }, 'New farm');
-    pic(s, 'bookbtn small', bookSvg(), () => showBook(progress, () => showReward({ sticker, newColor, newHat, progress })), 'Sticker book');
+  // F-3: the sticker (and a new hat), the paint screen when a paint was just won, and one go button
+  function showReward({ sticker, newPaint, newHat, progress }) {
+    const s = open('reward' + (newPaint ? ' withpaint' : ''));
+    const top = el('rewardtop', 'div', s), big = el('bigsticker', 'div', top); big.appendChild(portrait(icons, sticker));
+    if (newHat) { const h = el('extra hatted', 'div', top); h.innerHTML = `<img alt="" src="${icons.pig}"><span>${hatSvg(newHat)}</span>`; }
+    if (newPaint) paintPanel(s, progress, newPaint);
+    go(s, onKeepDriving);
+    pic(s, 'bookbtn small', bookSvg(), () => showBook(progress, () => showReward({ sticker, newPaint, newHat, progress })), 'Sticker book');
   }
 
   function showBook(progress, back) {
