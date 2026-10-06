@@ -38,10 +38,10 @@ for (const seed of SEEDS) test(`farm ${seed} obeys the spec`, () => {
     assert.ok(curves >= 4, `curves ${curves}`);                                              // T-25
   }
   assert.deepEqual(checkRules(f.routes), []);
-  assert.equal(f.hideSpots.length, 2);                                                       // A-13: on the shoulder, 8.5 m from a plain tile's line
+  assert.equal(f.hideSpots.length, 2);                                                       // A-13: on the shoulder, 7.8 m from a plain tile's line
   const plain = f.routes.flatMap(r => r.tiles.filter(t => t.type === 'straight' || t.type === 'gate'));
   for (const h of f.hideSpots) assert.ok(plain.some(t => { const c = tileCenter(t.i, t.j), [dx, dz] = DIRS[t.outDir], along = (h.x - c.x) * dx + (h.z - c.z) * dz, across = (h.x - c.x) * -dz + (h.z - c.z) * dx;
-    return Math.abs(along) < 1e-9 && Math.abs(Math.abs(across) - 8.5) < 1e-9; }), 'hide spot not 8.5 m beside a plain tile');
+    return Math.abs(along) < 1e-9 && Math.abs(Math.abs(across) - 7.8) < 1e-9; }), 'hide spot not 7.8 m beside a plain tile');
   // farmyard (4.7)
   const y = f.yard, count = k => y.obstacles.filter(o => o.kind === k).length;
   assert.deepEqual([count('bale'), count('cone'), count('barrel'), count('post'), count('tree')], [8, 16, 8, 8, 4]);  // T-31
@@ -49,6 +49,9 @@ for (const seed of SEEDS) test(`farm ${seed} obeys the spec`, () => {
     assert.ok(Math.abs(o.x) < YARD_HALF && Math.abs(o.z) < YARD_HALF);
     for (const l of y.lanes) assert.ok(segDist(o.x, o.z, l) > 5 + o.r - 1e-9, `${o.kind} in a lane`);                 // T-30
     const b = barnLocal(y.barn, o.x, o.z); assert.ok(Math.abs(b.a) > 8 || Math.abs(b.s) > 7, 'obstacle in the barn');
+    const B = y.barn, leafGap = Math.min(...[-1, 1].flatMap(sd => [-1, 1].map(end => {   // clear of the open door leaves: segments s = +-width, |a| in [half, half + leaf]
+      const a0 = end * B.half, a1 = end * (B.half + B.leaf), ta = Math.max(Math.min(a0, a1), Math.min(Math.max(a0, a1), b.a)); return Math.hypot(b.a - ta, b.s - sd * B.width); })));
+    assert.ok(leafGap > o.r + 1.5, `${o.kind} ${leafGap.toFixed(2)} m from a barn door leaf`);
   }
   assert.ok(Math.abs(f.start.x) < YARD_HALF && Math.abs(f.start.z) < YARD_HALF);
   // T-29: the duck pond is in a farmyard corner, clear of the lanes, the barn and the stage

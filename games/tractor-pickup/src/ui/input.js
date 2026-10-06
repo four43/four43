@@ -1,3 +1,11 @@
+// Circular stick travel -> square, so a full diagonal gives full throttle and full steer together (playtest 2):
+// scale by |v| / max(|x|, |y|), then clamp each axis to +-1.
+export function circleToSquare(x, y) {
+  const m = Math.max(Math.abs(x), Math.abs(y)); if (m === 0) return [0, 0];
+  const k = Math.hypot(x, y) / m, c = v => Math.max(-1, Math.min(1, v * k));
+  return [c(x), c(y)];
+}
+
 // One control (R-7): a floating thumb stick on the left two-thirds, W/A/S/D + arrows, gamepad left stick. Horn: button, H, pad A.
 export function createInput(root) {
   const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 }, keys = new Set(); let hornFns = [], hornHeld = false;
@@ -17,7 +25,7 @@ export function createInput(root) {
     if (e.pointerId !== stick.id) return;
     let dx = e.clientX - stick.ox, dy = e.clientY - stick.oy; const d = Math.hypot(dx, dy);
     if (d > R) { dx *= R / d; dy *= R / d; }
-    stick.x = dz(dx / R); stick.y = dz(dy / R); knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const [sx, sy] = circleToSquare(dx / R, dy / R); stick.x = dz(sx); stick.y = dz(sy); knob.style.transform = `translate(${dx}px, ${dy}px)`;
   });
   const end = e => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; base.hidden = true; };
   surface.addEventListener('pointerup', end); surface.addEventListener('pointercancel', end);
@@ -32,7 +40,7 @@ export function createInput(root) {
       if (k('w') || k('arrowup')) thr = 1; if (k('s') || k('arrowdown')) thr = -1;
       if (k('a') || k('arrowleft')) steer = 1; if (k('d') || k('arrowright')) steer = -1;
       for (const pad of navigator.getGamepads?.() || []) {
-        if (!pad) continue; const px = dz(pad.axes[0] || 0, 0.15), py = dz(pad.axes[1] || 0, 0.15);
+        if (!pad) continue; const [ax, ay] = circleToSquare(pad.axes[0] || 0, pad.axes[1] || 0), px = dz(ax, 0.15), py = dz(ay, 0.15);
         if (px || py) { steer = -px; thr = -py; }
         const a = pad.buttons[0]?.pressed; if (a && !hornHeld) fireHorn(); hornHeld = !!a;
       }

@@ -3,7 +3,8 @@ import { TILE, SIZE, DIRS, tileCenter, YARD_HALF } from './track.js';
 import { EDGE, addEdgeColliders } from './edges.js';
 import { G, groups } from './physics.js';
 import { addRamp } from './sandbox.js';
-export const TALL = ['oak', 'tree', 'treeFat'], SMALL = ['bush', 'bushS', 'rock', 'pumpkin', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay'];
+export const TALL = ['oak', 'tree', 'treeFat'];
+const UNDER = ['bush', 'bush', 'bushS', 'bushS', 'grass', 'grass', 'rock', 'flowerY', 'flowerR', 'log', 'stump']; // forest floor: mostly bushes and grass
 const R = { oak: 1.4, tree: 1.0, treeFat: 1.3, bush: 0.9, bushS: 0.5, rock: 0.5, pumpkin: 0.4, corn: 0.4, grass: 0.2, flowerY: 0.15, flowerR: 0.15, log: 0.6, stump: 0.5, hay: 0.8 };
 const yawQ = y => ({ x: 0, y: Math.sin(y / 2), z: 0, w: Math.cos(y / 2) });
 
@@ -35,20 +36,29 @@ export const curveCenters = farm => farm.routes.flatMap(R2 => R2.tiles.filter(t 
 }));
 
 export function scatterScenery(farm, road, rng) {
-  const inner = curveCenters(farm), items = [], ok = (x, z, r, tall) => (!tall || inner.every(k => Math.hypot(k.x - x, k.z - z) >= TILE / 2)) && road.nearest(x, z).d > EDGE.outFoot + r && !road.inYard(x, z)
-    && items.every(o => Math.hypot(o.x - x, o.z - z) > o.r + r + 0.5);
+  // Forest outside the edges (4.6): 25-40 tall trees of mixed sizes per field tile, then 10-20 bushes, grass and rocks
+  // under them; some tiles are corn fields. Items sit in 4 m buckets so the spacing check stays local.
+  const inner = curveCenters(farm), items = [], grid = new Map(), B = 4, key = (i, j) => i * 4096 + j;
+  const clear = (x, z, r, tall) => {
+    const bi = Math.floor(x / B), bj = Math.floor(z / B);
+    for (let i = bi - 1; i <= bi + 1; i++) for (let j = bj - 1; j <= bj + 1; j++) for (const o of grid.get(key(i, j)) || [])
+      if (Math.hypot(o.x - x, o.z - z) <= (TALL.includes(o.kind) && !tall ? 0.5 : o.r) + r + 0.5) return false; // small plants may grow under a canopy
+    return true;
+  };
+  const ok = (x, z, r, tall) => (!tall || inner.every(k => Math.hypot(k.x - x, k.z - z) >= TILE / 2)) && !road.inYard(x, z) && clear(x, z, r, tall) && road.nearest(x, z).d > EDGE.outFoot + r;
   for (let j = 0; j < SIZE; j++) for (let i = 0; i < SIZE; i++) {
     if (farm.grid[j][i] !== 'field') continue;
-    const c = tileCenter(i, j), cornField = rng.chance(0.15), n = cornField ? 60 : rng.int(10, 20);
+    const c = tileCenter(i, j), cornField = rng.chance(0.15), trees = cornField ? 0 : rng.int(25, 40), n = cornField ? 60 : trees + rng.int(10, 20);
     let placed = 0;
-    for (let m = 0; m < n * 6 && placed < n; m++) {
-      const kind = cornField ? 'corn' : rng.chance(0.55) ? rng.pick(TALL) : rng.pick(SMALL), r = R[kind]; // mostly trees: a forest (4.6)
+    for (let m = 0; m < n * 6 && placed < n; m++) { // trees first, then the forest floor
+      const kind = cornField ? 'corn' : placed < trees && m < trees * 4 ? rng.pick(TALL) : rng.pick(UNDER), r = R[kind], tall = TALL.includes(kind);
       const x = c.x + rng.range(-TILE / 2 + 1, TILE / 2 - 1), z = c.z + rng.range(-TILE / 2 + 1, TILE / 2 - 1);
-      if (!ok(x, z, r, TALL.includes(kind))) continue;
-      items.push({ kind, x, z, yaw: rng.range(0, Math.PI * 2), scale: rng.range(0.85, 1.25) * (TALL.includes(kind) ? 1.6 : 1.2), r }); placed++;
+      if (!ok(x, z, r, tall)) continue;
+      const it = { kind, x, z, yaw: rng.range(0, Math.PI * 2), scale: tall ? rng.range(1.1, 2.6) : rng.range(1, 1.5), r }; placed++;
+      items.push(it); const k = key(Math.floor(x / B), Math.floor(z / B)); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(it);
     }
   }
-  for (const h of farm.hideSpots) items.push({ kind: 'bush', x: h.x, z: h.z, yaw: 0, scale: 1.8, r: 1.2, hide: true });
+  for (const h of farm.hideSpots) items.push({ kind: 'bush', x: h.x, z: h.z, yaw: 0, scale: 1.3, r: 0.9, hide: true }); // in front of the bank, tail visible from the road
   return items;
 }
 

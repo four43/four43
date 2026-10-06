@@ -26,3 +26,8 @@ test('sheep is not pink and duck is not yellow', () => {
   const [sr, sg] = avg(A.sheep.parts); assert.ok(sr - sg < 25, 'sheep still pink');
   const [dr, dg, db] = avg(A.duck.parts); assert.ok(db > 150, 'duck still yellow (blue channel low)');
 });
+test('edge rocks are grey, not orange or teal', () => {
+  for (const k of ['rockA', 'rockB', 'rockC']) for (const p of Object.values(A[k])) for (let i = 0; i < p.col.length; i += 3) {
+    const [r, g, b] = p.col.slice(i, i + 3); assert.ok(Math.max(r, g, b) - Math.min(r, g, b) < 40, `${k} colour ${r},${g},${b}`);
+  }
+});

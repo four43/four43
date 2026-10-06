@@ -110,6 +110,14 @@ for (const [k, f] of Object.entries(statics)) {
 }
 for (const p of ['pig', 'cow', 'chick', 'bunny', 'dog']) out[p] = await bakePet(PET('animal-' + p));
 
+// Edge rocks: the Nature Kit's orange rock with a teal top -> natural greys (rock body mid/dark grey with a little
+// variation, top mossy grey-green, white parts light grey).
+for (const k of ['rockA', 'rockB', 'rockC']) for (const p of Object.values(out[k])) for (let i = 0; i < p.col.length; i += 3) {
+  const [r, g, b] = p.col.slice(i, i + 3), v = ((i * 2654435761) >>> 0) % 21 - 10; // deterministic per-vertex jitter, -10..10
+  const c = r > 200 && g < 160 ? [128, 124, 118] : g > r + 60 ? [122, 134, 108] : r > 240 && g > 240 && b > 240 ? [176, 174, 168] : [r, g, b];
+  p.col.splice(i, 3, ...c.map(x => Math.max(0, Math.min(255, x + v))));
+}
+
 // Sheep and duck are recolors of the pig and the chick (the pack has neither). Same parts, same anims.
 const mapCols = (pet, fn) => ({ ...pet, parts: pet.parts.map(p => { const col = p.col.slice(); for (let i = 0; i < col.length; i += 3) { const [r, g, b] = fn(col[i], col[i + 1], col[i + 2], p.name); col[i] = r; col[i + 1] = g; col[i + 2] = b; } return { ...p, col }; }) });
 const isPink = (r, g, b) => r > 180 && r - g > 40 && b > g - 10;

@@ -128,7 +128,7 @@ export function layoutYard(rng) {
   return yard;
 }
 
-const HIDE_OFF = 8.5; // m from the centerline: the outer edge of the shoulder (road 7 + shoulder 1.5)
+const HIDE_OFF = 7.8; // m from the centerline: on the shoulder (road 7 + shoulder 1.5), in front of the bank
 export function generateFarm(seed) {
   const rng = makeRng(seed);
   for (let tries = 0; tries < 200; tries++) {
@@ -140,7 +140,7 @@ export function generateFarm(seed) {
     const grid = Array.from({ length: SIZE }, (_, j) => Array.from({ length: SIZE }, (_, i) => inYard(i, j) ? 'yard' : 'field'));
     for (const r of routes) for (const t of r.tiles) grid[t.j][t.i] = 'road';
     const yard = layoutYard(rng);
-    // A-13: two hiding bushes on the shoulder of plain straight or gate tiles, against the edge
+    // A-13: two hiding bushes on the shoulder of plain straight or gate tiles, in front of the edge
     const plain = routes.flatMap(r => r.tiles.filter(t => t.type === 'straight' || t.type === 'gate'));
     const hideSpots = rng.shuffle(plain).slice(0, 2).map(t => { const c = tileCenter(t.i, t.j), [dx, dz] = DIRS[t.outDir], sd = rng.chance(0.5) ? 1 : -1; return { x: c.x - dz * sd * HIDE_OFF, z: c.z + dx * sd * HIDE_OFF }; });
     return { seed, size: SIZE, tile: TILE, routes, grid, yard, start: yard.start, pond: yard.pond, hideSpots };

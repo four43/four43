@@ -15,6 +15,11 @@ for (const seed of [1, 2, 3, 4, 5, 77, 1234]) test(`roads ${seed}: continuous, s
     }
   }
 });
+test('bucketed nearest() matches a brute-force search', () => {
+  const rng = makeRng(9);
+  for (const seed of [1, 2, 7]) { const road = buildRoad(generateFarm(seed));
+    for (let i = 0; i < 3000; i++) { const x = rng.range(-210, 210), z = rng.range(-210, 210); let b = Infinity; for (const p of road.pts) b = Math.min(b, Math.hypot(p.x - x, p.z - z)); assert.ok(Math.abs(b - road.nearest(x, z).d) < 1e-9); } }
+});
 test('road sizes (T-2)', () => { assert.equal(ROAD_HALF, 7); assert.equal(SHOULDER, 1.5); assert.equal(CORRIDOR, 8.5); });
 test('surfaces: yard gravel, road gravel, grass shoulder, mud tile mud', () => {
   const farm = generateFarm(5), road = buildRoad(farm);
@@ -52,9 +57,10 @@ test('scenery stays outside the edges and the yard, and hide bushes sit on the s
   for (const seed of [1, 2, 3]) {
     const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed));
     const field = items.filter(it => !it.hide), tiles = farm.grid.flat().filter(g => g === 'field').length;
-    assert.ok(field.length > tiles * 8, `only ${field.length} items on ${tiles} field tiles`);                    // dense forest (4.6)
+    assert.ok(field.length > tiles * 25, `only ${field.length} items on ${tiles} field tiles`);                   // dense forest (4.6)
+    const wood = field.filter(it => it.kind !== 'corn'); assert.ok(wood.filter(it => TALL.includes(it.kind)).length > wood.length / 2, 'forest is mostly trees');
     for (const it of field) { assert.ok(road.nearest(it.x, it.z).d > EDGE.outFoot + it.r, `${it.kind} inside the edges`); assert.ok(!road.inYard(it.x, it.z), `${it.kind} in yard`); }
-    for (const it of items.filter(i => i.hide)) { const d = road.nearest(it.x, it.z).d; assert.ok(d > 7.5 && d < 9.5, `hide bush ${d} m out`); }  // A-13
+    for (const it of items.filter(i => i.hide)) { const d = road.nearest(it.x, it.z).d; assert.ok(d > 7.3 && d < 8.3, `hide bush ${d} m out`); }  // A-13: on the shoulder, in front of the bank
   }
 });
 test('yard fence has a 17 m opening at each gate', () => {

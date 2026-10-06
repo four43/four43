@@ -32,9 +32,18 @@ export function buildRoad(farm, step = 1) {
     pts.push(...P); return { pts: P, length: s };
   });
   const tileOf = p => farm.routes[p.r].tiles[p.k];
+  // nearest route point, searched ring by ring through a coarse grid of buckets (exact: stops once no closer ring can win)
+  const CELL = 12, NC = Math.ceil(FARM_HALF * 2 / CELL) + 2, cellOf = v => Math.max(0, Math.min(NC - 1, Math.floor((v + FARM_HALF) / CELL) + 1));
+  const buckets = new Map(); for (const p of pts) { const key = cellOf(p.x) * NC + cellOf(p.z); if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(p); }
   const nearest = (x, z) => {
-    let best = Infinity, pt = pts[0];
-    for (const p of pts) { const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < best) { best = d; pt = p; } }
+    const ci = cellOf(x), cj = cellOf(z); let best = Infinity, pt = pts[0];
+    for (let k = 0; k < NC; k++) {
+      for (let i = ci - k; i <= ci + k; i++) for (let j = cj - k; j <= cj + k; j++) {
+        if (Math.max(Math.abs(i - ci), Math.abs(j - cj)) !== k || i < 0 || j < 0 || i >= NC || j >= NC) continue;
+        for (const p of buckets.get(i * NC + j) || []) { const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < best) { best = d; pt = p; } }
+      }
+      if (best <= (k * CELL) ** 2) break; // every point in ring k + 1 or beyond is at least k cells away
+    }
     return { d: Math.sqrt(best), pt };
   };
   const inYard = (x, z) => Math.abs(x) <= YARD_HALF && Math.abs(z) <= YARD_HALF;
