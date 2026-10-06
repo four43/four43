@@ -6,13 +6,21 @@ export function circleToSquare(x, y) {
   return [c(x), c(y)];
 }
 
+// U-2: a classic bulb horn: a red rubber squeeze bulb on a brass horn with a flared bell
+export const HORN_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
+<path d="M44 44 L66 41 Q78 38 92 18 L92 82 Q78 62 66 59 L44 56 Z" fill="#f2c230" stroke="#4a2c14" stroke-width="4" stroke-linejoin="round"/>
+<ellipse cx="91" cy="50" rx="6" ry="32" fill="#c98a1e" stroke="#4a2c14" stroke-width="4"/>
+<path d="M50 47 L70 45" stroke="#fff3b0" stroke-width="3" stroke-linecap="round"/>
+<rect x="36" y="41" width="10" height="18" rx="2" fill="#c98a1e" stroke="#4a2c14" stroke-width="4"/>
+<ellipse cx="22" cy="50" rx="17" ry="21" fill="#e04a3a" stroke="#4a2c14" stroke-width="4"/>
+<ellipse cx="16" cy="41" rx="5" ry="7" fill="#ff9a8a"/></svg>`;
 // One control (R-7): a floating thumb stick on the left two-thirds, W/A/S/D + arrows, gamepad left stick. Horn: button, H, pad A.
 export function createInput(root) {
   const stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 }, keys = new Set(); let hornFns = [], hornHeld = false;
   const R = 70, dz = (v, z = 0.1) => Math.abs(v) < z ? 0 : (v - Math.sign(v) * z) / (1 - z);
   const base = document.createElement('div'); base.id = 'stickBase'; base.hidden = true;
   const knob = document.createElement('div'); knob.id = 'stickKnob'; base.appendChild(knob); root.appendChild(base);
-  const horn = document.createElement('button'); horn.id = 'horn'; horn.setAttribute('aria-label', 'Horn'); horn.textContent = '📯'; root.appendChild(horn);
+  const horn = document.createElement('button'); horn.id = 'horn'; horn.setAttribute('aria-label', 'Horn'); horn.innerHTML = HORN_SVG; root.appendChild(horn);
   const fireHorn = () => hornFns.forEach(f => f());
   horn.addEventListener('pointerdown', e => { e.stopPropagation(); fireHorn(); });
   const surface = document.getElementById('c');

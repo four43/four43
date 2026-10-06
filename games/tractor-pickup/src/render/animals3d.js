@@ -5,14 +5,14 @@ import { FLIGHT, flourishAngle } from '../sim/launch.js';
 import { slotPoint } from '../sim/slots.js';
 import { TR } from '../sim/hitch.js';
 import { dirtify } from './dirtMat.js';
-import { SCALE } from './petScale.js';
+import { SCALE, HAT_SCALE } from './petScale.js';
 export const MODEL = { pig: 'pig', cow: 'cow', chicken: 'chicken', sheep: 'sheep', duck: 'duck', bunny: 'bunny', dog: 'dog', chick: 'chick' }; // model files (spec 5.1, X-8)
 const STRETCH = { duck: [1.15, 0.85, 1.15] };
 const WING = new THREE.Matrix4();
 // W-4: hats for riders, from the model files hat-<id>.glb (about 0.7 m wide, base at y = 0)
 const hatMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 function buildHat(id) { const g = new THREE.Group(), m = new THREE.Mesh(geoFrom(Object.values(ASSETS['hat-' + id])), hatMat); m.castShadow = true; g.add(m); return g; }
-const HAT_SCALE = 1.2; // hats sit on the "hat" node of each animal's model file (W-4), in the animal's own scale; the node moves with the head
+// hats sit on the "hat" node of each animal's model file (W-4), at HAT_SCALE in the animal's own scale; the node moves with the head
 const HIDE = { sink: -0.35, out: 0.55 }; // A-13: deep in the bush, nudged toward the road so the tail pokes out
 const UP = new THREE.Vector3(0, 1, 0), FACE_CAR = new THREE.Quaternion().setFromAxisAngle(UP, Math.PI / 2); // model +z -> car +x
 

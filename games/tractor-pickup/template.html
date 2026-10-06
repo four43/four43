@@ -46,7 +46,8 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #stickBase{position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.28);border:3px solid rgba(90,56,32,.5);z-index:6;pointer-events:none;display:grid;place-items:center}
 #stickBase[hidden]{display:none}
 #stickKnob{width:64px;height:64px;border-radius:50%;background:#f6a9bd;box-shadow:inset 0 0 0 3px #d9667f}
-#horn{all:unset;position:absolute;right:calc(env(safe-area-inset-right,0px) + 24px);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);width:110px;height:110px;border-radius:50%;background:#f5c84c;border:4px solid #6b4428;box-shadow:0 5px 0 #6b4428;font-size:56px;display:grid;place-items:center;z-index:6;cursor:pointer}
+#horn{all:unset;position:absolute;right:calc(env(safe-area-inset-right,0px) + 24px);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);width:110px;height:110px;border-radius:50%;background:#fffcf8;border:4px solid #6b4428;box-shadow:0 5px 0 #6b4428;display:grid;place-items:center;z-index:6;cursor:pointer}
+#horn svg{width:86%;height:86%;transform:rotate(-8deg)}
 #horn:active{transform:translateY(3px);box-shadow:0 2px 0 #6b4428}
 #tune{color-scheme:light;color:#222;position:absolute;top:64px;left:8px;z-index:9;background:rgba(255,255,255,.92);padding:8px;border-radius:10px;font:15px system-ui;max-height:80vh;overflow:auto;touch-action:pan-y;width:max-content;max-width:min(420px,60vw)}
 #tune label,#tune span,#tune output{color:#222}

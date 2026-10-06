@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tractor Pickup hats</title>
+<!-- Every hat on every animal (W-4), hung on each model's "hat" node at the game's HAT_SCALE, playing an animation. Serve
+     games/tractor-pickup/ (for example: python3 -m http.server 8766) and open /tools/hats.html. Drag to turn, scroll to zoom.
+     Each animal's label gives the gap between the top of its head cube and the hat's base: 0 to 5 cm is right (test/hats.test.mjs). -->
+<style>
+  body { margin: 0; background: #cfe8f5; font: 14px system-ui, sans-serif; overflow: hidden; }
+  #bar { position: fixed; top: 8px; left: 8px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: #fffd; padding: 6px 8px; border-radius: 8px; }
+  #bar button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid #888; background: #fff; cursor: pointer; }
+  #bar button.on { background: #f5c84c; }
+  #labels div { position: absolute; transform: translate(-50%, 0); background: #fffd; padding: 1px 6px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+  #labels .bad { background: #e84a4a; color: #fff; }
+  #labels .col { background: #6b4428; color: #fff; }
+</style>
+<script type="importmap">{ "imports": { "three": "../node_modules/three/build/three.module.js", "three/addons/": "../node_modules/three/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="bar"></div>
+<div id="labels"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { HAT_SCALE, HEAD_TOP } from '../src/render/petScale.js';
+const PETS = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick'], HATS = ['straw', 'cowboy', 'party'], ANIMS = ['idle', 'walk', 'run', 'dance', 'eat', 'gesture-negative'];
+const q = new URLSearchParams(location.search); let anim = q.get('anim') || 'walk', seeThrough = false;
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe8f5'); const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 500);
+scene.add(new THREE.HemisphereLight('#ffffff', '#b9a27c', 2.2)); const sun = new THREE.DirectionalLight('#ffffff', 1.5); sun.position.set(3, 6, 4); scene.add(sun);
+const controls = new OrbitControls(cam, renderer.domElement), loader = new GLTFLoader(), bust = `?v=${Date.now()}`, GAP = 2.6, labels = [], cells = [];
+const label = (text, p, cls = '') => { const d = document.createElement('div'); d.textContent = text; d.className = cls; document.getElementById('labels').appendChild(d); labels.push({ d, p }); };
+const hats = Object.fromEntries(await Promise.all(HATS.map(async h => [h, (await loader.loadAsync(`../assets/models/hat-${h}.glb${bust}`)).scene])));
+const hatMats = []; for (const h of Object.values(hats)) h.traverse(m => { if (m.isMesh) hatMats.push(m.material); });
+HATS.forEach((h, c) => label(h, new THREE.Vector3(c * GAP, 2.6, -GAP * 0.7), 'col'));
+for (const [r, pet] of PETS.entries()) {
+  const gltf = await loader.loadAsync(`../assets/models/${pet}.glb${bust}`);
+  // the gap between the head cube's top and the hat node, in the body's space (as the game hangs it)
+  let headTop = -Infinity, hatY = null, body = null; gltf.scene.traverse(o => { if (o.name === 'body' && o.isMesh) body = o; if (o.name === 'hat') hatY = o.position.y; });
+  if (body) { const p = body.geometry.attributes.position; for (let i = 0; i < p.count; i++) if (p.getY(i) <= HEAD_TOP) headTop = Math.max(headTop, p.getY(i)); }
+  const gap = hatY === null ? null : (hatY - headTop) * 100, ok = gap !== null && gap >= -0.5 && gap <= 5;
+  label(`${pet}: ${gap === null ? 'no hat node' : `head top ${gap >= 0 ? '' : '+'}${Math.abs(gap).toFixed(1)} cm ${gap >= 0 ? 'under' : 'INTO'} the hat`}`, new THREE.Vector3(-GAP * 0.9, 0.5, r * GAP), ok ? '' : 'bad');
+  for (const [c, h] of HATS.entries()) {
+    const root = (await loader.loadAsync(`../assets/models/${pet}.glb${bust}`)), s = root.scene; s.position.set(c * GAP, 0, r * GAP); scene.add(s);
+    let node = null; s.traverse(o => { if (o.name === 'hat') node = o; });
+    if (node) { const hat = hats[h].clone(); hat.scale.setScalar(HAT_SCALE); node.add(hat); }
+    const mixer = new THREE.AnimationMixer(s); cells.push({ mixer, clips: root.animations });
+  }
+}
+function play() { for (const c of cells) { c.mixer.stopAllAction(); const clip = THREE.AnimationClip.findByName(c.clips, anim); if (clip) c.mixer.clipAction(clip).play(); } for (const b of document.querySelectorAll('#bar .a')) b.classList.toggle('on', b.textContent === anim); }
+const bar = document.getElementById('bar');
+for (const a of ANIMS) { const b = document.createElement('button'); b.className = 'a'; b.textContent = a; b.onclick = () => { anim = a; play(); }; bar.appendChild(b); }
+const st = document.createElement('button'); st.textContent = 'see-through hats'; st.onclick = () => { seeThrough = !seeThrough; st.classList.toggle('on', seeThrough); for (const m of hatMats) { m.transparent = seeThrough; m.opacity = seeThrough ? 0.35 : 1; m.depthWrite = !seeThrough; } }; bar.appendChild(st);
+play();
+const mid = new THREE.Vector3(GAP, 1.2, (PETS.length - 1) * GAP / 2); controls.target.copy(mid); cam.position.set(mid.x + 6, 15, mid.z + 26); controls.update();
+const clock = new THREE.Clock(), v = new THREE.Vector3();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta(); for (const c of cells) c.mixer.update(dt);
+  for (const L of labels) { v.copy(L.p).project(cam); L.d.style.display = v.z < 1 ? '' : 'none'; L.d.style.left = (v.x + 1) / 2 * innerWidth + 'px'; L.d.style.top = (1 - v.y) / 2 * innerHeight + 'px'; }
+  renderer.render(scene, cam);
+});
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+</script>
+</body>
+</html>

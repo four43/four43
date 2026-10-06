@@ -1,5 +1,6 @@
 // Make the first version of every model file in assets/models/ (spec X-8). After that the files belong to whoever edits them:
 // this script never overwrites a file that exists. To remake some on purpose: node models.mjs --force sheep duck (or --force all).
+// node models.mjs --hat-mounts puts every animal's hat node back on the top of its head.
 // Kenney models come from the Kenney All-in-1 pack (KENNEY=<its 3D assets folder>), with their palette colors moved into
 // vertex colors. The sheep, duck and chicken are reshaped and recolored Cube Pets. The rest are built here with three.js.
 import fs from 'fs';
@@ -283,11 +284,13 @@ await built('barn', (doc, scene, add) => {
 });
 
 // Hat mounts (W-4): an empty node "hat" under each animal's "body" node, where the base of a hat sits. The animations move the
-// body, so a hat parented here bobs with the head. This step only adds the node when a file has none, so it is safe on edited files.
-const HAT_AT = { bunny: [0, 1.37, 0.08], sheep: [0, 1.2, 0.08] }; // body space; the default is just under the top of the head cube
+// body, so a hat parented here bobs with the head. It sits on the top of the head cube (body space y 1.25, see HEAD_TOP), so no hat
+// cuts into a head; ears, tufts, combs and wool above it may poke through (test/hats.test.mjs checks every hat on every animal).
+// This step only adds the node when a file has none, so it is safe on edited files; --hat-mounts moves existing ones back here.
+const HAT_AT = [0, 1.26, 0.08], moveMounts = process.argv.includes('--hat-mounts');
 for (const pet of ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick']) {
-  const file = `${OUT}/${pet}.glb`, doc = await io.read(file), nodes = doc.getRoot().listNodes();
-  if (nodes.some(n => n.getName() === 'hat')) continue;
-  nodes.find(n => n.getName() === 'body').addChild(doc.createNode('hat').setTranslation(HAT_AT[pet] || [0, 1.14, 0.08]));
+  const file = `${OUT}/${pet}.glb`, doc = await io.read(file), nodes = doc.getRoot().listNodes(), hat = nodes.find(n => n.getName() === 'hat');
+  if (hat && !moveMounts) continue;
+  if (hat) hat.setTranslation(HAT_AT); else nodes.find(n => n.getName() === 'body').addChild(doc.createNode('hat').setTranslation(HAT_AT));
   await write(pet, doc);
 }

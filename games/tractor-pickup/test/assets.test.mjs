@@ -28,7 +28,7 @@ test('the parts the code uses by name are in the model files', () => {
 test('every pet has a hat mount that moves with the head (W-4)', () => {
   for (const pet of ['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck', 'chicken']) {
     const P = A[pet], row = P.parts.length + P.mounts.indexOf('hat'), body = P.parts.findIndex(p => p.name === 'body'); assert.ok(P.mounts.includes('hat'), pet);
-    for (const f of P.anims.walk.frames) { const h = f[row], b = f[body]; assert.ok(h[13] > 1.1 && h[13] < 1.8, `${pet} hat at y ${h[13]}`); assert.ok(Math.abs(h[13] - b[13] - (P === A.bunny ? 1.37 : P === A.sheep ? 1.2 : 1.14)) < 0.05, `${pet}: hat does not ride on the body`); }
+    for (const f of P.anims.walk.frames) { const h = f[row], b = f[body]; assert.ok(h[13] > 1.1 && h[13] < 1.8, `${pet} hat at y ${h[13]}`); assert.ok(Math.abs(h[13] - b[13] - 1.26 /* on the head cube's top, see test/hats.test.mjs */) < 0.05, `${pet}: hat does not ride on the body`); }
   }
 });
 test('every pet has parts and idle/walk/run anims with one matrix per part and mount', () => {

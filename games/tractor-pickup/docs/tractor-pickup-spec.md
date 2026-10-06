@@ -58,6 +58,7 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - The sticker book has pages with a farm picture. The player drags stickers from a tray onto a page, and can move them again later (W-2).
 - The paint screen has a row of the unlocked hats: each hat can be turned off or on (W-4).
 - The parent gear is at the top left. Every close button is a red X at the top right (U-3, U-7).
+- The horn button shows a classic bulb horn (U-2). Every hat sits on the top of the head, with no head poking through it (W-4).
 
 ### 1.2.6 Change in version 1.6 (after review 2)
 
@@ -388,7 +389,7 @@ The tractor drives like a car. The chase camera (V-1) always stays behind the tr
 | ID | Item | Position |
 |---|---|---|
 | U-1 | Slot bar | Top center. 12 slots: 6 for the trailer, a small gap, then 6 for the wagon. Each slot fills with the animal picture and name. The bar empties after the show. |
-| U-2 | Horn | Bottom right |
+| U-2 | Horn | Bottom right. A round button with a classic bulb horn: a red rubber squeeze bulb on a brass horn with a flared bell. |
 | U-3 | Parent menu | Top left. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
 | U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4) and "New sticker!" on the sticker card (F-3). The voice says each of them (R-2). The parent menu can use text. |
 | U-5 | Skip | During the show only: top right. A fast-forward picture (F-13). |
@@ -426,7 +427,7 @@ All items in this section are accepted for the first version.
 | W-2 | Sticker book | The sticker book has pages. Each page is a farm picture (sky, hills, grass; the pictures take turns: day farm, pond, sunset). Stickers that are not on a page wait in a tray along the bottom of the screen, newest first; a new sticker bounces once. The player drags a sticker from the tray onto the page, where it stays where it is dropped, slightly tilted. A sticker on the page can be dragged again to move it; it comes to the front. Dragging a sticker back onto the tray takes it off the page. Arrows at the left and right edges turn the pages; there is always one empty page after the last page that has a sticker. The page, the position (as a part of the page width and height, so it fits any screen) and the tilt of each sticker are kept in the browser storage. A close button (a red X, top right) closes the book. Dragging works with a finger or a mouse. |
 | W-2 | Sticker book | A screen with all stickers. Data stays in the browser storage. |
 | W-3 | Paint | The tractor has two paint areas: the body (the cab, the hood and the frame) and the trim (the fenders and the roof). The windows, the wheels, the exhaust and the lamps are never painted. The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
-| W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. Each animal model has an empty node named `hat` on its head; the hat hangs on it, so it bobs with the head in every animation. Below the paint rows, the paint screen (W-3) has a row of the unlocked hats, starting with a small pig in a hat. A tap turns a hat off (pale and grey) or on (in color, with a gold ring), with a "plop"; the animals change their hats at once. The animals wear only the hats that are on, taking turns among them; with all hats off, no animal wears a hat. A newly unlocked hat starts on. The choice is kept in the browser storage. |
+| W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. Each animal model has an empty node named `hat` on its head; the hat hangs on it, so it bobs with the head in every animation. The node sits on the top of the head cube, so no head pokes through a hat and no hat floats above the head (within 5 cm), with every hat, in every frame of every animation. Ears, tufts, combs and wool can poke through a hat. `tools/hats.html` shows every hat on every animal, playing any animation, with see-through hats. Below the paint rows, the paint screen (W-3) has a row of the unlocked hats, starting with a small pig in a hat. A tap turns a hat off (pale and grey) or on (in color, with a gold ring), with a "plop"; the animals change their hats at once. The animals wear only the hats that are on, taking turns among them; with all hats off, no animal wears a hat. A newly unlocked hat starts on. The choice is kept in the browser storage. |
 
 ---
 
@@ -489,7 +490,7 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 
 ## 13. Test results
 
-State at version 1.7 (`npm test`: 488 tests, all pass). Version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.7 (`npm test`: 490 tests, all pass). Version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|
@@ -526,6 +527,7 @@ State at version 1.7 (`npm test`: 488 tests, all pass). Version 1.6 had 485, ver
 | 1.6 W-3, W-4, 5.1 Model fixes | `assets.test.mjs` (tractor parts and paint areas, hat node height in every walk frame, sheep muzzle) | Tractor red and yellow with clear glass and grey wheels; hats on riders; cow spots; stickers with snouts and legs | Hand edits of the split tractor in Blender |
 | 1.6 T-36 Farmyard wash | `track.test.mjs` (300 seeds: in the yard, clear of lanes, line-up, pond and obstacles), `dirt.test.mjs` (cleans in one pass, posts are solid) | Drive through: spray, brushes spin, canopy fades, tractor clean | Frame rate with the extra water particles |
 | 1.7 U-6 Drive buttons | None (UI) | Both buttons at the bottom left only while driving (hidden in the show); each opens its screen, the tractor is held, the X gives driving back; a paint tap repaints and is saved | Button size and the stick near them on the iPad |
+| 1.7 W-4 Hat fit | `hats.test.mjs` (every animal, every hat, every frame of every animation: the head cube's top is 0 to 5 cm under the hat's base) | `tools/hats.html`: 8 animals by 3 hats, walking; every hat sits on its head; ears and combs poke through | None |
 | 1.7 W-4 Hats on or off | `progress.test.mjs` (toggle, all off, a new hat starts on, locked hats cannot be toggled, storage and old saves) | Paint screen with 3 hats: straw turned off, the animals wear only cowboy and party; the choice is saved | Hat buttons read as on and off to a 4-year-old |
 | 1.7 W-1, W-2 Die-cut stickers and the book | `progress.test.mjs` (pose and angle from show and type, varied and stable; place, move to the front, back to the tray, one empty page at the end; old saves and damaged places) | 10 stickers: die-cut renders in 6 poses and 5 angles; dragged 4 onto a page, moved one (it came to the front); placements kept after a reload; the sticker card shows the new die-cut sticker | Dragging with a small finger; sticker size on the page |
 | 12 Voice | `voice.test.mjs` | Build prints the clip count (0 now) | Record the clips, check loudness |
