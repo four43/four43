@@ -9,6 +9,7 @@ import { createFx } from './render/fx.js';
 import { randomSeed } from './sim/rng.js';
 import { createAnimals3D } from './render/animals3d.js';
 import { renderIcons, tractorPicture } from './ui/icons.js';
+import { createStickerArt } from './ui/stickerArt.js';
 import { createHud } from './ui/hud.js';
 import { slotIndex } from './sim/slots.js';
 import { buildFarm3D } from './render/farm3d.js';
@@ -25,10 +26,10 @@ import { buildShowSteps } from './sim/showSteps.js';
 import { createShow } from './ui/show.js';
 import { Sound } from './audio/sound.js';
 import { createVoice } from './audio/voice.js';
-import { createMenus } from './ui/menus.js';
+import { createMenus, paintBtnSvg, bookSvg } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
-import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, unlockedHats, emptyProgress, hasPaintChoice } from './sim/progress.js';
+import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice } from './sim/progress.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
@@ -60,7 +61,7 @@ async function main() {
   let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, pathK = false, barnWay = null, camBlend, acc = 0, last = performance.now();
   const sfx = { surface: 'gravel', air: 0, whee: false };
   const bodies = () => bodyList;
-  const applyHats = () => { const ids = unlockedHats(progress); animals3d?.setHats(a => ids.length ? animals3d.hat(ids[a.id % ids.length]) : null); }; // W-4
+  const applyHats = () => { const ids = wornHats(progress); animals3d?.setHats(a => ids.length ? animals3d.hat(ids[a.id % ids.length]) : null); }; // W-4
 
   function build(newSeed, power) {
     seed = newSeed; gen++;
@@ -118,7 +119,9 @@ async function main() {
     addEventListener('pointerdown', first, true); addEventListener('keydown', first, true);
   }
   const menus = sandbox ? null : createMenus(ui, {
-    icons, tractorPic: sandbox ? null : tractorPicture(renderer),
+    icons, art: createStickerArt(renderer), tractorPic: sandbox ? null : tractorPicture(renderer),
+    onStickers(p) { save('tp-progress', p); }, // W-2: a sticker was placed, moved or taken off a page
+    onHats(p) { save('tp-progress', p); applyHats(); sound.plop(); }, // W-4: a hat was turned off or on
     onPlay: play,
     onKeepDriving() { rewardDone = true; },
     onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); if (!started) enterStart(); }, // R-1: from the start screen (or its sticker book) the new farm waits for the go tap; otherwise it is driving
@@ -132,6 +135,15 @@ async function main() {
     onParent() { menus.openParent(settings, seed); },
   });
 
+  // U-6: while driving, the paint screen and the sticker book are a tap away (bottom left); the tractor is held while one is open
+  const driveBtns = sandbox ? null : Object.assign(document.createElement('div'), { id: 'drivebtns', hidden: true });
+  if (driveBtns) {
+    ui.appendChild(driveBtns);
+    const btn = (cls, svg, label, openIt) => { const b = document.createElement('button'); b.className = 'pic ' + cls; b.innerHTML = svg; b.setAttribute('aria-label', label);
+      b.addEventListener('pointerdown', e => e.stopPropagation()); b.addEventListener('click', e => { e.stopPropagation(); if (game.mode !== 'drive') return; game.mode = 'menu'; sound.plop(); openIt(() => { if (game.mode === 'menu') game.mode = 'drive'; }); }); driveBtns.appendChild(b); };
+    btn('paintbtn', paintBtnSvg(), 'Paint', back => menus.openPaint(progress, back));
+    btn('stickerbtn', bookSvg(), 'Sticker book', back => menus.showBook(progress, back));
+  }
   build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
   const frame = now => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
@@ -180,6 +192,7 @@ async function main() {
       chaseIn.x = view[0].p.x; chaseIn.y = view[0].p.y; chaseIn.z = view[0].p.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); chase.update(dt, chaseIn);
       if (camBlend < 1) { camBlend = Math.min(1, camBlend + dt); const k = camBlend * camBlend * (3 - 2 * camBlend); chaseQuat.copy(camera.quaternion); camera.quaternion.slerpQuaternions(showQuat, chaseQuat, k); } // F-10: turn back smoothly
     }
+    if (driveBtns) { const on = started && game.mode === 'drive' && !show?.active; if (driveBtns.hidden === on) driveBtns.hidden = !on; }
     if (trip && started) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
       if (helpTarget && ((helpTarget.t -= dt) <= 0 || !game.herd.free().includes(helpTarget.a))) helpTarget = null;
       if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.25; barnWay = barnPath(game, t.x, t.z); if ((pathK = !pathK)) fx.sparkleTrail(barnWay.path); fx.sparkleFrame(barnWay.frame); } // the door frame twice as often
