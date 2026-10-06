@@ -29,7 +29,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     const n = env.roadNearest(x, z); if (n.d <= WALK_HALF) return { x, z };
     const k = WALK_HALF / n.d; return { x: n.pt.x + (x - n.pt.x) * k, z: n.pt.z + (z - n.pt.z) * k };
   };
-  const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, lookT: 0, helpT: 0, tx: at.x, tz: at.z, trail: [], penOrder: 0 }; animals.push(a); return a; };
+  const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, lookT: 0, tx: at.x, tz: at.z, trail: [], penOrder: 0 }; animals.push(a); return a; };
   for (const t of MAIN_TYPES) add(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad(), t === 'duck' ? 'yard' : 'route');
   const hen = add('chicken', spawnNearRoad());
   for (let i = 1; i <= 2; i++) { const c = add('chick', { x: hen.x - i * 0.8, z: hen.z }); c.leader = hen.id; c.line = i; c.state = 'follow'; }
@@ -72,7 +72,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     },
     callHelp(t) {
       const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
-      if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; c.helpT = 30; return c;
+      if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; return c;
     },
     toBarn(list) { // after the show: walk into the barn, one after the other, and are gone (A-16, F-10)
       list.forEach((a, i) => Object.assign(a, { state: 'toBarn', leader: null, hidden: false, y: 0, timer: i * 0.4, tx: env.barn.x, tz: env.barn.z }));
@@ -84,7 +84,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
       for (let i = 0; i < nYard; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard');
       // refill empty hiding bushes with the newest route animals
       env.hideSpots.forEach(h => { if (free().some(a => a.hidden && Math.hypot(a.x - h.x, a.z - h.z) < 1)) return;
-        const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !b.hidden && b.type !== 'cow' && b.type !== 'chick').at(-1); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
+        const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !['help', 'wave', 'come'].includes(b.state) && !b.hidden && !b.golden && b.type !== 'cow' && b.type !== 'chick' && !animals.some(c => c.leader === b.id && !NOT_FREE.has(c.state))).at(-1); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
     },
     step(dt, { tractor: t }) {
       for (const a of animals) {

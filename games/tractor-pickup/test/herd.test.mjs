@@ -79,3 +79,25 @@ test('respawn refills the route and yard counts along the routes (G-3)', () => {
   assert.ok(h.free().filter(a => a.golden).length <= 1);
   for (const a of h.free().filter(a => a.home === 'route' && !a.hidden).slice(-6)) assert.ok(Math.abs(a.x) > 30, 'respawned on a route, not in the yard');
 });
+test('respawn never hides a hen that leads chicks or a golden animal (hide-spot refill)', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const h = createHerd({ rng: makeRng(seed), env });
+    h.toBarn(h.free().filter(a => a.home === 'route' && a.type !== 'cow'));
+    h.respawn();
+    const hid = h.animals.filter(a => a.hidden && a.state === 'hide');
+    assert.ok(hid.length <= env.hideSpots.length, `seed ${seed}: hidden ${hid.length}`);
+    for (const a of hid) { assert.ok(!h.animals.some(c => c.leader === a.id), `seed ${seed}: hen with chicks hid`); assert.ok(!a.golden, `seed ${seed}: golden hid`); }
+  }
+});
+test('hidden animals stay put while the tractor drives past', () => {
+  const h = createHerd({ rng: makeRng(10), env }), hid = h.animals.filter(a => a.hidden), p0 = hid.map(a => [a.x, a.z]);
+  for (let i = 0; i < 60 * 60; i++) h.step(1 / 60, { tractor: { x: -60 + i * 0.03, z: 0, yaw: Math.PI / 2, speed: 6 } });
+  hid.forEach((a, i) => { assert.equal(a.x, p0[i][0]); assert.equal(a.z, p0[i][1]); });
+});
+test('respawn refill with only cows spawned still leaves the hen with chicks out of the bushes', () => {
+  const rng = makeRng(11); let cows = false; const pick = rng.pick.bind(rng); rng.pick = a => cows ? 'cow' : pick(a);
+  const h = createHerd({ rng, env }), hen = h.animals.find(a => h.animals.some(c => c.leader === a.id));
+  h.toBarn(h.free().filter(a => a.home === 'route' && a.type !== 'cow' && a !== hen && a.type !== 'chick'));
+  cows = true; h.respawn();
+  assert.ok(!hen.hidden && hen.state !== 'hide', 'hen with chicks hid');
+});
