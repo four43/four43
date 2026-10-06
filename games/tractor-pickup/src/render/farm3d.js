@@ -51,6 +51,7 @@ function buildGround(terrain) {
 // Lambert with the grass map, blended toward a triplanar rock map by the vertex `rock` weight (steep cut faces).
 function groundMaterial(grassMap, anisotropy) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, map: grassMap }), rockMap = makeRockTexture({ anisotropy });
+  m.userData.textures = [rockMap]; // freed with the farm (render/dispose.js)
   m.onBeforeCompile = sh => {
     sh.uniforms.rockMap = { value: rockMap };
     sh.vertexShader = 'attribute float rock;\nvarying float vRock;\nvarying vec3 vGP;\nvarying vec3 vGN;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n  vRock = rock; vGP = position; vGN = normal;');
