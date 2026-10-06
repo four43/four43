@@ -2011,6 +2011,79 @@ git commit -m "feat: Tractor Pickup - high and low terrain with fences and rock 
 
 ---
 
+### Task 7d: Breakable trees with gibs (T-34)
+
+The user asked: "I think it would be good to be able to break the trees and knock them over. She would love that. if they burst into gibs. maybe only at a certain speed." The binding spec is T-34 (with T-31 and T-32). Only farmyard trees are reachable; the forest is behind edges.
+
+Read the current `track.js` (`layoutYard` obstacles), `scenery.js` (`addYardProps`), `farm3d.js` (prop meshes), `physics.js` (groups incl. G.WALL), `tractor.js`, `hitch.js` and `main.js` (?tune panel) first.
+
+**Files:**
+- Create: `src/sim/trees.js`, `src/render/gibs.js`, `test/trees.test.mjs`
+- Modify: `track.js` (10 trees incl. young-tree groups), `scenery.js` and/or `trees.js` (tree colliders owned by the tree system), `farm3d.js` (tree meshes via the tree system), `main.js` (wire the gibs, tune slider), the affected tests.
+
+**Interfaces:**
+- track.js `layoutYard`:
+  - 10 trees total.
+  - About half are singles (`kind: 'tree'`, r 1.2).
+  - The rest are young-tree groups of 2–3 smaller trees (`kind: 'tree'`, `young: true`, r 0.7, scale ~0.6) placed close together.
+  - All obey `yardFree` and the obstacle spacing.
+  - Keep the other obstacle counts.
+- trees.js (pure, no three):
+  - `TREE = { breakSpeed: 4 (m/s), slowdown: 0.15 (fraction of speed lost per break), regrowTime: 0.8 (s) }`.
+  - `createTrees(phys, farm) -> trees`, with:
+    - `list: [{ id, x, z, r, young, state: 'standing'|'broken'|'growing', wobble, grow }]`
+    - `step(dt, bodies)`: `bodies` are the tractor and car bodies; returns events `[{ type: 'treeBreak', tree, dir: {x, z}, speed }]` and `[{ type: 'treeBump', tree }]`.
+    - `reset()`: all broken trees go to 'growing', then 'standing' after `regrowTime`, with their colliders back.
+  - Each standing tree has a fixed cylinder collider (`G.WALL`).
+  - Break detection: each step, for the tractor body, if the tree is standing and the horizontal distance from the tractor's front point (chassis x + 2 m) to the tree is < r + 0.6, and the tractor speed is ≥ `breakSpeed`:
+    - remove the collider before the contact resolves;
+    - set state 'broken';
+    - reduce the tractor's linear velocity by `slowdown`;
+    - emit `treeBreak` with the tractor's heading as `dir`.
+  - Below `breakSpeed`, contact is solid: when the tractor is within r + 1.2 and moving at > 0.3 m/s, set `wobble` = 1 (decays over 1 s) and emit one `treeBump` per approach.
+  - Trailer cars cannot break trees: only the tractor can. Cars hit solid trees normally.
+- gibs.js (render): `createGibs(scene) -> { burst(x, y, z, dir, scale), update(dt) }`.
+  - Pooled InstancedMesh boxes: wood chunks (brown, 0.15–0.35 m) and leaf cubes (greens of the tree palette, 0.2–0.4 m).
+  - About 40 per burst, scaled by `scale`.
+  - Simple ballistic motion: velocity up 4–8 m/s, outward along `dir` ±60°, gravity 9.8, bounce on y = 0 with 0.35 restitution and friction, tumbling spin.
+  - They rest for ~3 s, then shrink and fade out over 1 s.
+  - Cap at 400 live gibs; reuse the oldest.
+  - No physics engine bodies, for iPad cost.
+- farm3d.js / tree visuals:
+  - Standing trees use the oak model as before; young trees are smaller.
+  - Broken trees show a stump: a short cylinder with the bark color and a light top ring. The canopy is hidden.
+  - Growing trees scale up from 0 to 1 with a little overshoot (ease-out-back) over `regrowTime`.
+  - Wobble rotates the tree about its base by `wobble × 6° × sin(t × 20)`.
+- Sound: until Task 12 adds the synth, call an optional `sound?.treePop?.()`. Task 12 will implement a cheerful crunch-pop (record this in the report so Task 12 picks it up).
+- Reset: wherever `yardProps.reset()` is called for T-32, also call `trees.reset()`. Before Task 10 that is only the existing reset hook; Task 10's `startShow` must call both. Note this in the report.
+- `?tune` panel: add a "tree break speed" slider (1..10, step 0.5) bound to `TREE.breakSpeed`.
+
+- [ ] **Step 1: Failing tests (`test/trees.test.mjs`)**
+  1. The farm has 10 trees; at least one young group; all inside the yard, clear of lanes, barn and line-up.
+  2. Fast break: tractor at High power accelerating straight at a single tree from 25 m away gives exactly one `treeBreak`. The tree's collider is removed, and the tractor passes through the tree's position with speed > 60% of its pre-break speed. It ends upright.
+  3. Slow bump: the tractor rolling into a tree at about 2 m/s gives no break, a `treeBump`, and the tractor stops before the trunk (it never passes through the tree center).
+  4. A trailer car pushed into a standing tree does not break it.
+  5. `reset()` restores colliders and states ('standing' after `regrowTime`).
+  6. The gib physics helper, if you split it into a pure function (recommended: `stepGib(g, dt)` in gibs.js or a tiny pure module): never goes below y = 0, comes to rest, and is removed after its lifetime.
+
+- [ ] **Step 2: Run them and confirm they fail for the expected reasons**
+
+- [ ] **Step 3: Implement**
+
+- [ ] **Step 4: Run the tests and build, then check in the browser** (use a free port; never touch 4000 or 8765)
+  - Drive fast into a tree (burst, stump), slowly into one (wobble, bump), and into a young group.
+  - Screenshots: `shots/task7d-burst.png` (mid-burst) and `shots/task7d-stump.png`.
+  - Report draw calls with 400 gibs live.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A games/tractor-pickup/src games/tractor-pickup/test site/exp/tractor-pickup
+git commit -m "feat: Tractor Pickup - breakable farmyard trees with gibs"
+```
+
+---
+
 ### Task 8: Slots, riders and the launch path
 
 **Files:**
@@ -2548,8 +2621,8 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   const game = {
     farm, road, items, phys, yardProps, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
     load: createLoad(CAPACITY), mode: 'drive',
-    // F-5: the show takes over. Riders in landing order; obstacles go back to their places (T-32).
-    startShow() { game.mode = 'show'; yardProps.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
+    // F-5: the show takes over. Riders in landing order; obstacles go back to their places and broken trees regrow (T-32, T-34).
+    startShow() { game.mode = 'show'; yardProps.reset(); game.trees?.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
     // F-10, A-16, G-3: delivered animals walk into the barn and are gone, new ones appear on the routes, the trailer and wagon are empty again.
     finishShow(riders) {
       for (const r of riders) r.animal.ride = null;
