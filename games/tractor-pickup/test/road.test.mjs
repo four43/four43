@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateFarm, YARD_HALF } from '../src/sim/track.js';
 import { buildRoad, ROAD_HALF, makeBarnPass } from '../src/sim/road.js';
-import { scatterScenery, yardWalls } from '../src/sim/scenery.js';
+import { scatterScenery, yardWalls, curveCenters, TALL } from '../src/sim/scenery.js';
 import { makeRng } from '../src/sim/rng.js';
 
 for (const seed of [1, 2, 3, 4, 5, 77, 1234]) test(`roads ${seed}: continuous, start and end at a yard gate`, () => {
@@ -51,4 +51,19 @@ test('yard fence has an opening at each gate', () => {
     const t = Math.max(0, Math.min(1, ((gx - ax) * (bx - ax) + (gz - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2)));
     assert.ok(Math.hypot(gx - ax - (bx - ax) * t, gz - az - (bz - az) * t) > 3.5, 'gate blocked');
   }
+});
+
+test('tall scenery stays off the inside of curves (spec 4.6)', () => {
+  for (const seed of [1, 2, 3]) {
+    const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed)), centers = curveCenters(farm);
+    assert.ok(centers.length > 0);
+    for (const it of items.filter(i => TALL.includes(i.kind) && !i.hide)) for (const k of centers) assert.ok(Math.hypot(it.x - k.x, it.z - k.z) >= 10, `${it.kind} inside a curve, seed ${seed}`);
+  }
+});
+test('barn pass works for a barn turned 90 degrees', () => {
+  const barn = { x: 0, z: 0, yaw: Math.PI / 2, half: 6, width: 5 }, drive = (pts) => { const pass = makeBarnPass(barn); return pts.map(([x, z]) => pass(x, z)).filter(Boolean).length; };
+  const line = (z, x0, x1) => Array.from({ length: 41 }, (_, i) => [x0 + (x1 - x0) * i / 40, z]);
+  assert.equal(drive(line(0, -12, 12)), 1); assert.equal(drive(line(0, 12, -12)), 1);
+  assert.equal(drive([...line(0, -12, 0), ...line(0, 0, -12)]), 0);
+  assert.equal(drive(line(9, -12, 12)), 0);
 });

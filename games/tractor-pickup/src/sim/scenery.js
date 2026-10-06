@@ -1,9 +1,9 @@
 // Field scenery (4.6), the farmyard walls and props (4.7), and the static colliders for the farm.
-import { TILE, SIZE, tileCenter, YARD_HALF, barnLocal } from './track.js';
+import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, barnLocal } from './track.js';
 import { ROAD_HALF } from './road.js';
 import { G, groups } from './physics.js';
 import { addRamp } from './sandbox.js';
-const TALL = ['oak', 'tree', 'treeFat'], SMALL = ['bush', 'bushS', 'rock', 'pumpkin', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay'];
+export const TALL = ['oak', 'tree', 'treeFat'], SMALL = ['bush', 'bushS', 'rock', 'pumpkin', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay'];
 const R = { oak: 1.4, tree: 1.0, treeFat: 1.3, bush: 0.9, bushS: 0.5, rock: 0.5, pumpkin: 0.4, corn: 0.4, grass: 0.2, flowerY: 0.15, flowerR: 0.15, log: 0.6, stump: 0.5, hay: 0.8 };
 const yawQ = y => ({ x: 0, y: Math.sin(y / 2), z: 0, w: Math.cos(y / 2) });
 
@@ -28,8 +28,14 @@ function addWall(phys, [ax, az, bx, bz], h, group) {
   world.createCollider(RAPIER.ColliderDesc.cuboid(L / 2, h / 2, 0.15).setTranslation((ax + bx) / 2, h / 2, (az + bz) / 2).setRotation(yawQ(th)).setFriction(0.1).setRestitution(0).setCollisionGroups(group));
 }
 
+// Arc centers of every curve tile: the corner shared by the entry and exit edges. The inside of the curve is the quarter disc around it.
+export const curveCenters = farm => farm.routes.flatMap(R2 => R2.tiles.filter(t => t.inDir !== t.outDir).map(t => {
+  const c = tileCenter(t.i, t.j), [ix, iz] = DIRS[t.inDir], [ox, oz] = DIRS[t.outDir];
+  return { x: c.x + (ox - ix) * TILE / 2, z: c.z + (oz - iz) * TILE / 2 };
+}));
+
 export function scatterScenery(farm, road, rng) {
-  const items = [], ok = (x, z, r, gap) => road.nearest(x, z).d > ROAD_HALF + gap + r && !road.inYard(x, z) && Math.hypot(x - farm.pond.x, z - farm.pond.z) > farm.pond.r + r + 1
+  const inner = curveCenters(farm), items = [], ok = (x, z, r, gap, tall) => (!tall || inner.every(k => Math.hypot(k.x - x, k.z - z) >= TILE / 2)) && road.nearest(x, z).d > ROAD_HALF + gap + r && !road.inYard(x, z) && Math.hypot(x - farm.pond.x, z - farm.pond.z) > farm.pond.r + r + 1
     && items.every(o => Math.hypot(o.x - x, o.z - z) > o.r + r + 0.5) && farm.hideSpots.every(h => Math.hypot(h.x - x, h.z - z) > 3);
   for (let j = 0; j < SIZE; j++) for (let i = 0; i < SIZE; i++) {
     if (farm.grid[j][i] !== 'field') continue;
@@ -38,7 +44,7 @@ export function scatterScenery(farm, road, rng) {
     for (let m = 0; m < n * 3 && placed < n; m++) {
       const kind = cornField ? 'corn' : rng.chance(0.3) ? rng.pick(TALL) : rng.pick(SMALL), r = R[kind];
       const x = c.x + rng.range(-TILE / 2 + 1, TILE / 2 - 1), z = c.z + rng.range(-TILE / 2 + 1, TILE / 2 - 1);
-      if (!ok(x, z, r, TALL.includes(kind) ? 6 : 1.5)) continue;
+      if (!ok(x, z, r, TALL.includes(kind) ? 6 : 1.5, TALL.includes(kind))) continue;
       items.push({ kind, x, z, yaw: rng.range(0, Math.PI * 2), scale: rng.range(0.85, 1.25) * (TALL.includes(kind) ? 1.6 : 1.2), r }); placed++;
     }
   }
