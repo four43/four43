@@ -5,6 +5,7 @@ import { createGame } from './sim/game.js';
 import { TYPES } from './sim/herd.js';
 import { TREE } from './sim/trees.js';
 import { createGibs } from './render/gibs.js';
+import { createFx } from './render/fx.js';
 import { randomSeed } from './sim/rng.js';
 import { createAnimals3D } from './render/animals3d.js';
 import { renderIcons } from './ui/icons.js';
@@ -50,10 +51,10 @@ async function main() {
   for (const n of GEST) addEventListener(n, unlock, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sound.ctx && sound.ctx.state !== 'running') { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); } });
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
-  const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = null; // Task 13 replaces `fx` with the stars and puffs
+  const animals3d = game.herd ? createAnimals3D(scene, game.herd) : null, fx = createFx(scene, game.terrain ? (x, z) => game.terrain.height(x, z) : undefined);
+  const fxs = { dust: 0, mud: 0, mark: 0, spray: false, drip: new Set() }, wheelPt = {}, sprinklers = farm3d?.sprinklers || [];
   const hud = game.herd ? createHud(document.getElementById('ui'), { icons: renderIcons(renderer) }) : null;
   const trip = game.herd ? createTrip() : null, show = game.herd ? createShow({ root: document.getElementById('ui'), camera, game, voice, sound, fx }) : null;
-  const sparkles = fx?.sparkleTrail ? fx : createSparkleTrail(scene); // Task 13 swaps in fx.sparkleTrail
   let showDone = false, rewardDone = false, riders = [], guideToBarn = false, helpTarget = null, pathT = 0, camBlend = 1;
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
   const showReward = () => { rewardDone = true; }; // Task 14: the sticker card
@@ -62,7 +63,7 @@ async function main() {
   const slow = createSlowMo(); let booped = false; // B-7: half speed at the top of the arc of the first animal each boop launches
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
   let prev = bodies().map(snapOf), curr = prev, view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
-  if (params.has('tune')) { buildTunePanel(game); window.game = game; }
+  if (params.has('tune')) { buildTunePanel(game); window.game = game; window.fx = fx; window.renderer = renderer; }
   let acc = 0, last = performance.now();
   renderer.setAnimationLoop(now => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt * slow.scale();
@@ -72,7 +73,10 @@ async function main() {
       for (const e of ev) {
         if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); }
         if (e.type === 'horn') sound.horn();
-        if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx?.stars(e.animal.x, 1, e.animal.z); booped = true; }
+        if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx.stars(e.animal.x, 1, e.animal.z); booped = true; }
+        if (e.type === 'launch' && e.animal.type === 'duck' && game.farm && Math.hypot(e.animal.x - game.farm.yard.pond.x, e.animal.z - game.farm.yard.pond.z) < game.farm.yard.pond.r + 3) fxs.drip.add(e.animal); // A-5: a duck from the pond drips
+        if (e.type === 'mud-enter') { fx.mudSplash(game.tractor.x, game.tractor.z); sound.squelch(); } // T-13
+        if (e.type === 'washed') { const t = game.tractor; for (let k = 0; k < 3; k++) fx.sparkles(t.x, 1.8, t.z); sound.squeaky(); } // T-15
         if (e.type === 'launch' && booped) { booped = false; slow.onLaunch(FLIGHT[e.animal.type].dur); }
         if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n); }
       }
@@ -85,7 +89,7 @@ async function main() {
           if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
           if (c === 'help') { const h = game.herd.callHelp(game.tractor); if (h) helpTarget = { a: h, t: 10 }; }
           if (c === 'show') {
-            guideToBarn = false; helpTarget = null; sparkles.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow();
+            guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow();
             show.play(riders, buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden }))))
               .catch(e => console.error('show', e)).finally(() => { showDone = true; }); // R-1: an error in the show never locks the game
           }
@@ -94,8 +98,9 @@ async function main() {
       }
     }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
+    stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt * slow.scale());
     gibs.update(dt); farm3d?.update(view[0].p); animals3d?.update(dt, game, { cars: view.slice(1), alpha: a });
-    vehicles.update({ tractor: view[0], cars: view.slice(1) });
+    vehicles.update({ tractor: view[0], cars: view.slice(1), dirt: game.dirt?.tractor });
     const t = game.tractor, lv = t.body.linvel();
     if (show?.active) show.update(dt);
     else {
@@ -104,8 +109,7 @@ async function main() {
     }
     if (trip) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
       if (helpTarget && ((helpTarget.t -= dt) <= 0 || !game.herd.free().includes(helpTarget.a))) helpTarget = null;
-      if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.5; sparkles.sparkleTrail(barnPath(game, t.x, t.z)); }
-      sparkles.update?.(dt);
+      if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.5; fx.sparkleTrail(barnPath(game, t.x, t.z)); }
       const b = game.farm.yard.barn, aim = show.active ? null : helpTarget ? { x: helpTarget.a.x, y: 1, z: helpTarget.a.z } : guideToBarn ? { x: b.x, y: 3, z: b.z } : null;
       hud.arrowTo(aim && edgeArrow(camera, aim));
     }
@@ -118,7 +122,7 @@ async function main() {
 // Per-step sound cues: the squelch when the wheels enter mud (T-13); whee and a cheer when all four wheels leave the ground for over 0.15 s (T-14)
 function stepSounds(game, sound, s) {
   const t = game.tractor;
-  if (t.surface === 'mud' && s.surface !== 'mud') sound.squelch();
+  if (t.surface === 'mud' && s.surface !== 'mud' && !game.dirt) sound.squelch(); // the farm game sends a mud-enter event instead
   s.surface = t.surface;
   const air = [0, 1, 2, 3].every(i => !t.vc.wheelIsInContact(i));
   s.air = air ? s.air + DT : 0;
@@ -141,17 +145,26 @@ function barnPath(game, x, z) {
   return pts.map(p => ({ x: p.x, y: terrain.height(p.x, p.z) + 0.6, z: p.z }));
 }
 
-// Fallback sparkles until Task 13's fx.sparkleTrail: 40 small yellow sprites that twinkle in a wave toward the barn
-function createSparkleTrail(scene) {
-  const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-  gr.addColorStop(0, '#fff'); gr.addColorStop(0.35, '#ffe14a'); gr.addColorStop(1, 'rgba(255,210,60,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
-  const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false });
-  const sprites = Array.from({ length: 40 }, () => { const s = new THREE.Sprite(mat); s.visible = false; scene.add(s); return s; });
-  let t = 0;
-  return {
-    sparkleTrail(points) { sprites.forEach((s, i) => { const p = points[i]; s.visible = !!p; if (p) s.position.set(p.x, p.y, p.z); }); },
-    update(dt) { t += dt; sprites.forEach((s, i) => { const k = 0.5 + 0.2 * Math.sin(t * 6 - i * 0.8); s.scale.set(k, k, k); }); },
-  };
+// Continuous effects, once per drawn frame (the one-off ones come from game events): D-9 gravel spray, tire marks and dust, T-13 mud splashes,
+// T-15 sprinkler water, golden rainbow trails (A-8) and the pond duck's drips (A-5)
+function stepFx(game, fx, sound, s, w, sprinklers, dt) {
+  const t = game.tractor; if (!game.tractorWorld) return;
+  s.dust -= dt; s.mud -= dt; s.mark -= dt;
+  const lv = t.body.linvel(), sp = Math.hypot(lv.x, lv.z), hx = sp > 1 ? lv.x / sp : Math.sin(t.yaw), hz = sp > 1 ? lv.z / sp : Math.cos(t.yaw);
+  if (game.mode === 'drive' && t.surface === 'gravel' && (Math.abs(t.slip) > 0.25 || (t.engine > 0.8 && t.speed < 3))) {
+    for (const i of [2, 3]) { game.tractorWorld({ x: t.W[i].cx, y: 0, z: t.W[i].cz }, w); fx.gravel(w.x, w.z, hx, hz, 2); if (s.mark <= 0) fx.tireMark(w.x, w.z, Math.atan2(hx, hz), Math.min(1, Math.abs(t.slip) * 2)); }
+    if (s.mark <= 0) s.mark = 0.06;
+  }
+  if (t.speed > 4 && t.surface === 'gravel' && s.dust <= 0) { s.dust = 0.1; fx.dust(t.x - hx * 2, t.z - hz * 2); }
+  if (t.surface === 'mud' && t.speed > 2 && s.mud <= 0) { s.mud = 0.15; for (const i of [2, 3]) { game.tractorWorld({ x: t.W[i].cx, y: 0, z: t.W[i].cz }, w); fx.mudSplash(w.x, w.z); } }
+  let near = false;
+  for (const sp2 of sprinklers) if (Math.hypot(sp2.x - t.x, sp2.z - t.z) < 15) { near = true; fx.water(sp2.x, sp2.z, sp2.yaw, 4.1, 8, 14, 18); }
+  if (near !== s.spray) { s.spray = near; sound.spray(near); }
+  for (const f of game.flights) {
+    if (f.u < 0) continue;
+    if (f.animal.golden) fx.rainbowTrail(f.pos.x, f.pos.y, f.pos.z);
+    if (s.drip.has(f.animal)) { if (f.u > 0.6) s.drip.delete(f.animal); else fx.water(f.pos.x, f.pos.z, 0, f.pos.y - game.terrain.height(f.pos.x, f.pos.z), 1, 0.6); }
+  }
 }
 
 // F-2, F-4: a point off screen (or behind the camera) gives an arrow on a screen ellipse inset by 70 px, pointing toward it; on screen gives null

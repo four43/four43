@@ -11,6 +11,7 @@ import { createHerd, TYPES } from './herd.js';
 import { createLoad, slotPoint, newRider, stepRider } from './slots.js';
 import { launchLocal, FLIGHT } from './launch.js';
 import { makeRng } from './rng.js';
+import { stepDirt, stepRiderDirt } from './dirt.js';
 
 export const CAPACITY = 12;                            // G-1: 6 in the trailer + 6 in the wagon
 export const CATCH = { x0: 1.6, x1: 4.0, half: 1.6 }; // B-1: box in front of the nose, 1.5 x tractor width
@@ -40,11 +41,11 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
   const slotWorld = (sl, out) => Object.assign(out, local2world(train.cars[sl.car].body, slotPoint(sl.k, sl.animal.ride?.rider, TR.half.y, {})));
   const prevVel = train.cars.map(c => ({ ...c.body.linvel() }));
   const tmp = {}, tmp2 = {};
-  let pendingPass = false;
+  let pendingPass = false, lastSurface = 'gravel', lastAir = false, wasClean = true;
 
   const game = {
     farm, road, terrain, items, phys, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
-    load: createLoad(CAPACITY), mode: 'drive',
+    load: createLoad(CAPACITY), mode: 'drive', dirt: { tractor: 0 }, // T-16: dirt levels 0..1 (cars and animals carry their own)
     // F-5: the show takes over. Riders in slot order (trailer then wagon, the order they were booped in); obstacles go back to their places and broken trees regrow (T-32, T-34).
     startShow() { game.mode = 'show'; yardProps.reset(); trees.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
     // F-10, A-16, G-3: delivered animals walk into the barn and are gone, new ones appear on the routes, the trailer and wagon are empty again.
@@ -91,6 +92,19 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       // F-1: a pass through the barn with at least one rider starts the show (after any flight has landed)
       if (game.mode === 'drive' && barnPass(tractor.x, tractor.z)) pendingPass = true;
       if (pendingPass && flights.length === 0) { pendingPass = false; if (game.load.landed() > 0) events.push({ type: 'barnPass' }); }
+      // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler washes
+      const sf = tractor.speed / tractor.P.vmax, washing = road.inSprinkler(tractor.x, tractor.z); let anyWash = washing;
+      game.dirt.tractor = stepDirt(game.dirt.tractor, { surface: tractor.surface, speedFrac: sf, washing }, DT);
+      for (const c of train.cars) {
+        const p = c.body.translation(), w = road.inSprinkler(p.x, p.z), surf = road.surfaceAt(p.x, p.z);
+        anyWash ||= w; c.dirt = stepDirt(c.dirt, { surface: surf, speedFrac: sf, washing: w }, DT);
+        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: surf === 'mud', speed: tractor.speed, washing: w }, DT);
+      }
+      if (tractor.surface === 'mud' && lastSurface !== 'mud') events.push({ type: 'mud-enter' });
+      lastSurface = tractor.surface;
+      const air = [0, 1, 2, 3].every(i => !tractor.vc.wheelIsInContact(i)); if (air !== lastAir) events.push({ type: 'air', on: air }); lastAir = air;
+      if (anyWash && !wasClean && game.dirt.tractor < 0.05 && train.cars.every(c => c.dirt === 0)) { events.push({ type: 'washed' }); wasClean = true; }
+      if (game.dirt.tractor > 0.05) wasClean = false;
       return events;
     },
   };
