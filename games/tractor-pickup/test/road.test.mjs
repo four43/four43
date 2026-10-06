@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateFarm, YARD_HALF } from '../src/sim/track.js';
-import { buildRoad, ROAD_HALF, makeBarnPass } from '../src/sim/road.js';
+import { buildRoad, ROAD_HALF, SHOULDER, CORRIDOR, makeBarnPass } from '../src/sim/road.js';
+import { EDGE } from '../src/sim/edges.js';
 import { scatterScenery, yardWalls, curveCenters, TALL } from '../src/sim/scenery.js';
 import { makeRng } from '../src/sim/rng.js';
 
@@ -14,12 +15,22 @@ for (const seed of [1, 2, 3, 4, 5, 77, 1234]) test(`roads ${seed}: continuous, s
     }
   }
 });
-test('surfaces: yard gravel, road gravel, off-road grass, mud tile mud', () => {
+test('road sizes (T-2)', () => { assert.equal(ROAD_HALF, 7); assert.equal(SHOULDER, 1.5); assert.equal(CORRIDOR, 8.5); });
+test('surfaces: yard gravel, road gravel, grass shoulder, mud tile mud', () => {
   const farm = generateFarm(5), road = buildRoad(farm);
-  assert.equal(road.surfaceAt(10, 10), 'gravel');
-  const p = road.routes[0].pts[30]; assert.equal(road.surfaceAt(p.x, p.z), 'gravel');
-  assert.equal(road.surfaceAt(p.x + p.tz * (ROAD_HALF + 2), p.z - p.tx * (ROAD_HALF + 2)), 'grass');
-  for (const [r, R] of farm.routes.entries()) R.tiles.forEach((t, k) => { if (t.type === 'mud') { const c = road.featureCenter(r, k); assert.equal(road.surfaceAt(c.x, c.z), 'mud'); } });
+  assert.equal(road.surfaceAt(10, 10), 'gravel'); assert.equal(road.surfaceAt(50, -50), 'gravel');
+  const p = road.routes[0].pts[60]; assert.equal(road.surfaceAt(p.x, p.z), 'gravel');
+  assert.equal(road.surfaceAt(p.x + p.tz * 6.5, p.z - p.tx * 6.5), 'gravel');
+  assert.equal(road.surfaceAt(p.x + p.tz * 8, p.z - p.tx * 8), 'grass');
+  assert.equal(road.surfaceAt(p.x - p.tz * 8, p.z + p.tx * 8), 'grass');
+  let muds = 0;
+  for (const [r, R] of farm.routes.entries()) R.tiles.forEach((t, k) => { if (t.type === 'mud') {
+    const c = road.featureCenter(r, k), fx = Math.sin(c.yaw), fz = Math.cos(c.yaw); muds++;
+    assert.equal(road.surfaceAt(c.x, c.z), 'mud');
+    assert.equal(road.surfaceAt(c.x + fx * 12, c.z + fz * 12), 'mud'); assert.equal(road.surfaceAt(c.x + fz * 6, c.z - fx * 6), 'mud');  // 0.35 TILE along, the full width across
+    assert.equal(road.surfaceAt(c.x + fx * 13.5, c.z + fz * 13.5), 'gravel');
+  } });
+  assert.ok(muds > 0);
 });
 test('sprinkler zone is at the sprinkler tile center', () => {
   const farm = generateFarm(5), road = buildRoad(farm);
@@ -37,19 +48,21 @@ test('barn pass: through counts, backing out and passing beside do not (F-1)', (
   assert.equal(drive([...line(0, -12, 0), ...line(0, 0, -12)]), 0);
   assert.equal(drive(line(9, -12, 12)), 0);
 });
-test('scenery stays on field tiles: not on roads, not in the yard', () => {
+test('scenery stays outside the edges and the yard, and hide bushes sit on the shoulder', () => {
   for (const seed of [1, 2, 3]) {
     const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed));
-    assert.ok(items.length > 60);
-    for (const it of items) { assert.ok(road.nearest(it.x, it.z).d > ROAD_HALF + 1.5 + (it.r || 0), `${it.kind} on road`); assert.ok(!road.inYard(it.x, it.z), `${it.kind} in yard`); }
+    const field = items.filter(it => !it.hide), tiles = farm.grid.flat().filter(g => g === 'field').length;
+    assert.ok(field.length > tiles * 8, `only ${field.length} items on ${tiles} field tiles`);                    // dense forest (4.6)
+    for (const it of field) { assert.ok(road.nearest(it.x, it.z).d > EDGE.outFoot + it.r, `${it.kind} inside the edges`); assert.ok(!road.inYard(it.x, it.z), `${it.kind} in yard`); }
+    for (const it of items.filter(i => i.hide)) { const d = road.nearest(it.x, it.z).d; assert.ok(d > 7.5 && d < 9.5, `hide bush ${d} m out`); }  // A-13
   }
 });
-test('yard fence has an opening at each gate', () => {
+test('yard fence has a 17 m opening at each gate', () => {
   const farm = generateFarm(5), segs = yardWalls(farm);
   assert.equal(segs.length, 8);
   for (const [gx, gz] of [[YARD_HALF, 0], [0, YARD_HALF], [-YARD_HALF, 0], [0, -YARD_HALF]]) for (const [ax, az, bx, bz] of segs) {
     const t = Math.max(0, Math.min(1, ((gx - ax) * (bx - ax) + (gz - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2)));
-    assert.ok(Math.hypot(gx - ax - (bx - ax) * t, gz - az - (bz - az) * t) > 3.5, 'gate blocked');
+    assert.ok(Math.hypot(gx - ax - (bx - ax) * t, gz - az - (bz - az) * t) > 8, 'gate blocked');
   }
 });
 

@@ -1,6 +1,6 @@
-// Field scenery (4.6), the farmyard walls and props (4.7), and the static colliders for the farm.
-import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, barnLocal } from './track.js';
-import { ROAD_HALF } from './road.js';
+// Field scenery outside the edges (4.6), the farmyard fence and props (4.7), and the static colliders for the farm.
+import { TILE, SIZE, DIRS, tileCenter, YARD_HALF } from './track.js';
+import { EDGE, addEdgeColliders } from './edges.js';
 import { G, groups } from './physics.js';
 import { addRamp } from './sandbox.js';
 export const TALL = ['oak', 'tree', 'treeFat'], SMALL = ['bush', 'bushS', 'rock', 'pumpkin', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay'];
@@ -20,8 +20,8 @@ export function wallsOfRect(Rc, gaps = []) {
   return out;
 }
 const H = YARD_HALF;
-export const yardWalls = () => wallsOfRect({ x0: -H, x1: H, z0: -H, z1: H }, [[H, 0], [0, H], [-H, 0], [0, -H]].map(([x, z]) => ({ x, z, w: 8 })));
-export const paddockWalls = farm => wallsOfRect(farm.yard.paddock, [{ ...farm.yard.paddock.gate, w: 1.6 }]);
+export const GATE_W = 17; // T-3: the gate gap equals the corridor between the edge feet (2 x 8.5 m)
+export const yardWalls = () => wallsOfRect({ x0: -H, x1: H, z0: -H, z1: H }, [[H, 0], [0, H], [-H, 0], [0, -H]].map(([x, z]) => ({ x, z, w: GATE_W })));
 
 function addWall(phys, [ax, az, bx, bz], h, group) {
   const { RAPIER, world } = phys, L = Math.hypot(bx - ax, bz - az), th = Math.atan2(-(bz - az), bx - ax);
@@ -35,16 +35,16 @@ export const curveCenters = farm => farm.routes.flatMap(R2 => R2.tiles.filter(t 
 }));
 
 export function scatterScenery(farm, road, rng) {
-  const inner = curveCenters(farm), items = [], ok = (x, z, r, gap, tall) => (!tall || inner.every(k => Math.hypot(k.x - x, k.z - z) >= TILE / 2)) && road.nearest(x, z).d > ROAD_HALF + gap + r && !road.inYard(x, z) && Math.hypot(x - farm.pond.x, z - farm.pond.z) > farm.pond.r + r + 1
-    && items.every(o => Math.hypot(o.x - x, o.z - z) > o.r + r + 0.5) && farm.hideSpots.every(h => Math.hypot(h.x - x, h.z - z) > 3);
+  const inner = curveCenters(farm), items = [], ok = (x, z, r, tall) => (!tall || inner.every(k => Math.hypot(k.x - x, k.z - z) >= TILE / 2)) && road.nearest(x, z).d > EDGE.outFoot + r && !road.inYard(x, z)
+    && items.every(o => Math.hypot(o.x - x, o.z - z) > o.r + r + 0.5);
   for (let j = 0; j < SIZE; j++) for (let i = 0; i < SIZE; i++) {
     if (farm.grid[j][i] !== 'field') continue;
-    const c = tileCenter(i, j), cornField = rng.chance(0.15), n = cornField ? 40 : rng.int(4, 9);
+    const c = tileCenter(i, j), cornField = rng.chance(0.15), n = cornField ? 60 : rng.int(10, 20);
     let placed = 0;
-    for (let m = 0; m < n * 3 && placed < n; m++) {
-      const kind = cornField ? 'corn' : rng.chance(0.3) ? rng.pick(TALL) : rng.pick(SMALL), r = R[kind];
+    for (let m = 0; m < n * 6 && placed < n; m++) {
+      const kind = cornField ? 'corn' : rng.chance(0.55) ? rng.pick(TALL) : rng.pick(SMALL), r = R[kind]; // mostly trees: a forest (4.6)
       const x = c.x + rng.range(-TILE / 2 + 1, TILE / 2 - 1), z = c.z + rng.range(-TILE / 2 + 1, TILE / 2 - 1);
-      if (!ok(x, z, r, TALL.includes(kind) ? 6 : 1.5, TALL.includes(kind))) continue;
+      if (!ok(x, z, r, TALL.includes(kind))) continue;
       items.push({ kind, x, z, yaw: rng.range(0, Math.PI * 2), scale: rng.range(0.85, 1.25) * (TALL.includes(kind) ? 1.6 : 1.2), r }); placed++;
     }
   }
@@ -52,21 +52,18 @@ export function scatterScenery(farm, road, rng) {
   return items;
 }
 
-export function addSceneryColliders(phys, items) {
-  const { RAPIER, world } = phys, cg = groups(G.STATIC, 0xffff);
-  for (const it of items) if (TALL.includes(it.kind) || it.kind === 'rock' || it.kind === 'hay' || it.kind === 'stump')
-    world.createCollider(RAPIER.ColliderDesc.cylinder(1.5, it.r * 0.6).setTranslation(it.x, 1.5, it.z).setFriction(0.1).setRestitution(0.1).setCollisionGroups(cg));
-}
-
 export function addFarmColliders(phys, farm, road) {
   const { RAPIER, world } = phys, cg = groups(G.STATIC, 0xffff), y = farm.yard, b = y.barn;
-  farm.routes.forEach((R2, r) => R2.tiles.forEach((t, k) => { if (t.type === 'ramp') addRamp(phys, road.featureCenter(r, k)); }));
-  for (const sd of [-1, 1]) { // drive-through barn: two side walls along the axis (T-28)
+  farm.routes.forEach((R2, r) => R2.tiles.forEach((t, k) => { if (t.type === 'ramp') addRamp(phys, { ...road.featureCenter(r, k), width: 14 }); }));
+  addEdgeColliders(phys, road);
+  const fx = Math.sin(b.yaw), fz = Math.cos(b.yaw);
+  for (const sd of [-1, 1]) { // drive-through barn: two side walls along the axis (T-28), and the open door leaves in line with them
     const ox = Math.cos(b.yaw) * sd * b.width, oz = -Math.sin(b.yaw) * sd * b.width;
     world.createCollider(RAPIER.ColliderDesc.cuboid(0.3, 2.5, b.half).setTranslation(b.x + ox, 2.5, b.z + oz).setRotation(yawQ(b.yaw)).setFriction(0.1).setCollisionGroups(cg));
+    for (const end of [-1, 1]) { const a = end * (b.half + b.leaf / 2);
+      world.createCollider(RAPIER.ColliderDesc.cuboid(0.15, 2.3, b.leaf / 2).setTranslation(b.x + ox + fx * a, 2.3, b.z + oz + fz * a).setRotation(yawQ(b.yaw)).setFriction(0.1).setCollisionGroups(cg)); }
   }
   for (const seg of yardWalls(farm)) addWall(phys, seg, 1.0, cg);
-  for (const seg of paddockWalls(farm)) addWall(phys, seg, 1.0, cg);
   const st = y.stage; // low platform: the tractor can bump up onto it
   world.createCollider(RAPIER.ColliderDesc.cuboid((st.x1 - st.x0) / 2, st.y / 2, (st.z1 - st.z0) / 2).setTranslation((st.x0 + st.x1) / 2, st.y / 2, (st.z0 + st.z1) / 2).setCollisionGroups(cg));
 }

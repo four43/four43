@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const A = JSON.parse(fs.readFileSync(new URL('../src/assets.json', import.meta.url)));
 
 test('statics are present and non-empty', () => {
-  for (const k of ['tractor', 'oak', 'tree', 'treeFat', 'bush', 'bushS', 'fence', 'rock', 'pumpkin', 'corn', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay']) {
+  for (const k of ['tractor', 'oak', 'tree', 'treeFat', 'bush', 'bushS', 'fence', 'rock', 'pumpkin', 'corn', 'grass', 'flowerY', 'flowerR', 'log', 'stump', 'hay', 'rockA', 'rockB', 'rockC']) {
     assert.ok(A[k], k); const parts = Object.values(A[k]); assert.ok(parts.length > 0, k);
     for (const p of parts) assert.ok(p.idx.length > 0 && p.pos.length === p.col.length, k);
   }

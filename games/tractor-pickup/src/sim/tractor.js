@@ -12,6 +12,7 @@ export const TP = {
   scale: 1.6, mass: 1400, revForce: 3200, vrev: 3, brake: 30, handbrake: 60, roll: 1.5,
   steerMax: 0.62, steerRate: 2.8, inputRate: 4, suspRest: 0.32, stiffness: 18, compression: 2.0, relaxation: 2.6,
   slip: 2.4, travel: 0.45, yawRateMax: 2.6, slideK: 6, yawInertia: 2200, slideTorque: 30, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 9000,
+  steep: Math.cos(30 * Math.PI / 180), steepGrip: 0.2, // T-17: a wheel on ground steeper than 30 degrees (an edge bank) loses most of its grip
 };
 export function quatAxes(q) {
   const { x, y, z, w } = q;
@@ -64,11 +65,11 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
       const v = this.fwd, maxSteer = TP.steerMax / (1 + Math.abs(v) * 0.06);
       const want = Math.max(-1, Math.min(1, this.inSteer + this.assist));
       this.steer = ease(this.steer, want * maxSteer, TP.steerRate, dt);
-      const vmax = P.vmax * SF.vmul;
+      const vmax = P.vmax * SF.vmul, steep = W.some((w, i) => { const n = vc.wheelIsInContact(i) && vc.wheelContactNormal(i); return n && n.y < TP.steep; });
       let force = 0, brake = 0;
       if (this.thr > 0.05) { if (v < -0.3) brake = TP.brake * this.thr; else force = P.force * this.thr * Math.max(0, 1 - v / vmax); }
       else if (this.thr < -0.05) { if (v > 0.3) brake = TP.brake * -this.thr; else force = -TP.revForce * -this.thr * Math.max(0, 1 + v / TP.vrev); }
-      else brake = this.speed < 0.3 ? TP.handbrake : TP.roll;
+      else brake = this.speed < 0.3 && !steep ? TP.handbrake : TP.roll; // no parking brake with a wheel up a bank: roll back to the road
       this.engine = Math.abs(force) / P.force;
       // D-6 rally drift: steering hard at speed with throttle lets the rear tyres let go (rear side stiffness
       // falls from P.rearSide to P.loose); the D-7 limiter below keeps the slide bounded.
@@ -79,8 +80,9 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
         vc.setWheelSteering(i, w.front ? this.steer : 0);
         vc.setWheelEngineForce(i, w.front ? 0 : force / 2);
         vc.setWheelBrake(i, brake);
-        vc.setWheelFrictionSlip(i, TP.slip * SF.grip);
-        vc.setWheelSideFrictionStiffness(i, (w.front ? 1 : rearSide) * SF.grip);
+        const n = vc.wheelIsInContact(i) && vc.wheelContactNormal(i), g = SF.grip * (n && n.y < TP.steep ? TP.steepGrip : 1);
+        vc.setWheelFrictionSlip(i, TP.slip * g);
+        vc.setWheelSideFrictionStiffness(i, (w.front ? 1 : rearSide) * SF.grip * (steep ? TP.steepGrip : 1)); // slide sideways off the bank
       }
       vc.updateVehicle(dt, undefined, rayGroups, c => !own.has(c.handle));
       // D-7 slide help: past slideMax, push the slide back toward the direction of travel

@@ -8,7 +8,7 @@ await RAPIER.init();
 
 test('props: dynamic bales/cones/barrels, fixed posts/trees, and reset puts them back (T-31, T-32)', () => {
   const phys = createPhysics(RAPIER), farm = generateFarm(5), { props, reset } = addYardProps(phys, farm);
-  assert.equal(props.filter(p => p.body).length, 16); assert.equal(props.filter(p => !p.body).length, 6);
+  assert.equal(props.filter(p => p.body).length, 32); assert.equal(props.filter(p => !p.body).length, 12);
   for (let i = 0; i < 60; i++) phys.world.step();
   const bale = props.find(p => p.kind === 'bale'), p0 = { ...bale.body.translation() };
   bale.body.applyImpulse({ x: 900, y: 0, z: 0 }, true);
@@ -21,7 +21,7 @@ test('props: dynamic bales/cones/barrels, fixed posts/trees, and reset puts them
 test('the tractor cannot drive through the yard fence or up a barn wall', async () => {
   const { addFarmColliders } = await import('../src/sim/scenery.js'), { buildRoad } = await import('../src/sim/road.js'), { createTractor } = await import('../src/sim/tractor.js');
   const phys = createPhysics(RAPIER), farm = generateFarm(5), road = buildRoad(farm); addFarmColliders(phys, farm, road);
-  const t = createTractor(phys, { x: -18, z: -24, yaw: Math.PI, power: 'medium', surfaceAt: () => 'gravel' });
+  const t = createTractor(phys, { x: -22, z: -44, yaw: Math.PI, power: 'medium', surfaceAt: () => 'gravel' });
   for (let i = 0; i < 60 * 8; i++) { t.setInput(1, 0); t.step(DT); phys.world.step(); }
-  assert.ok(t.z > -30, `drove through the fence to z=${t.z}`);
+  assert.ok(t.z > -54, `drove through the fence to z=${t.z}`);
 });

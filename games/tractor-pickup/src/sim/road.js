@@ -1,7 +1,8 @@
 // Route centerlines and surface queries. Straights run edge-midpoint to edge-midpoint; curves are quarter circles
 // (radius TILE/2) about the tile corner shared by the entry and exit edges. Each route starts and ends on the yard edge.
 import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, barnLocal } from './track.js';
-export const ROAD_HALF = 3.5, FARM_HALF = SIZE * TILE / 2;
+export const ROAD_HALF = 7, SHOULDER = 1.5, CORRIDOR = ROAD_HALF + SHOULDER, FARM_HALF = SIZE * TILE / 2;
+export const MUD_HALF = 0.35; // the mud area on a mud tile: |u - 0.5| < MUD_HALF (in tiles), across the full road width
 
 function tilePts(t, N) {
   const c = tileCenter(t.i, t.j), [ix, iz] = DIRS[t.inDir], [ox, oz] = DIRS[t.outDir], ex = c.x - ix * TILE / 2, ez = c.z - iz * TILE / 2, out = [];
@@ -42,15 +43,11 @@ export function buildRoad(farm, step = 1) {
     surfaceAt(x, z) {
       if (inYard(x, z)) return 'gravel';
       const n = nearest(x, z); if (n.d > ROAD_HALF) return 'grass';
-      return tileOf(n.pt).type === 'mud' && Math.abs(n.pt.u - 0.5) * TILE < 7 ? 'mud' : 'gravel';
+      return tileOf(n.pt).type === 'mud' && Math.abs(n.pt.u - 0.5) < MUD_HALF ? 'mud' : 'gravel';
     },
     inSprinkler(x, z) { if (inYard(x, z)) return false; const n = nearest(x, z); return tileOf(n.pt).type === 'sprinkler' && n.d < ROAD_HALF + 1 && Math.abs(n.pt.u - 0.5) * TILE < 2.5; },
     featureCenter(r, k) { const t = farm.routes[r].tiles[k], c = tileCenter(t.i, t.j); return { x: c.x, z: c.z, yaw: Math.atan2(DIRS[t.outDir][0], DIRS[t.outDir][1]) }; },
     ahead(pt, dist) { const P = routes[pt.r].pts; return P[Math.max(0, Math.min(P.length - 1, pt.n + Math.round(dist / step)))]; },
-    edgePush(x, z) { // soft farm-edge fence (T-17): spring back inside within 5 m of the edge, in m/s^2
-      const lim = FARM_HALF - 5, f = v => Math.abs(v) > lim ? -Math.sign(v) * (Math.abs(v) - lim) * 3 : 0;
-      return { x: f(x), z: f(z) };
-    },
   };
 }
 

@@ -46,3 +46,25 @@ export function worldUV(geo, meters) {
   for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getX(i) / meters; uv[i * 2 + 1] = p.getZ(i) / meters; }
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return geo;
 }
+
+// Barn boards (T-28): red vertical planks with dark seams, grain streaks and light weathering. One repeat is 2 m x 2 m (8 boards).
+export function makePlankTexture({ anisotropy = 1 } = {}) {
+  const N = 256, c = canvas(N), g = c.getContext('2d'), rnd = lcg(23), W = N / 8;
+  for (let i = 0; i < 8; i++) { const k = 0.9 + rnd() * 0.16; g.fillStyle = `rgb(${Math.round(184 * k)},${Math.round(52 * k)},${Math.round(42 * k)})`; g.fillRect(i * W, 0, W, N); }
+  for (let i = 0; i < 160; i++) { const x = rnd() * N, y = rnd() * N; g.fillStyle = rnd() < 0.5 ? 'rgba(90,20,15,.18)' : 'rgba(255,220,200,.12)'; g.fillRect(x, y, 1 + rnd() * 1.5, 10 + rnd() * 40); }
+  for (let i = 0; i < 12; i++) { g.fillStyle = 'rgba(230,200,180,.10)'; g.beginPath(); g.ellipse(rnd() * N, rnd() * N, 6 + rnd() * 14, 20 + rnd() * 40, 0, 0, 7); g.fill(); }
+  g.fillStyle = 'rgba(70,15,12,.85)'; for (let i = 0; i < 8; i++) g.fillRect(i * W, 0, 2, N);
+  return finish(c, anisotropy);
+}
+
+// Roof shingles: dark red-brown rows of staggered tabs with a shadow line under each row. One repeat is 2 m x 2 m (8 rows).
+export function makeShingleTexture({ anisotropy = 1 } = {}) {
+  const N = 256, c = canvas(N), g = c.getContext('2d'), rnd = lcg(31), H = N / 8, T = N / 6;
+  for (let r = 0; r < 8; r++) for (let t = -1; t < 7; t++) {
+    const k = 0.85 + rnd() * 0.25, x = t * T + (r % 2) * T / 2;
+    g.fillStyle = `rgb(${Math.round(112 * k)},${Math.round(58 * k)},${Math.round(50 * k)})`; g.fillRect(x, r * H, T, H);
+    g.fillStyle = 'rgba(30,12,10,.55)'; g.fillRect(x, r * H, 2, H);
+  }
+  g.fillStyle = 'rgba(25,10,8,.6)'; for (let r = 0; r < 8; r++) g.fillRect(0, r * H, N, 3);
+  return finish(c, anisotropy);
+}

@@ -99,6 +99,7 @@ const statics = {
   oak: NK('tree_oak'), tree: NK('tree_default'), treeFat: NK('tree_fat'), bush: NK('plant_bushLarge'), bushS: NK('plant_bush'),
   fence: NK('fence_simple'), rock: NK('rock_smallC'), pumpkin: NK('crop_pumpkin'), corn: NK('crops_cornStageD'), grass: NK('grass_large'),
   flowerY: NK('flower_yellowB'), flowerR: NK('flower_redA'), log: NK('log'), stump: NK('stump_old'), hay: `${KENNEY}/Graveyard Kit/Models/GLB format/hay-bale.glb`,
+  rockA: NK('rock_largeA'), rockB: NK('rock_largeB'), rockC: NK('rock_tallA'), // edge rocks (T-17)
 };
 const out = {};
 for (const [k, f] of Object.entries(statics)) {

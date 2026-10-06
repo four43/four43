@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { ASSETS, geoFrom, boxGeo, mergeGeos, colorGeo } from './gfx.js';
-import { ROAD_HALF, FARM_HALF } from '../sim/road.js';
+import { ROAD_HALF, CORRIDOR, FARM_HALF, MUD_HALF } from '../sim/road.js';
 import { YARD_HALF } from '../sim/track.js';
-import { makeGravelTexture, makeGrassTexture, worldUV } from './textures.js';
-import { yardWalls, paddockWalls } from '../sim/scenery.js';
+import { makeGravelTexture, makeGrassTexture, makePlankTexture, makeShingleTexture, worldUV } from './textures.js';
+import { yardWalls, GATE_W } from '../sim/scenery.js';
+import { EDGE, edgeStrips, edgeRocks } from '../sim/edges.js';
+import { makeRng } from '../sim/rng.js';
 
 const TEX_M = 4; // one texture repeat per 4 m of ground
 export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } = {}) {
@@ -22,22 +24,43 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
   }
   // farmyard: packed gravel square
   { const g = speckle(new THREE.PlaneGeometry(YARD_HALF * 2, YARD_HALF * 2, 60, 60).rotateX(-Math.PI / 2), '#ffffff', '#ebe3d6'); g.translate(0, 0.015, 0); worldUV(g, TEX_M); const m = new THREE.Mesh(g, matGravel); m.receiveShadow = true; scene.add(m); }
-  // road ribbons (one per route; open ends meet the yard edge)
-  const ribbon = (P, keep, colA, colB, y, mat) => {
+  // ribbons along a route between two signed offsets o0 < o1 from the centerline (open ends meet the yard edge)
+  const ribbon = (P, keep, o0, o1, colA, colB, y, mat, texM = TEX_M) => {
     const pos = [], col = [], idx = [], A = new THREE.Color(colA), B = new THREE.Color(colB), c = new THREE.Color(); let open = false;
     for (const p of P) {
       if (!keep(p)) { open = false; continue; }
-      for (const sd of [-1, 1]) { pos.push(p.x + p.tz * sd * ROAD_HALF, y, p.z - p.tx * sd * ROAD_HALF); c.copy(A).lerp(B, Math.random()); col.push(c.r, c.g, c.b); }
+      for (const o of [o0, o1]) { pos.push(p.x + p.tz * o, y, p.z - p.tx * o); c.copy(A).lerp(B, Math.random()); col.push(c.r, c.g, c.b); }
       const b = pos.length / 3 - 2; if (open) idx.push(b - 2, b, b - 1, b - 1, b, b + 1); open = true;
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
-    if (!mat) worldUV(g, TEX_M);
-    const m = new THREE.Mesh(g, mat || matGravel); m.receiveShadow = true; scene.add(m);
+    if (mat !== mudMat) worldUV(g, texM);
+    const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m);
   };
   const mudMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 70, specular: '#4a3622' });
   for (const R of road.routes) {
-    ribbon(R.pts, () => true, '#ffffff', '#ebe3d6', 0.02);
-    ribbon(R.pts, p => farm.routes[p.r].tiles[p.k].type === 'mud' && Math.abs(p.u - 0.5) * 20 < 7, '#7a5233', '#5f3e25', 0.04, mudMat);
+    ribbon(R.pts, () => true, -ROAD_HALF, ROAD_HALF, '#ffffff', '#ebe3d6', 0.02, matGravel);
+    for (const [o0, o1] of [[-CORRIDOR, -ROAD_HALF], [ROAD_HALF, CORRIDOR]]) ribbon(R.pts, () => true, o0, o1, '#e2f2cf', '#cfe6bd', 0.018, matGrass, TEX_M * 2); // grass shoulder
+    ribbon(R.pts, p => farm.routes[p.r].tiles[p.k].type === 'mud' && Math.abs(p.u - 0.5) < MUD_HALF, -ROAD_HALF, ROAD_HALF, '#7a5233', '#5f3e25', 0.04, mudMat);
+  }
+  // edge banks (T-17): grey-brown gravel on the inner slope, grass on the crest and the outer slope; rocks along the crests
+  const bankRock = new THREE.MeshLambertMaterial({ map: matGravel.map, color: '#d2c3b2' }), bankGrass = new THREE.MeshLambertMaterial({ map: matGrass.map, color: '#e4f2d6' });
+  for (const R of road.routes) {
+    const { vertices, indices } = edgeStrips(R), parts = [[], []];
+    for (let t = 0; t < indices.length; t += 3) parts[Math.floor(t / 6) % 3 === 0 ? 0 : 1].push(indices[t], indices[t + 1], indices[t + 2]); // each quad is 6 indices; quad k = 0 is the inner slope
+    parts.forEach((idx, n) => {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(vertices.slice(), 3)); g.setIndex(idx); g.computeVertexNormals(); worldUV(g, n ? TEX_M * 2 : TEX_M);
+      const m = new THREE.Mesh(g, n ? bankGrass : bankRock); m.receiveShadow = m.castShadow = true; scene.add(m);
+    });
+  }
+  {
+    const bankY = d => d < EDGE.crest ? EDGE.height * (d - EDGE.foot) / (EDGE.crest - EDGE.foot) : d > EDGE.crestOut ? EDGE.height * (EDGE.outFoot - d) / (EDGE.outFoot - EDGE.crestOut) : EDGE.height;
+    const rocks = edgeRocks(road, makeRng(farm.seed ^ 0x5eed)), byRock = new Map();
+    for (const k of rocks) { if (!byRock.has(k.kind)) byRock.set(k.kind, []); byRock.get(k.kind).push(k); }
+    for (const [kind, list] of byRock) {
+      const m = new THREE.InstancedMesh(geoFrom(Object.values(ASSETS[kind])), matV, list.length);
+      list.forEach((k, i) => m.setMatrixAt(i, mtx.compose(p3.set(k.x, bankY(road.nearest(k.x, k.z).d) - 0.15 * k.scale, k.z), q.setFromAxisAngle(UP, k.yaw), s3.setScalar(k.scale))));
+      m.castShadow = m.receiveShadow = true; scene.add(m);
+    }
   }
   // ramps and sprinkler arches on route tiles
   const sprinklers = [];
@@ -45,7 +68,7 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
     const c = road.featureCenter(r, k);
     if (t.type === 'ramp') {
       const s = new THREE.Shape([[-5, 0], [0, 0.6], [1, 0.6], [4, 0]].map(([a, y]) => new THREE.Vector2(a, y)));
-      const g = new THREE.ExtrudeGeometry(s, { depth: 7, bevelEnabled: false }); g.translate(0, 0, -3.5); g.rotateY(-Math.PI / 2);
+      const g = new THREE.ExtrudeGeometry(s, { depth: ROAD_HALF * 2, bevelEnabled: false }); g.translate(0, 0, -ROAD_HALF); g.rotateY(-Math.PI / 2);
       const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#c9ad7f' })); m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = m.receiveShadow = true; scene.add(m);
     }
     if (t.type === 'sprinkler') {
@@ -53,8 +76,10 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
       const m = new THREE.Mesh(g, matV); m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = true; scene.add(m); sprinklers.push({ mesh: m, ...c });
     }
   }));
-  // pond
-  { const p = farm.pond, m = new THREE.Mesh(new THREE.CircleGeometry(p.r, 40).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#5fb4e0', shininess: 90 })); m.position.set(p.x, 0.03, p.z); scene.add(m); }
+  // duck pond in a farmyard corner (T-29, A-5), with a sandy rim
+  { const p = farm.pond, rim = new THREE.Mesh(new THREE.CircleGeometry(p.r + 1, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#d9c79c' }));
+    const m = new THREE.Mesh(new THREE.CircleGeometry(p.r, 40).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#5fb4e0', shininess: 90 }));
+    rim.position.set(p.x, 0.025, p.z); m.position.set(p.x, 0.035, p.z); rim.receiveShadow = m.receiveShadow = true; scene.add(rim, m); }
   // field scenery: one InstancedMesh per kind
   const byKind = new Map(); for (const it of items) { if (!byKind.has(it.kind)) byKind.set(it.kind, []); byKind.get(it.kind).push(it); }
   for (const [kind, list] of byKind) {
@@ -62,29 +87,21 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
     list.forEach((it, i) => m.setMatrixAt(i, mtx.compose(p3.set(it.x, 0, it.z), q.setFromAxisAngle(UP, it.yaw), s3.setScalar(it.scale))));
     m.castShadow = m.receiveShadow = true; scene.add(m);
   }
-  // fences: farm edge, yard (with gate gaps) and paddock, all from the Kenney fence piece every 1 m
-  const fenceGeo = geoFrom(Object.values(ASSETS.fence), new THREE.Matrix4().makeTranslation(0, 0.05, 0.465)), segs = [...yardWalls(farm), ...paddockWalls(farm)];
+  // fences: farm edge and yard (with gate gaps), all from the Kenney fence piece every 1 m
+  const fenceGeo = geoFrom(Object.values(ASSETS.fence), new THREE.Matrix4().makeTranslation(0, 0.05, 0.465)), segs = [...yardWalls(farm)];
   const E = FARM_HALF; segs.push([-E, -E, E, -E], [E, -E, E, E], [E, E, -E, E], [-E, E, -E, -E]);
   const pieces = []; for (const [ax, az, bx, bz] of segs) { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L)), yaw = Math.atan2(bx - ax, bz - az) - Math.PI / 2; for (let i = 0; i < n; i++) pieces.push([ax + (bx - ax) * (i + 0.5) / n, az + (bz - az) * (i + 0.5) / n, yaw]); }
   { const m = new THREE.InstancedMesh(fenceGeo, matV, pieces.length); pieces.forEach(([x, z, yaw], i) => m.setMatrixAt(i, mtx.compose(p3.set(x, 0, z), q.setFromAxisAngle(UP, yaw), s3.setScalar(1)))); m.castShadow = true; scene.add(m); }
   // gate posts (T-8): two tall wood posts with a cross bar at each farmyard gate
   for (const [gx, gz] of [[YARD_HALF, 0], [0, YARD_HALF], [-YARD_HALF, 0], [0, -YARD_HALF]]) {
     const across = gx === 0 ? [1, 0] : [0, 1], parts = [];
-    for (const sd of [-1, 1]) parts.push(boxGeo(0.4, 3.2, 0.4, gx + across[0] * sd * 4.2, 1.6, gz + across[1] * sd * 4.2, '#8a6240'));
-    parts.push(boxGeo(across[0] ? 8.8 : 0.3, 0.3, across[1] ? 8.8 : 0.3, gx, 3.1, gz, '#8a6240'));
+    const o = GATE_W / 2 + 0.2;
+    for (const sd of [-1, 1]) parts.push(boxGeo(0.5, 4, 0.5, gx + across[0] * sd * o, 2, gz + across[1] * sd * o, '#8a6240'));
+    parts.push(boxGeo(across[0] ? o * 2 + 0.6 : 0.35, 0.35, across[1] ? o * 2 + 0.6 : 0.35, gx, 3.85, gz, '#8a6240'));
     const m = new THREE.Mesh(mergeGeos(parts), matV); m.castShadow = true; scene.add(m);
   }
-  // drive-through barn (T-28): red walls along the axis, a roof, open at both ends
-  const b = farm.yard.barn, barn = new THREE.Group(); barn.position.set(b.x, 0, b.z); barn.rotation.y = b.yaw; scene.add(barn);
-  const Wd = b.width, L = b.half;
-  barn.add(new THREE.Mesh(mergeGeos([boxGeo(0.4, 5, L * 2, Wd, 2.5, 0, '#b8322a'), boxGeo(0.4, 5, L * 2, -Wd, 2.5, 0, '#b8322a')]), matV));
-  // roof and gables are their own mesh so they fade out while the tractor is in the barn (the chase camera looks down through them)
-  const roofMat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true });
-  const roof = new THREE.Mesh(mergeGeos([
-    boxGeo(Wd * 2 + 0.8, 0.4, L * 2 + 0.4, 0, 5.2, 0, '#7b2a22'),
-    boxGeo(Wd * 2 + 0.8, 2.2, 0.4, 0, 6.4, L, '#b8322a'), boxGeo(Wd * 2 + 0.8, 2.2, 0.4, 0, 6.4, -L, '#b8322a'),
-    boxGeo(1.2, 1.2, 0.1, 0, 6.4, L + 0.25, '#ffffff'), boxGeo(1.2, 1.2, 0.1, 0, 6.4, -L - 0.25, '#ffffff'),
-  ]), roofMat); roof.castShadow = true; barn.add(roof);
+  // drive-through barn (T-28); the roof group fades out while the tractor is near (the chase camera looks down through it)
+  const b = farm.yard.barn, { group: barn, roofMats, roof } = buildBarn(b, anisotropy, matV); scene.add(barn); const L = b.half;
   // stage: low wood platform (T-29)
   { const s = farm.yard.stage, m = new THREE.Mesh(boxGeo(s.x1 - s.x0, s.y, s.z1 - s.z0, (s.x0 + s.x1) / 2, s.y / 2, (s.z0 + s.z1) / 2, '#b9874f'), matV); m.receiveShadow = m.castShadow = true; scene.add(m); }
   // props (T-31)
@@ -103,7 +120,98 @@ export function buildFarm3D(scene, farm, road, items, props, { anisotropy = 1 } 
   return {
     sprinklers,
     update(focus) {
-      if (focus) { const a = Math.hypot(focus.x - b.x, focus.z - b.z); roofMat.opacity += ((a < L + 20 ? 0 : 1) - roofMat.opacity) * 0.15; roof.visible = roofMat.opacity > 0.03; roof.castShadow = roofMat.opacity > 0.5; }
+      if (focus) {
+        const a = Math.hypot(focus.x - b.x, focus.z - b.z), o = roofMats[0].opacity + ((a < L + 20 ? 0 : 1) - roofMats[0].opacity) * 0.15;
+        for (const m of roofMats) m.opacity = o; roof.visible = o > 0.03; roof.traverse(m => { m.castShadow = o > 0.5; });
+      }
        props.forEach((p, i) => { const m = propMeshes[i]; if (!m || !p.body) return; m.position.copy(p.body.translation()); m.quaternion.copy(p.body.rotation()); }); },
   };
+}
+
+// Copy x/y/z of a barn-local geometry into board UVs: u runs along the wall (x or z), v up; one texture repeat per 2 m.
+const boardUV = (g, along) => { const p = g.attributes.position, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { uv[i * 2] = (along === 'x' ? p.getX(i) : p.getZ(i)) / 2; uv[i * 2 + 1] = p.getY(i) / 2; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return g; };
+function mergeUV(list) { // position + normal + uv (no color), for the textured barn parts
+  const parts = list.map(g => g.index ? g.toNonIndexed() : g), out = new THREE.BufferGeometry();
+  for (const [k, n] of [['position', 3], ['normal', 3], ['uv', 2]]) { const a = new Float32Array(parts.reduce((s, g) => s + g.attributes[k].array.length, 0)); let o = 0; for (const g of parts) { a.set(g.attributes[k].array, o); o += g.attributes[k].array.length; } out.setAttribute(k, new THREE.BufferAttribute(a, n)); }
+  return out;
+}
+
+// A classic red barn in barn-local space (+z along the drive-through axis, +x across), 12 m long and 10 m wide inside,
+// walls 5 m high. Solid: board walls, white corner and eave trim, and the door leaves standing open 90 degrees out in line
+// with the walls (where the sim puts their colliders). Fading roof group: the gambrel roof, the gables with hay-loft doors,
+// and the cupola.
+function buildBarn(b, anisotropy, matV) {
+  const group = new THREE.Group(); group.position.set(b.x, 0, b.z); group.rotation.y = b.yaw;
+  const W = b.width, L = b.half, LEAF = b.leaf, GAP = 0.2, H = 5, WHITE = '#f4f1ea', T60 = Math.tan(Math.PI / 3), T30 = Math.tan(Math.PI / 6);
+  const planks = makePlankTexture({ anisotropy }), plankMat = new THREE.MeshLambertMaterial({ map: planks });
+  const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+  // X-braced white frame on a w x h panel in a plane: 'x' (across the barn) or 'z' (along it), centered at (cx, cy, cz).
+  // No two faces may be coplanar (z-fighting): the rails run full width and the stiles butt between them; the two braces
+  // are 3 and 6 cm thinner than the frame, so each layer stands at least 1.5 cm off the one below it on both faces.
+  const frameX = (along, w, h, cx, cy, cz, t = 0.3, bar = 0.2) => {
+    const P = (a, y, len, hh) => along === 'x' ? boxGeo(len, hh, t, cx + a, cy + y, cz) : boxGeo(t, hh, len, cx, cy + y, cz + a);
+    const out = [P(0, h / 2 - bar / 2, w, bar), P(0, -h / 2 + bar / 2, w, bar), P(-w / 2 + bar / 2, 0, bar, h - bar * 2), P(w / 2 - bar / 2, 0, bar, h - bar * 2)];
+    const iw = w - bar * 2, ih = h - bar * 2, len = Math.hypot(iw, ih), ang = Math.atan2(ih, iw);
+    for (const sg of [-1, 1]) {
+      const tb = t - (sg > 0 ? 0.03 : 0.06), g = new THREE.BoxGeometry(along === 'x' ? len : tb, bar * 0.9, along === 'x' ? tb : len);
+      if (along === 'x') g.rotateZ(sg * ang); else g.rotateX(-sg * ang);
+      out.push(colorGeo(g.translate(cx, cy, cz), WHITE));
+    }
+    return out;
+  };
+  // solid: board walls and door leaf panels
+  const walls = [], leaves = [];
+  for (const sx of [-1, 1]) {
+    walls.push(boardUV(box(0.4, H, L * 2, sx * W, H / 2, 0), 'z'));
+    for (const sz of [-1, 1]) leaves.push(boardUV(box(0.12, 4.4, LEAF - GAP, sx * W, 2.25, sz * (L + (LEAF + GAP) / 2)), 'z')); // a gap from the wall end
+  }
+  const solid = new THREE.Mesh(mergeUV([...walls, ...leaves]), plankMat); solid.castShadow = solid.receiveShadow = true; group.add(solid);
+  const trim = [];
+  for (const sx of [-1, 1]) {
+    trim.push(boxGeo(0.62, 0.44, L * 2 + 0.4, sx * W, H - 0.18, 0, WHITE));                                  // eave band under the roof: its top sits 4 cm above the wall top
+    for (const sz of [-1, 1]) {
+      trim.push(boxGeo(0.55, H - 0.06, 0.32, sx * W, (H - 0.06) / 2, sz * (L - 0.06), WHITE));                // corner trim: proud of the wall faces, top hidden in the eave band
+      trim.push(...frameX('z', LEAF - GAP, 4.4, sx * W, 2.25, sz * (L + (LEAF + GAP) / 2)));                                 // open door leaf: frame and X
+    }
+  }
+  const trimMesh = new THREE.Mesh(mergeGeos(trim), matV); trimMesh.castShadow = true; group.add(trimMesh);
+
+  // fading roof group: gambrel roof (steep ~60 degree lower pitch, ~30 degree upper), gables, loft doors and cupola
+  const roof = new THREE.Group(); group.add(roof);
+  const fade = m => { m.transparent = true; return m; };
+  const shingleMat = fade(new THREE.MeshLambertMaterial({ map: makeShingleTexture({ anisotropy }) })), gableMat = fade(new THREE.MeshLambertMaterial({ map: planks })), roofTrimMat = fade(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const KNEE = 3.5, OVER = 0.45, eaveX = W + 0.2 + OVER;                                                    // profile breaks at |x| = 3.5 m
+  const yAt = ax => ax >= KNEE ? H + (W + 0.2 - ax) * T60 : H + (W + 0.2 - KNEE) * T60 + (KNEE - ax) * T30;   // outer roof line at |x|
+  const prof = [[-eaveX, yAt(eaveX)], [-KNEE, yAt(KNEE)], [0, yAt(0)], [KNEE, yAt(KNEE)], [eaveX, yAt(eaveX)]], RL = L + 0.6, TH = 0.22;
+  const slabs = [];
+  for (let i = 0; i < 4; i++) { // alternating slab depths keep the overlapping slab ends off one plane
+    const [x0, y0] = prof[i], [x1, y1] = prof[i + 1], len = Math.hypot(x1 - x0, y1 - y0) + 0.12, ang = Math.atan2(y1 - y0, x1 - x0);
+    const g = new THREE.BoxGeometry(len, TH, RL * 2 + (i % 2) * 0.06), p = g.attributes.position, uv = new Float32Array(p.count * 2);
+    for (let k = 0; k < p.count; k++) { uv[k * 2] = p.getZ(k) / 2; uv[k * 2 + 1] = p.getX(k) / 2; }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.rotateZ(ang).translate((x0 + x1) / 2 - Math.sin(ang) * TH / 2, (y0 + y1) / 2 + Math.cos(ang) * TH / 2, 0); slabs.push(g);
+  }
+  const ridge = box(0.45, 0.3, RL * 2 + 0.2, 0, yAt(0) + TH, 0); boardUV(ridge, 'z'); slabs.push(ridge);
+  const shingles = new THREE.Mesh(mergeUV(slabs), shingleMat); roof.add(shingles);
+  const gShape = new THREE.Shape([[-W - 0.2, H], [-KNEE, yAt(KNEE) - 0.05], [0, yAt(0) - 0.05], [KNEE, yAt(KNEE) - 0.05], [W + 0.2, H]].map(([x, y]) => new THREE.Vector2(x, y)));
+  const gables = [-1, 1].map(sz => { const g = new THREE.ExtrudeGeometry(gShape, { depth: 0.3, bevelEnabled: false }); g.translate(0, 0, sz * L - 0.15); return boardUV(g, 'x'); });
+  roof.add(new THREE.Mesh(mergeUV(gables), gableMat));
+  const rt = [], ridgeY = yAt(0) + TH;
+  for (const sz of [-1, 1]) {
+    const z = sz * (L + 0.2);
+    rt.push(boxGeo(W * 2 + 0.7, 0.4, 0.3, 0, H + 0.12, z, WHITE));                                             // header over the drive-through opening
+    for (let i = 0; i < 4; i++) {                                                                            // rake trim along the gable edge
+      const [x0, y0] = prof[i], [x1, y1] = prof[i + 1], len = Math.hypot(x1 - x0, y1 - y0), ang = Math.atan2(y1 - y0, x1 - x0);
+      rt.push(colorGeo(new THREE.BoxGeometry(len, 0.28, 0.2).rotateZ(ang).translate((x0 + x1) / 2, (y0 + y1) / 2 - 0.05, sz * (RL - 0.02 + (i % 2) * 0.04)), WHITE));
+    }
+    rt.push(boxGeo(2.0, 2.0, 0.08, 0, 7.2, z - sz * 0.02, '#7a2620'));                                      // hay-loft door panel
+    rt.push(...frameX('x', 2.4, 2.4, 0, 7.2, z + sz * 0.08, 0.2, 0.18));                                   // its white frame and X brace
+  }
+  rt.push(boxGeo(1.5, 1.3, 1.5, 0, ridgeY + 0.5, 0, WHITE));                                                 // cupola
+  for (const [x, z, w, d] of [[0.79, 0, 0.05, 0.9], [-0.79, 0, 0.05, 0.9], [0, 0.79, 0.9, 0.05], [0, -0.79, 0.9, 0.05]]) rt.push(boxGeo(w, 0.75, d, x, ridgeY + 0.55, z, '#7f7a72')); // louvers
+  rt.push(colorGeo(new THREE.ConeGeometry(1.3, 0.95, 4).rotateY(Math.PI / 4).translate(0, ridgeY + 1.57, 0), '#5a2b25'));
+  rt.push(boxGeo(0.06, 0.7, 0.06, 0, ridgeY + 2.4, 0, '#3b3b3b'), boxGeo(0.06, 0.06, 0.8, 0, ridgeY + 2.6, 0, '#3b3b3b'));   // weather vane
+  roof.add(new THREE.Mesh(mergeGeos(rt), roofTrimMat));
+  roof.traverse(m => { m.castShadow = true; });
+  return { group, roof, roofMats: [shingleMat, gableMat, roofTrimMat] };
 }

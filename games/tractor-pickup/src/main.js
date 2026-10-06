@@ -5,7 +5,7 @@ import { createTractor } from './sim/tractor.js';
 import { createTrain } from './sim/hitch.js';
 import { generateFarm } from './sim/track.js';
 import { buildRoad } from './sim/road.js';
-import { scatterScenery, addSceneryColliders, addFarmColliders, addYardProps } from './sim/scenery.js';
+import { scatterScenery, addFarmColliders, addYardProps } from './sim/scenery.js';
 import { makeRng, randomSeed } from './sim/rng.js';
 import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
@@ -63,13 +63,12 @@ function buildSandbox3D(scene, game, anisotropy) {
 
 function createFarmDrive(RAPIER, seed, power) {
   const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9));
-  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); addSceneryColliders(phys, items);
+  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); // routes are closed in by their edges and the yard fence (T-17)
   const yardProps = addYardProps(phys, farm), s = farm.start;
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
   const train = createTrain(phys, tractor);
   return { phys, farm, road, items, yardProps, tractor, train, step(input) {
     tractor.setInput(input.thr, input.steer); tractor.step(DT);
-    const e = road.edgePush(tractor.x, tractor.z); if (e.x || e.z) tractor.body.applyImpulse({ x: e.x * 1400 * DT, y: 0, z: e.z * 1400 * DT }, true);
     train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 }); phys.world.step();
   } };
 }
