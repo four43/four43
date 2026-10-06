@@ -6,9 +6,9 @@ import { generateFarm } from '../src/sim/track.js';
 import { addYardProps } from '../src/sim/scenery.js';
 await RAPIER.init();
 
-test('props: dynamic bales/cones/barrels, fixed posts/trees, and reset puts them back (T-31, T-32)', () => {
+test('props: dynamic bales/cones/barrels, fixed posts, and reset puts them back (T-31, T-32)', () => {
   const phys = createPhysics(RAPIER), farm = generateFarm(5), { props, reset } = addYardProps(phys, farm);
-  assert.equal(props.filter(p => p.body).length, 32); assert.equal(props.filter(p => !p.body).length, 12);
+  assert.equal(props.filter(p => p.body).length, 32); assert.equal(props.filter(p => !p.body).length, 8);
   for (let i = 0; i < 60; i++) phys.world.step();
   const bale = props.find(p => p.kind === 'bale'), p0 = { ...bale.body.translation() };
   bale.body.applyImpulse({ x: 900, y: 0, z: 0 }, true);

@@ -116,12 +116,20 @@ export function layoutYard(rng) {
   });
   const pc = YARD_HALF - 14, pond = { x: (rng.chance(0.5) ? 1 : -1) * pc, z: (rng.chance(0.5) ? 1 : -1) * pc, r: 7 }; // A-5: a corner, 7 m in from the fence
   const yard = { half: YARD_HALF, barn, end, side, lineup, pond, lanes, obstacles: [] };
-  for (const [kind, n, rad] of [['bale', 8, 0.9], ['cone', 16, 0.3], ['barrel', 8, 0.45], ['post', 8, 0.2], ['tree', 4, 1.2]]) {
+  for (const [kind, n, rad] of [['bale', 8, 0.9], ['cone', 16, 0.3], ['barrel', 8, 0.45], ['post', 8, 0.2]]) {
     for (let m = 0, placed = 0; placed < n && m < 2000; m++) {
       const x = rng.range(-YARD_HALF, YARD_HALF), z = rng.range(-YARD_HALF, YARD_HALF);
       if (!yardFree(yard, x, z, rad) || yard.obstacles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + rad + 2)) continue;
       yard.obstacles.push({ kind, x, z, yaw: rng.range(0, Math.PI * 2), r: rad }); placed++;
     }
+  }
+  // T-31, T-34: 10 trees, five singles and two groups (3 + 2) of young trees close together (the groups are placed as one blob 2.4 m wide)
+  const spaced = (x, z, rad) => yardFree(yard, x, z, rad) && !yard.obstacles.some(o => Math.hypot(o.x - x, o.z - z) < o.r + rad + 2);
+  const find = rad => { for (let m = 0; m < 2000; m++) { const x = rng.range(-YARD_HALF, YARD_HALF), z = rng.range(-YARD_HALF, YARD_HALF); if (spaced(x, z, rad)) return { x, z }; } return null; };
+  for (let i = 0; i < 5; i++) { const c = find(1.2); if (c) yard.obstacles.push({ kind: 'tree', x: c.x, z: c.z, yaw: rng.range(0, Math.PI * 2), r: 1.2, scale: 1 }); }
+  for (const [g, n] of [[0, 3], [1, 2]]) {
+    const c = find(2.4), a0 = rng.range(0, Math.PI * 2); if (!c) continue;
+    for (let k = 0; k < n; k++) { const a = a0 + k * Math.PI * 2 / n; yard.obstacles.push({ kind: 'tree', young: true, group: g, x: c.x + Math.cos(a) * 0.9, z: c.z + Math.sin(a) * 0.9, yaw: rng.range(0, Math.PI * 2), r: 0.7, scale: 0.6 }); }
   }
   const s0 = W(-end * 12, 0);
   yard.start = { x: s0.x, z: s0.z, yaw: Math.atan2(-end * f[0], -end * f[1]) }; // facing out of the far exit; the train sits in the barn

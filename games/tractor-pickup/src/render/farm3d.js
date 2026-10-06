@@ -62,7 +62,7 @@ function groundMaterial(grassMap, anisotropy) {
   };
   return m;
 }
-export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotropy = 1 } = {}) {
+export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotropy = 1, trees = null } = {}) {
   const matV = new THREE.MeshLambertMaterial({ vertexColors: true });
   // textured ground materials: the vertex colors tint on top of the tiling texture
   const matGrass = new THREE.MeshLambertMaterial({ vertexColors: true, map: makeGrassTexture({ anisotropy }) });
@@ -150,13 +150,27 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
   };
   const COLORS = { bale: '#e7c45a', cone: '#ff7a1a', barrel: '#a5462f', post: '#8a6240' };
   const propMeshes = props.map(p => {
-    if (p.kind === 'tree') { const m = new THREE.Mesh(geoFrom(Object.values(ASSETS.oak)), matV); m.position.set(p.x, 0, p.z); m.scale.setScalar(1.8); m.castShadow = true; scene.add(m); return null; }
     const m = new THREE.Mesh(PROP_GEO[p.kind](), p.kind === 'post' || p.kind === 'cone' ? matV : new THREE.MeshLambertMaterial({ color: COLORS[p.kind] }));
     m.castShadow = true; m.position.set(p.x, 0, p.z); scene.add(m); return m;
   });
+  // trees (T-34): the oak while standing (wobbling when bumped), scaling up from 0 while growing back, a stump when broken
+  const treeViews = (trees?.list || []).map(t => {
+    const grp = new THREE.Group(), oak = new THREE.Mesh(geoFrom(Object.values(ASSETS.oak)), matV), k = 1.8 * t.scale;
+    oak.scale.setScalar(k); oak.castShadow = true;
+    const stump = new THREE.Mesh(mergeGeos([colorGeo(new THREE.CylinderGeometry(0.42, 0.5, 0.5, 14, 1, true).translate(0, 0.25, 0), '#8a6240'), colorGeo(new THREE.CircleGeometry(0.42, 14).rotateX(-Math.PI / 2).translate(0, 0.5, 0), '#e8cf9f'), colorGeo(new THREE.RingGeometry(0.2, 0.3, 14).rotateX(-Math.PI / 2).translate(0, 0.505, 0), '#d2b27a')]), matV);
+    stump.scale.setScalar(t.young ? 0.8 : 1.3); stump.castShadow = true; stump.visible = false;
+    grp.add(oak, stump); grp.position.set(t.x, 0, t.z); scene.add(grp); return { t, grp, oak, stump };
+  });
+  const easeOutBack = u => { const c = 1.70158; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
   return {
     sprinklers,
     update(focus) {
+      const now = performance.now() / 1000;
+      for (const { t, grp, oak, stump } of treeViews) {
+        const broken = t.state === 'broken'; oak.visible = !broken; stump.visible = broken;
+        grp.scale.setScalar(t.state === 'growing' ? Math.max(0.001, easeOutBack(t.grow)) : 1);
+        grp.rotation.z = t.wobble * 6 * Math.PI / 180 * Math.sin(now * 20);
+      }
       if (focus) {
         const a = Math.hypot(focus.x - b.x, focus.z - b.z), o = roofMats[0].opacity + ((a < L + 20 ? 0 : 1) - roofMats[0].opacity) * 0.15;
         for (const m of roofMats) m.opacity = o; roof.visible = o > 0.03; roof.traverse(m => { m.castShadow = o > 0.5; });

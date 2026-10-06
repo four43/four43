@@ -6,6 +6,8 @@ import { createTrain } from './sim/hitch.js';
 import { generateFarm } from './sim/track.js';
 import { buildRoad } from './sim/road.js';
 import { scatterScenery, addFarmColliders, addYardProps } from './sim/scenery.js';
+import { createTrees, TREE } from './sim/trees.js';
+import { createGibs } from './render/gibs.js';
 import { createTerrain } from './sim/terrain.js';
 import { makeRng, randomSeed } from './sim/rng.js';
 import { buildFarm3D } from './render/farm3d.js';
@@ -29,9 +31,10 @@ async function main() {
   console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0));
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
   const aniso = renderer.capabilities.getMaxAnisotropy();
-  const t1 = performance.now(), farm3d = game.farm ? buildFarm3D(scene, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso }) : (buildSandbox3D(scene, game, aniso), null);
+  const t1 = performance.now(), farm3d = game.farm ? buildFarm3D(scene, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso, trees: game.trees }) : (buildSandbox3D(scene, game, aniso), null);
   console.log('farm 3d build ms', Math.round(performance.now() - t1));
   const vehicles = createVehicles3D(scene, game.tractor, game.train);
+  const gibs = createGibs(scene), sound = null; // Task 12 replaces `sound` with the synth: sound?.treePop?.() is the cheerful crunch-pop
   const chase = createChaseCam(camera), input = createInput(document.getElementById('ui'));
   const bodies = () => [game.tractor.body, ...game.train.cars.map(c => c.body)];
   let prev = bodies().map(snapOf), curr = prev, view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() }));
@@ -40,9 +43,9 @@ async function main() {
   renderer.setAnimationLoop(now => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
     const inp = input.read();
-    while (acc >= DT) { prev = curr; game.step({ ...inp, horn: false }); curr = bodies().map(snapOf); acc -= DT; }
+    while (acc >= DT) { prev = curr; for (const e of game.step({ ...inp, horn: false }) || []) if (e.type === 'treeBreak') { const t = e.tree, k = t.young ? 0.6 : 1; gibs.burst(t.x, 1.4 * k, t.z, e.dir, k); sound?.treePop?.(); } curr = bodies().map(snapOf); acc -= DT; }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
-    farm3d?.update(view[0].p);
+    gibs.update(dt); farm3d?.update(view[0].p);
     vehicles.update({ tractor: view[0], cars: view.slice(1) });
     const t = game.tractor, lv = t.body.linvel();
     chase.update(dt, { x: view[0].p.x, y: view[0].p.y, z: view[0].p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: Math.atan2(lv.x, lv.z) });
@@ -67,13 +70,16 @@ function createFarmDrive(RAPIER, seed, power) {
   const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1));
   const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
   const phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
-  const yardProps = addYardProps(phys, farm), s = farm.start;
+  const yardProps = addYardProps(phys, farm), trees = createTrees(phys, farm), s = farm.start;
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
-  const train = createTrain(phys, tractor);
-  return { phys, farm, road, terrain, items, yardProps, tractor, train, step(input) {
-    tractor.setInput(input.thr, input.steer); tractor.step(DT);
-    train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 }); phys.world.step();
-  } };
+  const train = createTrain(phys, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
+  return { phys, farm, road, terrain, items, yardProps, trees, tractor, train,
+    reset() { yardProps.reset(); trees.reset(); }, // Task 10's startShow must call this (T-32): props back, broken trees grow again
+    step(input) {
+      tractor.setInput(input.thr, input.steer); tractor.step(DT);
+      train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 });
+      const events = trees.step(DT, bodies); phys.world.step(); return events; // trees first: a broken trunk's collider is gone before contact resolves
+    } };
 }
 
 // Cones scattered every ~12 m for parallax. Keeps the lane to the ramp and the mud patch clear.
@@ -103,6 +109,7 @@ function buildTunePanel(game) {
     ['loose', () => t.P.loose, v => t.P.loose = v, 0, 0.3, 0.005],
     ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5], ['cam ahead', () => CAM.AHEAD, v => CAM.AHEAD = v, 2, 24, 0.5],
     ['slip', () => TP.slip, v => TP.slip = v, 0.5, 6, 0.1], ['steerMax', () => TP.steerMax, v => TP.steerMax = v, 0.3, 0.9, 0.01],
+    ['tree break speed', () => TREE.breakSpeed, v => TREE.breakSpeed = v, 1, 10, 0.5],
     ['stiffness (reload)', () => TP.stiffness, v => TP.stiffness = v, 8, 40, 1], ['trailer limitBeta', () => TR.limitBeta, v => TR.limitBeta = v, 0.1, 2, 0.05],
   ];
   for (const [name, get, set, min, max, step] of rows) {
@@ -113,5 +120,6 @@ function buildTunePanel(game) {
   }
   const sel = document.createElement('select'); sel.innerHTML = Object.keys(POWER).map(k => `<option ${k === t.power ? 'selected' : ''}>${k}</option>`).join('');
   sel.onchange = () => t.setPower(sel.value); body.appendChild(sel);
+  if (game.reset) { const r = document.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = () => game.reset(); body.appendChild(r); }
 }
 main();

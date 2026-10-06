@@ -80,12 +80,13 @@ export function addFarmColliders(phys, farm, road, terrain) {
   }
 }
 
-// T-31: bales roll (cylinder on its side), cones and barrels tip; posts and trees are fixed. T-32: reset() on each show.
+// T-31: bales roll (cylinder on its side), cones and barrels tip; posts are fixed; trees are in trees.js. T-32: reset() on each show.
 export function addYardProps(phys, farm) {
   const { RAPIER, world } = phys, cg = groups(G.PROP, 0xffff), fixed = groups(G.STATIC, 0xffff), props = [], S = Math.SQRT1_2;
   for (const o of farm.yard.obstacles) {
-    if (o.kind === 'post' || o.kind === 'tree') {
-      world.createCollider(RAPIER.ColliderDesc.cylinder(1.2, o.kind === 'tree' ? 0.7 : 0.18).setTranslation(o.x, 1.2, o.z).setFriction(0.1).setCollisionGroups(fixed));
+    if (o.kind === 'tree') continue; // trees belong to the tree system (trees.js): a fast tractor breaks them (T-34)
+    if (o.kind === 'post') {
+      world.createCollider(RAPIER.ColliderDesc.cylinder(1.2, 0.18).setTranslation(o.x, 1.2, o.z).setFriction(0.1).setCollisionGroups(fixed));
       props.push({ ...o, body: null }); continue;
     }
     const cy = Math.cos(o.yaw / 2), sy = Math.sin(o.yaw / 2);
