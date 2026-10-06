@@ -1,6 +1,6 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.2 (wide routes with edges, larger farmyard, no paddock)
+Version: 1.3 (high and low terrain, fences and banks, no stage)
 Date: 5 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
@@ -30,6 +30,10 @@ The farm has a large open farmyard at the center, with the barn. Two roads (rout
 ### 1.2.2 Change in version 1.2 (after playtest 2)
 
 Everything is larger. Routes are 14 m wide and have rock edges, so the tractor cannot leave them. The farmyard is larger. The paddock is removed: after the show, the animals walk into the barn and do not come back. The barn has a better model.
+
+### 1.2.3 Change in version 1.3 (after playtest 2b)
+
+The ground is in large high and low areas. Where the ground next to a route is high, the route goes through a cutting with a rock bank. Where the ground is low, a fence keeps the tractor on the route. The farmyard and the area around it are low. The stage is removed: the animals stand on the ground for the show.
 
 ### 1.3 Design rules for a 4-year-old player
 
@@ -64,7 +68,8 @@ These rules apply to all items in this document. If an item does not obey a rule
 |---|---|---|
 | Farmyard | TN | The large open gravel area at the center of the farm. The barn is in it. |
 | Route | TN | A road that goes out of the farmyard at one gate and comes back at a different gate. It has a rock edge on each side. |
-| Edge | TN | The earth bank with rocks along each side of a route. The tractor cannot drive over it. |
+| Edge | TN | The barrier along each side of a route: a rock bank where the ground is high, a fence where the ground is low. The tractor cannot pass it. |
+| High ground / low ground | TN | The two terrain levels of the farm. High ground is 4 m above low ground. |
 | Shoulder | TN | The grass strip between the road and the edge. |
 | Gate | TN | One of the four openings in the farmyard fence, at the middle of each side. |
 | Road | TN | All route tiles together. |
@@ -73,7 +78,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 | Obstacle | TN | A hay bale, cone, barrel, post or tree in the farmyard. |
 | Trip | TN | One drive from the barn, out on the routes and back through the barn. |
 | Show | TN | The sequence after a trip. The animals hop out, the game counts them and says their names. |
-| Stage | TN | The low platform next to the barn exit. The animals stand on it during the show. |
+| Line-up | TN | The area of ground next to the barn exit where the animals stand during the show. |
 | Trailer | TN | The cart that the tractor tows. Animals ride in it. |
 | Wagon | TN | One more trailer that the game attaches behind the last trailer. |
 | Barn | TN | The drive-through building at the center of the farmyard. The player drives through it to deliver the animals. |
@@ -119,11 +124,11 @@ The show starts when the tractor comes out of the barn with at least one animal.
 
 | ID | Item | Description |
 |---|---|---|
-| F-5 | Stop | The tractor stops softly after the barn exit. The camera moves to a position at the side of the stage. |
-| F-6 | Hop out | The animals hop out of the trailer and the wagon one at a time, in landing order, and stand in a row on the stage. When an animal lands, a large number shows above it (1, 2, 3 ...) and its name shows below it. The voice says the number and the name ("One... Pig!"). |
+| F-5 | Stop | The tractor stops softly after the barn exit. The camera moves to a position at the side of the line-up area. |
+| F-6 | Hop out | The animals hop out of the trailer and the wagon one at a time, in landing order, and stand in a row in the line-up area. When an animal lands, a large number shows above it (1, 2, 3 ...) and its name shows below it. The voice says the number and the name ("One... Pig!"). |
 | F-7 | All together | After the last animal, all animals jump together. One large number shows the total. The animals move into groups by type, with the name and the number of each group. The voice says the total and "animals!", then "Hooray!". Confetti. |
 | F-8 | Speed | Each step waits 0.8 s. A tap on the screen goes to the next step immediately, so a parent can make it faster. |
-| F-10 | Into the barn | After the show, the animals walk off the stage, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. |
+| F-10 | Into the barn | After the show, the animals walk, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. |
 
 ---
 
@@ -156,7 +161,7 @@ Road tiles have connection points at the center of a tile edge. The road surface
 | T-10 | Ramp | Two opposite edges | Straight road with a ramp. See 4.4. |
 | T-11 | Sprinkler | Two opposite edges | Straight road with a sprinkler arch. See 4.4. |
 | T-12 | Field | None | Forest, crops and grass outside the edges. Decoration only. |
-| T-26 | Farmyard | Gates | Open packed gravel with the barn, the stage, the pond and obstacles. See 4.7. |
+| T-26 | Farmyard | Gates | Open packed gravel with the barn, the line-up area, the pond and obstacles. See 4.7. |
 
 ### 4.3 Generation steps
 
@@ -165,9 +170,9 @@ Road tiles have connection points at the center of a tile edge. The road surface
 3. For each route, find a path of tiles from the tile outside its first gate to the tile outside its second gate. Use a random depth-first search. Use only the tiles in the corner of the farm between the two gates. Obey T-24 and T-25.
 4. Give each road tile its type: straight or curve, from the directions of the road into and out of the tile. The first and last tiles are gate tiles.
 5. Change straight tiles to feature tiles (T-9 to T-11). Obey the rules in 4.5.
-6. Put the barn, the stage, the pond and the obstacles in the farmyard (4.7).
+6. Put the barn, the line-up area, the pond and the obstacles in the farmyard (4.7).
 7. Fill all other tiles with field tiles (T-12). Put more animals on the field tiles next to the road.
-8. Put the edges along both sides of each route (T-17), and a fence around the farmyard. The farmyard fence has an opening at each gate.
+8. Make the high and low ground. Put the edges along both sides of each route (T-17), and a fence around the farmyard. The farmyard fence has an opening at each gate.
 
 ### 4.4 Track features
 
@@ -177,7 +182,7 @@ Road tiles have connection points at the center of a tile edge. The road surface
 | T-14 | Ramp | A gravel kicker across the full road width: 5 m up to 0.6 m, a 1 m flat top, 3 m down. The tractor jumps approximately 4 m. Driven in the other direction, it is a bump. The trailer and the wagon follow over the ramp. The animals bounce up and land in their slots again (B-11). A "whee" sound and a cheer from the animals. |
 | T-15 | Sprinkler | A sprinkler arch over the road. Water sprays when the tractor comes near. The tractor drives through the spray and becomes clean in 1.5 s. Sparkles and a "squeaky clean" sound. |
 | T-16 | Dirt | The tractor, the trailer, the wagon and each animal have a dirt level from 0 (clean) to 1 (very dirty). The level increases slowly on gravel and grass, and fast in mud. Brown spots and dust show on the tractor body, the wheels, the trailers and the animals. Animals in the trailers get dirt from the mud splashes. More dirt gives more spots. Only the sprinkler removes the dirt. It washes the tractor, the trailers and all animals in them. |
-| T-17 | Edges | Each side of a route has an edge: an earth bank 3 m high with a steep inner slope (approximately 50°) and rocks along the top. The tractor cannot drive over it; it rolls back down to the road. The edges end at the farmyard fence, so the route and the farmyard are one closed area. The shoulder is grass: it decreases the maximum speed by 30 % and decreases grip. |
+| T-17 | Edges | The farm has large areas of high ground (4 m) and low ground (0 m), with smooth slopes between them (approximately 20 m wide). The farmyard and the ground within 20 m of it are low. The road is always at 0 m. Where the ground beside a route is high, the route goes through a cutting: a steep rocky bank (approximately 50°) up to the high ground, with rocks along the top. Where the ground is low, a wood fence 1.2 m high stands at the outer side of the shoulder. Where the ground changes, the fence and the bank overlap by at least 6 m, so there is no gap and no bank stops suddenly. The tractor cannot pass an edge. The route and the farmyard are one closed area. The shoulder is grass: it decreases the maximum speed by 30 % and decreases grip. |
 
 ### 4.5 Placement rules
 
@@ -192,7 +197,7 @@ Road tiles have connection points at the center of a tile edge. The road surface
 
 ### 4.6 Scenery
 
-Outside the edges: dense forest, crops and fields. This scenery is decoration only; the tractor cannot reach it. Scenery must not block the view of an animal from the chase camera. Put tall items (trees) on the outer side of curves, not the inner side.
+Outside the edges: dense forest, crops and fields, on the high and the low ground. This scenery is decoration only; the tractor cannot reach it. Scenery must not block the view of an animal from the chase camera. Put tall items (trees) on the outer side of curves, not the inner side.
 
 ### 4.7 Farmyard
 
@@ -200,7 +205,7 @@ Outside the edges: dense forest, crops and fields. This scenery is decoration on
 |---|---|---|
 | T-27 | Surface | Packed gravel. Grip and speed are the same as on the road. |
 | T-28 | Barn | A drive-through barn at the farmyard center, 12 m long and 10 m wide inside. It is open at both ends. Its axis points to two opposite gates. The player can drive through it in either direction. Look: a classic red barn with a gambrel roof, white trim, X-braced doors that stand open at both ends, a hay-loft door and a small cupola. The roof fades out when the tractor comes near, so the player can see inside. |
-| T-29 | Stage and pond | The stage is a low wood platform 8 m past one barn exit, at the side of the drive line. The duck pond is in a corner of the farmyard. |
+| T-29 | Line-up and pond | The line-up is an area of farmyard ground 8 m past one barn exit, at the side of the drive line. It has no platform. The duck pond is in a corner of the farmyard. |
 | T-30 | Lanes | Keep a 10 m wide lane clear of obstacles from each gate to the nearest barn end. |
 | T-31 | Obstacles | 8 round hay bales (they roll when the tractor pushes them), 16 cones and 8 barrels (they tip over and slide), 8 fixed posts and 4 trees (they do not move). Put them at random outside the lanes. |
 | T-32 | Reset | When a show starts, all moved obstacles go back to their start positions with a small "poof". |

@@ -91,6 +91,7 @@ games/tractor-pickup/
 | 5 | Tractor + trailer + wagon feel in a flat sandbox with a ramp and mud. Tune with `?tune`. |
 | 7 | The farmyard (push bales, knock cones) and both routes. Try several seeds. |
 | 7b | Wider routes with rock edges, bigger farmyard, new barn. |
+| 7c | High/low terrain with fences and rock cuttings, no stage. |
 | 10 | Core loop: boop animals, launches, slots, names. |
 | 11 | Trips through the barn and the show. |
 | 13 | Full trips with voice, mud and the sprinkler. |
@@ -1929,6 +1930,87 @@ git commit -m "feat: Tractor Pickup - wider routes with rock edges, bigger farmy
 
 ---
 
+### Task 7c: High and low terrain, fences and banks, no stage (Playtest 2b changes)
+
+This task changes code from Tasks 6, 7 and 7b. Read the current `src/sim/track.js`, `road.js`, `scenery.js`, `edges.js`, `physics.js`, `tractor.js` (the steep-slope grip), `src/render/farm3d.js`, `textures.js`, `main.js` and the tests before you edit. The binding design is spec v1.3: 1.2.3, T-17, T-29 and 4.6.
+
+The user's words (Playtest 2b): "the berms on the edges are okay but it would be nice if the ground behind them was also high so they don't look so out of place. the start of them also has no end caps so it looks silly. lets change the procedural approach here. the ground is in large patches low or high. if it's low, use a fence, if it's high, use the berm. make sure we have transitions. the farm is low. there is also a strange large rectangle on the ground next to the barn. remove that" (the rectangle is the stage platform).
+
+**Files:**
+- Create: `src/sim/terrain.js`, `test/terrain.test.mjs`
+- Delete: `src/sim/edges.js` and `test/edges.test.mjs`. Move their useful assertions, such as the escape tests, into `terrain.test.mjs`.
+- Modify: `track.js` (stage → line-up), `scenery.js`, `physics.js` (ground), `src/render/farm3d.js`, `main.js` (if needed) and the affected tests.
+
+**Interfaces:**
+- terrain.js (pure, no three):
+  - `HIGH = 4` (m), `CELL = 72` (m, the patch size).
+  - `CUT = { foot: 8.5, top: 11.5 }`: the cutting slope rises from the shoulder edge to full height over 3 m, about 50°.
+  - `FENCE_D = 9.2`: the fence line, at the outer side of the shoulder.
+  - `YARD_LOW = 20`: ground within 20 m of the yard edge is forced low.
+  - `createTerrain(farm, road, rng) -> terrain` with:
+    - `patch(x, z)`: 0..HIGH, the smooth patch height without the road cut.
+    - `height(x, z)`: the final ground height, 0 in the yard and on the road and shoulder, rising through the cut to `patch`.
+    - `fences: [[ax, az, bx, bz], ...]`: fence segments.
+    - `banks: [{ x, z, ... }]`: crest points for rocks.
+    - `grid: { n, size, heights: Float32Array }`: a 1 m height grid over the farm for physics and render.
+- Patch map: a coarse grid of `CELL`-sized cells over the farm, each randomly high or low via `rng` (about 50% high). Force low every cell that overlaps the yard plus `YARD_LOW`. Blend smoothly (bilinear plus smoothstep) so a high-to-low change spans about 20 m. `patch(x, z)` = HIGH × blend.
+- Cut: `height = patch × smoothstep(CUT.foot, CUT.top, d)`, where `d` is the distance to the nearest route centerline (`road.nearest`). In the yard (|x|, |z| ≤ YARD_HALF), height = 0.
+- Barrier rule (T-17): for each route point (every 1 m) and side, sample `patch` at the cutting top (d = `CUT.top` + 1).
+  - If it is below 2.5 m, that point needs a fence at d = `FENCE_D`.
+  - Merge consecutive fence points into segments.
+  - Extend each fence run by at least 6 m at both ends into the bank region, so fence and bank overlap at transitions.
+  - Fences join the yard fence at the gates: the ground near the yard is low, so fences run up to the yard edge.
+- Physics: replace the edges trimesh with one Rapier heightfield collider built from `terrain.grid` (`G.GROUND`, friction 0.6).
+  - Check Rapier's heightfield layout (rows/columns, scale, centered origin) against `terrain.height` with raycast tests.
+  - Keep the flat ground cuboid only if needed beneath, and avoid coplanar contact issues.
+  - Fences: cuboid colliders 1.2 m high along each segment (`G.STATIC`), using the existing `addWall`.
+  - Keep the steep-slope grip logic in `tractor.js`.
+- track.js: remove `yard.stage` (data, collider and mesh). Add `yard.lineup = { x0, x1, z0, z1 }`: the same rect the stage had, as ground only, with no collider. `yardFree` still keeps obstacles out of it.
+- Render (`farm3d.js`):
+  - Replace the flat grass plane and the edge strips with one ground mesh from `terrain.grid`. Use 1 m resolution near the routes if possible; otherwise choose a resolution that keeps the cut slope looking crisp. Keep the vertex count reasonable for iPad, and report it.
+  - Use the grass texture on flat ground and a rock/dirt look on steep faces. Select by slope with vertex colors or a second texture blend, and make the cut faces read as rock.
+  - The yard gravel and the road ribbons sit just above the ground (no z-fighting).
+  - Put grey rocks along the crest of high cut sections only.
+  - Fences: the Kenney fence piece instanced along the segments.
+  - Trees and field scenery stand at `terrain.height`.
+  - Remove the stage mesh.
+- Scenery and herd: field scenery y = `terrain.height`. Animals stay on the road (y = 0), so nothing changes there.
+
+- [ ] **Step 1: Write the failing tests (`test/terrain.test.mjs`)**
+  1. For seeds 1–5:
+     - `patch` is within [0, HIGH].
+     - Every point within `YARD_HALF + YARD_LOW` of the center has `patch` = 0.
+     - At least 25% of field-tile centers are high (≥ 3.5) and at least 25% are low (≤ 0.5), so both kinds exist.
+  2. Road and shoulder are flat: for every route point, height at d ≤ 8.5 = 0, both sides.
+  3. Barrier coverage, for every route point and side, either:
+     - the height at d = 12 is ≥ 2.5 (bank), or
+     - a fence segment passes within 1 m of the point's d = `FENCE_D` position.
+
+     At every bank/fence transition, the fence extends ≥ 6 m past the point where the bank first reaches 2.5 m.
+  4. The heightfield collider matches: raycast down at 200 random farm points, and the hit y equals `terrain.height` within 0.15 m (interpolation).
+  5. Escape tests, with the full train at High power, seeds 1–3: drive straight at each side of a route on a bank section and on a fence section. The tractor and both cars never get beyond d = 11 (bank) or `FENCE_D` + 0.5 (fence), and end upright (u.y > 0.9 after rest).
+  6. No stage: `yard.stage` is undefined; `yard.lineup` exists inside the yard; obstacles stay clear of it.
+
+- [ ] **Step 2: Run them and confirm the failures are for the expected reasons**
+
+- [ ] **Step 3: Implement (as above)**
+
+- [ ] **Step 4: Run the tests, build, and check in the browser** (use a free port; never touch 4000/8765)
+  - Drive seed 1 and seed 2 along both routes.
+  - Look at a high cutting, a low fenced section and a transition: the bank and fence must overlap, and no bank may end abruptly.
+  - The yard surroundings must be low with a fence, and the rectangle by the barn must be gone.
+  - Screenshots: `shots/task7c-cutting.png`, `shots/task7c-fence.png`, `shots/task7c-transition.png`, `shots/task7c-yard.png`.
+  - Report draw calls, ground vertex count, and farm build time.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A games/tractor-pickup/src games/tractor-pickup/test site/exp/tractor-pickup
+git commit -m "feat: Tractor Pickup - high and low terrain with fences and rock cuttings"
+```
+
+---
+
 ### Task 8: Slots, riders and the launch path
 
 **Files:**
@@ -2708,7 +2790,7 @@ Stop and ask the user to playtest the core loop.
 - Produces (showSteps.js): `buildShowSteps(animals) -> steps` (`animals = [{ type, golden }]` in landing order). Step kinds: `{ kind: 'intro', say }`, `{ kind: 'hop', index, n, word, say }`, `{ kind: 'all', n, groups: [{ type, n, word }], say }`.
 - Produces (words.js): `NUMBER_WORDS` (`'zero'`..`'twelve'`), `ANIMAL_WORDS`, `PHRASES`, `WORDS`, `textOf(id)`.
 - Produces (show.js): `createShow({ root, camera, game, voice, sound, fx }) -> { active, update(dt), play(riders, steps) -> Promise<void>, end() }`. While `active`, main.js skips the chase camera.
-- Consumes: `game.startShow()`, `game.finishShow(riders)`, the `barnPass` event (Task 10); `farm.yard.stage/barn/side` (Task 6).
+- Consumes: `game.startShow()`, `game.finishShow(riders)`, the `barnPass` event (Task 10); `farm.yard.lineup/barn/side` (Tasks 6, 7c).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2828,7 +2910,7 @@ Expected: trip and show-step tests PASS.
 - [ ] **Step 5: show.js (the barn show in 3D)**
 
 ```js
-// The barn show (F-5..F-8, F-10, W-7). The camera moves beside the stage; animals hop from the trailer onto the stage
+// The barn show (F-5..F-8, F-10, W-7). The camera moves beside the line-up area; animals hop from the trailer onto the ground there
 // one at a time with a number above and a name below; then all jump, regroup by type, and the total shows.
 import * as THREE from 'three';
 const GAP = 0.95, GROUP_GAP = 0.45;
@@ -2848,7 +2930,7 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
     labels.push({ anchor, d, dy });
   };
   const frame = () => { // stage center, axis along the stage, and the side the camera stands on
-    const y = game.farm.yard, b = y.barn, st = y.stage, f = [Math.sin(b.yaw), Math.cos(b.yaw)], side = [Math.cos(b.yaw) * y.side, -Math.sin(b.yaw) * y.side];
+    const y = game.farm.yard, b = y.barn, st = { ...y.lineup, y: 0 }, f = [Math.sin(b.yaw), Math.cos(b.yaw)], side = [Math.cos(b.yaw) * y.side, -Math.sin(b.yaw) * y.side];
     return { c: { x: (st.x0 + st.x1) / 2, z: (st.z0 + st.z1) / 2 }, f, side, y: st.y };
   };
   return {
