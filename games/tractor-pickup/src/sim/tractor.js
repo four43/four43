@@ -70,6 +70,7 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
       if (this.thr > 0.05) { if (v < -0.3) brake = TP.brake * this.thr; else force = P.force * this.thr * Math.max(0, 1 - v / vmax); }
       else if (this.thr < -0.05) { if (v > 0.3) brake = TP.brake * -this.thr; else force = -TP.revForce * -this.thr * Math.max(0, 1 + v / TP.vrev); }
       else brake = this.speed < 0.3 && !steep ? TP.handbrake : TP.roll; // no parking brake with a wheel up a bank: roll back to the road
+      if (this.hold) { force = 0; brake = TP.handbrake; } // set by the game outside driving (start, show, sticker card): stand still
       this.engine = Math.abs(force) / P.force;
       // D-6 rally drift: steering hard at speed with throttle lets the rear tyres let go (rear side stiffness
       // falls from P.rearSide to P.loose); the D-7 limiter below keeps the slide bounded.

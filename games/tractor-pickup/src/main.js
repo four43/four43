@@ -30,7 +30,7 @@ import { createVoice } from './audio/voice.js';
 import { createMenus } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
-import { DEFAULT_SETTINGS, clampSettings, clampProgress, completeShow, unlockedHats } from './sim/progress.js';
+import { DEFAULT_SETTINGS, clampSettings, clampProgress, completeShow, unlockedHats, emptyProgress } from './sim/progress.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -38,7 +38,8 @@ function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQua
 async function main() {
   await RAPIER.init();
   const params = new URLSearchParams(location.search), sandbox = params.has('sandbox'), ui = document.getElementById('ui');
-  let settings = clampSettings(load('tp-settings', DEFAULT_SETTINGS)), progress = clampProgress(load('tp-progress', null), Object.keys(TYPES));
+  const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } }; // no storage content may stop the game starting
+  let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
   let powerNow = params.get('power') || settings.power;
   const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
   const aniso = renderer.capabilities.getMaxAnisotropy();
@@ -87,14 +88,14 @@ async function main() {
   }
   function startFarm({ seed: s, power }) {
     renderer.setAnimationLoop(null);
-    dispose(); build(s ?? randomSeed(), power ?? powerNow);
-    hud?.reset();
-    const t = game.tractor, p = t.body.translation(); chase.update(1, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); // the camera starts behind the new tractor
-    acc = 0; last = performance.now(); renderer.setAnimationLoop(frame);
+    try {
+      dispose(); build(s ?? randomSeed(), power ?? powerNow);
+      hud?.reset();
+      const t = game.tractor, p = t.body.translation(); chase.update(1, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); // the camera starts behind the new tractor
+    } catch (e) { console.error('new farm', e); } finally { acc = 0; last = performance.now(); renderer.setAnimationLoop(frame); }
   }
   const showReward = rs => { // W-1, W-3, W-4: the sticker, a new color or hat, then the card
     const r = completeShow(progress, rs.map(x => x.animal)); progress = r.progress;
-    if (r.newColor) { progress.color = r.newColor; vehicles.setColor(r.newColor); }
     if (r.newHat) applyHats();
     save('tp-progress', progress);
     if (r.newColor || r.newHat) sound.bells();
@@ -102,7 +103,7 @@ async function main() {
   };
   const menus = sandbox ? null : createMenus(ui, {
     icons,
-    onPlay() { sound.unlock(); voice.prime(); started = true; game.mode = 'drive'; Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }, // a real gesture: unlock audio and speech here
+    onPlay() { voice.prime(); started = true; game.mode = 'drive'; Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }, // a real gesture: unlock audio and speech here
     onKeepDriving() { rewardDone = true; },
     onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); },
     onColor(c) { progress.color = c; vehicles.setColor(c); save('tp-progress', progress); },

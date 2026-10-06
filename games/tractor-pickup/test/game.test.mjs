@@ -104,16 +104,19 @@ test('a boop always launches: no boop event without a launch (load full)', () =>
   for (const b of boops) assert.ok(launches.some(l => l.animal === b.animal || l.animal.leader === b.animal.id || b.animal.leader === l.animal.id));
 });
 
-test('in the reward state the tractor is held: full throttle goes nowhere and a close animal is not booped', () => {
+test('in the reward state the tractor is held: full throttle goes nowhere, a coasting tractor stops, and nothing is booped or broken', () => {
   const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
+  for (let i = 0; i < 150; i++) g.step({ thr: 1, steer: 0, horn: false }); // get up to speed, then the card comes up
+  assert.ok(g.tractor.speed > 3, 'coasting at speed when the card appears');
+  const trunk = g.trees.list[0], p0 = g.tractor.body.translation(); // a standing tree right in the path must not break while held
+  trunk.x = p0.x + Math.sin(g.tractor.yaw) * 3; trunk.z = p0.z + Math.cos(g.tractor.yaw) * 3;
   g.mode = 'reward'; // main.js sets this while the sticker card is up (the trip's reward state)
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
-  const x0 = g.tractor.x, z0 = g.tractor.z, ev = [];
-  for (let i = 0; i < 180; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: true }));
-  assert.ok(Math.hypot(g.tractor.x - x0, g.tractor.z - z0) < 0.5, 'the tractor stays put');
-  assert.ok(!ev.some(e => e.type === 'boop' || e.type === 'horn' || e.type === 'barnPass'));
-  g.mode = 'drive';
+  const ev = []; for (let i = 0; i < 240; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: true }));
+  assert.ok(g.tractor.speed < 0.3, 'the tractor is braked to a stop');
+  assert.ok(!ev.some(e => e.type === 'boop' || e.type === 'horn' || e.type === 'barnPass' || e.type === 'treeBreak'));
+  const x0 = g.tractor.x, z0 = g.tractor.z; g.mode = 'drive';
   for (let i = 0; i < 120; i++) g.step({ thr: 1, steer: 0, horn: false });
   assert.ok(Math.hypot(g.tractor.x - x0, g.tractor.z - z0) > 3, 'driving works again after the card');
 });

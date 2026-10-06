@@ -25,6 +25,9 @@ test('settings are clamped to the spec values (P-3..P-7)', () => {
   assert.deepEqual(clampSettings({ goal: 40, power: 'turbo', voice: 'yes', music: false, seed: -3 }), { power: 'medium', voice: true, music: false, seed: null });
   assert.deepEqual(clampSettings({ power: 'high', seed: 42 }), { power: 'high', voice: true, music: true, seed: 42 });
 });
+test('settings that are not an object (stored null, array, string, number) give the defaults and never throw', () => {
+  for (const bad of [null, undefined, [], 'x', 123, true]) assert.deepEqual(clampSettings(bad), { power: 'medium', voice: true, music: true, seed: null });
+});
 test('saved progress that is damaged falls back to clean values; a locked color is not kept', () => {
   const types = ['pig', 'cow'];
   assert.deepEqual(clampProgress('junk', types), emptyProgress());

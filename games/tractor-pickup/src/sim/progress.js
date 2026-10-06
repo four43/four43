@@ -26,6 +26,7 @@ export function clampProgress(p, types) {
 }
 export const DEFAULT_SETTINGS = { power: 'medium', voice: true, music: true, seed: null };
 export function clampSettings(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) s = {}; // storage can hold anything
   return {
     power: ['low', 'medium', 'high'].includes(s.power) ? s.power : 'medium',
     voice: s.voice === undefined ? true : !!s.voice, music: s.music === undefined ? true : !!s.music,

@@ -41,10 +41,13 @@ export function createMenus(root, { icons, onPlay, onKeepDriving, onNewFarm, onS
     const s = open('reward');
     const big = el('bigsticker', 'div', s); big.appendChild(portrait(icons, sticker));
     const extras = el('extras', 'div', s);
-    if (newColor) { const c = el('extra', 'div', extras); c.innerHTML = tractorSvg(newColor); }
     if (newHat) { const h = el('extra hatted', 'div', extras); h.innerHTML = `<img alt="" src="${icons.pig}"><span>${hatSvg(newHat)}</span>`; }
     const btns = el('btns', 'div', s);
-    pic(btns, 'keep', tractorSvg(progress.color), () => { close(); onKeepDriving(); }, 'Keep driving');
+    const keep = pic(btns, 'keep', tractorSvg(progress.color), () => { close(); onKeepDriving(); }, 'Keep driving');
+    if (newColor) { // W-3: the new color is shown here; a tap on it is the player's choice
+      const c = pic(extras, 'extra swatch', tractorSvg(newColor), () => { progress.color = newColor; onColor?.(newColor); keep.innerHTML = tractorSvg(newColor); c.classList.add('on'); }, newColor);
+      extras.prepend(c);
+    }
     pic(btns, 'newfarm', mapSvg(), () => { close(); onNewFarm(); }, 'New farm');
     pic(s, 'bookbtn small', bookSvg(), () => showBook(progress, () => showReward({ sticker, newColor, newHat, progress })), 'Sticker book');
   }
@@ -92,7 +95,7 @@ export function createMenus(root, { icons, onPlay, onKeepDriving, onNewFarm, onS
       const a = e.target.dataset?.a; if (!a) return;
       if (a === 'apply') { onSettings(values()); done(); }
       else if (a === 'close') done();
-      else if (a === 'new') { onSettings(values()); done(); onNewFarm(); }
+      else if (a === 'new') { onSettings(values()); done(); const atStart = screen?.classList.contains('start'); close(); onNewFarm(); if (atStart) onPlay(); } // a screen left open would hide the new farm; from the start screen this also starts play
       else if (a === 'clear' && confirm('Clear all stickers? This cannot be undone.')) { onClearStickers(); done(); }
     });
     p.addEventListener('pointerdown', e => e.stopPropagation());

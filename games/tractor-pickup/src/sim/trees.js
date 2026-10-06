@@ -19,7 +19,7 @@ export function createTrees(phys, farm) {
   return {
     list,
     // bodies[0] is the tractor; the trailer cars after it only ever bump into trees (they are solid, never broken).
-    step(dt, bodies) {
+    step(dt, bodies, canBreak = true) {
       const events = [], tb = bodies[0], p = tb.translation(), { f } = quatAxes(tb.rotation()), lv = tb.linvel(), speed = Math.hypot(lv.x, lv.z);
       const hl = Math.hypot(f.x, f.z) || 1, dir = { x: f.x / hl, z: f.z / hl }, nx = p.x + dir.x * FRONT, nz = p.z + dir.z * FRONT;
       for (const t of list) {
@@ -27,7 +27,7 @@ export function createTrees(phys, farm) {
         if (t.state === 'growing') { t.grow = Math.min(1, t.grow + dt / TREE.regrowTime); if (t.grow >= 1) t.state = 'standing'; continue; }
         if (t.state !== 'standing') continue;
         const d = Math.hypot(nx - t.x, nz - t.z);
-        if (d < t.r + REACH && speed >= TREE.breakSpeed) {
+        if (d < t.r + REACH && speed >= TREE.breakSpeed && canBreak) {
           dropCollider(t); t.state = 'broken'; t.wobble = 0; t.near = false; t.grow = 0;
           tb.setLinvel({ x: lv.x * (1 - TREE.slowdown), y: lv.y, z: lv.z * (1 - TREE.slowdown) }, true);
           events.push({ type: 'treeBreak', tree: t, dir: { ...dir }, speed });

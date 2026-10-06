@@ -7,7 +7,7 @@ const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 export function createShow({ root, camera, game, voice, sound, fx }) {
   const el = document.createElement('div'); el.id = 'show'; el.hidden = true; root.appendChild(el);
   const big = document.createElement('div'); big.className = 'big'; el.appendChild(big);
-  let tweens = [], labels = [], active = false, camT = 1, cut = null, fast = false;
+  let tweens = [], labels = [], active = false, ended = false, camT = 1, cut = null, fast = false;
   const camFrom = new THREE.Vector3(), camTo = new THREE.Vector3(), look = new THREE.Vector3(), lookFrom = new THREE.Vector3(), lookTo = new THREE.Vector3(), v = new THREE.Vector3();
   // F-8: one tap finishes the current step: hops in flight land at once, and the voice and the 0.8 s wait end together
   const newStep = () => { fast = false; let fire; const p = new Promise(r => { fire = r; }); cut = { p, fire }; };
@@ -47,7 +47,7 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
       for (const L of labels) { v.set(L.anchor.x, (L.anchor.y || 0) + L.dy, L.anchor.z).project(camera); L.d.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; L.d.style.top = ((1 - v.y) / 2 * innerHeight) + 'px'; }
     },
     async play(riders, steps) {
-      active = true; el.hidden = false; big.textContent = ''; big.classList.remove('on');
+      active = true; ended = false; el.hidden = false; big.textContent = ''; big.classList.remove('on');
       try {
         const F = frame(), L = rowLayout(riders.map(r => r.animal.type));
         const spot = x => ({ x: F.c.x + F.f[0] * x, y: F.y, z: F.c.z + F.f[1] * x }); // x = metres along the line-up row from its center
@@ -57,6 +57,7 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
         lookFrom.copy(camera.getWorldDirection(v)).multiplyScalar(15).add(camera.position); lookTo.set(F.c.x, F.y + 1, F.c.z); look.copy(lookFrom); camT = 0;
         const faceCam = Math.atan2(F.side[0], F.side[1]);
         for (const s of steps) {
+          if (ended) break; // end() was called (a new farm): stop before touching the old bodies
           newStep();
           if (s.kind === 'hop') { // F-6
             labels.filter(L => L.d.className === 'name').forEach(L => L.d.remove()); labels = labels.filter(L => L.d.className !== 'name'); // names are wider than the row gap: only the newest stays
@@ -82,6 +83,6 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
         for (const tw of tweens) finish(tw); tweens = []; cut = null; fast = false;
       }
     },
-    end() { active = false; el.hidden = true; labels.forEach(L => L.d.remove()); labels = []; big.classList.remove('on'); },
+    end() { active = false; ended = true; fast = true; cut?.fire(); for (const tw of tweens) finish(tw); tweens = []; el.hidden = true; labels.forEach(L => L.d.remove()); labels = []; big.classList.remove('on'); },
   };
 }

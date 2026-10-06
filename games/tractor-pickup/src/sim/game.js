@@ -62,9 +62,9 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
       if (game.mode === 'drive') for (const a of herd.free()) { const l = tractorLocal(a.x, 0, a.z, tmp), d = Math.hypot(l.x, l.z);
         if (l.x > 0 && d < best && Math.abs(Math.atan2(l.z, l.x)) < AIM.cone) { best = d; assist = Math.max(-AIM.max, Math.min(AIM.max, -Math.atan2(l.z, l.x) * AIM.gain)); } }
       tractor.setAssist(tractor.fwd > 0.5 ? assist : 0);
-      tractor.setInput(drive.thr, drive.steer); tractor.step(DT);
-      train.step(DT, { parked: Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3 });
-      events.push(...trees.step(DT, bodies)); phys.world.step(); // trees first: a broken trunk's collider is gone before contact resolves
+      tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer); tractor.step(DT);
+      train.step(DT, { parked: tractor.hold || (Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3) });
+      events.push(...trees.step(DT, bodies, game.mode === 'drive')); phys.world.step(); // trees first: a broken trunk's collider is gone before contact resolves
       herd.step(DT, { tractor });
       // boops (B-1, B-2: any speed; A-13: a hider sits at its bush, so driving into the bush finds it) and the dog that jumps in by itself (A-7)
       if (game.mode === 'drive' && !load.full()) for (const a of herd.free()) {
