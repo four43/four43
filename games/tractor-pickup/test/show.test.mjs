@@ -52,3 +52,14 @@ test('the hop turns the animal from its riding yaw to face the camera (no snap)'
   assert.ok(Math.abs(Math.atan2(Math.sin(first - Math.PI), Math.cos(first - Math.PI))) < 0.4, `starts near the riding yaw, got ${first}`);
   assert.ok(Math.abs(a.yaw - Math.PI / 2) < 1e-9, 'ends facing the camera (side +x)');
 });
+test('a hop shows a number above the animal and its name below it, letter by letter (F-6, W-7)', async () => {
+  const { show, el, stop } = setup({ say: () => Promise.resolve() }), r = riders(['cow']);
+  let seen = null;
+  const p = show.play(r, steps(r));
+  try {
+    for (let i = 0; i < 200 && !seen; i++) { await new Promise(res => setTimeout(res, 10)); const num = el.children.find(c => c.className === 'num'); if (num) seen = { num, name: el.children.find(c => c.className === 'name') }; }
+    const taps = setInterval(() => el.tap(), 20); await within(p, 3000); clearInterval(taps);
+  } finally { stop(); }
+  assert.ok(seen, 'no number label'); assert.equal(seen.num.innerHTML, 1);
+  assert.ok(seen.name, 'no name label'); assert.equal(seen.name.innerHTML.match(/<b[^>]*>(.)<\/b>/g).map(b => b.replace(/<[^>]+>/g, '')).join(''), 'Cow');
+});

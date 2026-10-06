@@ -62,7 +62,8 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
             labels.filter(L => L.d.className === 'name').forEach(L => L.d.remove()); labels = labels.filter(L => L.d.className !== 'name'); // names are wider than the row gap: only the newest stays
             const r = riders[s.index], a = r.animal; a.yaw = ridingYaw(r); a.state = 'show'; a.anim = 'idle'; sound?.boing?.(0.3);
             await tween(a, spot(L.hop[s.index]), 0.7, 3, faceCam); sound?.plop?.();
-            label(a, 'num', s.n, s.n >= 10 && s.n % 2 === 0 ? 2.25 : 1.6); // 10 and 12 sit higher: two-digit numbers are wider than a small animal label(a, 'name', letters(s.word), -0.35, s.say.slice(1));
+            label(a, 'num', s.n, s.n >= 10 && s.n % 2 === 0 ? 2.25 : 1.6); // 10 and 12 sit higher: two-digit numbers are wider than a small animal
+            label(a, 'name', letters(s.word), -0.35, s.say.slice(1));
           }
           if (s.kind === 'all') { // F-7
             labels.forEach(L => L.d.remove()); labels = [];
@@ -78,7 +79,7 @@ export function createShow({ root, camera, game, voice, sound, fx }) {
           await wait(800);
         }
       } finally { // R-1: whatever happens, nobody is left mid-hop
-        for (const tw of tweens) finish(tw); tweens = []; cut = null;
+        for (const tw of tweens) finish(tw); tweens = []; cut = null; fast = false;
       }
     },
     end() { active = false; el.hidden = true; labels.forEach(L => L.d.remove()); labels = []; big.classList.remove('on'); },
