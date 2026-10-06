@@ -51,9 +51,10 @@ games/tractor-pickup/
 │   │   ├── track.js         # farm generator: farmyard, routes, features, yard layout (4.1-4.7)
 │   │   ├── road.js          # route centerlines, nearest point, surfaces, barn pass
 │   │   ├── scenery.js       # field scenery, fences, yard props, colliders (4.6, 4.7)
+│   │   ├── edges.js         # rock edges along the routes (T-17)
 │   │   ├── slots.js         # slot layout, load, rider springs (B-8..B-13)
 │   │   ├── launch.js        # predefined launch path (B-5, B-6)
-│   │   ├── herd.js          # animals, behaviors, paddock, respawn (section 5)
+│   │   ├── herd.js          # animals, behaviors, delivery into the barn, respawn (section 5)
 │   │   ├── dirt.js          # dirt levels (T-16)
 │   │   ├── trip.js          # trip state machine (3.1, F-2, F-4)
 │   │   ├── showSteps.js     # barn show timeline (3.4)
@@ -89,6 +90,7 @@ games/tractor-pickup/
 |---|---|
 | 5 | Tractor + trailer + wagon feel in a flat sandbox with a ramp and mud. Tune with `?tune`. |
 | 7 | The farmyard (push bales, knock cones) and both routes. Try several seeds. |
+| 7b | Wider routes with rock edges, bigger farmyard, new barn. |
 | 10 | Core loop: boop animals, launches, slots, names. |
 | 11 | Trips through the barn and the show. |
 | 13 | Full trips with voice, mud and the sprinkler. |
@@ -1781,7 +1783,7 @@ console.log('seed', seed);
 
 function createFarmDrive(RAPIER, seed, power) {
   const farm = generateFarm(seed), road = buildRoad(farm), items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9));
-  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); addSceneryColliders(phys, items);
+  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); // includes the route edges (Task 7b)
   const yardProps = addYardProps(phys, farm), s = farm.start;
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
   const train = createTrain(phys, tractor);
@@ -1809,6 +1811,121 @@ git commit -m "feat: Tractor Pickup - routes, farmyard props and generated farm"
 ```
 
 Stop and ask the user to playtest the farm and the farmyard on the iPad.
+
+---
+
+### Task 7b: Bigger farm, route edges, new barn, no paddock (Playtest 2 changes)
+
+This task changes code that Tasks 6 and 7 built. Read the current `src/sim/track.js`, `src/sim/road.js`, `src/sim/scenery.js`, `src/sim/sandbox.js`, `src/render/farm3d.js`, `bake.mjs` and their tests before you edit. The binding design is spec v1.2: T-1, T-2, T-3, T-5, T-14, T-17, T-28 to T-31, 4.6, A-5, A-13 and A-16.
+
+**Files:**
+- Modify: `src/sim/track.js`, `src/sim/road.js`, `src/sim/scenery.js`, `src/sim/sandbox.js` (`addRamp` width), `src/render/farm3d.js`, `bake.mjs` and `src/assets.json` (rock models), `test/track.test.mjs`, `test/road.test.mjs`, `test/yard.test.mjs`
+- Create: `src/sim/edges.js`, `test/edges.test.mjs`
+
+**Interfaces (changes):**
+- track.js: `TILE = 36`, `YARD_HALF = 54` (3 tiles). `yard.paddock` is removed. `yard.pond = { x, z, r: 7 }` sits in a farmyard corner, and `yardFree` keeps clear of it (r + 2). `farm.pond` is `yard.pond`. Obstacle counts are 8 bales, 16 cones, 8 barrels, 8 posts and 4 trees. Lane clearance is `segDist > 5 + r`, for 10 m wide lanes. `hideSpots` sit on the shoulder, 8.5 m from the centerline of a plain straight or gate tile.
+- road.js: `ROAD_HALF = 7`, `SHOULDER = 1.5`, `CORRIDOR = ROAD_HALF + SHOULDER` (8.5). `surfaceAt` returns `'gravel'` or `'mud'` within `ROAD_HALF`, `'grass'` on the shoulder and beyond, and `'gravel'` in the yard. The mud area is `|u − 0.5| × TILE < 0.35 × TILE`. `inSprinkler` has width `ROAD_HALF + 1`. The farm-edge `edgePush` is removed, because the edges and the yard fence now enclose the drivable area.
+- edges.js (new): `EDGE = { foot: 8.5, crest: 11, crestOut: 13, outFoot: 16, height: 3 }` (distances from the centerline, in m). `edgeStrips(route) -> { vertices: Float32Array, indices: Uint32Array }` builds both banks of one route from `route.pts`. `addEdgeColliders(phys, road)` adds one fixed trimesh collider per route (`G.STATIC`). `edgeRocks(road, rng) -> [{ x, z, yaw, scale, kind }]` places rocks about every 3 m along both crests.
+- scenery.js: paddock walls are removed. Gate gaps are 17 m wide. Field scenery sits only outside the edges (`road.nearest(x, z).d > EDGE.outFoot + r`) and is denser: 10–20 items per field tile, with more tall trees (forest, A-4.6). Scenery colliders are no longer needed and are removed, because the tractor cannot reach the fields. The yard props and the yard fence stay.
+- sandbox.js: `addRamp(phys, { x, z, yaw, width = 7 })`. The farm uses `width: 14`.
+- farm3d.js:
+  - Draw the road ribbons at `ROAD_HALF` 7, with a grass shoulder strip.
+  - Draw the edge banks from `edgeStrips`. Use the gravel texture tinted grey-brown on the inner slope and the grass texture on the crest and the outer slope.
+  - Draw the rocks instanced from the Nature Kit rock models.
+  - Remove the paddock.
+  - Draw the pond in the yard.
+  - Build the new barn (below).
+
+- [ ] **Step 1: Write the failing tests**
+
+- `test/edges.test.mjs`:
+  1. `edgeStrips` gives a closed, valid mesh. Every index is below the vertex count. Every vertex is at 0 ≤ y ≤ 3. For seeds 1–3, the crest vertices lie 11–13 m from the route's centerline, checked with `road.nearest` at 0.5 m tolerance.
+  2. The tractor can't leave the route. Build a farm (seed 1): physics, `addFarmColliders`, `addEdgeColliders`, and a tractor on a straight route tile facing across the road toward one edge. Drive full throttle (High power) for 6 s.
+     - It never reaches the crest: max `road.nearest(...).d` < `EDGE.crest`.
+     - Afterwards the tractor is upright: `u.y` > 0.9 after 3 s of rest.
+     - Repeat toward the other edge.
+  3. Driving straight along a route tile at full speed for 4 s keeps `d` < `ROAD_HALF`, so the edges don't interfere with normal driving.
+- `test/track.test.mjs`:
+  - Update the constants and counts: 8, 16, 8, 8 and 4 obstacles; lanes `> 5 + r`.
+  - The pond is inside the yard and clear of lanes, barn and stage.
+  - Hide spots are 7.5–9.5 m from the route centerline. Measure this in the road tests; in track.js, check the 8.5 m offset from the tile line.
+- `test/road.test.mjs`:
+  - Scenery `d > EDGE.outFoot + r`.
+  - Yard gate gaps are clear by more than 8 m.
+  - `surfaceAt` on the shoulder (d = 8) is `'grass'`.
+  - The mud test still passes at the new size.
+- `test/yard.test.mjs`:
+  - Props are 32 dynamic and 12 fixed.
+  - Remove the paddock wall test.
+
+- [ ] **Step 2: Run the tests and confirm they fail for the expected reasons**
+
+- [ ] **Step 3: Implement**
+
+Edge strips. For each route, build both sides from its points. Each side is a profile of 4 points at distances `[foot, crest, crestOut, outFoot]` with heights `[0, height, height, 0]`, offset along the left normal `(-tz, tx)` × side. Join consecutive points with quads. Wind the triangles so the normals face up and inward. Take the winding care that Task 7's road ribbon needed.
+
+```js
+// src/sim/edges.js: the rock edges that keep the tractor on a route (spec T-17).
+import { G, groups } from './physics.js';
+export const EDGE = { foot: 8.5, crest: 11, crestOut: 13, outFoot: 16, height: 3 };
+const PROFILE = [[EDGE.foot, 0], [EDGE.crest, EDGE.height], [EDGE.crestOut, EDGE.height], [EDGE.outFoot, 0]];
+export function edgeStrips(route) {
+  const P = route.pts, pos = [], idx = [];
+  for (const side of [-1, 1]) {
+    const base = pos.length / 3;
+    for (const p of P) for (const [d, h] of PROFILE) pos.push(p.x - p.tz * side * d, h, p.z + p.tx * side * d);
+    for (let i = 0; i + 1 < P.length; i++) for (let k = 0; k < 3; k++) {
+      const a = base + i * 4 + k, b = a + 1, c = a + 4, e = a + 5;
+      if (side > 0) idx.push(a, c, b, b, c, e); else idx.push(a, b, c, b, e, c);
+    }
+  }
+  return { vertices: new Float32Array(pos), indices: new Uint32Array(idx) };
+}
+export function addEdgeColliders(phys, road) {
+  const { RAPIER, world } = phys;
+  for (const r of road.routes) { const { vertices, indices } = edgeStrips(r);
+    world.createCollider(RAPIER.ColliderDesc.trimesh(vertices, indices).setFriction(0.6).setRestitution(0).setCollisionGroups(groups(G.STATIC, 0xffff))); }
+}
+export function edgeRocks(road, rng) {
+  const out = [];
+  for (const r of road.routes) for (let i = 0; i < r.pts.length; i += 3) for (const side of [-1, 1]) {
+    const p = r.pts[i], d = rng.range(EDGE.crest - 0.5, EDGE.crestOut + 0.5);
+    out.push({ x: p.x - p.tz * side * d, z: p.z + p.tx * side * d, yaw: rng.range(0, 6.28), scale: rng.range(1.2, 2.4), kind: rng.pick(['rockA', 'rockB', 'rockC']) });
+  }
+  return out;
+}
+```
+
+- Verify the winding in the browser: the banks must be visible from the road. Use one strip winding for the mesh; trimesh colliders are double-sided.
+- Bake: add `rockA: NK('rock_largeA')`, `rockB: NK('rock_largeB')`, `rockC: NK('rock_tallA')` to the statics. Check these files exist in "Nature Kit/Models/GLTF format/"; if one is missing, use the nearest existing `rock_large*` or `rock_tall*` model. Then re-run `npm run bake`.
+- `addFarmColliders` calls `addEdgeColliders`. `game`/`main` farm mode no longer apply `edgePush`; remove those calls.
+
+The new barn (T-28), the same size (inside 12 m long × 10 m wide, walls 5 m), built in code in `farm3d.js`:
+- Red board walls with vertical plank lines. Use a small canvas texture: red with darker plank seams and slight weathering, or vertex-color stripes.
+- White corner trim and a white trim band under the roof.
+- A gambrel roof: extrude a 5-point profile along the barn axis. The steep lower pitch is about 60° and the shallow upper pitch about 30°. Use dark red-brown or grey shingles, and keep a small overhang.
+- Both gable ends: a white-framed hay-loft door with an X brace, above the open drive-through door.
+- At each end, two big door leaves standing open against the walls (swung 90° out), red with a white X brace and frame.
+- A small white cupola with a little roof on the ridge.
+- The roof, gables and cupola stay in the separate fading roof group (the existing fade logic). The walls and open doors stay solid. The open door leaves must not block the 10 m opening; check them against the barn collider walls.
+
+- [ ] **Step 4: Run the tests, build, and check in the browser**
+
+Run `npm test` and `npm run build`. With a local server on a free port, drive seed 1 and seed 2: down a route, into an edge (it must stop you and roll you back), through the yard and through the barn.
+
+Take screenshots:
+- `shots/task7b-route.png`: a route with both edges and rocks.
+- `shots/task7b-barn.png`: the new barn from the yard, roof visible.
+- `shots/task7b-yard.png`.
+
+Check 60 fps feel: no obvious stutter, and report draw-call count from `renderer.info.render.calls`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add games/tractor-pickup/src games/tractor-pickup/test games/tractor-pickup/bake.mjs site/exp/tractor-pickup
+git commit -m "feat: Tractor Pickup - wider routes with rock edges, bigger farmyard, new barn"
+```
 
 ---
 
@@ -1970,10 +2087,11 @@ git commit -m "feat: Tractor Pickup - trailer slots, rider springs and launch pa
 
 **Interfaces:**
 - Consumes: `makeRng` (rng.js).
-- Produces: `TYPES` (per type: `word, speed, r, flee, come`), `MAIN_TYPES = ['pig','cow','chicken','sheep','duck','bunny','dog']`, `ROUTE_ANIMALS = 18`, `YARD_ANIMALS = 3`, `createHerd({ rng, env, count = 18, yardCount = 3 }) -> herd`.
-- `env = { bounds, roadNearest(x,z) -> { d, pt: { x, z, tx, tz } }, roadAhead(x, z, yaw, dist) -> { x, z }, mudSpots: [{ x, z }], pond: { x, z, r }, hideSpots: [{ x, z }], yard: { half, randomPoint(rng) -> { x, z } }, paddock: { x0, x1, z0, z1, gate: { x, z } }, edgePoint(rng) -> { x, z } }`.
-- `herd = { animals, step(dt, { tractor }), horn(tractor), callHelp(tractor) -> animal|null, free(): animal[], pen(list), respawn(), prune(max) }`.
-- `animal = { id, type, golden, home: 'route'|'yard', x, y, z, yaw, state, anim, leader, line, hidden, dirt, lookT, helpT, penOrder }`. States: `idle, walk, flee, come, follow, hide, wallow, help, wave` (free), `fly, ride, show` (set by `game.js` and the show; the herd skips them), `toPen, penned, leave, gone` (delivered).
+- Spec v1.2: animals live on the routes between the edges (A-9), ducks at the farmyard pond (A-5), delivered animals walk into the barn and are gone (A-16, F-10). There is no paddock.
+- Produces: `TYPES` (per type: `word, speed, r, flee, come`), `MAIN_TYPES = ['pig','cow','chicken','sheep','duck','bunny','dog']`, `ROUTE_ANIMALS = 18`, `YARD_ANIMALS = 3`, `WALK_HALF = 6.5` (route animals stay within 6.5 m of the centerline), `createHerd({ rng, env, count = 18, yardCount = 3 }) -> herd`.
+- `env = { bounds, roadNearest(x,z) -> { d, pt: { x, z, tx, tz } }, roadAhead(x, z, yaw, dist) -> { x, z }, routePoint(rng) -> { x, z } (a random point on a route, outside the yard), mudSpots: [{ x, z }], pond: { x, z, r } (in the yard), hideSpots: [{ x, z }], yard: { half, randomPoint(rng) -> { x, z } }, barn: { x, z } }`.
+- `herd = { animals, step(dt, { tractor }), horn(tractor), callHelp(tractor) -> animal|null, free(): animal[], toBarn(list), respawn() }`.
+- `animal = { id, type, golden, home: 'route'|'yard', x, y, z, yaw, state, anim, leader, line, hidden, dirt, lookT, helpT, penOrder }`. States: `idle, walk, flee, come, follow, hide, wallow, help, wave` (free), `fly, ride, show` (set by `game.js` and the show; the herd skips them), `toBarn, gone` (delivered).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1985,43 +2103,44 @@ import assert from 'node:assert/strict';
 import { createHerd, MAIN_TYPES } from '../src/sim/herd.js';
 import { makeRng } from '../src/sim/rng.js';
 
-// A straight east-west road along z = 0, a 60 m farmyard at the center, a paddock to the north-east.
+// A straight east-west route along z = 0 (walkable |z| <= 6.5), a 60 m farmyard at the center with a pond and the barn.
 const env = {
-  bounds: 105,
+  bounds: 190,
   roadNearest: (x, z) => ({ d: Math.abs(z), pt: { x, z: 0, tx: 1, tz: 0 } }),
   roadAhead: (x, z, yaw, dist) => ({ x: x + Math.sin(yaw) * dist, z: 0 }),
-  mudSpots: [{ x: -90, z: 0 }, { x: -60, z: 0 }, { x: 40, z: 0 }, { x: 80, z: 0 }], pond: { x: -50, z: 12, r: 5 }, hideSpots: [{ x: 50, z: 12 }, { x: -50, z: -12 }],
+  routePoint: r => ({ x: (r.chance(0.5) ? 1 : -1) * r.range(40, 180), z: r.range(-5, 5) }),
+  mudSpots: [{ x: -150, z: 0 }, { x: -90, z: 0 }, { x: 60, z: 0 }, { x: 120, z: 0 }], pond: { x: -20, z: -20, r: 5 }, hideSpots: [{ x: 50, z: 8.5 }, { x: -50, z: -8.5 }],
   yard: { half: 30, randomPoint: r => ({ x: r.range(-25, 25), z: r.range(-25, -8) }) },
-  paddock: { x0: 10, x1: 25, z0: 12, z1: 26, gate: { x: 17, z: 12 } },
-  edgePoint: r => ({ x: r.range(-90, 90), z: -100 }),
+  barn: { x: 0, z: 0 },
 };
 const far = { x: 500, z: 500, yaw: 0, speed: 0 };
 const run = (h, sec, tractor = far) => { for (let i = 0; i < sec * 60; i++) h.step(1 / 60, { tractor }); };
-const inPaddock = a => a.x > 10 && a.x < 25 && a.z > 12 && a.z < 26;
 
 test('spawns route and yard animals, every main type, a hen with two chicks, at most one golden', () => {
   const h = createHerd({ rng: makeRng(1), env, count: 18, yardCount: 3 });
   assert.equal(h.animals.length, 21);
   assert.equal(h.animals.filter(a => a.home === 'yard').length, 3);
-  for (const t of MAIN_TYPES) assert.ok(h.animals.some(a => a.type === t && a.home === 'route'), t);
+  for (const t of MAIN_TYPES) assert.ok(h.animals.some(a => a.type === t), t);
+  assert.ok(h.animals.some(a => a.type === 'duck' && Math.hypot(a.x - env.pond.x, a.z - env.pond.z) < env.pond.r + 3), 'duck at the pond');
   assert.equal(h.animals.filter(a => a.type === 'chick').length, 2);
   assert.ok(h.animals.filter(a => a.golden).length <= 1);
   assert.equal(h.animals.filter(a => a.hidden).length, 2);
-  for (const a of h.animals.filter(a => a.home === 'route')) assert.ok(Math.abs(a.x) > 30 || Math.abs(a.z) > 30, 'route animal spawned in the yard');
+  for (const a of h.animals.filter(a => a.home === 'route')) { assert.ok(Math.abs(a.x) > 30 || Math.abs(a.z) > 30, 'route animal spawned in the yard'); if (!a.hidden) assert.ok(Math.abs(a.z) <= 6.5, 'route animal off the road'); }
 });
 test('animals stay inside the farm and mosey; yard animals stay in the yard (A-9, A-15)', () => {
   const h = createHerd({ rng: makeRng(2), env }), x0 = h.animals.map(a => [a.x, a.z]);
   run(h, 300);
-  for (const a of h.animals) assert.ok(Math.abs(a.x) <= 105 && Math.abs(a.z) <= 105);
+  for (const a of h.animals.filter(a => a.home === 'route' && !a.hidden)) assert.ok(Math.abs(a.z) <= 6.5 + 1e-6 || (Math.abs(a.x) < 30 && Math.abs(a.z) < 30), `route animal left the road: ${a.x},${a.z}`);
   for (const a of h.animals.filter(a => a.home === 'yard')) assert.ok(Math.abs(a.x) < 30 && Math.abs(a.z) < 30, 'yard animal left the yard');
   const moved = h.animals.filter((a, i) => !a.hidden && Math.hypot(a.x - x0[i][0], a.z - x0[i][1]) > 3).length;
   assert.ok(moved >= 14, `moved ${moved}`);
 });
 test('flee types run off slowly from the tractor (A-10)', () => {
   const h = createHerd({ rng: makeRng(3), env }), s = h.animals.find(a => a.type === 'sheep' && !a.hidden && a.home === 'route');
-  let maxV = 0; const t = { x: s.x - 4, z: s.z, yaw: Math.PI / 2, speed: 5 };
+  s.z = 0; let maxV = 0; const t = { x: s.x - 4, z: s.z, yaw: Math.PI / 2, speed: 5 };
   for (let i = 0; i < 120; i++) { const px = s.x, pz = s.z; h.step(1 / 60, { tractor: t }); maxV = Math.max(maxV, Math.hypot(s.x - px, s.z - pz) * 60); }
   assert.ok(s.x > t.x + 4, 'did not move away'); assert.ok(maxV < 3, `too fast ${maxV}`); // the tractor is always faster (6+ m/s)
+  assert.ok(Math.abs(s.z) <= 6.5 + 1e-6, 'fled off the road');
 });
 test('horn: everyone looks; come types walk toward the tractor (A-11)', () => {
   const h = createHerd({ rng: makeRng(4), env }), t = { x: 40, z: 0, yaw: 0, speed: 0 };
@@ -2046,24 +2165,19 @@ test('help call brings the nearest free animal onto the road ahead (F-4)', () =>
   for (let i = 0; i < 20 * 60 && a.state !== 'wave'; i++) h.step(1 / 60, { tractor: t });
   assert.equal(a.state, 'wave'); assert.ok(Math.hypot(a.x - 65, a.z) < 3, `at ${a.x},${a.z}`);
 });
-test('delivered animals walk into the paddock and stay; they are not free (A-16)', () => {
+test('delivered animals walk into the barn and are gone; they are never free again (A-16, F-10)', () => {
   const h = createHerd({ rng: makeRng(8), env }), list = h.free().slice(0, 5);
-  list.forEach(a => { a.state = 'show'; a.x = 0; a.z = 5; });
-  h.pen(list); run(h, 40);
-  for (const a of list) { assert.equal(a.state, 'penned'); assert.ok(inPaddock(a), `${a.x},${a.z}`); assert.ok(!h.free().includes(a)); }
-  run(h, 60); for (const a of list) assert.ok(inPaddock(a));
+  list.forEach(a => { a.state = 'show'; a.x = 14; a.z = 9; });
+  h.toBarn(list); assert.ok(list.every(a => a.state === 'toBarn' && !h.free().includes(a)));
+  run(h, 30);
+  for (const a of list) assert.equal(a.state, 'gone');
 });
-test('respawn refills the route and yard counts from the farm edge (G-3)', () => {
+test('respawn refills the route and yard counts along the routes (G-3)', () => {
   const h = createHerd({ rng: makeRng(9), env }), list = h.free().filter(a => a.home === 'route').slice(0, 6).concat(h.free().filter(a => a.home === 'yard').slice(0, 1));
-  h.pen(list); h.respawn();
+  h.toBarn(list); h.respawn();
   assert.equal(h.free().filter(a => a.home === 'route').length, 18); assert.equal(h.free().filter(a => a.home === 'yard').length, 3);
   assert.ok(h.free().filter(a => a.golden).length <= 1);
-});
-test('prune sends the oldest penned animals away past the limit', () => {
-  const h = createHerd({ rng: makeRng(10), env }), list = h.free().slice(0, 8);
-  list.forEach(a => { a.state = 'show'; a.x = 0; a.z = 5; }); h.pen(list); run(h, 40); h.prune(5); run(h, 120);
-  assert.equal(h.animals.filter(a => a.state === 'penned').length, 5);
-  assert.equal(h.animals.filter(a => a.state === 'gone').length, 3);
+  for (const a of h.free().filter(a => a.home === 'route' && !a.hidden).slice(-6)) assert.ok(Math.abs(a.x) > 30, 'respawned on a route, not in the yard');
 });
 ```
 
@@ -2076,7 +2190,8 @@ Expected: FAIL on the missing module.
 
 ```js
 // Farm animals (spec 5): spawn, mosey, gentle run, come to the horn, chick lines, hiding, mud baths, help (F-4),
-// farmyard animals (A-15), the paddock for delivered animals (A-16) and respawning from the farm edge (G-3).
+// farmyard animals (A-15), delivery into the barn (A-16) and respawning along the routes (G-3).
+// Route animals stay on the road between the edges: within WALK_HALF of the centerline.
 export const TYPES = {
   pig:     { word: 'Pig',     speed: 0.9, r: 0.5,  flee: false, come: true },
   cow:     { word: 'Cow',     speed: 0.6, r: 0.75, flee: false, come: true },
@@ -2088,24 +2203,25 @@ export const TYPES = {
   chick:   { word: 'Chick',   speed: 1.2, r: 0.2,  flee: false, come: false },
 };
 export const MAIN_TYPES = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog'];
-export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3;
+export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3, WALK_HALF = 6.5;
 const FILL = ['pig', 'cow', 'sheep', 'chicken', 'duck', 'bunny', 'pig', 'cow'];
-const FLEE_R = 7, FLEE_V = 2.2, HORN_R = 25, WALK = { walk: 'walk', flee: 'run', come: 'walk', follow: 'walk', help: 'run', toPen: 'walk', leave: 'walk' };
-const SKIP = new Set(['fly', 'ride', 'show', 'gone']), NOT_FREE = new Set(['fly', 'ride', 'show', 'toPen', 'penned', 'leave', 'gone']);
+const FLEE_R = 7, FLEE_V = 2.2, HORN_R = 25, WALK = { walk: 'walk', flee: 'run', come: 'walk', follow: 'walk', help: 'run', toBarn: 'walk' };
+const SKIP = new Set(['fly', 'ride', 'show', 'gone']), NOT_FREE = new Set(['fly', 'ride', 'show', 'toBarn', 'gone']);
 const turn = (a, b, max) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + Math.max(-max, Math.min(max, d)); };
 
 export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_ANIMALS }) {
   const animals = [], Y = env.yard.half;
   const inYard = (x, z, m = 0) => Math.abs(x) < Y + m && Math.abs(z) < Y + m;
-  const spawnNearRoad = () => { // 5-12 m either side of the road, outside the yard, inside the farm
-    for (let tries = 0; tries < 80; tries++) {
-      const x = rng.range(-env.bounds + 6, env.bounds - 6), z = rng.range(-env.bounds + 6, env.bounds - 6), n = env.roadNearest(x, z);
-      if (n.d > 5 && n.d < 12 && !inYard(x, z, 3)) return { x, z };
-    }
-    return { x: env.bounds - 10, z: env.bounds - 10 };
+  const spawnNearRoad = () => { // on a route, outside the yard (the edges keep everything else unreachable)
+    for (let tries = 0; tries < 80; tries++) { const p = env.routePoint(rng); if (!inYard(p.x, p.z, 3)) return p; }
+    return env.routePoint(rng);
+  };
+  const keepOnRoad = (x, z) => { // pull a point back to within WALK_HALF of the centerline
+    const n = env.roadNearest(x, z); if (n.d <= WALK_HALF) return { x, z };
+    const k = WALK_HALF / n.d; return { x: n.pt.x + (x - n.pt.x) * k, z: n.pt.z + (z - n.pt.z) * k };
   };
   const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, lookT: 0, helpT: 0, tx: at.x, tz: at.z, trail: [], penOrder: 0 }; animals.push(a); return a; };
-  for (const t of MAIN_TYPES) add(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad());
+  for (const t of MAIN_TYPES) add(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad(), t === 'duck' ? 'yard' : 'route');
   const hen = add('chicken', spawnNearRoad());
   for (let i = 1; i <= 2; i++) { const c = add('chick', { x: hen.x - i * 0.8, z: hen.z }); c.leader = hen.id; c.line = i; c.state = 'follow'; }
   while (animals.length < count) add(rng.pick(FILL), spawnNearRoad());
@@ -2117,17 +2233,15 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
   if (rng.chance(0.5)) rng.pick(animals.filter(a => a.type !== 'chick' && !a.hidden)).golden = true; // A-8
 
   const free = () => animals.filter(a => !NOT_FREE.has(a.state));
-  const inPaddock = () => { const P = env.paddock; return { x: rng.range(P.x0 + 1.5, P.x1 - 1.5), z: rng.range(P.z0 + 1.5, P.z1 - 1.5) }; };
   const pickTarget = a => {
-    if (a.state === 'penned') { const p = inPaddock(); a.tx = p.x; a.tz = p.z; a.penWalk = true; return; }
+    if (a.type === 'duck' && a.home === 'yard' && rng.chance(0.7)) { const ang = rng.range(0, 6.28); a.tx = env.pond.x + Math.cos(ang) * (env.pond.r + 1); a.tz = env.pond.z + Math.sin(ang) * (env.pond.r + 1); a.state = 'walk'; return; }
     if (a.home === 'yard') { const p = env.yard.randomPoint(rng); a.tx = p.x; a.tz = p.z; a.state = 'walk'; return; }
     if (a.type === 'pig' && rng.chance(0.35)) { const m = env.mudSpots.map(s => [s, Math.hypot(s.x - a.x, s.z - a.z)]).filter(([, d]) => d < 40).sort((p, q) => p[1] - q[1])[0];
       if (m) { a.state = 'walk'; a.wallow = true; a.tx = m[0].x + rng.range(-2, 2); a.tz = m[0].z + rng.range(-2, 2); return; } }
-    if (a.type === 'duck' && rng.chance(0.6)) { const ang = rng.range(0, 6.28); a.tx = env.pond.x + Math.cos(ang) * (env.pond.r + 1); a.tz = env.pond.z + Math.sin(ang) * (env.pond.r + 1); a.state = 'walk'; return; }
     const n = env.roadNearest(a.x, a.z);
-    if (rng.chance(0.35)) { a.tx = 2 * n.pt.x - a.x + rng.range(-3, 3); a.tz = 2 * n.pt.z - a.z + rng.range(-3, 3); } // cross the road
-    else { a.tx = a.x + rng.range(-8, 8); a.tz = a.z + rng.range(-8, 8); }
-    const lim = env.bounds - 4; a.tx = Math.max(-lim, Math.min(lim, a.tx)); a.tz = Math.max(-lim, Math.min(lim, a.tz));
+    if (rng.chance(0.35)) { a.tx = 2 * n.pt.x - a.x + rng.range(-1, 1); a.tz = 2 * n.pt.z - a.z + rng.range(-1, 1); } // cross the road
+    else { a.tx = a.x + n.pt.tx * rng.range(-10, 10) + rng.range(-2, 2); a.tz = a.z + n.pt.tz * rng.range(-10, 10) + rng.range(-2, 2); } // wander along it
+    const q = keepOnRoad(a.tx, a.tz); a.tx = q.x; a.tz = q.z;
     if (inYard(a.tx, a.tz, 2)) { a.tx = a.x; a.tz = a.z; } // route animals keep out of the yard
     a.state = 'walk';
   };
@@ -2136,37 +2250,32 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     a.yaw = turn(a.yaw, Math.atan2(dx, dz), 5 * dt); const s = Math.min(d, v * dt); a.x += Math.sin(a.yaw) * s; a.z += Math.cos(a.yaw) * s; return d < 0.4;
   };
   const clampHome = a => {
-    const lim = a.home === 'yard' ? Y - 2 : env.bounds - 3;
-    a.x = Math.max(-lim, Math.min(lim, a.x)); a.z = Math.max(-lim, Math.min(lim, a.z));
+    if (a.home === 'yard') { const lim = Y - 2; a.x = Math.max(-lim, Math.min(lim, a.x)); a.z = Math.max(-lim, Math.min(lim, a.z)); return; }
+    if (a.hidden || inYard(a.x, a.z)) return;
+    const q = keepOnRoad(a.x, a.z); a.x = q.x; a.z = q.z;
   };
-  let penSeq = 0;
 
   return {
     animals, free,
     horn(t) {
       for (const a of free()) { if (a.hidden) continue; a.lookT = 1.5;
         if (TYPES[a.type].come && Math.hypot(a.x - t.x, a.z - t.z) < HORN_R && a.state !== 'help' && a.state !== 'wave') { a.state = 'come'; a.timer = 6; a.tx = t.x + Math.sin(t.yaw) * 6; a.tz = t.z + Math.cos(t.yaw) * 6; } }
-      for (const a of animals) if (a.state === 'penned') a.lookT = 1.5;
     },
     callHelp(t) {
       const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
       if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; c.helpT = 30; return c;
     },
-    pen(list) { // after the show: walk to the paddock gate, then inside (A-16)
-      for (const a of list) { Object.assign(a, { state: 'toPen', leader: null, hidden: false, y: 0, penOrder: ++penSeq, inside: false, tx: env.paddock.gate.x, tz: env.paddock.gate.z }); }
+    toBarn(list) { // after the show: walk into the barn, one after the other, and are gone (A-16, F-10)
+      list.forEach((a, i) => Object.assign(a, { state: 'toBarn', leader: null, hidden: false, y: 0, timer: i * 0.4, tx: env.barn.x, tz: env.barn.z }));
     },
-    respawn() { // G-3: new animals walk in from the farm edge to replace delivered ones
+    respawn() { // G-3: new animals appear on the routes, away from the yard, to replace delivered ones
       const nRoute = count - free().filter(a => a.home === 'route').length, nYard = yardCount - free().filter(a => a.home === 'yard').length;
       const goldenFree = () => free().some(a => a.golden);
-      for (let i = 0; i < nRoute; i++) { const a = add(rng.pick(FILL), env.edgePoint(rng)); const p = spawnNearRoad(); a.state = 'walk'; a.tx = p.x; a.tz = p.z; if (!goldenFree() && rng.chance(0.3)) a.golden = true; }
-      for (let i = 0; i < nYard; i++) { const p = env.yard.randomPoint(rng); add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), { x: p.x, z: -Y + 2 }, 'yard'); }
+      for (let i = 0; i < nRoute; i++) { const a = add(rng.pick(FILL), spawnNearRoad()); if (!goldenFree() && rng.chance(0.3)) a.golden = true; }
+      for (let i = 0; i < nYard; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard');
       // refill empty hiding bushes with the newest route animals
       env.hideSpots.forEach(h => { if (free().some(a => a.hidden && Math.hypot(a.x - h.x, a.z - h.z) < 1)) return;
-        const a = animals.filter(b => b.home === 'route' && b.state === 'walk' && !b.hidden && b.type !== 'cow').at(-1); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
-    },
-    prune(max) { // A-16: past the limit, the oldest penned animals walk off the farm
-      const penned = animals.filter(a => a.state === 'penned').sort((p, q) => p.penOrder - q.penOrder);
-      for (const a of penned.slice(0, Math.max(0, penned.length - max))) { const e = env.edgePoint(rng); a.state = 'leave'; a.tx = e.x; a.tz = e.z; }
+        const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !b.hidden && b.type !== 'cow' && b.type !== 'chick').at(-1); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
     },
     step(dt, { tractor: t }) {
       for (const a of animals) {
@@ -2178,7 +2287,9 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
           case 'idle': a.anim = a.anim === 'eat' || rng.chance(0.002) ? 'eat' : 'idle'; if ((a.timer -= dt) <= 0) pickTarget(a); break;
           case 'walk': if (moveToward(a, a.tx, a.tz, def.speed, dt)) { if (a.wallow) { a.state = 'wallow'; a.timer = rng.range(6, 10); a.wallow = false; } else { a.state = 'idle'; a.timer = rng.range(2, 5); } } break;
           case 'wallow': a.dirt = Math.min(1, a.dirt + dt * 0.5); a.anim = 'eat'; if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 1; } break;
-          case 'flee': { const ang = Math.atan2(a.x - t.x, a.z - t.z); a.yaw = turn(a.yaw, ang, 8 * dt);
+          case 'flee': { const n = env.roadNearest(a.x, a.z), away = Math.atan2(a.x - t.x, a.z - t.z), along = Math.atan2(n.pt.tx, n.pt.tz);
+            // run away along the road (not into the edge): pick the road direction that points away from the tractor
+            const ang = a.home === 'route' && !inYard(a.x, a.z) ? (Math.cos(away - along) >= 0 ? along : along + Math.PI) : away; a.yaw = turn(a.yaw, ang, 8 * dt);
             a.x += Math.sin(a.yaw) * FLEE_V * dt; a.z += Math.cos(a.yaw) * FLEE_V * dt;
             if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 1.5; a.lookT = 1.5; } break; }
           case 'come': if (moveToward(a, a.tx, a.tz, def.speed * 1.6, dt) || (a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 3; } break;
@@ -2187,19 +2298,14 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
           case 'help': if (moveToward(a, a.tx, a.tz, Math.max(def.speed * 2, 2.5), dt)) { a.state = 'wave'; a.timer = 10; } break;
           case 'wave': a.anim = 'dance'; a.yaw = turn(a.yaw, Math.atan2(t.x - a.x, t.z - a.z), 4 * dt); if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 2; } break;
           case 'hide': a.anim = 'idle'; break;
-          case 'toPen': if (moveToward(a, a.tx, a.tz, 1.6, dt)) { if (a.inside) { a.state = 'penned'; a.timer = rng.range(1, 4); } else { const p = inPaddock(); a.inside = true; a.tx = p.x; a.tz = p.z; } } break;
-          case 'penned': // wander inside the paddock
-            if (a.penWalk) { if (moveToward(a, a.tx, a.tz, def.speed, dt)) { a.penWalk = false; a.timer = rng.range(2, 6); } a.anim = 'walk'; }
-            else { a.anim = 'idle'; if ((a.timer -= dt) <= 0) pickTarget(a); }
-            break;
-          case 'leave': if (moveToward(a, a.tx, a.tz, 1.6, dt)) a.state = 'gone'; break;
+          case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; } if (moveToward(a, a.tx, a.tz, 2.2, dt)) a.state = 'gone'; break;
         }
-        if (['walk', 'flee', 'come', 'follow', 'help', 'toPen', 'leave'].includes(a.state)) a.anim = WALK[a.state] || 'walk';
+        if (['walk', 'flee', 'come', 'follow', 'help'].includes(a.state) || (a.state === 'toBarn' && a.timer <= 0)) a.anim = WALK[a.state] || 'walk';
         if (!NOT_FREE.has(a.state)) clampHome(a);
         const last = a.trail[0]; if (!last || Math.hypot(last.x - a.x, last.z - a.z) > 0.25) { a.trail.unshift({ x: a.x, z: a.z }); if (a.trail.length > 12) a.trail.pop(); }
       }
-      // separation (free and penned animals; not the ones in flight, riding, on stage or gone)
-      const live = animals.filter(a => !SKIP.has(a.state) && !a.hidden && a.state !== 'leave');
+      // separation (free animals only; not the ones in flight, riding, on stage, walking into the barn or gone)
+      const live = animals.filter(a => !NOT_FREE.has(a.state) && !a.hidden);
       for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
         const p = live[i], q = live[j], dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz), m = TYPES[p.type].r + TYPES[q.type].r;
         if (d > 0 && d < m) { const k = (m - d) / d / 2; p.x -= dx * k; p.z -= dz * k; q.x += dx * k; q.z += dz * k; }
@@ -2209,18 +2315,16 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
 }
 ```
 
-Penned animals can be pushed slightly past the paddock edge by separation. If the paddock test fails on that, clamp penned animals to the paddock rect inside the `penned` case.
-
 - [ ] **Step 4: Run the tests**
 
 Run: `npm test`
-Expected: herd tests PASS. The test road has a mud spot within 40 m of every point along it, so every route pig can find one.
+Expected: herd tests PASS. Every point of the test route has a mud spot within 40 m, so every route pig can find one.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add games/tractor-pickup/src/sim/herd.js games/tractor-pickup/test/herd.test.mjs
-git commit -m "feat: Tractor Pickup - farm animals, farmyard animals and the paddock"
+git commit -m "feat: Tractor Pickup - farm animals, farmyard animals and delivery into the barn"
 ```
 
 ---
@@ -2285,7 +2389,7 @@ test('the trailer and wagon never over-fill (G-1)', () => {
   assert.equal(g.load.landed(), CAPACITY); assert.equal(g.load.slots.length, CAPACITY);
   assert.deepEqual([0, 1].map(c => g.load.slots.filter(s => s.car === c).length), [6, 6]);
 });
-test('show hooks: riders in order, props reset, paddock, respawn and an empty trailer (F-5, F-10, G-3)', () => {
+test('show hooks: riders in order, props reset, delivery into the barn, respawn and an empty trailer (F-5, F-10, G-3)', () => {
   const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const placed = pickable(g).slice(0, 3); for (const a of placed) place(g, a);
@@ -2296,7 +2400,7 @@ test('show hooks: riders in order, props reset, paddock, respawn and an empty tr
   riders.forEach(r => { r.animal.state = 'show'; });
   g.finishShow(riders);
   assert.equal(g.mode, 'drive'); assert.equal(g.load.landed(), 0);
-  for (const a of placed) assert.equal(a.state, 'toPen');
+  for (const a of placed) assert.equal(a.state, 'toBarn');
   assert.equal(g.herd.free().filter(a => a.home === 'route').length, 18);
 });
 test('no boops and no driving during the show', () => {
@@ -2324,7 +2428,7 @@ import { createTractor, quatAxes } from './tractor.js';
 import { createTrain, local2world, TR } from './hitch.js';
 import { generateFarm, YARD_HALF, yardFree } from './track.js';
 import { buildRoad, FARM_HALF, makeBarnPass } from './road.js';
-import { scatterScenery, addSceneryColliders, addFarmColliders, addYardProps } from './scenery.js';
+import { scatterScenery, addFarmColliders, addYardProps } from './scenery.js';
 import { createHerd, TYPES } from './herd.js';
 import { createLoad, slotLocal, newRider, stepRider } from './slots.js';
 import { launchLocal, FLIGHT } from './launch.js';
@@ -2338,17 +2442,17 @@ const STILL = { thr: 0, steer: 0, horn: false };
 export function createGame(RAPIER, { seed, power = 'medium' }) {
   const farm = generateFarm(seed), road = buildRoad(farm), rng = makeRng(seed ^ 0x51ed);
   const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9));
-  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); addSceneryColliders(phys, items);
+  const phys = createPhysics(RAPIER); addFarmColliders(phys, farm, road); // includes the route edges (Task 7b)
   const yardProps = addYardProps(phys, farm), s = farm.start;
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
   const train = createTrain(phys, tractor), flights = [], barnPass = makeBarnPass(farm.yard.barn);
   const mudSpots = farm.routes.flatMap((R, r) => R.tiles.flatMap((t, k) => t.type === 'mud' ? [road.featureCenter(r, k)] : []));
   const env = {
-    bounds: FARM_HALF - 3, mudSpots, pond: farm.pond, hideSpots: farm.hideSpots, paddock: farm.yard.paddock,
+    bounds: FARM_HALF - 3, mudSpots, pond: farm.pond, hideSpots: farm.hideSpots, barn: farm.yard.barn,
     roadNearest: (x, z) => road.nearest(x, z),
     roadAhead: (x, z, yaw, dist) => { const n = road.nearest(x, z), f = n.pt.tx * Math.sin(yaw) + n.pt.tz * Math.cos(yaw); return road.ahead(n.pt, f >= 0 ? dist : -dist); },
     yard: { half: YARD_HALF, randomPoint: r => { for (let i = 0; i < 60; i++) { const x = r.range(-YARD_HALF, YARD_HALF), z = r.range(-YARD_HALF, YARD_HALF); if (yardFree(farm.yard, x, z, 0.6)) return { x, z }; } return { x: YARD_HALF - 4, z: YARD_HALF - 4 }; } },
-    edgePoint: r => { const e = FARM_HALF - 6, t = r.range(-e, e); return r.pick([{ x: t, z: -e }, { x: t, z: e }, { x: -e, z: t }, { x: e, z: t }]); },
+    routePoint: r => { const R = r.pick(road.routes), p = r.pick(R.pts.slice(10, -10)), off = r.range(-5, 5); return { x: p.x - p.tz * off, z: p.z + p.tx * off }; }, // on the road, away from the yard ends
   };
   const herd = createHerd({ rng, env });
   const tractorWorld = (l, out) => Object.assign(out, local2world(tractor.body, l));
@@ -2364,10 +2468,10 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
     load: createLoad(CAPACITY), mode: 'drive',
     // F-5: the show takes over. Riders in landing order; obstacles go back to their places (T-32).
     startShow() { game.mode = 'show'; yardProps.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
-    // F-10, G-3: delivered animals go to the paddock, new ones walk in, the trailer and wagon are empty again.
+    // F-10, A-16, G-3: delivered animals walk into the barn and are gone, new ones appear on the routes, the trailer and wagon are empty again.
     finishShow(riders) {
       for (const r of riders) r.animal.ride = null;
-      herd.pen(riders.map(r => r.animal)); herd.respawn(); herd.prune(30);
+      herd.toBarn(riders.map(r => r.animal)); herd.respawn();
       game.load = createLoad(CAPACITY); game.mode = 'drive';
     },
     step(input) {
@@ -2379,7 +2483,6 @@ export function createGame(RAPIER, { seed, power = 'medium' }) {
         if (l.x > 0 && d < best && Math.abs(Math.atan2(l.z, l.x)) < AIM.cone) { best = d; assist = Math.max(-AIM.max, Math.min(AIM.max, -Math.atan2(l.z, l.x) * AIM.gain)); } }
       tractor.setAssist(tractor.fwd > 0.5 ? assist : 0);
       tractor.setInput(drive.thr, drive.steer); tractor.step(DT);
-      const e = road.edgePush(tractor.x, tractor.z); if (e.x || e.z) tractor.body.applyImpulse({ x: e.x * 1400 * DT, y: 0, z: e.z * 1400 * DT }, true);
       train.step(DT, { parked: Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3 });
       phys.world.step();
       herd.step(DT, { tractor });
@@ -2851,7 +2954,7 @@ Expected:
 - A barn pass with riders starts the show; a pass with an empty trailer does nothing.
 - The animals hop out one by one onto the stage, each named and numbered by the voice, then all jump, regroup, and the total shows with confetti.
 - A tap speeds it up.
-- After the show the animals walk into the paddock and stay there, and the slot bar is empty.
+- After the show the animals walk off the stage into the barn one after the other and are gone, and the slot bar is empty.
 
 ```bash
 git add games/tractor-pickup/src games/tractor-pickup/test/trip.test.mjs games/tractor-pickup/test/showSteps.test.mjs games/tractor-pickup/template.html site/exp/tractor-pickup
@@ -3348,7 +3451,7 @@ Build each from `CylinderGeometry` and `ConeGeometry` with Lambert colors. Show 
 - [ ] **Step 7: Verify and commit**
 
 Run: `npm test && npm run build`. Do three short trips (one or two animals each) through the barn.
-Expected: a sticker after each show; a green tractor unlocks after show 3; the sticker book lists all three. "Keep driving" continues on the same farm with the paddock filling up; "new farm" builds a new one. The parent menu opens only after a 2 s hold. Reload: the stickers are kept.
+Expected: a sticker after each show; a green tractor unlocks after show 3; the sticker book lists all three. "Keep driving" continues on the same farm with new animals on the routes; "new farm" builds a new one. The parent menu opens only after a 2 s hold. Reload: the stickers are kept.
 
 ```bash
 git add games/tractor-pickup/src games/tractor-pickup/test/progress.test.mjs games/tractor-pickup/template.html site/exp/tractor-pickup
@@ -3409,7 +3512,8 @@ Ask the user to install the game to the iPad home screen (Share → Add to Home 
   - 3.4 (the show) → Task 11.
   - 4.1–4.5 (layout, routes, features, rules) → Task 6.
   - 4.6–4.7 (scenery, farmyard, props, reset) → Tasks 6, 7 and 10 (`startShow` resets the props).
-  - 5.1 → Task 2. 5.2 (including A-15 farmyard animals and A-16 paddock) → Task 9.
+  - 5.1 → Task 2. 5.2 (including A-15 farmyard animals and A-16 delivery into the barn) → Task 9.
+  - Spec v1.2 changes (T-1..T-5 sizes, T-17 edges, T-28 barn look, T-29..T-31) → Task 7b.
   - 6.1–6.3 → Tasks 8 and 10.
   - 7.1 → Tasks 3–4. 7.2–7.4 → Task 5.
   - 8.1–8.3 → Tasks 10–12.

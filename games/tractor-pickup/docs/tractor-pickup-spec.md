@@ -1,6 +1,6 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.1 (farmyard and routes)
+Version: 1.2 (wide routes with edges, larger farmyard, no paddock)
 Date: 5 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
@@ -26,6 +26,10 @@ This document gives the design for Tractor Pickup. Tractor Pickup is a 3D browse
 ### 1.2.1 Change in version 1.1
 
 The farm has a large open farmyard at the center, with the barn. Two roads (routes) go out from the farmyard, turn through the fields and come back to the farmyard. The player drives a route, boops animals and comes back. When the tractor drives through the barn, the animals hop out and the game shows them, counts them and says their names. The farmyard is also an open area to drive, slide and push obstacles.
+
+### 1.2.2 Change in version 1.2 (after playtest 2)
+
+Everything is larger. Routes are 14 m wide and have rock edges, so the tractor cannot leave them. The farmyard is larger. The paddock is removed: after the show, the animals walk into the barn and do not come back. The barn has a better model.
 
 ### 1.3 Design rules for a 4-year-old player
 
@@ -59,16 +63,17 @@ These rules apply to all items in this document. If an item does not obey a rule
 | Term | Type | Definition |
 |---|---|---|
 | Farmyard | TN | The large open gravel area at the center of the farm. The barn is in it. |
-| Route | TN | A road that goes out of the farmyard at one gate and comes back at a different gate. |
+| Route | TN | A road that goes out of the farmyard at one gate and comes back at a different gate. It has a rock edge on each side. |
+| Edge | TN | The earth bank with rocks along each side of a route. The tractor cannot drive over it. |
+| Shoulder | TN | The grass strip between the road and the edge. |
 | Gate | TN | One of the four openings in the farmyard fence, at the middle of each side. |
 | Road | TN | All route tiles together. |
 | Tile | TN | One 20 m × 20 m square of the farm. |
-| Field | TN | The grass area between the routes. |
+| Field | TN | The grass and forest area outside the edges. The tractor cannot go there. |
 | Obstacle | TN | A hay bale, cone, barrel, post or tree in the farmyard. |
 | Trip | TN | One drive from the barn, out on the routes and back through the barn. |
 | Show | TN | The sequence after a trip. The animals hop out, the game counts them and says their names. |
 | Stage | TN | The low platform next to the barn exit. The animals stand on it during the show. |
-| Paddock | TN | The fenced area next to the barn. Delivered animals live in it. |
 | Trailer | TN | The cart that the tractor tows. Animals ride in it. |
 | Wagon | TN | One more trailer that the game attaches behind the last trailer. |
 | Barn | TN | The drive-through building at the center of the farmyard. The player drives through it to deliver the animals. |
@@ -93,7 +98,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 3. The player drives out on a route and boops animals. Each boop fills one slot.
 4. The player comes back to the farmyard and drives through the barn, in either direction. If at least one animal rides in the trailer or the wagon, the show starts (3.4). If no animal rides, nothing occurs. **[F-1]**
 5. When all 12 slots are full, the voice says "Great job! Go to the barn!". An arrow and a path of sparkles show the way to the barn. **[F-2]**
-6. After the show, the delivered animals walk into the paddock and stay there. The player gets a sticker (W-1). **[F-3]**
+6. After the show, the delivered animals walk into the barn and do not come back. The player gets a sticker (W-1). **[F-3]**
 7. The player drives again with an empty trailer and wagon, on the same farm. **[F-9]** The sticker card has a "new farm" button (a map picture). A tap on it makes a new farm.
 
 ### 3.2 Animals and slots
@@ -102,7 +107,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 |---|---|---|
 | G-1 | Slots | 12: 6 in the trailer, then 6 in the wagon |
 | G-2 | Trip size | 1 to 12 animals. There is no fixed goal. |
-| G-3 | Free animals | 18 on the routes and 3 in the farmyard. After each show, new animals walk in from the farm edge to replace the delivered animals. |
+| G-3 | Free animals | 18 on the routes and 3 in the farmyard. After each show, new animals walk in along the routes to replace the delivered animals. |
 
 ### 3.3 Help to find animals
 
@@ -118,7 +123,7 @@ The show starts when the tractor comes out of the barn with at least one animal.
 | F-6 | Hop out | The animals hop out of the trailer and the wagon one at a time, in landing order, and stand in a row on the stage. When an animal lands, a large number shows above it (1, 2, 3 ...) and its name shows below it. The voice says the number and the name ("One... Pig!"). |
 | F-7 | All together | After the last animal, all animals jump together. One large number shows the total. The animals move into groups by type, with the name and the number of each group. The voice says the total and "animals!", then "Hooray!". Confetti. |
 | F-8 | Speed | Each step waits 0.8 s. A tap on the screen goes to the next step immediately, so a parent can make it faster. |
-| F-10 | Paddock | After the show, the animals walk off the stage into the paddock. The camera goes back to the chase camera. |
+| F-10 | Into the barn | After the show, the animals walk off the stage, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. |
 
 ---
 
@@ -130,11 +135,11 @@ The game makes the farm at run time from a set of predefined tiles. Each route s
 
 | ID | Item | Value |
 |---|---|---|
-| T-1 | Grid | Square tiles, 20 m × 20 m. The farm is a grid of 11 × 11 tiles (220 m × 220 m). The outer ring of tiles has no road. |
-| T-2 | Road width | 7 m (approximately 3 tractor widths) |
-| T-3 | Farmyard | The 3 × 3 tiles at the grid center (60 m × 60 m). Four gates, one at the middle of each side. |
+| T-1 | Grid | Square tiles, 36 m × 36 m. The farm is a grid of 11 × 11 tiles (396 m × 396 m). The outer ring of tiles has no road. |
+| T-2 | Road width | 14 m (approximately 6 tractor widths). A 1.5 m grass shoulder on each side, then the edge (T-17). |
+| T-3 | Farmyard | The 3 × 3 tiles at the grid center (108 m × 108 m). Four gates, one at the middle of each side. Each gate is 17 m wide. |
 | T-4 | Seed | Each new farm uses a new random seed. The parent menu shows the seed and can set it. The same seed always makes the same farm. |
-| T-5 | Curves | A curve tile turns the road 90°. The curve radius is 10 m. |
+| T-5 | Curves | A curve tile turns the road 90°. The curve radius is 18 m. |
 | T-24 | Routes | Two routes. Each route goes out at one gate and comes back at the next gate around the farmyard (for example, north gate to east gate). The two routes use opposite corners of the farm, so they never meet. Each route is 8 to 14 tiles long. |
 | T-25 | Twists | Each route has at least 4 curves. No more than 2 curves are next to each other. |
 
@@ -150,8 +155,8 @@ Road tiles have connection points at the center of a tile edge. The road surface
 | T-9 | Mud | Two opposite edges | Straight road with a large mud area. See 4.4. |
 | T-10 | Ramp | Two opposite edges | Straight road with a ramp. See 4.4. |
 | T-11 | Sprinkler | Two opposite edges | Straight road with a sprinkler arch. See 4.4. |
-| T-12 | Field | None | Grass, crops, trees, a pond or a hay stack. Animals live here. |
-| T-26 | Farmyard | Gates | Open packed gravel with the barn, the stage, the paddock and obstacles. See 4.7. |
+| T-12 | Field | None | Forest, crops and grass outside the edges. Decoration only. |
+| T-26 | Farmyard | Gates | Open packed gravel with the barn, the stage, the pond and obstacles. See 4.7. |
 
 ### 4.3 Generation steps
 
@@ -160,19 +165,19 @@ Road tiles have connection points at the center of a tile edge. The road surface
 3. For each route, find a path of tiles from the tile outside its first gate to the tile outside its second gate. Use a random depth-first search. Use only the tiles in the corner of the farm between the two gates. Obey T-24 and T-25.
 4. Give each road tile its type: straight or curve, from the directions of the road into and out of the tile. The first and last tiles are gate tiles.
 5. Change straight tiles to feature tiles (T-9 to T-11). Obey the rules in 4.5.
-6. Put the barn, the stage, the paddock and the obstacles in the farmyard (4.7).
+6. Put the barn, the stage, the pond and the obstacles in the farmyard (4.7).
 7. Fill all other tiles with field tiles (T-12). Put more animals on the field tiles next to the road.
-8. Put a low fence around the farm edge and around the farmyard. The farmyard fence has an opening at each gate.
+8. Put the edges along both sides of each route (T-17), and a fence around the farmyard. The farmyard fence has an opening at each gate.
 
 ### 4.4 Track features
 
 | ID | Feature | Description |
 |---|---|---|
 | T-13 | Mud | The mud decreases the maximum speed by 50 % and decreases grip. The wheels throw brown splashes. A "squelch" sound. The tractor gets very dirty fast (T-16). |
-| T-14 | Ramp | A gravel kicker: 5 m up to 0.6 m, a 1 m flat top, 3 m down. The tractor jumps approximately 4 m. Driven in the other direction, it is a bump. The trailer and the wagon follow over the ramp. The animals bounce up and land in their slots again (B-11). A "whee" sound and a cheer from the animals. |
+| T-14 | Ramp | A gravel kicker across the full road width: 5 m up to 0.6 m, a 1 m flat top, 3 m down. The tractor jumps approximately 4 m. Driven in the other direction, it is a bump. The trailer and the wagon follow over the ramp. The animals bounce up and land in their slots again (B-11). A "whee" sound and a cheer from the animals. |
 | T-15 | Sprinkler | A sprinkler arch over the road. Water sprays when the tractor comes near. The tractor drives through the spray and becomes clean in 1.5 s. Sparkles and a "squeaky clean" sound. |
 | T-16 | Dirt | The tractor, the trailer, the wagon and each animal have a dirt level from 0 (clean) to 1 (very dirty). The level increases slowly on gravel and grass, and fast in mud. Brown spots and dust show on the tractor body, the wheels, the trailers and the animals. Animals in the trailers get dirt from the mud splashes. More dirt gives more spots. Only the sprinkler removes the dirt. It washes the tractor, the trailers and all animals in them. |
-| T-17 | Off-road | The player can drive on the grass. Grass decreases the maximum speed by 30 % and decreases grip. The fence at the farm edge stops the tractor softly. |
+| T-17 | Edges | Each side of a route has an edge: an earth bank 3 m high with a steep inner slope (approximately 37°) and rocks along the top. The tractor cannot drive over it; it rolls back down to the road. The edges end at the farmyard fence, so the route and the farmyard are one closed area. The shoulder is grass: it decreases the maximum speed by 30 % and decreases grip. |
 
 ### 4.5 Placement rules
 
@@ -187,17 +192,17 @@ Road tiles have connection points at the center of a tile edge. The road surface
 
 ### 4.6 Scenery
 
-Scenery must not block the view of an animal from the chase camera. Put tall items (trees) on the outer side of curves, not the inner side.
+Outside the edges: dense forest, crops and fields. This scenery is decoration only; the tractor cannot reach it. Scenery must not block the view of an animal from the chase camera. Put tall items (trees) on the outer side of curves, not the inner side.
 
 ### 4.7 Farmyard
 
 | ID | Item | Description |
 |---|---|---|
 | T-27 | Surface | Packed gravel. Grip and speed are the same as on the road. |
-| T-28 | Barn | A drive-through barn at the farmyard center. It is open at both ends. Its axis points to two opposite gates. The player can drive through it in either direction. |
-| T-29 | Stage and paddock | The stage is a low wood platform 8 m past one barn exit, at the side of the drive line. The paddock is a fenced area next to the stage. |
-| T-30 | Lanes | Keep a 6 m wide lane clear of obstacles from each gate to the nearest barn end. |
-| T-31 | Obstacles | 4 round hay bales (they roll when the tractor pushes them), 8 cones and 4 barrels (they tip over and slide), 4 fixed posts and 2 trees (they do not move). Put them at random outside the lanes. |
+| T-28 | Barn | A drive-through barn at the farmyard center, 12 m long and 10 m wide inside. It is open at both ends. Its axis points to two opposite gates. The player can drive through it in either direction. Look: a classic red barn with a gambrel roof, white trim, X-braced doors that stand open at both ends, a hay-loft door and a small cupola. The roof fades out when the tractor comes near, so the player can see inside. |
+| T-29 | Stage and pond | The stage is a low wood platform 8 m past one barn exit, at the side of the drive line. The duck pond is in a corner of the farmyard. |
+| T-30 | Lanes | Keep a 10 m wide lane clear of obstacles from each gate to the nearest barn end. |
+| T-31 | Obstacles | 8 round hay bales (they roll when the tractor pushes them), 16 cones and 8 barrels (they tip over and slide), 8 fixed posts and 4 trees (they do not move). Put them at random outside the lanes. |
 | T-32 | Reset | When a show starts, all moved obstacles go back to their start positions with a small "poof". |
 
 ---
@@ -214,7 +219,7 @@ Use Kenney Cube Pets models for the pig, cow, chicken, bunny and dog. The pack h
 | A-2 | Cow | "Moo" | Slow and heavy on the path. The trailer bounces when it lands. | Accepted |
 | A-3 | Chicken | "Bawk" | It flaps its wings on the path and floats down into the slot. | Accepted |
 | A-4 | Sheep | "Baa" | A soft spin on the path | Accepted |
-| A-5 | Duck | "Quack" | Water drops fall from it if it comes from the pond. | Accepted |
+| A-5 | Duck | "Quack" | Water drops fall from it if it comes from the pond. Ducks live at the pond in the farmyard. | Accepted |
 | A-6 | Bunny | Small "boing" | Its ears spin like a propeller on the path. | Accepted |
 | A-7 | Dog | "Woof" | It jumps on the path by itself when the tractor comes near. It does not need a boop. | Accepted |
 | A-8 | Golden animal | Bells | One of the types above, but gold. A rainbow trail on the path. A large celebration. The name shows as "Golden Pig" (for example). One or zero on the farm at a time. | Accepted |
@@ -223,14 +228,14 @@ Use Kenney Cube Pets models for the pig, cow, chicken, bunny and dog. The pack h
 
 | ID | Item | Description | Status |
 |---|---|---|---|
-| A-9 | Mosey | Animals walk slowly near the road and across it. They stop, eat grass, look around and walk again. Each animal type has a different walk speed. | Accepted |
+| A-9 | Mosey | Animals walk slowly along the road and across it, between the edges. They stop, eat grass, look around and walk again. Each animal type has a different walk speed. | Accepted |
 | A-10 | Gentle run | Some animals run away slowly when the tractor comes near. The tractor is always faster. | Accepted |
 | A-11 | Come here | Some animals walk to the tractor when the player uses the horn. | Accepted |
 | A-12 | Groups | Chicks walk in a line behind a hen. The name of a chick is "Chick". One boop launches all of them, one after the other. | Accepted |
-| A-13 | Hide | An animal hides behind a bush. Its tail shows. A boop on the bush finds it. | Accepted |
+| A-13 | Hide | An animal hides in a bush on the shoulder, against the edge. Its tail shows. A boop on the bush finds it. | Accepted |
 | A-14 | Mud bath | Pigs walk to a mud tile and roll in the mud. They get very dirty (T-16). | Accepted |
 | A-15 | Farmyard animals | 3 animals walk in the farmyard between the obstacles. They stay out of the barn. They walk across the lanes, so the player meets them. | Accepted |
-| A-16 | Paddock | Delivered animals live in the paddock. They walk, eat and look at the tractor. They cannot be booped. If the paddock has more than 30 animals, the oldest animals walk out of the farm. | Accepted |
+| A-16 | Into the barn | Delivered animals walk into the barn and are gone. | Accepted |
 
 ---
 
