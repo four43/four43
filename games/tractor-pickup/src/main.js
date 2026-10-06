@@ -76,7 +76,8 @@ async function main() {
           if (c === 'help') { const h = game.herd.callHelp(game.tractor); if (h) helpTarget = { a: h, t: 10 }; }
           if (c === 'show') {
             guideToBarn = false; helpTarget = null; sparkles.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow();
-            show.play(riders, buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden })))).then(() => { showDone = true; });
+            show.play(riders, buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden }))))
+              .catch(e => console.error('show', e)).finally(() => { showDone = true; }); // R-1: an error in the show never locks the game
           }
           if (c === 'reward') { showQuat.copy(camera.quaternion); camBlend = 0; show.end(); game.finishShow(riders); hud.reset(); showReward(riders); }
         }

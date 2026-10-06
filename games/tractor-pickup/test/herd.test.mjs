@@ -11,7 +11,7 @@ const env = {
   routePoint: r => ({ x: (r.chance(0.5) ? 1 : -1) * r.range(40, 180), z: r.range(-5, 5) }),
   mudSpots: [{ x: -150, z: 0 }, { x: -90, z: 0 }, { x: 60, z: 0 }, { x: 120, z: 0 }], pond: { x: -20, z: -20, r: 5 }, hideSpots: [{ x: 50, z: 8.5 }, { x: -50, z: -8.5 }],
   yard: { half: 30, randomPoint: r => ({ x: r.range(-25, 25), z: r.range(-25, -8) }) },
-  barn: { x: 0, z: 0 },
+  barn: { x: 0, z: 0, yaw: 0, half: 6, leaf: 5 },
 };
 const far = { x: 500, z: 500, yaw: 0, speed: 0 };
 const run = (h, sec, tractor = far) => { for (let i = 0; i < sec * 60; i++) h.step(1 / 60, { tractor }); };
@@ -71,6 +71,16 @@ test('delivered animals walk into the barn and are gone; they are never free aga
   h.toBarn(list); assert.ok(list.every(a => a.state === 'toBarn' && !h.free().includes(a)));
   run(h, 30);
   for (const a of list) assert.equal(a.state, 'gone');
+});
+test('delivered animals first walk to a point on the barn axis outside the end on their side, then into the barn (no walking through the door leaves)', () => {
+  const h = createHerd({ rng: makeRng(8), env }), a = h.free()[0], b = h.free()[1];
+  Object.assign(a, { state: 'show', x: 10, z: -15 }); Object.assign(b, { state: 'show', x: 10, z: 15 });
+  h.toBarn([a, b]);
+  assert.deepEqual([a.tx, a.tz], [0, -12]); assert.deepEqual([b.tx, b.tz], [0, 12]); // barn + f * (half + leaf + 1), on each animal's side
+  let maxSide = 0;
+  for (let i = 0; i < 60 * 30; i++) { h.step(1 / 60, { tractor: far }); if (a.state === 'toBarn' && Math.abs(a.z) < 11) maxSide = Math.max(maxSide, Math.abs(a.x)); }
+  assert.equal(a.state, 'gone'); assert.equal(b.state, 'gone');
+  assert.ok(maxSide < 1, `walked between the door leaves, not through them (|x| ${maxSide.toFixed(2)})`);
 });
 test('respawn refills the route and yard counts along the routes (G-3)', () => {
   const h = createHerd({ rng: makeRng(9), env }), list = h.free().filter(a => a.home === 'route').slice(0, 6).concat(h.free().filter(a => a.home === 'yard').slice(0, 1));

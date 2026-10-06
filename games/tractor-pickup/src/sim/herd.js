@@ -75,7 +75,10 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
       if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; return c;
     },
     toBarn(list) { // after the show: walk into the barn, one after the other, and are gone (A-16, F-10)
-      list.forEach((a, i) => Object.assign(a, { state: 'toBarn', leader: null, hidden: false, y: 0, timer: i * 0.4, tx: env.barn.x, tz: env.barn.z }));
+      // first to a point on the barn axis just outside the end on the animal's side (clear of the door leaves), then to the center
+      const B = env.barn, fx = Math.sin(B.yaw), fz = Math.cos(B.yaw), out = B.half + B.leaf + 1;
+      list.forEach((a, i) => { const end = (a.x - B.x) * fx + (a.z - B.z) * fz >= 0 ? 1 : -1;
+        Object.assign(a, { state: 'toBarn', leader: null, hidden: false, y: 0, timer: i * 0.4, tx: B.x + fx * out * end, tz: B.z + fz * out * end, inside: false }); });
     },
     respawn() { // G-3: new animals appear on the routes, away from the yard, to replace delivered ones
       const nRoute = count - free().filter(a => a.home === 'route').length, nYard = yardCount - free().filter(a => a.home === 'yard').length;
@@ -107,7 +110,8 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
           case 'help': if (moveToward(a, a.tx, a.tz, Math.max(def.speed * 2, 2.5), dt)) { a.state = 'wave'; a.timer = 10; } break;
           case 'wave': a.anim = 'dance'; a.yaw = turn(a.yaw, Math.atan2(t.x - a.x, t.z - a.z), 4 * dt); if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 2; } break;
           case 'hide': a.anim = 'idle'; break;
-          case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; } if (moveToward(a, a.tx, a.tz, 2.2, dt)) a.state = 'gone'; break;
+          case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; }
+            if (moveToward(a, a.tx, a.tz, 2.2, dt)) { if (a.inside) a.state = 'gone'; else { a.inside = true; a.tx = env.barn.x; a.tz = env.barn.z; } } break;
         }
         if (['walk', 'flee', 'come', 'follow', 'help'].includes(a.state) || (a.state === 'toBarn' && a.timer <= 0)) a.anim = WALK[a.state] || 'walk';
         if (!NOT_FREE.has(a.state)) clampHome(a);
