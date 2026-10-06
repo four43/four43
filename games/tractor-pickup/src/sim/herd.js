@@ -1,0 +1,125 @@
+// Farm animals (spec 5): spawn, mosey, gentle run, come to the horn, chick lines, hiding, mud baths, help (F-4),
+// farmyard animals (A-15), delivery into the barn (A-16) and respawning along the routes (G-3).
+// Route animals stay on the road between the edges: within WALK_HALF of the centerline.
+export const TYPES = {
+  pig:     { word: 'Pig',     speed: 0.9, r: 0.5,  flee: false, come: true },
+  cow:     { word: 'Cow',     speed: 0.6, r: 0.75, flee: false, come: true },
+  chicken: { word: 'Chicken', speed: 1.1, r: 0.35, flee: true,  come: false },
+  sheep:   { word: 'Sheep',   speed: 0.8, r: 0.5,  flee: true,  come: false },
+  duck:    { word: 'Duck',    speed: 0.8, r: 0.35, flee: false, come: true },
+  bunny:   { word: 'Bunny',   speed: 1.4, r: 0.3,  flee: true,  come: false },
+  dog:     { word: 'Dog',     speed: 1.6, r: 0.45, flee: false, come: true },
+  chick:   { word: 'Chick',   speed: 1.2, r: 0.2,  flee: false, come: false },
+};
+export const MAIN_TYPES = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog'];
+export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3, WALK_HALF = 6.5;
+const FILL = ['pig', 'cow', 'sheep', 'chicken', 'duck', 'bunny', 'pig', 'cow'];
+const FLEE_R = 7, FLEE_V = 2.2, HORN_R = 25, WALK = { walk: 'walk', flee: 'run', come: 'walk', follow: 'walk', help: 'run', toBarn: 'walk' };
+const SKIP = new Set(['fly', 'ride', 'show', 'gone']), NOT_FREE = new Set(['fly', 'ride', 'show', 'toBarn', 'gone']);
+const turn = (a, b, max) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + Math.max(-max, Math.min(max, d)); };
+
+export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_ANIMALS }) {
+  const animals = [], Y = env.yard.half;
+  const inYard = (x, z, m = 0) => Math.abs(x) < Y + m && Math.abs(z) < Y + m;
+  const spawnNearRoad = () => { // on a route, outside the yard (the edges keep everything else unreachable)
+    for (let tries = 0; tries < 80; tries++) { const p = env.routePoint(rng); if (!inYard(p.x, p.z, 3)) return p; }
+    return env.routePoint(rng);
+  };
+  const keepOnRoad = (x, z) => { // pull a point back to within WALK_HALF of the centerline
+    const n = env.roadNearest(x, z); if (n.d <= WALK_HALF) return { x, z };
+    const k = WALK_HALF / n.d; return { x: n.pt.x + (x - n.pt.x) * k, z: n.pt.z + (z - n.pt.z) * k };
+  };
+  const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, lookT: 0, helpT: 0, tx: at.x, tz: at.z, trail: [], penOrder: 0 }; animals.push(a); return a; };
+  for (const t of MAIN_TYPES) add(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad(), t === 'duck' ? 'yard' : 'route');
+  const hen = add('chicken', spawnNearRoad());
+  for (let i = 1; i <= 2; i++) { const c = add('chick', { x: hen.x - i * 0.8, z: hen.z }); c.leader = hen.id; c.line = i; c.state = 'follow'; }
+  const routeCount = () => animals.filter(a => a.home === 'route').length;
+  while (routeCount() < count) add(rng.pick(FILL), spawnNearRoad()); // the pond duck is a yard animal, so it does not count here
+  // two hide in the bushes (A-13), taken from the random fill so the first animal of each type stays in view
+  rng.shuffle(animals.slice(MAIN_TYPES.length + 3).filter(a => a.type !== 'cow')).slice(0, env.hideSpots.length)
+    .forEach((a, i) => { a.hidden = true; a.state = 'hide'; a.x = env.hideSpots[i].x; a.z = env.hideSpots[i].z; });
+  for (let i = 1; i < yardCount; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard'); // the pond duck is the first
+  if (rng.chance(0.5)) rng.pick(animals.filter(a => a.type !== 'chick' && !a.hidden)).golden = true; // A-8
+
+  const free = () => animals.filter(a => !NOT_FREE.has(a.state));
+  const pickTarget = a => {
+    if (a.type === 'duck' && a.home === 'yard' && rng.chance(0.7)) { const ang = rng.range(0, 6.28); a.tx = env.pond.x + Math.cos(ang) * (env.pond.r + 1); a.tz = env.pond.z + Math.sin(ang) * (env.pond.r + 1); a.state = 'walk'; return; }
+    if (a.home === 'yard') { const p = env.yard.randomPoint(rng); a.tx = p.x; a.tz = p.z; a.state = 'walk'; return; }
+    if (a.type === 'pig' && rng.chance(0.35)) { const m = env.mudSpots.map(s => [s, Math.hypot(s.x - a.x, s.z - a.z)]).filter(([, d]) => d < 40).sort((p, q) => p[1] - q[1])[0];
+      if (m) { a.state = 'walk'; a.wallow = true; a.tx = m[0].x + rng.range(-2, 2); a.tz = m[0].z + rng.range(-2, 2); return; } }
+    const n = env.roadNearest(a.x, a.z);
+    if (rng.chance(0.35)) { a.tx = 2 * n.pt.x - a.x + rng.range(-1, 1); a.tz = 2 * n.pt.z - a.z + rng.range(-1, 1); } // cross the road
+    else { a.tx = a.x + n.pt.tx * rng.range(-10, 10) + rng.range(-2, 2); a.tz = a.z + n.pt.tz * rng.range(-10, 10) + rng.range(-2, 2); } // wander along it
+    const q = keepOnRoad(a.tx, a.tz); a.tx = q.x; a.tz = q.z;
+    if (inYard(a.tx, a.tz, 2)) { a.tx = a.x; a.tz = a.z; } // route animals keep out of the yard
+    a.state = 'walk';
+  };
+  const moveToward = (a, tx, tz, v, dt) => {
+    const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz); if (d < 0.05) return true;
+    a.yaw = turn(a.yaw, Math.atan2(dx, dz), 5 * dt); const s = Math.min(d, v * dt); a.x += Math.sin(a.yaw) * s; a.z += Math.cos(a.yaw) * s; return d < 0.4;
+  };
+  const clampHome = a => {
+    if (a.home === 'yard') { const lim = Y - 2; a.x = Math.max(-lim, Math.min(lim, a.x)); a.z = Math.max(-lim, Math.min(lim, a.z)); return; }
+    if (a.hidden || inYard(a.x, a.z)) return;
+    const q = keepOnRoad(a.x, a.z); a.x = q.x; a.z = q.z;
+  };
+
+  return {
+    animals, free,
+    horn(t) {
+      for (const a of free()) { if (a.hidden) continue; a.lookT = 1.5;
+        if (TYPES[a.type].come && Math.hypot(a.x - t.x, a.z - t.z) < HORN_R && a.state !== 'help' && a.state !== 'wave') { a.state = 'come'; a.timer = 6; a.tx = t.x + Math.sin(t.yaw) * 6; a.tz = t.z + Math.cos(t.yaw) * 6; } }
+    },
+    callHelp(t) {
+      const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
+      if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; c.helpT = 30; return c;
+    },
+    toBarn(list) { // after the show: walk into the barn, one after the other, and are gone (A-16, F-10)
+      list.forEach((a, i) => Object.assign(a, { state: 'toBarn', leader: null, hidden: false, y: 0, timer: i * 0.4, tx: env.barn.x, tz: env.barn.z }));
+    },
+    respawn() { // G-3: new animals appear on the routes, away from the yard, to replace delivered ones
+      const nRoute = count - free().filter(a => a.home === 'route').length, nYard = yardCount - free().filter(a => a.home === 'yard').length;
+      const goldenFree = () => free().some(a => a.golden);
+      for (let i = 0; i < nRoute; i++) { const a = add(rng.pick(FILL), spawnNearRoad()); if (!goldenFree() && rng.chance(0.3)) a.golden = true; }
+      for (let i = 0; i < nYard; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard');
+      // refill empty hiding bushes with the newest route animals
+      env.hideSpots.forEach(h => { if (free().some(a => a.hidden && Math.hypot(a.x - h.x, a.z - h.z) < 1)) return;
+        const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !b.hidden && b.type !== 'cow' && b.type !== 'chick').at(-1); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
+    },
+    step(dt, { tractor: t }) {
+      for (const a of animals) {
+        if (SKIP.has(a.state)) continue;
+        const def = TYPES[a.type], dT = Math.hypot(a.x - t.x, a.z - t.z);
+        if (a.lookT > 0) { a.lookT -= dt; a.yaw = turn(a.yaw, Math.atan2(t.x - a.x, t.z - a.z), 6 * dt); }
+        if (!NOT_FREE.has(a.state) && def.flee && !a.hidden && a.state !== 'flee' && a.state !== 'help' && a.state !== 'wave' && dT < FLEE_R && t.speed > 0.5) { a.state = 'flee'; a.timer = 2; }
+        switch (a.state) {
+          case 'idle': a.anim = a.anim === 'eat' || rng.chance(0.002) ? 'eat' : 'idle'; if ((a.timer -= dt) <= 0) pickTarget(a); break;
+          case 'walk': if (moveToward(a, a.tx, a.tz, def.speed, dt)) { if (a.wallow) { a.state = 'wallow'; a.timer = rng.range(6, 10); a.wallow = false; } else { a.state = 'idle'; a.timer = rng.range(2, 5); } } break;
+          case 'wallow': a.dirt = Math.min(1, a.dirt + dt * 0.5); a.anim = 'eat'; if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 1; } break;
+          case 'flee': { const n = env.roadNearest(a.x, a.z), away = Math.atan2(a.x - t.x, a.z - t.z), along = Math.atan2(n.pt.tx, n.pt.tz);
+            // run away along the road (not into the edge): pick the road direction that points away from the tractor
+            const ang = a.home === 'route' && !inYard(a.x, a.z) ? (Math.cos(away - along) >= 0 ? along : along + Math.PI) : away; a.yaw = turn(a.yaw, ang, 8 * dt);
+            a.x += Math.sin(a.yaw) * FLEE_V * dt; a.z += Math.cos(a.yaw) * FLEE_V * dt;
+            if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 1.5; a.lookT = 1.5; } break; }
+          case 'come': if (moveToward(a, a.tx, a.tz, def.speed * 1.6, dt) || (a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 3; } break;
+          case 'follow': { const L = animals[a.leader]; if (!L || NOT_FREE.has(L.state)) { a.state = 'idle'; a.leader = null; break; }
+            const p = L.trail[Math.min(L.trail.length - 1, a.line * 3)] || L; moveToward(a, p.x, p.z, def.speed * 1.8, dt); break; }
+          case 'help': if (moveToward(a, a.tx, a.tz, Math.max(def.speed * 2, 2.5), dt)) { a.state = 'wave'; a.timer = 10; } break;
+          case 'wave': a.anim = 'dance'; a.yaw = turn(a.yaw, Math.atan2(t.x - a.x, t.z - a.z), 4 * dt); if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 2; } break;
+          case 'hide': a.anim = 'idle'; break;
+          case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; } if (moveToward(a, a.tx, a.tz, 2.2, dt)) a.state = 'gone'; break;
+        }
+        if (['walk', 'flee', 'come', 'follow', 'help'].includes(a.state) || (a.state === 'toBarn' && a.timer <= 0)) a.anim = WALK[a.state] || 'walk';
+        if (!NOT_FREE.has(a.state)) clampHome(a);
+        const last = a.trail[0]; if (!last || Math.hypot(last.x - a.x, last.z - a.z) > 0.25) { a.trail.unshift({ x: a.x, z: a.z }); if (a.trail.length > 12) a.trail.pop(); }
+      }
+      // separation (free animals only; not the ones in flight, riding, on stage, walking into the barn or gone)
+      const live = animals.filter(a => !NOT_FREE.has(a.state) && !a.hidden);
+      for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+        const p = live[i], q = live[j], dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz), m = TYPES[p.type].r + TYPES[q.type].r;
+        if (d > 0 && d < m) { const k = (m - d) / d / 2; p.x -= dx * k; p.z -= dz * k; q.x += dx * k; q.z += dz * k; }
+      }
+      for (const a of live) clampHome(a); // separation must not push anyone off the road or out of the yard
+    },
+  };
+}
