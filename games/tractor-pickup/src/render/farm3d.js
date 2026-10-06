@@ -163,7 +163,7 @@ function buildBarn(b, anisotropy, matV) {
   const walls = [], leaves = [];
   for (const sx of [-1, 1]) {
     walls.push(boardUV(box(0.4, H, L * 2, sx * W, H / 2, 0), 'z'));
-    for (const sz of [-1, 1]) leaves.push(boardUV(box(0.12, 4.4, LEAF - GAP, sx * W, 2.25, sz * (L + (LEAF + GAP) / 2)), 'z')); // a gap from the wall end
+    for (const sz of [-1, 1]) leaves.push(boardUV(box(0.12, 4.3, LEAF - GAP, sx * W, 2.25, sz * (L + (LEAF + GAP) / 2)), 'z')); // a gap from the wall end; top 5 cm below the frame's top face (was coplanar: flicker), bottom 5 cm above its bottom
   }
   const solid = new THREE.Mesh(mergeUV([...walls, ...leaves]), plankMat); solid.castShadow = solid.receiveShadow = true; group.add(solid);
   const trim = [];
