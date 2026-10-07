@@ -60,7 +60,7 @@ export function withLag(net, { delay, jitter, loss }, { rng = Math.random, timer
     on(e, f) { if (e !== 'message') return net.on(e, f); const g = (from, d, rel) => timer(() => f(from, d, rel), rel ? ordered(lastIn, v => { lastIn = v; }) : wait()); wrapped.set(f, g); net.on(e, g); },
     off(e, f) { net.off(e, wrapped.get(f) || f); wrapped.delete(f); } };
 }
-// codec.js kindOf() accepts only an ArrayBuffer, so a typed array (Uint8Array, Buffer) is delivered as a copy of its exact byte range
+// replica.js isFrame() accepts only an ArrayBuffer, so a typed array (Uint8Array, Buffer) is delivered as a copy of its exact byte range
 const exact = d => ArrayBuffer.isView(d) ? d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) : d;
 // A handshake Room (vendored src/net/handshake.js, Task 15) as a net
 export function roomLink(room) {
