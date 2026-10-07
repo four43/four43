@@ -117,3 +117,13 @@ test('a lost paint: the guest sends it again at the next keyframe (M-2, M-56)', 
   assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[2 - 1], 'lost');
   w.seconds(2.5); assert.deepEqual(w.host.sync.players.map.get(2).paint, { body: 'green', trim: 'pink' });
 });
+test('a lost hello: the guest says it again every 2 s until it has its welcome; the host takes one hello only (M-24, M-50)', async () => {
+  const w = await mpWorld({ seed: 101, join: false }), hellos = [];
+  w.hub.drop = (from, to, d) => { if (d?.t === 'hello') hellos.push(w.now); return d?.t === 'hello' && hellos.length === 1; }; // the first is lost
+  const g = w.addGuest(); w.seconds(1.5); assert.equal(g.sync.you, 0, 'no welcome yet');
+  w.seconds(1); assert.equal(g.sync.you, 2); assert.equal(g.game.farm.seed, 101); assert.equal(hellos.length, 2);
+  const welcome = w.host.sync.handlers.hello; let handled = 0; w.host.sync.handlers.hello = (...a) => { handled++; return welcome(...a); };
+  g.net.send(w.host.net.id, { t: 'hello', v: 2, paint: { body: 'pink', trim: 'pink' } }, true); w.seconds(4);
+  assert.equal(handled, 1); assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[1], 'a second hello changes nothing');
+  assert.equal(hellos.length, 3, 'only the one sent by hand: no more hellos once welcomed'); assert.deepEqual(settle(w, 3), []);
+});

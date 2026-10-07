@@ -13,6 +13,7 @@ import { NOT_FREE } from '../sim/herd.js';
 const OWN = new Set(['fly', 'ride', 'show', 'gone']); // host data never moves these: this guest's own, or unknown since the welcome (Decision 10: not toBarn)
 const HELD = new Set(['fly', 'ride', 'show']); // in this guest's train or its show
 export const SILENT_MS = 3000; // M-40: no binary message from the host for this long: it is away, whatever the server says (a sleeping page, a dead channel)
+export const HELLO_MS = 2000; // M-24: a hello is said again this often until the welcome comes (a lost hello)
 export const TREE_GRACE = 1000; // ms: a keyframe does not grow back a tree this guest broke this recently (the keyframe may be older than the host's break) (M-17, M-56)
 const MAX_JSON = 2048; // M-50: a longer reliable message from the host is dropped (the welcome is the biggest: about 60 bytes)
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
@@ -20,11 +21,12 @@ const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id]
 export function createGuestSync({ game, net, paint, onFarm, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
   const store = createStore(KINDS), mine = createTracker([TRAIN]), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
-  let you = 0, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
+  let you = 0, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
   let hostAway = false, silent = false, paused = false, lastFast = 0; // M-40: two sources (the server's hostAway, the silence watchdog); the host is away while either says so
   const setPaused = () => { const v = hostAway || silent; if (v === paused) return; paused = v; game.boopsPaused = v; const p = players.map.get(1); if (p) p.away = v; };
   const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
   const toHost = (m, rel = true) => { if (hostPeer && !alone) net.send(hostPeer, m, rel); };
+  const hello = () => { helloAt = clock(); toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); };
   const holds = id => game.flights.some(f => f.animal.id === id) || game.load.slots.some(s => s.animal.id === id);
   const forgetOwner = n => { for (const k of KINDS) if (k.authority === 'owner') store.forget(k.name, n); }; // a player left or came: a new one with its number starts a fresh (lower) clock, and a late frame of the old one must not outrank it
   function applyRoster() { // M-22: the player objects. A new player gets this train's keyframe at once (M-23)
@@ -90,7 +92,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   net.on('hostAway', () => { hostAway = true; setPaused(); }); // M-40
   net.on('hostBack', () => { hostAway = false; setPaused(); });
   net.on('closed', reason => goAlone(reason));
-  net.on('peer', id => { hostPeer = id; toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); });
+  net.on('peer', id => { hostPeer = id; hello(); });
   net.on('message', (from, data, reliable) => {
     try {
       if (from !== hostPeer || alone || !(reliable ? rate.rel : rate.fast).allow(clock())) return; // M-50: the guest checks the host's messages too (in wall time)
@@ -135,7 +137,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     players, handlers, out, pending, store,
     get game() { return game; }, get you() { return you; }, get alone() { return alone; },
     before(now) {
-      nowMs = now; if (!you) return out.splice(0);
+      nowMs = now; if (!you) { if (hostPeer && clock() - helloAt >= HELLO_MS) hello(); return out.splice(0); }
       if (!alone) { silent = clock() - lastFast > SILENT_MS; setPaused(); } // M-40: the silence watchdog
       if (deferred && game.mode === 'drive') { const m = deferred, k = deferredKey; deferred = deferredKey = null; applyWelcome(m); if (k) applyFrame(k); }
       if (!alone) { players.sample(now); if (!deferred) { settleClaims(); applyHerd(now); for (const a of game.herd.animals) if (a.state === 'carried') a.state = 'elsewhere'; applyCarried(); } } // M-19: a waiting welcome's herd is not put on the old farm
