@@ -14,6 +14,12 @@ export const TP = {
   slip: 2.4, travel: 0.45, yawRateMax: 2.6, slideK: 6, yawInertia: 2200, slideTorque: 30, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 9000,
   steep: Math.cos(30 * Math.PI / 180), steepGrip: 0.2, // T-17: a wheel on ground steeper than 30 degrees (an edge bank) loses most of its grip
 };
+export const TRACTOR_WHEELS = [
+  { name: 'wheel-front-left', mx: 0.415, my: 0.325, mz: 0.735, r: 0.325, front: true },
+  { name: 'wheel-front-right', mx: -0.415, my: 0.325, mz: 0.735, r: 0.325, front: true },
+  { name: 'wheel-back-left', mx: 0.465, my: 0.525, mz: -0.575, r: 0.525, front: false },
+  { name: 'wheel-back-right', mx: -0.465, my: 0.525, mz: -0.575, r: 0.525, front: false },
+].map(w => ({ ...w, cx: w.mz * TP.scale, cy: w.my * TP.scale, cz: -w.mx * TP.scale, radius: w.r * TP.scale }));
 export function quatAxes(q) {
   const { x, y, z, w } = q;
   return {
@@ -26,7 +32,7 @@ const yawQuat = yaw => { const a = yaw - Math.PI / 2; return { x: 0, y: Math.sin
 const ease = (cur, tgt, rate, dt) => cur + Math.max(-rate * dt, Math.min(rate * dt, tgt - cur));
 
 export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = () => 'gravel' }) {
-  const { RAPIER, world } = phys, S = TP.scale;
+  const { RAPIER, world } = phys;
   const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, 0.3, z).setRotation(yawQuat(yaw))
     .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.8)
     .setAdditionalMassProperties(TP.mass, { x: 0.15, y: 0.45, z: 0 }, { x: 900, y: 2200, z: 2000 }, { x: 0, y: 0, z: 0, w: 1 }));
@@ -36,14 +42,8 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
     world.createCollider(RAPIER.ColliderDesc.cuboid(0.55, 0.55, 0.62).setTranslation(-0.55, 1.95, 0).setDensity(0.1).setFriction(0.2).setCollisionGroups(cg), body),
   ];
   const vc = world.createVehicleController(body);
-  const W = [
-    { name: 'wheel-front-left', mx: 0.415, my: 0.325, mz: 0.735, r: 0.325, front: true },
-    { name: 'wheel-front-right', mx: -0.415, my: 0.325, mz: 0.735, r: 0.325, front: true },
-    { name: 'wheel-back-left', mx: 0.465, my: 0.525, mz: -0.575, r: 0.525, front: false },
-    { name: 'wheel-back-right', mx: -0.465, my: 0.525, mz: -0.575, r: 0.525, front: false },
-  ];
+  const W = TRACTOR_WHEELS.map(w => ({ ...w }));
   W.forEach((w, i) => {
-    w.cx = w.mz * S; w.cy = w.my * S; w.cz = -w.mx * S; w.radius = w.r * S;
     vc.addWheel({ x: w.cx, y: w.cy + 0.12, z: w.cz }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, TP.suspRest, w.radius);
     vc.setWheelSuspensionStiffness(i, TP.stiffness); vc.setWheelSuspensionCompression(i, TP.compression);
     vc.setWheelSuspensionRelaxation(i, TP.relaxation); vc.setWheelMaxSuspensionForce(i, 1e6); vc.setWheelMaxSuspensionTravel(i, TP.travel);

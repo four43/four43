@@ -31,7 +31,7 @@ export function createAnimals3D(scene, herd) {
     const parts = geos[a.type].map(geo => { const m = new THREE.Mesh(geo, mat); m.matrixAutoUpdate = false; m.castShadow = true; inner.add(m); return m; });
     const hat = new THREE.Group(); hat.visible = false; hat.matrixAutoUpdate = false; inner.add(hat); scene.add(g);
     if (hatMake) applyHat({ a, hat });
-    return { a, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
+    return { a, type: a.type, golden: a.golden, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
   };
   const views = herd.animals.map(makeView);
   return {
@@ -44,9 +44,11 @@ export function createAnimals3D(scene, herd) {
       flightOf.clear(); for (const f of game.flights) flightOf.set(f.animal, f);
       while (views.length < herd.animals.length) views.push(makeView(herd.animals[views.length])); // respawned animals (G-3)
       for (const v of views) {
-        const a = v.a; v.t += dt;
-        v.g.visible = a.state !== 'gone'; if (!v.g.visible) continue;
-        v.hat.visible = a.state === 'ride';
+        const a = v.a;
+        if (v.type !== a.type || v.golden !== a.golden) { scene.remove(v.g); v.parts[0]?.material.dispose(); const i = views.indexOf(v); views[i] = makeView(a); continue; } // a placeholder from herd.ensure got its real type (M-11)
+        v.t += dt;
+        v.g.visible = a.state !== 'gone' && a.state !== 'elsewhere'; if (!v.g.visible) continue;
+        v.hat.visible = a.state === 'ride' || (a.state === 'carried' && !!a.riding);
         const fl = flightOf.get(a);
         v.g.position.set(a.x, a.y || 0, a.z); v.g.rotation.set(0, a.yaw, 0);
         if (fl) v.g.position.set(fl.prev.x + (fl.pos.x - fl.prev.x) * view.alpha, fl.prev.y + (fl.pos.y - fl.prev.y) * view.alpha, fl.prev.z + (fl.pos.z - fl.prev.z) * view.alpha);
