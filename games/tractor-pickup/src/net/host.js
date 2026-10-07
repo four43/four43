@@ -99,7 +99,7 @@ export function createHostSync({ game, net, paint }) {
     setPaint(pt) { myPaint = { ...pt }; all({ t: 'players', list: roster() }); },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
     delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host (Task 15)
-    close() { closed = true; for (const p of players.list()) { for (const a of owned(p.n)) { a.state = 'gone'; a.epoch++; } players.remove(p.n); } game.herd.respawn(); }, // M-39: the host keeps playing alone and its herd refills
+    close() { closed = true; for (const p of players.list()) { for (const a of owned(p.n)) { a.state = 'gone'; a.epoch++; } if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(p.n); } game.herd.respawn(); }, // M-39: the host keeps playing alone and its herd refills
   };
   sync.owned = owned; sync.freeUp = freeUp; // for Tasks 10 and 12
   return sync;

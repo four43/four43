@@ -374,3 +374,30 @@ test('going alone with a claim still waiting keeps the animal (decision 3)', asy
   w.hub.leave(w.host.net.id, 'left'); w.seconds(2);
   assert.ok(g.events.some(e => e.type === 'land' && e.animal === ga));
 });
+test('alone, chick lines follow their hen again (M-41)', async () => {
+  const w = await mpWorld({ seed: 67 }); w.seconds(1);
+  const g = w.guests[0]; w.hub.leave(w.host.net.id, 'left'); w.seconds(0.2);
+  const game = g.game, line = c => c.type === 'chick' && c.leader !== null && free(game, c) && free(game, game.herd.animals[c.leader]);
+  const chicks = game.herd.animals.filter(line); assert.ok(chicks.length > 0);
+  w.seconds(30);
+  for (const c of chicks.filter(line)) { const L = game.herd.animals[c.leader]; assert.ok(Math.hypot(c.x - L.x, c.z - L.z) < 4, 'chick ' + c.id + ' stays by its hen'); }
+});
+test('alone, an animal walking into the barn goes by the door first and is gone (M-41)', async () => {
+  const w = await mpWorld({ seed: 68 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  w.host.game.herd.toBarn([ha]); w.seconds(0.3); assert.equal(ga.state, 'toBarn');
+  w.hub.leave(w.host.net.id, 'left'); w.seconds(0.05);
+  const B = g.game.farm.yard.barn; assert.equal(ga.inside, false); assert.ok(Math.abs(Math.hypot(ga.tx - B.x, ga.tz - B.z) - (B.half + B.leaf + 1)) < 1e-6, 'the outside waypoint first');
+  w.seconds(45); assert.equal(ga.state, 'gone'); // about 70 m to walk at 2.2 m/s
+});
+test('a host that stops hosting poofs every guest tractor (M-39)', async () => {
+  const w = await mpWorld({ seed: 69 }); w.seconds(1);
+  w.host.sync.close(); w.step(1);
+  assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.sync.players.list().length, 0);
+});
+test('a throw while going alone never reaches the link (M-44)', async () => {
+  const w = await mpWorld({ seed: 70 }); w.seconds(1);
+  const g = w.guests[0], warn = console.warn; let warned = 0; console.warn = () => { warned++; };
+  try { g.game.herd.respawn = () => { throw new Error('boom'); }; assert.doesNotThrow(() => g.sync.close()); assert.equal(warned, 1); assert.equal(g.sync.alone, true); }
+  finally { console.warn = warn; }
+});

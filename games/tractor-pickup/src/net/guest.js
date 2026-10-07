@@ -6,6 +6,7 @@ import { checkFromHost, createRate, NET_VERSION } from './protocol.js';
 import { createPlayers, vehicleOf, SEND } from './players.js';
 import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
+import { NOT_FREE } from '../sim/herd.js';
 
 const OWN = new Set(['fly', 'ride', 'show', 'gone']); // this guest's own animals: herd messages never move them. Not toBarn: the host walks delivered animals in (Decision 10)
 const HELD = new Set(['fly', 'ride', 'show']); // in this guest's train or its show
@@ -54,12 +55,17 @@ export function createGuestSync({ game, net, paint, onFarm }) {
   };
   function goAlone(reason) { // M-41: carry on alone on the same farm; nothing is made again
     if (alone) return; alone = true; deferred = null;
-    for (const f of game.flights.filter(f => f.claim === 'pending')) game.resolveClaim(f.animal.id, true); // decision 3: nobody else can have it now
-    pending.clear(); game.claims = false; game.boopsPaused = false; game.herd.remote = false;
-    for (const a of game.herd.animals) if (a.state === 'carried' || a.state === 'elsewhere') a.state = 'gone';
-    game.herd.respawn();
-    for (const p of players.list()) { if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(p.n); }
-    game.others = []; out.push({ type: 'alone', reason });
+    try {
+      for (const f of game.flights.filter(f => f.claim === 'pending')) game.resolveClaim(f.animal.id, true); // decision 3: nobody else can have it now
+      pending.clear(); game.claims = false; game.boopsPaused = false; game.herd.remote = false;
+      const herd = game.herd, isFree = a => a && !NOT_FREE.has(a.state);
+      for (const a of herd.animals) if (a.state === 'carried' || a.state === 'elsewhere') a.state = 'gone';
+      for (const a of herd.animals) if (a.state === 'idle' && a.leader !== null && isFree(herd.animals[a.leader])) a.state = 'follow'; // herd messages carry no 'follow': chick lines walk again
+      herd.toBarn(herd.animals.filter(a => a.state === 'toBarn')); // real waypoints: the ones from herd messages have none
+      herd.respawn();
+      for (const p of players.list()) { if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(p.n); }
+      game.others = []; out.push({ type: 'alone', reason });
+    } catch (e) { console.warn('net alone', e); } // M-44
   }
   net.on('hostAway', () => { game.boopsPaused = true; const p = players.map.get(1); if (p) p.away = true; }); // M-40
   net.on('hostBack', () => { game.boopsPaused = false; const p = players.map.get(1); if (p) p.away = false; });
