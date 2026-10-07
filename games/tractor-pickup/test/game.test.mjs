@@ -178,3 +178,60 @@ test('an empty train drives on through the barn (F-1)', () => {
   const ev = []; for (let i = 0; i < 60 * 8; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
   assert.ok(!ev.some(e => e.type === 'barnPass')); assert.equal(g.mode, 'drive');
 });
+
+test('createGame puts player n at its spawn point (M-10)', async () => {
+  const { spawnPoint } = await import('../src/sim/spawn.js');
+  const g = createGame(RAPIER, { seed: 41, power: 'medium', player: 3 }), p = spawnPoint(g.farm, 3);
+  assert.ok(Math.hypot(g.tractor.x - p.x, g.tractor.z - p.z) < 0.01);
+});
+test('with claims on, a booped animal waits at the top of its arc for the answer, then lands (M-14)', () => {
+  const g = createGame(RAPIER, { seed: 42, power: 'medium' }); quiet(g); g.claims = true;
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  let ev = []; for (let i = 0; i < 90; i++) ev.push(...g.step(STILL)); // 1.5 s: past the top of every arc (at most 0.75 x 1.4 s), inside the 1 s hold (ends at 1.75 s at the earliest)
+  assert.ok(ev.some(e => e.type === 'launch')); assert.ok(!ev.some(e => e.type === 'land'), 'no landing without a yes');
+  assert.equal(g.flights.length, 1); assert.equal(g.flights[0].claim, 'pending');
+  assert.deepEqual(g.resolveClaim(a.id, true), []);
+  ev = []; for (let i = 0; i < 60; i++) ev.push(...g.step(STILL));
+  assert.ok(ev.some(e => e.type === 'land' && e.animal === a)); assert.equal(a.state, 'ride');
+});
+test('a refused claim drops the flight with a poof, and frees its slot (M-14)', () => {
+  const g = createGame(RAPIER, { seed: 43, power: 'medium' }); quiet(g); g.claims = true;
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  for (let i = 0; i < 20; i++) g.step(STILL);
+  const ev = g.resolveClaim(a.id, false);
+  assert.equal(ev.length, 1); assert.equal(ev[0].type, 'unclaim'); assert.equal(ev[0].reason, 'refused'); assert.ok(Number.isFinite(ev[0].pos.y));
+  assert.equal(g.flights.length, 0); assert.equal(g.load.slots.length, 0); assert.equal(a.state, 'elsewhere');
+});
+test('a claim with no answer for 1 s at the top of the arc times out (M-14)', () => {
+  const g = createGame(RAPIER, { seed: 44, power: 'medium' }); quiet(g); g.claims = true;
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  const ev = []; for (let i = 0; i < 60 * 4; i++) ev.push(...g.step(STILL));
+  const u = ev.find(e => e.type === 'unclaim'); assert.ok(u); assert.equal(u.reason, 'timeout'); assert.equal(g.load.slots.length, 0);
+});
+test('paused boops: nothing is booped (M-40)', () => {
+  const g = createGame(RAPIER, { seed: 45, power: 'medium' }); quiet(g); g.boopsPaused = true;
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  const ev = []; for (let i = 0; i < 60; i++) ev.push(...g.step(STILL)); assert.ok(!ev.some(e => e.type === 'boop'));
+});
+test('with a remote herd there is no B-14 dodge and no respawn after the show (M-12, M-16)', () => {
+  const g = createGame(RAPIER, { seed: 46, power: 'medium' }); quiet(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  for (const a of pickable(g).slice(0, 12)) place(g, a);
+  g.herd.remote = true;
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  for (let i = 0; i < 30; i++) g.step(STILL); assert.notEqual(a.state, 'dodge');
+  const n = g.herd.animals.length, riders = g.startShow(); riders.forEach(r => { r.animal.state = 'show'; }); g.finishShow(riders);
+  assert.equal(g.herd.animals.length, n, 'no new animals: the host makes them');
+});
+test('fullDodge makes animals hop out of the way of any full train given as poses (M-12, B-14)', async () => {
+  const { fullDodge } = await import('../src/sim/game.js');
+  const g = createGame(RAPIER, { seed: 47, power: 'medium' }); quiet(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const a = pickable(g)[0], p = g.tractorWorld({ x: 3, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
+  const ev = []; fullDodge(g.herd, g.tractor.body.translation(), g.tractor.body.rotation(), g.train.cars.map(c => ({ p: c.body.translation(), q: c.body.rotation() })), ev);
+  assert.equal(a.state, 'dodge'); assert.ok(ev.some(e => e.type === 'dodge' && e.animal === a));
+});

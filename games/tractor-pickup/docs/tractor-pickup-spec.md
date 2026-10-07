@@ -588,7 +588,7 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 | M-7 | Soft bump | When two tractors touch, each device pushes its own tractor gently away from the other tractor, with a "boing" and a short horn. The push is approximately 2 m/s, away from the other tractor's center. The tractors do not stay together. Trailers and wagons do not touch other vehicles. |
 | M-8 | Horn | The horn (U-2) calls animals to that player's tractor on all devices (C-6, A-11). The horn of an other tractor sounds more quietly. |
 | M-9 | Help | The help animal (F-4) comes to the tractor of the player who needs help. |
-| M-10 | Join on screen | When a guest joins, its tractor appears beside the farm start with a sparkle and a short horn. Each player number has its own place, 8 m apart, clear of obstacles. |
+| M-10 | Join on screen | When a guest joins, its tractor appears ahead of the farm start with a sparkle and a short horn. Each player number has its own place, 12 m apart along the farm start's heading (8 m to the side when that place is blocked), clear of obstacles. |
 
 ### 14.3 What each device owns
 

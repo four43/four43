@@ -121,3 +121,12 @@ test('stepGib: bounces, never goes below the ground, comes to rest and dies (gib
   while (g.alive && t < 20) { stepGib(g, DT); t += DT; assert.ok(g.y >= g.size / 2 - 1e-9, `below ground ${g.y}`); if (g.vy > 0 && prevVy < 0) bounced = true; prevVy = g.vy; if (g.rest > 0 && restedAt === null) restedAt = t; }
   assert.ok(bounced); assert.ok(restedAt !== null && restedAt < 8, 'never came to rest'); assert.ok(!g.alive, 'never removed'); assert.ok(t - restedAt > 3 && t - restedAt < 5.5, `life after rest ${t - restedAt}`);
 });
+
+test('a tree or bush can be broken by id (M-17); brokenIds lists them', () => {
+  const { trees } = setup([...oneTree(0, 0), ...oneBush(20, 0)]);
+  const ev = trees.breakById(0, { x: 1, z: 0 });
+  assert.equal(ev.type, 'treeBreak'); assert.equal(ev.tree.id, 0); assert.equal(ev.remote, true); assert.equal(trees.list[0].collider, null);
+  assert.equal(trees.breakById(0), null, 'already broken'); assert.equal(trees.breakById(99), null, 'no such tree');
+  assert.ok(trees.breakById(1)); assert.deepEqual(trees.brokenIds(), [0, 1]);
+  trees.reset(); assert.deepEqual(trees.brokenIds(), []);
+});
