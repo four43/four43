@@ -88,3 +88,5 @@ export function disagreements(w) {
 }
 // step until every device agrees, at most s seconds; returns the disagreements left (empty: agreed in time)
 export function settle(w, s) { let left = disagreements(w); for (let i = 0; i < Math.round(s * 60) && left.length; i++) { w.step(1); left = disagreements(w); } return left; }
+// a connection change (M-42, M-53): every claim, release and frame, both ways, is lost for s seconds
+export function blackout(w, s, inputs) { w.hub.drop = (from, to, d) => d instanceof ArrayBuffer || d?.t === 'claim' || d?.t === 'release'; w.seconds(s, inputs); w.hub.drop = null; }

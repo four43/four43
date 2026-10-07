@@ -1,7 +1,7 @@
 // test/mp.repair.test.mjs — repair after lost messages (M-56..M-58, M-53 loss tests)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, settle, trainFrame, parked } from './mp.harness.mjs';
+import { mpWorld, free, STILL, settle, blackout, trainFrame, parked } from './mp.harness.mjs';
 import { createLoad } from '../src/sim/slots.js';
 import { CAPACITY } from '../src/sim/game.js';
 
@@ -31,4 +31,43 @@ test('an away guest keeps its animals: the 3 s count only while its frames come 
   assert.equal(ha.state, 'carried', 'not freed while away'); assert.equal(ha.owner, 2);
   w.hub.back(g.net.id); w.seconds(1);
   assert.equal(ha.state, 'carried'); assert.equal(ha.owner, 2); assert.equal(ga.state, 'ride');
+});
+test('a claim lost in a connection change: the guest poofs, nobody keeps the animal, all agree within 3 s (M-14, M-56, M-58)', async () => {
+  const w = await mpWorld({ seed: 93 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = inFrontOf(g, ha);
+  w.hub.drop = (from, to, d) => d?.t === 'claim'; let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 60) w.step(1); // the guest boops; its claim is lost
+  blackout(w, 2.5); // then every claim, release and frame, both ways, until after the 1 s hold
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'), 'poofed'); assert.ok(free(w.host.game, ha), 'the host never had the claim');
+  g.game.boopsPaused = true; assert.deepEqual(settle(w, 3), []);
+  assert.ok(free(g.game, ga), 'free on the guest again');
+});
+test('a yes lost in a connection change: the guest poofs and gives it back at the next keyframe; all agree within 3 s (M-14, M-56, M-58)', async () => {
+  const w = await mpWorld({ seed: 94 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = inFrontOf(g, ha);
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 60) w.step(1);
+  w.hub.drop = (from, to, d) => to === g.net.id && d instanceof ArrayBuffer; w.seconds(0.1); assert.equal(ha.owner, 2, 'granted'); // the claim got through; its answer does not
+  blackout(w, 2.5);
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id), 'poofed');
+  g.game.boopsPaused = true; assert.deepEqual(settle(w, 3), []);
+  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', 'the host has it free');
+});
+test('a tree break and a regrow lost: the keyframe puts every tree right within 3 s (M-17, M-56, M-58)', async () => {
+  const w = await mpWorld({ seed: 95, guests: 2 }); w.seconds(1);
+  const [g1, g2] = w.guests, trees = w.host.game.trees.list.filter(t => t.kind === 'tree').slice(0, 2);
+  w.hub.drop = (from, to) => to === g2.net.id; // g2 hears nothing for a while
+  for (const t of trees) w.host.sync.after([{ type: 'treeBreak', tree: w.host.game.trees.breakById(t.id).tree }], w.now);
+  w.seconds(0.5); w.host.game.trees.reset(); w.seconds(1); w.host.game.trees.breakById(trees[1].id); w.seconds(0.5); // one grows back, one stays broken
+  g1.game.trees.breakById(trees[0].id); // a guest break the host refused (too far): only on g1's screen
+  w.hub.drop = null;
+  assert.deepEqual(settle(w, 3), []);
+  for (const d of w.devs) assert.deepEqual(d.game.trees.list.filter(t => t.state === 'broken').map(t => t.id), [trees[1].id], d.name);
+});
+test('everything lost for a second while two guests boop under a far network: all agree within 3 s (M-53, M-58)', async () => {
+  const { makeRng } = await import('../src/sim/rng.js');
+  const w = await mpWorld({ seed: 96, guests: 2, link: { delay: 150, jitter: 60, loss: 0.05, rng: makeRng(96).next } }); w.seconds(2);
+  for (const g of w.guests) for (let i = 0; i < 3; i++) { const ha = w.host.game.herd.free().filter(x => !x.hidden && x.type !== 'chick' && !w.host.game.herd.animals.some(c => c.leader === x.id))[i * 2 + (g === w.guests[0] ? 0 : 1)]; inFrontOf(g, ha); w.step(12); }
+  blackout(w, 1);
+  w.seconds(1, (d, i) => i > 0 ? { thr: 0.3, steer: 0.4, horn: false } : STILL);
+  for (const g of w.guests) g.game.boopsPaused = true; w.host.game.boopsPaused = true;
+  const t0 = w.now; assert.deepEqual(settle(w, 3), []); assert.ok(w.now - t0 <= 3000);
 });
