@@ -1,7 +1,7 @@
 // test/mp.repair.test.mjs — repair after lost messages (M-56..M-58, M-53 loss tests)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, free, STILL, settle, disagreements, blackout, trainFrame, parked } from './mp.harness.mjs';
+import { mpWorld, free, STILL, PAINTS, settle, disagreements, blackout, trainFrame, parked } from './mp.harness.mjs';
 import { createLoad } from '../src/sim/slots.js';
 import { CAPACITY } from '../src/sim/game.js';
 
@@ -95,4 +95,25 @@ test('a lost new-farm welcome: the host sends the welcome with each keyframe, so
   s.game.mode = 'drive'; w.step(1); const sb = s.game; assert.equal(sb.farm.seed, 98, 'after its show');
   w.seconds(4.5); assert.equal(s.game, sb, 'built once: the welcomes that came during the show do not build it again');
   assert.deepEqual(settle(w, 3), []);
+});
+test('a lost delivered: the guest sends it again at the next keyframe, so the animals walk into the barn on the host and are never free again (M-6, M-16, M-56)', async () => {
+  const w = await mpWorld({ seed: 99 }); w.seconds(1);
+  const g = w.guests[0], h = w.host.game.herd, ha = single(w.host.game), ga = inFrontOf(g, ha);
+  w.seconds(3); assert.equal(ga.state, 'ride'); assert.equal(ha.owner, 2);
+  const before = h.animals.length, sent = [];
+  w.hub.drop = (from, to, d) => { if (d?.t === 'delivered') sent.push(d); return d?.t === 'delivered' && sent.length === 1; }; // the first one is lost
+  const riders = g.game.startShow(); g.sync.showStarted(); riders.forEach(r => { r.animal.state = 'show'; }); g.game.finishShow(riders); g.sync.delivered(riders); g.game.boopsPaused = true;
+  let freed = false; for (let i = 0; i < 4 * 60; i++) { w.step(1); if (free(w.host.game, ha) || free(g.game, ga)) freed = true; }
+  w.hub.drop = null;
+  assert.ok(sent.length >= 2, 'sent again'); assert.ok(!freed, 'never free again on either device');
+  assert.ok(['toBarn', 'gone'].includes(ha.state), ha.state); assert.ok(h.animals.length > before, 'new animals');
+  assert.deepEqual(settle(w, 3), []);
+  const n = sent.length; w.seconds(4.5); assert.equal(sent.length, n, 'not sent again once the host has it');
+});
+test('a lost paint: the guest sends it again at the next keyframe (M-2, M-56)', async () => {
+  const w = await mpWorld({ seed: 100 }); w.seconds(1);
+  const g = w.guests[0]; w.hub.drop = (from, to, d) => d?.t === 'paint';
+  g.sync.setPaint({ body: 'green', trim: 'pink' }); w.seconds(0.2); w.hub.drop = null;
+  assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[2 - 1], 'lost');
+  w.seconds(2.5); assert.deepEqual(w.host.sync.players.map.get(2).paint, { body: 'green', trim: 'pink' });
 });

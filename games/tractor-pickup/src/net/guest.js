@@ -19,7 +19,7 @@ const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one a
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
 export function createGuestSync({ game, net, paint, onFarm, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
-  const store = createStore(KINDS), mine = createTracker([TRAIN]), pending = new Map(), myBreaks = new Map(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }
+  const store = createStore(KINDS), mine = createTracker([TRAIN]), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
   let you = 0, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
   let hostAway = false, silent = false, paused = false, lastFast = 0; // M-40: two sources (the server's hostAway, the silence watchdog); the host is away while either says so
   const setPaused = () => { const v = hostAway || silent; if (v === paused) return; paused = v; game.boopsPaused = v; const p = players.map.get(1); if (p) p.away = v; };
@@ -40,8 +40,11 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   }
   function repair() { // M-56, at each keyframe from the host
     for (const [id, c] of pending) if (c.done) pending.delete(id); // M-14: the keyframe settles a claim whose flight is over
-    const lost = []; for (const [id, r] of store.all('animal')) if (r.owner === you && !holds(id)) lost.push(id); // given to us, but not here (a lost answer)
+    const again = []; for (const id of handedIn) { const r = store.get('animal', id); if (r?.state === 'carried' && r.owner === you) again.push(id); else handedIn.delete(id); } // a lost delivered: still ours on the host
+    const lost = []; for (const [id, r] of store.all('animal')) if (r.owner === you && !holds(id) && !handedIn.has(id)) lost.push(id); // given to us, but not here (a lost answer)
+    for (let i = 0; i < again.length; i += 16) toHost({ t: 'delivered', ids: again.slice(i, i + 16) });
     for (let i = 0; i < lost.length; i += 16) toHost({ t: 'release', ids: lost.slice(i, i + 16) });
+    const me = store.get('player', you); if (me && (me.body !== myPaint.body || me.trim !== myPaint.trim)) toHost({ t: 'paint', paint: myPaint }); // a lost paint (M-2)
   }
   function applyFrame(f) {
     const changes = store.apply(f);
@@ -58,7 +61,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     if (!you) lastFast = clock(); // the watchdog starts with the first welcome
     you = m.you; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
     game.herd.remote = true; game.claims = true; game.boopsPaused = paused; // a host that is away stays away on the new farm (M-40)
-    pending.clear(); myBreaks.clear(); herdBuf.reset(); store.clear(); mine.reset(); lastKey = -Infinity;
+    pending.clear(); myBreaks.clear(); handedIn.clear(); herdBuf.reset(); store.clear(); mine.reset(); lastKey = -Infinity;
     for (const a of game.herd.animals) a.state = 'gone'; // M-24: nothing is free until the host's keyframe says so
     for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; }
   }
@@ -155,7 +158,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     setGame(g) { game = g; },
     setPaint(pt) { myPaint = { ...pt }; toHost({ t: 'paint', paint: myPaint }); },
     showStarted() { toHost({ t: 'regrow' }); }, // M-17
-    delivered(riders) { const ids = riders.map(r => r.animal.id).filter(id => id < 0x10000); if (ids.length) toHost({ t: 'delivered', ids: ids.slice(0, 16) }); }, // M-6, M-16
+    delivered(riders) { const ids = riders.map(r => r.animal.id).filter(id => id < 0x10000); for (const id of ids) handedIn.add(id); if (ids.length) toHost({ t: 'delivered', ids: ids.slice(0, 16) }); }, // M-6, M-16; repair() sends it again while the host still has them in this train
     requestHelp() { if (!you || alone) return false; toHost({ t: 'help' }); return true; }, // M-9
     close() { net.leave?.(); goAlone('left'); },
   };
