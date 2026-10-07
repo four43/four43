@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createSession, parseRoomInput, roomName, joinUrl, ERRORS } from '../src/net/session.js';
+import { createSession, parseRoomInput, roomName, joinUrl, ERRORS, signalServer } from '../src/net/session.js';
 import { qrSvg } from '../src/ui/qr.js';
 import { emitter } from '../src/net/link.js';
 import { createGame } from '../src/sim/game.js';
@@ -133,4 +133,9 @@ test('join: a failed join closes the client; Back or the X during a check or at 
 test('join: a network error does not promise to try again (only Host retries)', async () => {
   const e = Object.assign(new Error('network'), { code: 'network' }), fh = fakeHandshake({ peekResult: e }), t = setup(fh);
   t.s.openJoin(); await t.s.submitCode('K7MX2'); assert.equal(t.s.view().error, ERRORS.joinNetwork); assert.doesNotMatch(ERRORS.joinNetwork, /again…/);
+});
+test('?signal= takes only a local server or this page\'s own origin; anything else is ignored (M-28, M-48)', () => {
+  const origin = 'https://four43.com';
+  for (const ok of ['http://localhost:8787', 'https://localhost', 'http://127.0.0.1:9000', 'https://127.0.0.1', 'https://four43.com', 'https://four43.com/handshake']) assert.equal(signalServer(ok, origin), ok, ok);
+  for (const bad of [null, '', 'evil.com', 'https://evil.com', 'http://localhost.evil.com', 'http://localhost@evil.com', 'wss://localhost', 'javascript:alert(1)', 'https://four43.com.evil.com', 'http://four43.com', 'ftp://127.0.0.1']) assert.equal(signalServer(bad, origin), undefined, String(bad));
 });

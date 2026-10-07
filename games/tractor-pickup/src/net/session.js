@@ -9,6 +9,13 @@ import { NET_VERSION, MAX_PLAYERS } from './protocol.js';
 export const SERVER = 'https://handshake.four43.com', APP = 'tractor-pickup';
 export const roomName = code => 'tractor-pickup-' + code;
 export const joinUrl = (code, loc = location) => loc.origin + loc.pathname + '?r=' + code;
+// M-28, M-48: ?signal= may name only a local Handshake (tests) or this page's own origin. A link to any other server is ignored (undefined: the default
+// server), so a crafted link cannot send players to a server that calls everyone nearby and so skips the relay-only rule.
+export function signalServer(s, origin) {
+  let u; try { u = new URL(s); } catch { return undefined; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return undefined;
+  return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.origin === origin ? s : undefined;
+}
 const CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/; // the server's join alphabet
 export const parseRoomInput = s => { const m = typeof s === 'string' && s.trim().toUpperCase().replace(/^TRACTOR-PICKUP-/, ''); return m && CODE.test(m) ? m : null; };
 export const ERRORS = {

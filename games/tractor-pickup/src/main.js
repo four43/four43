@@ -30,7 +30,7 @@ import { createMenus, paintBtnSvg, bookSvg } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
 import { Handshake } from './net/handshake.js';
-import { createSession, parseRoomInput } from './net/session.js';
+import { createSession, parseRoomInput, signalServer } from './net/session.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice } from './sim/progress.js';
@@ -42,7 +42,7 @@ function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQua
 async function main() {
   await RAPIER.init();
   const params = new URLSearchParams(location.search), sandbox = params.has('sandbox'), ui = document.getElementById('ui');
-  const lag = parseLag(params.get('lag')), signal = params.get('signal') || undefined; // M-28
+  const lag = parseLag(params.get('lag')), signal = signalServer(params.get('signal'), location.origin); // M-28; M-48: only a local server or this origin
   const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } }; // no storage content may stop the game starting
   let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
   let powerNow = powerParam(params.get('power'), settings.power);
