@@ -9,16 +9,16 @@ import { quatAxes } from '../src/sim/tractor.js';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
-export async function mpWorld({ seed = 21, guests = 1, link = {}, join = true } = {}) {
+export async function mpWorld({ seed = 21, guests = 1, link = {}, join = true, clock = null } = {}) {
   await RAPIER.init();
-  const hub = createMemoryHub(link); let now = 0;
+  const hub = createMemoryHub(link); let now = 0; const wall = clock || (() => now); // the syncs' wall clock (rate limits, the silence watchdog): the sim clock unless a test drives it
   const host = { name: 'host', events: [], game: createGame(RAPIER, { seed, power: 'medium' }) };
-  host.net = hub.host(); host.sync = createHostSync({ game: host.game, net: host.net, paint: PAINTS[0] });
+  host.net = hub.host(); host.sync = createHostSync({ game: host.game, net: host.net, paint: PAINTS[0], clock: wall });
   const devs = [host];
   const addGuest = () => {
     const i = devs.length, g = { name: 'guest' + i, events: [], game: createGame(RAPIER, { seed: 1000 + i, power: 'medium' }) }; // its own solo farm until the welcome
     g.net = hub.join();
-    g.sync = createGuestSync({ game: g.game, net: g.net, paint: PAINTS[i], onFarm: (s, n) => (g.game = createGame(RAPIER, { seed: s, power: 'medium', player: n })) });
+    g.sync = createGuestSync({ game: g.game, net: g.net, paint: PAINTS[i], clock: wall, onFarm: (s, n) => (g.game = createGame(RAPIER, { seed: s, power: 'medium', player: n })) });
     devs.push(g); return g;
   };
   if (join) for (let i = 0; i < guests; i++) addGuest();

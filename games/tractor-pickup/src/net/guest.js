@@ -13,7 +13,7 @@ const HELD = new Set(['fly', 'ride', 'show']); // in this guest's train or its s
 const MAX_JSON = 131072; // M-50: a longer reliable message from the host is dropped (the welcome, with the herd, is the biggest)
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
-export function createGuestSync({ game, net, paint, onFarm }) {
+export function createGuestSync({ game, net, paint, onFarm, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), pending = new Set(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
   let you = 0, hostNext = 0, hostPeer = null, lastVeh = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null;
   const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
@@ -73,7 +73,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
   net.on('peer', id => { hostPeer = id; toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); });
   net.on('message', (from, data, reliable) => {
     try {
-      if (from !== hostPeer || alone || !(reliable ? rate.rel : rate.fast).allow(nowMs)) return; // M-50: the guest checks the host's messages too
+      if (from !== hostPeer || alone || !(reliable ? rate.rel : rate.fast).allow(clock())) return; // M-50: the guest checks the host's messages too (in wall time)
       if (data instanceof ArrayBuffer) {
         if (!you) return;
         if (kindOf(data) === KIND.VEHICLE) { const v = decodeVehicle(data); if (v && v.player !== you && players.map.has(v.player)) { const first = !players.map.get(v.player).latest;

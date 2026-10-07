@@ -433,3 +433,15 @@ test('a herd message never pulls an animal out of the guest trailer, whatever it
   w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ id: ha.id, epoch: ga.epoch + 5, type: ha.type, golden: ha.golden, hidden: false, busy: false, x: 40, y: 0, z: 40, yaw: 0, anim: 'idle', leader: null, line: 0 }] }), false);
   w.seconds(0.5); assert.equal(ga.state, 'ride'); assert.equal(g.game.load.landed(), 1);
 });
+
+test('the rate limits count in wall time: with the game frozen (rAF paused), a new window still opens (M-50)', async () => {
+  let wall = 0; const w = await mpWorld({ seed: 74, clock: () => wall }); w.seconds(1); wall = 5000;
+  const g = w.guests[0], H = w.host.net.id, G = g.net.id; let handled = 0;
+  const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { handled++; return orig(...a); };
+  const deliver = () => w.hub.tick(w.now); // messages arrive, but no frame runs: sim time stands still
+  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled, 60);
+  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled, 61, 'the host: a new second, a new window');
+  for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[0], away: false }] }, true); deliver();
+  wall += 1100; w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[3], away: false }] }, true); deliver();
+  assert.deepEqual(g.sync.players.map.get(1).paint, PAINTS[3], 'the guest: a new window too');
+});

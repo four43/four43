@@ -18,7 +18,7 @@ export function herdRecords(herd) { // M-24: every animal not gone, for a welcom
   return herd.animals.filter(a => a.state !== 'gone').map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
     state: HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
 }
-export function createHostSync({ game, net, paint }) {
+export function createHostSync({ game, net, paint, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper();
   let lastVeh = -Infinity, lastHerd = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0;
   const send = (n, m, rel = true) => { const p = players.map.get(n); if (p?.peer) net.send(p.peer, m, rel); };
@@ -64,7 +64,7 @@ export function createHostSync({ game, net, paint }) {
   net.on('message', (from, data, reliable) => {
     try {
       const n = byPeer.get(from), p = n && players.map.get(n); if (!p || closed) return;
-      const r = rates.get(from); if (!(reliable ? r.rel : r.fast).allow(nowMs)) return; // M-50 (the sim clock: tests and the game agree)
+      const r = rates.get(from); if (!(reliable ? r.rel : r.fast).allow(clock())) return; // M-50: in wall time, so a frozen frame loop never closes the window for good
       if (data instanceof ArrayBuffer) {
         if (!p.helloed || kindOf(data) !== KIND.VEHICLE) return;
         new DataView(data).setUint8(1, n); // M-50: a guest speaks only for itself
