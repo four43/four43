@@ -36,9 +36,10 @@ export function createGuestSync({ game, net, paint, onFarm }) {
   const handlers = {
     welcome(m) { if (m.v !== NET_VERSION) return; if (['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show
     players(m) { applyRoster(m.list); },
-    claimed(m) { // M-14
-      for (const [id, e] of m.epochs) { const a = game.herd.animals[id]; if (a) a.epoch = e; }
-      for (const id of m.ok) { pending.delete(id); game.resolveClaim(id, true); }
+    claimed(m) { // M-14. M-26: ownership numbers only go up. Answers come in claim order, so a yes below the animal's number answers an older claim (it timed out): it never lands a newer flight
+      const ep = new Map(m.epochs);
+      for (const id of m.ok) { const a = game.herd.animals[id], e = ep.get(id); if (!a || e === undefined || e < a.epoch) continue; pending.delete(id); game.resolveClaim(id, true); }
+      for (const [id, e] of m.epochs) { const a = game.herd.animals[id]; if (a && e > a.epoch) a.epoch = e; }
       for (const id of m.no) { pending.delete(id); out.push(...game.resolveClaim(id, false)); }
     },
   };

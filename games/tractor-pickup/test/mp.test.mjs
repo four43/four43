@@ -124,6 +124,7 @@ test('the host refuses a claim from a tractor more than 8 m away (M-50)', async 
   const w = await mpWorld({ seed: 35 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game);
   let seen = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { seen++; return orig(...a); };
+  const t = w.host.sync.players.map.get(2).latest.bodies[0].p; assert.ok(Math.hypot(ha.x - t.x, ha.z - t.z) > 8, 'the guest tractor is more than 8 m away');
   g.net.send(w.host.net.id, { t: 'claim', ids: [ha.id] }, true); w.seconds(0.3);
   assert.equal(seen, 1, 'the claim was handled'); assert.ok(free(w.host.game, ha), 'still free');
 });
@@ -132,4 +133,33 @@ test('the host boop raises the ownership number and the animal leaves the guest 
   const ha = single(w.host.game), e0 = ha.epoch; inFront(w.host, ha); w.seconds(2);
   assert.equal(ha.epoch, e0 + 1); const ga = w.guests[0].game.herd.animals[ha.id];
   assert.ok(!free(w.guests[0].game, ga)); assert.ok(['carried', 'elsewhere'].includes(ga.state));
+});
+test('a stale yes (an older claim) never lowers the ownership number nor lands a newer flight (M-14, M-26)', async () => {
+  const w = await mpWorld({ seed: 37 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  w.host.sync.handlers.claim = () => {}; // the host's answer to the newer claim is still on its way
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; ha.epoch = ga.epoch = 2; } // freed after an older grant (epoch 1)
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it'); assert.equal(ga.epoch, 2);
+  g.sync.handlers.claimed({ t: 'claimed', ok: [ha.id], no: [], epochs: [[ha.id, 1]] }); // the answer to the older claim
+  assert.equal(ga.epoch, 2, 'the number does not drop'); assert.ok(g.sync.pending.has(ha.id), 'still waiting for its own answer');
+  w.seconds(2.5);
+  assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'));
+});
+test('a yes that arrives after the guest gave up: nothing lands and the host frees it at a higher number (M-14, Decision 2)', async () => {
+  const w = await mpWorld({ seed: 38, link: { delay: 1200 } }); w.seconds(4);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  const answers = []; const orig = g.sync.handlers.claimed; g.sync.handlers.claimed = m => { answers.push({ m, unclaimed: g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id) }); return orig(m); };
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it');
+  let grant = null; k = 0; while (grant === null && k++ < 120) { w.step(1); if (ha.state === 'carried') grant = ha.epoch; }
+  assert.ok(grant !== null, 'the host granted it');
+  k = 0; while (!answers.length && k++ < 180) w.step(1);
+  assert.equal(answers.length, 1); assert.deepEqual(answers[0].m.ok, [ha.id]); assert.ok(answers[0].unclaimed, 'the yes arrived after the guest timed out');
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'));
+  k = 0; while (ha.state === 'carried' && k++ < 120) w.step(1); // the release is on its way to the host
+  assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
+  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
 });
