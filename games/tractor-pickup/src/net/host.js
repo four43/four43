@@ -98,7 +98,8 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
       for (const e of events) { if (e.type === 'launch') e.animal.epoch++; // M-15, M-26: the host's own boop changes the owner
         if (e.type === 'treeBreak' && !e.remote) all({ t: 'tree', id: e.tree.id }); if (e.type === 'horn') all({ t: 'horn', n: 1 }); } // M-17, M-8
       if (!players.list().some(p => p.helloed)) return; // nobody to send to yet: a joiner's first keyframe has everything
-      if (now - lastKey >= SEND.key) { lastKey = now; all(encodeFrame({ key: true, sender: 1, time: now, groups: [...world.key(worldNow()), ...mine.key(trainNow())] }), true); } // M-23
+      if (now - lastKey >= SEND.key) { lastKey = now; for (const p of players.list()) if (p.helloed) send(p.n, welcome(p)); // M-19: again with each keyframe, so a lost one heals (a guest ignores one it has)
+        all(encodeFrame({ key: true, sender: 1, time: now, groups: [...world.key(worldNow()), ...mine.key(trainNow())] }), true); } // M-23
       if (now - lastWorld >= SEND.world) { lastWorld = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: world.diff(worldNow()) }), false); }
       if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(trainNow()) }), false); }
     },

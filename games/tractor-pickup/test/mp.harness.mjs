@@ -60,12 +60,13 @@ export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2]
 //   held by another player -> carried or not drawn here; walking into the barn -> toBarn here; free -> free here;
 //   not free on the host (held, carried or walking in) -> this guest's replicated record has the host's owner and ownership number (epoch)
 // - every animal held here is carried by this guest on the host; no open claims; every tree broken here exactly when broken on the host
-// - the same players: every host roster number (but its own) is in this guest's players, and no other number is
+// - the host's farm (its seed); the same players: every host roster number (but its own) is in this guest's players, and no other number is
 const HELD = ['fly', 'ride', 'show'];
 export function disagreements(w) {
   const out = [], H = w.host.game, roster = [1, ...w.host.sync.players.list().map(p => p.n)];
   for (const g of w.guests) {
     if (g.sync.alone) continue; const G = g.game, you = g.sync.you, at = (b, what) => out.push(`${g.name} animal ${b}: ${what}`);
+    if (G.farm.seed !== H.farm.seed) { out.push(`${g.name}: farm ${G.farm.seed}, the host has ${H.farm.seed}`); continue; }
     for (const a of H.herd.animals) {
       const b = G.herd.animals[a.id];
       if (a.state === 'gone') { if (b && b.state !== 'gone' && b.state !== 'elsewhere') at(a.id, `gone on the host, here ${b.state}`); continue; }

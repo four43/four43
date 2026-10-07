@@ -82,3 +82,17 @@ test('everything lost for a second while two guests boop under a far network: al
   assert.ok(disagreements(w).length > 0, 'the devices disagree after the loss');
   assert.deepEqual(settle(w, 3), []);
 });
+test('a lost new-farm welcome: the host sends the welcome with each keyframe, so the guest is on the new farm within 3 s; a guest in its show is not rebuilt twice (M-19, M-58)', async () => {
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
+  const w = await mpWorld({ seed: 97, guests: 2 }); w.seconds(1);
+  const [g, s] = w.guests; s.game.mode = 'show';
+  w.hub.drop = (from, to, d) => to === g.net.id && d?.t === 'welcome'; // the new farm's welcome to g is lost
+  w.host.game = createGame(RAPIER, { seed: 98, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.2); w.hub.drop = null;
+  assert.equal(g.game.farm.seed, 97, 'the welcome is lost'); assert.ok(disagreements(w).some(x => x.startsWith('guest1: farm')), 'the devices disagree after the loss');
+  const t0 = w.now; let k = 0; while (g.game.farm.seed !== 98 && k++ < 180) w.step(1);
+  assert.equal(g.game.farm.seed, 98); assert.ok(w.now - t0 <= 3000, `on the new farm after ${(w.now - t0).toFixed(0)} ms`);
+  const built = g.game; w.seconds(2.5); assert.equal(s.game.farm.seed, 97, 'the show guest waits'); assert.equal(g.game, built, 'a repeated welcome does not build the farm again');
+  s.game.mode = 'drive'; w.step(1); const sb = s.game; assert.equal(sb.farm.seed, 98, 'after its show');
+  w.seconds(4.5); assert.equal(s.game, sb, 'built once: the welcomes that came during the show do not build it again');
+  assert.deepEqual(settle(w, 3), []);
+});

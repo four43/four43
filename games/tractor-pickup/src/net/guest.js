@@ -63,7 +63,8 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; }
   }
   const handlers = {
-    welcome(m) { if (m.v !== NET_VERSION) return; if (['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show
+    welcome(m) { if (m.v !== NET_VERSION) return; if (you && m.you === you && m.seed === game.farm.seed) return; if (deferred?.seed === m.seed) return; // the host repeats it with each keyframe: one we have, or one that waits for the show, changes nothing
+      if (['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show
     tree(m) { if (deferred) return; const e = game.trees.breakById(m.id); if (e) out.push(e); }, // M-17: gibs, no direction (not on the old farm while a new one waits)
     regrow() { if (!deferred) game.trees.reset(); },
     horn(m) { out.push({ type: 'remoteHorn', n: m.n }); }, // M-8
