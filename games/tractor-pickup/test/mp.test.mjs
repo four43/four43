@@ -296,13 +296,13 @@ test('a guest handler that throws is contained too (M-44)', async () => {
   g.sync.handlers.horn = orig; w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
   assert.ok(g.events.some(e => e.type === 'remoteHorn' && e.n === 1), 'the guest still handles messages');
 });
-test('a reliable message that is too big is dropped: over 2048 from a guest, over 65536 from the host (M-50)', async () => {
+test('a reliable message that is too big is dropped: over 2048 from a guest, over 131072 from the host (M-50)', async () => {
   const w = await mpWorld({ seed: 57 }); w.seconds(1);
   const g = w.guests[0], H = w.host.net.id, G = g.net.id, hp = () => w.host.sync.players.map.get(2).paint, gp = () => g.sync.players.map.get(1).paint;
   g.net.send(H, { t: 'paint', paint: { ...PAINTS[3], pad: 'x'.repeat(2048) } }, true); w.seconds(0.3); assert.deepEqual(hp(), PAINTS[1], 'dropped by the host');
   g.net.send(H, { t: 'paint', paint: { ...PAINTS[3], pad: 'x'.repeat(1900) } }, true); w.seconds(0.3); assert.equal(hp().body, PAINTS[3].body, 'under the cap: handled');
-  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(65536) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[0], 'dropped by the guest');
-  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(65000) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[2], 'under the cap: handled');
+  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(131072) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[0], 'dropped by the guest');
+  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(130000) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[2], 'under the cap: handled');
 });
 test('a guest regrow counts at most once in 5 s; the extra ones are not passed on (M-17, M-50)', async () => {
   const w = await mpWorld({ seed: 58, guests: 2 }); w.seconds(1);

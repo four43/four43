@@ -9,7 +9,7 @@ import { createBumper } from '../sim/bump.js';
 
 const OWN = new Set(['fly', 'ride', 'show', 'gone']); // this guest's own animals: herd messages never move them. Not toBarn: the host walks delivered animals in (Decision 10)
 const HELD = new Set(['fly', 'ride', 'show']); // in this guest's train or its show
-const MAX_JSON = 65536; // M-50: a longer reliable message from the host is dropped (the welcome, with the herd, is the biggest)
+const MAX_JSON = 131072; // M-50: a longer reliable message from the host is dropped (the welcome, with the herd, is the biggest)
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
 export function createGuestSync({ game, net, paint, onFarm }) {
