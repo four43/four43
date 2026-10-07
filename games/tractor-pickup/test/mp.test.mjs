@@ -142,7 +142,7 @@ test('a stale yes (an older claim) never lowers the ownership number nor lands a
   let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
   assert.ok(g.sync.pending.has(ha.id), 'the guest launched it'); assert.equal(ga.epoch, 2);
   g.sync.handlers.claimed({ t: 'claimed', ok: [ha.id], no: [], epochs: [[ha.id, 1]] }); // the answer to the older claim
-  assert.equal(ga.epoch, 2, 'the number does not drop'); assert.ok(g.sync.pending.has(ha.id), 'still waiting for its own answer');
+  assert.equal(ga.epoch, 2, 'the number does not drop'); assert.ok(!g.sync.pending.has(ha.id), 'any answer ends the claim in flight (one claim per id at a time)'); assert.equal(ga.state, 'fly', 'the flight still waits');
   w.seconds(2.5);
   assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
   assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'));
@@ -402,4 +402,34 @@ test('a throw while going alone never reaches the link (M-44)', async () => {
   const g = w.guests[0], warn = console.warn; let warned = 0; console.warn = () => { warned++; };
   try { g.game.herd.respawn = () => { throw new Error('boom'); }; assert.doesNotThrow(() => g.sync.close()); assert.equal(warned, 1); assert.equal(g.sync.alone, true); }
   finally { console.warn = warn; }
+});
+
+test('after a timeout the claim is still in flight: no re-boop until its answer comes; the answer clears it (M-14)', async () => {
+  const w = await mpWorld({ seed: 71 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  const claims = []; w.host.sync.handlers.claim = (p, m) => { claims.push(m); }; // the host has the claim, its answer is slow
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; } // free in front of the guest on both devices
+  w.seconds(2.5);
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'), 'timed out');
+  assert.equal(claims.length, 1, 'one claim only: the host still shows it free, yet no re-boop'); assert.ok(g.sync.pending.has(ha.id), 'still waiting for its answer');
+  assert.ok(!free(g.game, ga), 'a stale herd sample does not free it');
+  g.sync.handlers.claimed({ t: 'claimed', ok: [], no: [ha.id], epochs: [] }); assert.ok(!g.sync.pending.has(ha.id), 'the answer clears it');
+  w.seconds(1); assert.equal(claims.length, 2, 'boopable again');
+});
+test('a stale yes still clears the claim in flight (M-14, M-26)', async () => {
+  const w = await mpWorld({ seed: 72 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  ga.epoch = 3; g.sync.pending.add(ha.id);
+  g.sync.handlers.claimed({ t: 'claimed', ok: [ha.id], no: [], epochs: [[ha.id, 1]] });
+  assert.ok(!g.sync.pending.has(ha.id)); assert.equal(ga.epoch, 3);
+});
+test('a herd message never pulls an animal out of the guest trailer, whatever its ownership number (R-4, M-26)', async () => {
+  const { encodeHerd } = await import('../src/net/codec.js');
+  const w = await mpWorld({ seed: 73 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  w.seconds(3); assert.equal(ga.state, 'ride');
+  w.host.sync.after = () => {}; w.step();
+  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ id: ha.id, epoch: ga.epoch + 5, type: ha.type, golden: ha.golden, hidden: false, busy: false, x: 40, y: 0, z: 40, yaw: 0, anim: 'idle', leader: null, line: 0 }] }), false);
+  w.seconds(0.5); assert.equal(ga.state, 'ride'); assert.equal(g.game.load.landed(), 1);
 });

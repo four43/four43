@@ -42,7 +42,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     claimed(m) { // M-14. M-26: ownership numbers only go up. Answers come in claim order, so a yes below the animal's number answers an older claim (it timed out): it never lands a newer flight
       const ep = new Map(m.epochs);
       const lost = []; // a current yes for a flight this guest no longer has (a stale no dropped it): give it back, or the host keeps it for us forever
-      for (const id of m.ok) { const a = game.herd.animals[id], e = ep.get(id); if (!a || e === undefined || e < a.epoch) continue; pending.delete(id);
+      for (const id of m.ok) { const a = game.herd.animals[id], e = ep.get(id); pending.delete(id); if (!a || e === undefined || e < a.epoch) continue; // any answer ends the claim in flight
         if (!game.flights.some(f => f.animal.id === id && f.claim === 'pending') && !HELD.has(a.state)) lost.push(id); else game.resolveClaim(id, true); }
       if (lost.length) toHost({ t: 'release', ids: lost.slice(0, 16) });
       for (const [id, e] of m.epochs) { const a = game.herd.animals[id]; if (a && e > a.epoch) a.epoch = e; }
@@ -91,7 +91,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     for (const r of s.b.animals) {
       if (r.id > lim) continue;
       const a = herd.ensure(r.id, r.type, r.golden); seen.add(r.id);
-      if (pending.has(r.id) || r.epoch < a.epoch || OWN.has(a.state) && a.epoch >= r.epoch && a.state !== 'gone') continue;
+      if (pending.has(r.id) || r.epoch < a.epoch || HELD.has(a.state)) continue; // R-4: nothing leaves this guest's train or show
       const o = prev.get(r.id), k = o ? s.k : 1, f = o || r;
       a.epoch = r.epoch; a.x = lerp(f.x, r.x, k); a.z = lerp(f.z, r.z, k); a.y = lerp(f.y, r.y, k); a.yaw = lerpAngle(f.yaw, r.yaw, k);
       a.anim = r.anim; a.hidden = r.hidden; a.leader = leaderOf(herd, a, r.leader); a.line = r.line;
@@ -118,7 +118,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     after(events, now) {
       nowMs = now; if (!you || alone) return;
       const ids = [], gone = [];
-      for (const e of events) { if (e.type === 'launch') { ids.push(e.animal.id); pending.add(e.animal.id); } if (e.type === 'unclaim') { pending.delete(e.animal.id); if (e.reason === 'timeout') gone.push(e.animal.id); }
+      for (const e of events) { if (e.type === 'launch') { ids.push(e.animal.id); pending.add(e.animal.id); } if (e.type === 'unclaim') { if (e.reason === 'timeout') gone.push(e.animal.id); else pending.delete(e.animal.id); } // a timed-out claim stays in flight until its answer: no re-boop, and no stale herd sample frees it
         if (e.type === 'treeBreak' && !e.remote) toHost({ t: 'tree', id: e.tree.id }); if (e.type === 'horn') toHost({ t: 'horn' }); } // M-17, M-8
       if (ids.length) toHost({ t: 'claim', ids: ids.slice(0, 16) }); // M-13: a chick line goes in one claim
       if (gone.length) toHost({ t: 'release', ids: gone });
