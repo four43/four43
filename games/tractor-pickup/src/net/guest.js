@@ -36,6 +36,11 @@ export function createGuestSync({ game, net, paint, onFarm }) {
   const handlers = {
     welcome(m) { if (m.v !== NET_VERSION) return; if (['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show
     players(m) { applyRoster(m.list); },
+    claimed(m) { // M-14
+      for (const [id, e] of m.epochs) { const a = game.herd.animals[id]; if (a) a.epoch = e; }
+      for (const id of m.ok) { pending.delete(id); game.resolveClaim(id, true); }
+      for (const id of m.no) { pending.delete(id); out.push(...game.resolveClaim(id, false)); }
+    },
   };
   net.on('peer', id => { hostPeer = id; toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); });
   net.on('message', (from, data, reliable) => {
@@ -83,6 +88,10 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     },
     after(events, now) {
       nowMs = now; if (!you || alone) return;
+      const ids = [], gone = [];
+      for (const e of events) { if (e.type === 'launch') { ids.push(e.animal.id); pending.add(e.animal.id); } if (e.type === 'unclaim') { pending.delete(e.animal.id); if (e.reason === 'timeout') gone.push(e.animal.id); } }
+      if (ids.length) toHost({ t: 'claim', ids: ids.slice(0, 16) }); // M-13: a chick line goes in one claim
+      if (gone.length) toHost({ t: 'release', ids: gone });
       if (now - lastVeh >= SEND.vehicle) { lastVeh = now; toHost(encodeVehicle(vehicleOf(game, you, now)), false); }
     },
     setGame(g) { game = g; },

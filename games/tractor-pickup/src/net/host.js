@@ -9,6 +9,7 @@ import { NOT_FREE } from '../sim/herd.js';
 
 const HERD_OUT = new Set(['gone', 'fly', 'ride', 'show', 'carried', 'elsewhere']); // not in the herd message: gone, or in a train (the owner's vehicle message has them)
 const TAU = Math.PI * 2;
+export const CLAIM_RANGE = 8; // m: a claim is granted only near the guest's last real tractor position (M-50)
 export function herdRecords(herd) { // M-24: every animal not gone, for a welcome (ids grow with every respawn; the welcome holds 512). Yaw in 0..2 pi: herd yaws drift without bound, and checkFromHost allows |yaw| <= 100
   return herd.animals.filter(a => a.state !== 'gone').map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
     state: HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
@@ -25,6 +26,19 @@ export function createHostSync({ game, net, paint }) {
     hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; send(p.n, welcome(p)); all({ t: 'players', list: roster() }, true, p.n); },
     paint(p, m) { p.paint = m.paint; all({ t: 'players', list: roster() }); },
   };
+  const owned = n => game.herd.animals.filter(a => a.state === 'carried' && a.owner === n);
+  const freeUp = a => { a.state = 'idle'; a.timer = 1; a.owner = null; a.epoch++; a.y = 0; };
+  Object.assign(handlers, {
+    // M-13: first claim wins; the guest's last real tractor position must be within 8 m of the animal (M-50)
+    claim(p, m) {
+      const ok = [], no = [], epochs = [], t = p.latest?.bodies[0].p;
+      for (const id of m.ids) { const a = game.herd.animals[id];
+        if (a && t && !NOT_FREE.has(a.state) && Math.hypot(a.x - t.x, a.z - t.z) <= CLAIM_RANGE) { a.state = 'carried'; a.owner = p.n; a.epoch++; a.hidden = false; ok.push(id); epochs.push([id, a.epoch]); }
+        else no.push(id); }
+      send(p.n, { t: 'claimed', ok, no, epochs });
+    },
+    release(p, m) { for (const id of m.ids) { const a = game.herd.animals[id]; if (a?.state === 'carried' && a.owner === p.n) freeUp(a); } }, // M-14 timeout
+  });
   net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
   net.on('message', (from, data, reliable) => {
     try {
@@ -47,11 +61,13 @@ export function createHostSync({ game, net, paint }) {
     get game() { return game; }, you: 1,
     before(now) {
       nowMs = now; players.sample(now); game.others = players.others();
+      for (const p of players.list()) for (const c of p.carried) { const a = game.herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) Object.assign(a, { x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
       if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only: a tractor in its show stays in the barn (M-4)
       return out.splice(0);
     },
     after(events, now) {
       nowMs = now;
+      for (const e of events) if (e.type === 'launch') e.animal.epoch++; // M-15, M-26: the host's own boop changes the owner
       if (now - lastVeh >= SEND.vehicle) { lastVeh = now; all(encodeVehicle(vehicleOf(game, 1, now)), false); }
       if (now - lastHerd >= SEND.herd) { lastHerd = now; all(encodeHerd(herdMessage(game.herd, now)), false); }
     },
@@ -60,6 +76,7 @@ export function createHostSync({ game, net, paint }) {
     showStarted() {}, delivered() {}, requestHelp() {}, // filled in by Tasks 9 and 10
     close() { closed = true; },
   };
+  sync.owned = owned; sync.freeUp = freeUp; // for Tasks 10 and 12
   return sync;
 }
 // M-23: the free animals and the ones walking into the barn (busy), with their ownership numbers

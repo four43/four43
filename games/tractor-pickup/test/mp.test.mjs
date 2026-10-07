@@ -74,3 +74,62 @@ test('a guest joins a host that has played long (most of 600+ animals gone): it 
     assert.ok(free(g.game, b), `${a.id} is ${b.state}`); assert.ok(dist(a, b) < 0.5, `animal ${a.id} ${dist(a, b).toFixed(2)} m off`); }
   assert.equal(g.game.herd.animals[0].state, 'gone');
 });
+
+const single = g => g.herd.free().find(x => !x.hidden && x.type !== 'chick' && !g.herd.animals.some(c => c.leader === x.id) && x.home === 'route');
+
+test('a guest boop is claimed and granted: the animal lands in the guest wagon, and the host shows it there (M-13, M-14)', async () => {
+  const w = await mpWorld({ seed: 31 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; } // in front of the guest on both devices
+  w.seconds(3);
+  assert.ok(g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'it landed on the guest');
+  assert.equal(ha.state, 'carried'); assert.equal(ha.owner, 2); assert.equal(ha.epoch, 1);
+  w.seconds(0.5);
+  assert.ok(dist(ha, ga) < 0.6, `host draws it in the guest wagon (${dist(ha, ga).toFixed(2)} m)`);
+});
+test('when host and guest boop the same animal at once, the host is first; the guest copy poofs (M-14, M-15)', async () => {
+  const w = await mpWorld({ seed: 32, link: { delay: 80 } }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  // the guest sees an animal only through the host's snapshots, so it boops first; then, while its claim is on the wire (80 ms),
+  // the host's train moves so the same animal is 2.5 m ahead of the host's nose: the host boops it before the claim arrives
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it');
+  const yaw = w.host.game.tractor.yaw; moveTrain(w.host.game, ha.x - Math.sin(yaw) * 2.5, ha.z - Math.cos(yaw) * 2.5, yaw); w.step(1);
+  w.seconds(3);
+  assert.ok(w.host.events.some(e => e.type === 'land' && e.animal === ha), 'host got it');
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'refused'), 'guest poofed');
+  assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'never landed on the guest (R-4)');
+  assert.equal(g.game.load.slots.length, 0);
+});
+test('a late yes: the animal waits at the top of its arc, then lands (M-14)', async () => {
+  const w = await mpWorld({ seed: 33, link: { delay: 400 } }); w.seconds(2);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  w.seconds(3);
+  const fl = g.events.find(e => e.type === 'launch' && e.animal.id === ha.id), land = g.events.find(e => e.type === 'land' && e.animal.id === ha.id);
+  assert.ok(fl && land, 'launched and landed'); assert.ok(!g.events.some(e => e.type === 'unclaim'));
+});
+test('no answer within 1 s: the guest poofs it and releases it; the host frees it (M-14, Decision 2)', async () => {
+  const w = await mpWorld({ seed: 34, link: { delay: 100 } }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  w.seconds(0.15); assert.equal(ha.state, 'carried', 'the host granted it'); // the claim arrived (100 ms); the answer is on the wire
+  w.hub.away(g.net.id); w.seconds(0.15); w.hub.back(g.net.id); w.seconds(2.5); // the answer is lost: the guest times out and releases it
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.reason === 'timeout'));
+  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`);
+});
+test('the host refuses a claim from a tractor more than 8 m away (M-50)', async () => {
+  const w = await mpWorld({ seed: 35 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game);
+  let seen = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { seen++; return orig(...a); };
+  g.net.send(w.host.net.id, { t: 'claim', ids: [ha.id] }, true); w.seconds(0.3);
+  assert.equal(seen, 1, 'the claim was handled'); assert.ok(free(w.host.game, ha), 'still free');
+});
+test('the host boop raises the ownership number and the animal leaves the guest free list (M-15, M-26)', async () => {
+  const w = await mpWorld({ seed: 36 }); w.seconds(1);
+  const ha = single(w.host.game), e0 = ha.epoch; inFront(w.host, ha); w.seconds(2);
+  assert.equal(ha.epoch, e0 + 1); const ga = w.guests[0].game.herd.animals[ha.id];
+  assert.ok(!free(w.guests[0].game, ga)); assert.ok(['carried', 'elsewhere'].includes(ga.state));
+});
