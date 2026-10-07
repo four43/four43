@@ -12,14 +12,13 @@ test('bad guest messages are refused (M-50)', () => {
     { t: 'claim', ids: Array.from({ length: 17 }, (_, i) => i) }, { t: 'tree', id: 70000 }, { t: 'paint', paint: { body: 'chartreuse', trim: 'red' } },
     { t: 'hello', v: NET_VERSION }, { t: 'welcome', v: 1 }]) assert.equal(checkFromGuest(m), null, JSON.stringify(m));
 });
-test('host messages are checked the same way', () => {
-  const herd = [{ id: 0, type: 'pig', golden: false, home: 'route', leader: null, line: 0, x: 1, z: 2, yaw: 0, epoch: 0, state: 'free', hidden: false }];
-  const w = { t: 'welcome', v: 1, seed: 42, you: 2, players: [{ n: 1, paint, away: false }, { n: 2, paint, away: false }], herd, trees: [3], next: 1 };
+test('host messages are checked the same way; the herd, trees and players are not messages any more (M-24, M-50)', () => {
+  const w = { t: 'welcome', v: NET_VERSION, seed: 42, you: 2, next: 30 };
   assert.deepEqual(checkFromHost(w), w);
-  assert.deepEqual(checkFromHost({ t: 'claimed', ok: [1], no: [2], epochs: [[1, 4]] }), { t: 'claimed', ok: [1], no: [2], epochs: [[1, 4]] });
-  assert.deepEqual(checkFromHost({ t: 'help', id: null }), { t: 'help', id: null });
-  for (const m of [{ ...w, you: 5 }, { ...w, seed: -1 }, { ...w, herd: [{ ...herd[0], type: 'dragon' }] }, { ...w, herd: [{ ...herd[0], x: NaN }] }, { ...w, next: undefined }, { ...w, next: 70000 }, { ...w, next: 1.5 }, { ...w, next: 0 },
-    { t: 'horn', n: 9 }, { t: 'claimed', ok: [1], no: [], epochs: [[1]] }, { t: 'hello', v: 1, paint }]) assert.equal(checkFromHost(m), null, JSON.stringify(m).slice(0, 60));
+  for (const m of [{ t: 'tree', id: 3 }, { t: 'regrow' }, { t: 'horn', n: 1 }, { t: 'help', id: null }, { t: 'help', id: 7 }]) assert.deepEqual(checkFromHost(m), m, m.t);
+  for (const m of [{ ...w, you: 5 }, { ...w, you: 1 }, { ...w, seed: -1 }, { ...w, next: undefined }, { ...w, next: 70000 }, { ...w, next: 1.5 },
+    { t: 'horn', n: 9 }, { t: 'hello', v: NET_VERSION, paint }, { t: 'claimed', ok: [1], no: [], epochs: [[1, 4]] }, { t: 'players', list: [] }]) assert.equal(checkFromHost(m), null, JSON.stringify(m).slice(0, 60));
+  assert.equal(NET_VERSION, 2, 'M-27: the messages changed');
 });
 test('the rate limiter allows 60 messages in each second (M-50)', () => {
   const r = createRate(60); let ok = 0;

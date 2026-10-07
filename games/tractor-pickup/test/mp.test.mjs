@@ -1,7 +1,7 @@
 // test/mp.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, inFront, free, STILL, PAINTS, moveTrain } from './mp.harness.mjs';
+import { mpWorld, inFront, free, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked } from './mp.harness.mjs';
 import { spawnPoint } from '../src/sim/spawn.js';
 import { makeRng } from '../src/sim/rng.js';
 
@@ -52,16 +52,14 @@ test('a guest joins a host whose animals have turned many times: yaws go out in 
 });
 test('a host id far past the herd is dropped and a leader the guest lacks is no leader (M-44, M-50)', async () => {
   const w = await mpWorld({ seed: 27 }); w.seconds(0.5);
-  const g = w.guests[0], rec = (id, leader) => ({ id, type: 'pig', golden: false, home: 'yard', leader, line: 1, x: 1, z: 2, yaw: 0, epoch: 0, state: 'free', hidden: true });
-  g.sync.handlers.welcome({ t: 'welcome', v: 1, seed: 27, you: 2, players: [{ n: 1, paint: PAINTS[0], away: false }], herd: [rec(0, 40000), rec(1, 0), rec(60000, null)], trees: [], next: 2 });
-  const n = g.game.herd.animals.length; assert.ok(n < 100, `${n} animals`);
+  const g = w.guests[0], n = g.game.herd.animals.length, rec = (leader, o) => animalRec({ home: 'yard', hidden: true, x: 1, z: 2, leader, line: 1, ...o });
+  w.host.sync.after = () => {}; w.step(); // the host goes quiet: only the frames below reach the guest
+  sendAnimals(w, g, [[0, rec(40000)], [1, rec(0)], [60000, rec(null)]]); w.seconds(0.5);
+  assert.equal(g.game.herd.animals.length, n, 'no animals grown up to 60000');
   const [a0, a1] = g.game.herd.animals; assert.equal(a0.leader, null); assert.equal(a1.leader, 0); assert.equal(a0.home, 'yard'); assert.equal(a0.hidden, true);
-  const { encodeHerd } = await import('../src/net/codec.js');
-  w.host.sync.after = () => {}; w.step(); // the host goes quiet: only the herd message below reaches the guest
-  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ ...rec(0, 50000), x: 33, z: 44, hidden: false, busy: false, y: 0, anim: 'idle' }, { ...rec(65000, null), hidden: false, busy: false, y: 0, anim: 'idle' }] }), false);
-  w.seconds(1);
+  sendAnimals(w, g, [[0, rec(50000, { x: 33, z: 44, hidden: false })], [65000, rec(null)]]); w.seconds(1);
   const b0 = g.game.herd.animals[0]; assert.equal(g.game.herd.animals.length, n);
-  assert.deepEqual([b0.x, b0.z, b0.hidden, b0.state, b0.leader], [33, 44, false, 'idle', null], 'the message was applied, without its unknown leader');
+  assert.deepEqual([b0.x, b0.z, b0.hidden, b0.state, b0.leader], [33, 44, false, 'idle', null], 'the record was applied, without its unknown leader');
 });
 test('a guest joins a host that has played long (most of 600+ animals gone): it sees the live ones by their real ids (M-24, M-50)', async () => {
   const w = await mpWorld({ seed: 28, join: false }), h = w.host.game.herd, old = h.animals.slice();
@@ -111,15 +109,20 @@ test('a late yes: the animal waits at the top of its arc, then lands (M-14)', as
   const fl = g.events.find(e => e.type === 'launch' && e.animal.id === ha.id), land = g.events.find(e => e.type === 'land' && e.animal.id === ha.id);
   assert.ok(fl && land, 'launched and landed'); assert.ok(!g.events.some(e => e.type === 'unclaim'));
 });
-test('no answer within 1 s: the guest poofs it and releases it; the host frees it (M-14, Decision 2)', async () => {
+test('no answer within 1 s: the guest poofs it; the next keyframe gives it back and the host frees it (M-14, M-56)', async () => {
   const w = await mpWorld({ seed: 34, link: { delay: 100 } }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
-  w.seconds(0.15); assert.equal(ha.state, 'carried', 'the host granted it'); // the claim arrived (100 ms); the answer is on the wire
-  w.hub.away(g.net.id); w.seconds(0.15); w.hub.back(g.net.id); w.seconds(2.5); // the answer is lost: the guest times out and releases it
-  assert.ok(g.events.some(e => e.type === 'unclaim' && e.reason === 'timeout'));
-  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`);
+  w.hub.drop = (from, to, d) => to === g.net.id && d instanceof ArrayBuffer; // the answer (the animal's replicated owner) is lost
+  w.seconds(0.15); assert.equal(ha.state, 'carried', 'the host granted it'); const grant = ha.epoch;
+  k = 0; while (!g.events.some(e => e.type === 'unclaim') && k++ < 180) w.step(1);
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout')); assert.ok(g.sync.pending.has(ha.id), 'the claim stays open');
+  g.game.boopsPaused = true; // it is still in front of the guest: no re-boop, to see the host free it
+  w.hub.drop = null; w.seconds(2.5);
+  assert.ok(!g.sync.pending.has(ha.id), 'a keyframe settled it');
+  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
+  assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
 });
 test('the host refuses a claim from a tractor more than 8 m away (M-50)', async () => {
   const w = await mpWorld({ seed: 35 }); w.seconds(1);
@@ -135,51 +138,45 @@ test('the host boop raises the ownership number and the animal leaves the guest 
   assert.equal(ha.epoch, e0 + 1); const ga = w.guests[0].game.herd.animals[ha.id];
   assert.ok(!free(w.guests[0].game, ga)); assert.ok(['carried', 'elsewhere'].includes(ga.state));
 });
-test('a stale yes (an older claim) never lowers the ownership number nor lands a newer flight (M-14, M-26)', async () => {
+test('a record with an older ownership number neither lowers it nor lands a newer flight (M-14, M-26)', async () => {
   const w = await mpWorld({ seed: 37 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
-  w.host.sync.handlers.claim = () => {}; // the host's answer to the newer claim is still on its way
-  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; ha.epoch = ga.epoch = 2; } // freed after an older grant (epoch 1)
+  w.host.sync.handlers.claim = () => {}; // the host's answer to the newer claim never comes
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; ha.epoch = 2; } // freed after an older grant (epoch 1)
   let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
-  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it'); assert.equal(ga.epoch, 2);
-  g.sync.handlers.claimed({ t: 'claimed', ok: [ha.id], no: [], epochs: [[ha.id, 1]] }); // the answer to the older claim
-  assert.equal(ga.epoch, 2, 'the number does not drop'); assert.ok(!g.sync.pending.has(ha.id), 'any answer ends the claim in flight (one claim per id at a time)'); assert.equal(ga.state, 'fly', 'the flight still waits');
+  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it'); assert.equal(g.sync.pending.get(ha.id).e0, 2);
+  sendAnimals(w, g, [[ha.id, animalRec({ type: ha.type, golden: ha.golden, state: 'carried', owner: 2, epoch: 1 })]]); w.step(1); // the older grant
+  assert.equal(g.sync.store.get('animal', ha.id).epoch, 2, 'the number does not drop'); assert.equal(ga.state, 'fly', 'the flight still waits');
   w.seconds(2.5);
   assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
   assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'));
 });
-test('a yes that arrives after the guest gave up: nothing lands and the host frees it at a higher number (M-14, Decision 2)', async () => {
+test('a yes that arrives after the guest gave up: nothing lands, the guest gives it back and the host frees it at a higher number (M-14, M-56)', async () => {
   const w = await mpWorld({ seed: 38, link: { delay: 1200 } }); w.seconds(4);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
-  const answers = []; const orig = g.sync.handlers.claimed; g.sync.handlers.claimed = m => { answers.push({ m, unclaimed: g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id) }); return orig(m); };
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
   assert.ok(g.sync.pending.has(ha.id), 'the guest launched it');
   let grant = null; k = 0; while (grant === null && k++ < 120) { w.step(1); if (ha.state === 'carried') grant = ha.epoch; }
   assert.ok(grant !== null, 'the host granted it');
-  k = 0; while (!answers.length && k++ < 180) w.step(1);
-  assert.equal(answers.length, 1); assert.deepEqual(answers[0].m.ok, [ha.id]); assert.ok(answers[0].unclaimed, 'the yes arrived after the guest timed out');
-  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'));
-  k = 0; while (ha.state === 'carried' && k++ < 120) w.step(1); // the release is on its way to the host
+  k = 0; while (g.sync.store.get('animal', ha.id)?.owner !== 2 && k++ < 180) w.step(1);
+  assert.equal(g.sync.store.get('animal', ha.id).owner, 2, 'the yes reached the guest');
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'), 'after the guest timed out');
+  k = 0; while (ha.state === 'carried' && k++ < 420) w.step(1); // a keyframe, then the release (1.2 s each way)
   assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
   assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
 });
-test('a stale no drops the newer flight; its yes then finds no flight, so the guest releases it and the host frees it (M-14, M-26)', async () => {
+test('news from before the boop (no higher ownership number) does not poof the flight; the real answer lands it (M-14, M-26)', async () => {
   const w = await mpWorld({ seed: 39, link: { delay: 100 } }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
-  const released = []; const orig = w.host.sync.handlers.release; w.host.sync.handlers.release = (p, m) => { released.push(...m.ids); return orig(p, m); };
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
-  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it (flight B)');
-  let grant = null; k = 0; while (grant === null && k++ < 60) { w.step(1); if (ha.state === 'carried') grant = ha.epoch; }
-  assert.ok(grant !== null, 'the host granted B'); assert.ok(g.sync.pending.has(ha.id), "B's yes is still on the wire");
-  g.game.boopsPaused = true; // the guest's snapshots still show it free for ~150 ms: a re-boop would take B's yes and land (also consistent), so hold boops to see the lone yes
-  g.sync.handlers.claimed({ t: 'claimed', ok: [], no: [ha.id], epochs: [] }); w.step(1); // the no to an older claim A arrives first
-  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'refused'), 'B poofed');
-  k = 0; while (ha.state === 'carried' && k++ < 60) w.step(1); // B's yes reaches the guest, which has no flight: it releases
-  assert.deepEqual(released, [ha.id], 'the guest released it');
-  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
-  assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
+  const e0 = g.sync.pending.get(ha.id).e0;
+  sendAnimals(w, g, [[ha.id, animalRec({ type: ha.type, golden: ha.golden, state: 'carried', owner: 3, epoch: e0 })]]); w.step(1); // another owner, but not newer than the boop
+  assert.equal(ga.state, 'fly', 'no poof');
+  w.seconds(3);
+  assert.ok(g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'landed'); assert.ok(!g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id));
+  assert.equal(ha.owner, 2);
 });
 test('after a guest show, the host removes the delivered animals and makes new ones (M-6, M-16)', async () => {
   const w = await mpWorld({ seed: 41 }); w.seconds(1);
@@ -247,19 +244,17 @@ test('a new farm on the host: the guest makes it too, after its own show (M-19)'
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 48);
 });
 
-import { encodeVehicle } from '../src/net/codec.js';
 test('garbage, wrong kinds, odd JSON and a flood never break the host or the guest (M-44, M-50)', async () => {
   const w = await mpWorld({ seed: 51 }); w.seconds(1);
   const g = w.guests[0], H = w.host.net.id, G = g.net.id;
-  const junk = [new ArrayBuffer(0), new Uint8Array([2, 0, 0]).buffer, new Uint8Array(500).fill(255).buffer, { t: 'welcome', v: 1 }, { t: 'claim', ids: [99999] }, { t: 'tree', id: -1 }, null, 'text', 42, { t: 'claim', ids: [1e9] }];
+  const junk = [new ArrayBuffer(0), new Uint8Array([2, 0, 0]).buffer, new Uint8Array(500).fill(255).buffer, { t: 'welcome', v: 1 }, { t: 'claim', ids: [99999] }, { t: 'tree', id: -1 }, null, 'text', 42, { t: 'claim', ids: [1e9] }, new Uint8Array([0x11, 1, 0, 0, 0, 0, 1, 99]).buffer, new Uint8Array([0x10, 9, 0, 0, 0, 0, 0]).buffer];
   for (const j of junk) { g.net.send(H, j, typeof j === 'object' && !(j instanceof ArrayBuffer)); w.host.net.send(G, j, typeof j === 'object' && !(j instanceof ArrayBuffer)); }
   w.seconds(0.5);
   assert.equal(g.game.farm.seed, 51); assert.equal(g.sync.you, 2); assert.equal(w.host.sync.players.list().length, 1);
 });
-test('a guest cannot speak for another player: the host rewrites the player number (M-50)', async () => {
+test('a guest cannot speak for another player: a train record for another number is dropped (M-50)', async () => {
   const w = await mpWorld({ seed: 52, guests: 2 }); w.seconds(1);
-  const [g1] = w.guests, fake = encodeVehicle({ player: 3, time: 1e9, mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x: 40, y: 1, z: 40 }, q: { x: 0, y: 0, z: 0, w: 1 } })), carried: [] });
-  g1.net.send(w.host.net.id, fake); w.seconds(0.3);
+  const [g1] = w.guests; g1.net.send(w.host.net.id, trainFrame(2, 3, parked(40, 40), 1e9)); w.seconds(0.3); // the host writes 2 over the sender: id 3 is not its own
   const p3 = w.host.sync.players.map.get(3).pose.tractor.p; assert.ok(Math.hypot(p3.x - 40, p3.z - 40) > 1, 'player 3 did not move');
 });
 test('a flood of claims: at most 60 each second are handled (M-50)', async () => {
@@ -269,13 +264,12 @@ test('a flood of claims: at most 60 each second are handled (M-50)', async () =>
   w.seconds(0.2); assert.ok(handled > 50 && handled <= 60, `${handled}`); // the window may already hold a few earlier messages
 });
 test('old messages are ignored: an older train position, and animal data with a lower ownership number (M-26)', async () => {
-  const { encodeHerd } = await import('../src/net/codec.js');
   const w = await mpWorld({ seed: 55 }); w.seconds(1);
-  const g = w.guests[0], G = g.net.id, far = { x: 40, y: 1, z: 40 };
-  w.host.net.send(G, encodeVehicle({ player: 1, time: 1, mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: far, q: { x: 0, y: 0, z: 0, w: 1 } })), carried: [] })); // time 1: older than all
+  const g = w.guests[0], G = g.net.id;
+  w.host.net.send(G, trainFrame(1, 1, parked(40, 40), 1)); // time 1: older than all
   w.seconds(0.3); const hp = g.sync.players.map.get(1).pose.tractor.p; assert.ok(Math.hypot(hp.x - 40, hp.z - 40) > 5, 'the host tractor did not jump back');
   const ha = w.host.game.herd.free().find(a => !a.hidden), ga = g.game.herd.animals[ha.id]; ha.epoch = 5; w.seconds(0.5); assert.equal(ga.epoch, 5);
-  w.host.net.send(G, encodeHerd({ time: w.now + 1, animals: [{ ...ha, epoch: 4, busy: false, x: 40, y: 0, z: 40, anim: 'idle' }] })); // newer time, older owner
+  sendAnimals(w, g, [[ha.id, animalRec({ type: ha.type, golden: ha.golden, epoch: 4, x: 40, z: 40 })]]); // newer time, older owner
   for (let i = 0; i < 30; i++) { w.step(1); assert.ok(Math.hypot(ga.x - 40, ga.z - 40) > 5, 'ignored'); }
   assert.equal(ga.epoch, 5);
 });
@@ -297,13 +291,13 @@ test('a guest handler that throws is contained too (M-44)', async () => {
   g.sync.handlers.horn = orig; w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
   assert.ok(g.events.some(e => e.type === 'remoteHorn' && e.n === 1), 'the guest still handles messages');
 });
-test('a reliable message that is too big is dropped: over 2048 from a guest, over 131072 from the host (M-50)', async () => {
+test('a reliable message that is too big is dropped: over 2048 from a guest or from the host (M-50)', async () => {
   const w = await mpWorld({ seed: 57 }); w.seconds(1);
-  const g = w.guests[0], H = w.host.net.id, G = g.net.id, hp = () => w.host.sync.players.map.get(2).paint, gp = () => g.sync.players.map.get(1).paint;
+  const g = w.guests[0], H = w.host.net.id, G = g.net.id, hp = () => w.host.sync.players.map.get(2).paint, horns = () => g.events.filter(e => e.type === 'remoteHorn').length;
   g.net.send(H, { t: 'paint', paint: { ...PAINTS[3], pad: 'x'.repeat(2048) } }, true); w.seconds(0.3); assert.deepEqual(hp(), PAINTS[1], 'dropped by the host');
   g.net.send(H, { t: 'paint', paint: { ...PAINTS[3], pad: 'x'.repeat(1900) } }, true); w.seconds(0.3); assert.equal(hp().body, PAINTS[3].body, 'under the cap: handled');
-  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(131072) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[0], 'dropped by the guest');
-  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(130000) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[2], 'under the cap: handled');
+  w.host.net.send(G, { t: 'horn', n: 1, pad: 'x'.repeat(2048) }, true); w.seconds(0.3); assert.equal(horns(), 0, 'dropped by the guest');
+  w.host.net.send(G, { t: 'horn', n: 1, pad: 'x'.repeat(1900) }, true); w.seconds(0.3); assert.equal(horns(), 1, 'under the cap: handled');
 });
 test('a guest regrow counts at most once in 5 s; the extra ones are not passed on (M-17, M-50)', async () => {
   const w = await mpWorld({ seed: 58, guests: 2 }); w.seconds(1);
@@ -317,11 +311,11 @@ test('a guest regrow counts at most once in 5 s; the extra ones are not passed o
 });
 test('a repeated id in claim, release or delivered is handled once (M-50)', async () => {
   const w = await mpWorld({ seed: 59 }); w.seconds(1);
-  const g = w.guests[0], H = w.host.net.id, answers = []; g.sync.handlers.claimed = m => answers.push(m); // the guest only records the answers
+  const g = w.guests[0], H = w.host.net.id; w.hub.drop = (from, to) => to === g.net.id; // the guest hears nothing back (so it gives nothing back either)
   const near = a => { const t = w.host.sync.players.map.get(2).latest.bodies[0].p; Object.assign(a, { x: t.x + 2, z: t.z, state: 'idle', timer: 99, hidden: false }); };
   const [a, b] = w.host.game.herd.free().filter(x => !x.hidden && x.type !== 'chick');
-  near(a); g.net.send(H, { t: 'claim', ids: [a.id, a.id] }, true); w.seconds(0.2);
-  assert.deepEqual([answers[0].ok, answers[0].no, answers[0].epochs.length], [[a.id], [], 1]); assert.equal(a.owner, 2);
+  const ea = a.epoch; near(a); g.net.send(H, { t: 'claim', ids: [a.id, a.id] }, true); w.seconds(0.2);
+  assert.deepEqual([a.owner, a.epoch], [2, ea + 1], 'granted once');
   let barn = 0; const toBarn = w.host.game.herd.toBarn; w.host.game.herd.toBarn = list => { barn += list.length; return toBarn(list); };
   const e = a.epoch; g.net.send(H, { t: 'delivered', ids: [a.id, a.id] }, true); w.seconds(0.2);
   assert.deepEqual([barn, a.epoch], [1, e + 1]);
@@ -342,6 +336,15 @@ test('a guest that leaves: its tractor poofs and its animals are replaced (M-39)
   g.net.leave(); w.seconds(0.3);
   assert.equal(ha.state, 'gone'); assert.equal(w.host.sync.players.list().length, 0);
   assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.game.herd.free().filter(a => a.home === 'route').length, 18);
+});
+test('player 3 leaves and a new guest gets number 3: the other guest sees the new train, though its clock starts lower (M-22, M-26, M-39)', async () => {
+  const w = await mpWorld({ seed: 63, guests: 2 }); w.seconds(1);
+  const [g2, g3] = w.guests, H = w.host.net.id;
+  g3.net.send(H, trainFrame(3, 3, parked(g3.game.tractor.x, g3.game.tractor.z), 1e9)); w.seconds(0.3); // the old player 3's clock was far ahead of the new one's
+  assert.ok(g2.sync.store.get('train', 3), 'player 2 has the old train 3');
+  g3.net.leave(); w.seconds(0.5); assert.ok(!g2.sync.players.map.has(3), 'gone from the roster');
+  const g = w.addGuest(); w.seconds(1); assert.equal(g.sync.you, 3);
+  const seen = g2.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, 'player 2 sees the new train where it is');
 });
 test('the host drops: boops pause; back in time they go on (M-40)', async () => {
   const w = await mpWorld({ seed: 63 }); w.seconds(1);
@@ -405,33 +408,32 @@ test('a throw while going alone never reaches the link (M-44)', async () => {
   finally { console.warn = warn; }
 });
 
-test('after a timeout the claim is still in flight: no re-boop until its answer comes; the answer clears it (M-14)', async () => {
+test('after a timeout the claim stays open: no re-boop until a keyframe settles it (M-14, M-56)', async () => {
   const w = await mpWorld({ seed: 71 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
-  const claims = []; w.host.sync.handlers.claim = (p, m) => { claims.push(m); }; // the host has the claim, its answer is slow
+  const claims = []; w.host.sync.handlers.claim = (p, m) => { claims.push(m); }; // the host has the claim and never answers
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; } // free in front of the guest on both devices
-  w.seconds(2.5);
+  let k = 0; while (!g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id) && k++ < 180) w.step(1);
   assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'timeout'), 'timed out');
-  assert.equal(claims.length, 1, 'one claim only: the host still shows it free, yet no re-boop'); assert.ok(g.sync.pending.has(ha.id), 'still waiting for its answer');
-  assert.ok(!free(g.game, ga), 'a stale herd sample does not free it');
-  g.sync.handlers.claimed({ t: 'claimed', ok: [], no: [ha.id], epochs: [] }); assert.ok(!g.sync.pending.has(ha.id), 'the answer clears it');
-  w.seconds(1); assert.equal(claims.length, 2, 'boopable again');
+  assert.equal(claims.length, 1, 'one claim only: the host still shows it free, yet no re-boop'); assert.ok(g.sync.pending.has(ha.id), 'still open');
+  assert.ok(!free(g.game, ga), 'host data does not free it');
+  const t0 = w.now; k = 0; while (claims.length < 2 && k++ < 180) w.step(1); // a keyframe settles it (the animal is still in front: the guest boops it again)
+  assert.equal(claims.length, 2, 'boopable again'); assert.ok(w.now - t0 <= 2200, 'within one keyframe period');
 });
-test('a stale yes still clears the claim in flight (M-14, M-26)', async () => {
+test('a keyframe ends a claim whose flight is over; a claim whose flight still waits stays open (M-14, M-56)', async () => {
   const w = await mpWorld({ seed: 72 }); w.seconds(1);
-  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
-  ga.epoch = 3; g.sync.pending.add(ha.id);
-  g.sync.handlers.claimed({ t: 'claimed', ok: [ha.id], no: [], epochs: [[ha.id, 1]] });
-  assert.ok(!g.sync.pending.has(ha.id)); assert.equal(ga.epoch, 3);
+  const g = w.guests[0], [a, b] = w.host.game.herd.free().filter(x => !x.hidden);
+  g.sync.pending.set(a.id, { e0: a.epoch, done: true }); g.sync.pending.set(b.id, { e0: b.epoch, done: false });
+  w.seconds(2.2);
+  assert.ok(!g.sync.pending.has(a.id), 'settled'); assert.ok(g.sync.pending.has(b.id), 'still waiting');
 });
-test('a herd message never pulls an animal out of the guest trailer, whatever its ownership number (R-4, M-26)', async () => {
-  const { encodeHerd } = await import('../src/net/codec.js');
+test('host data never pulls an animal out of the guest trailer, whatever its ownership number (R-4, M-26)', async () => {
   const w = await mpWorld({ seed: 73 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   w.seconds(3); assert.equal(ga.state, 'ride');
   w.host.sync.after = () => {}; w.step();
-  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ id: ha.id, epoch: ga.epoch + 5, type: ha.type, golden: ha.golden, hidden: false, busy: false, x: 40, y: 0, z: 40, yaw: 0, anim: 'idle', leader: null, line: 0 }] }), false);
+  sendAnimals(w, g, [[ha.id, animalRec({ type: ha.type, golden: ha.golden, epoch: ga.epoch + 5, x: 40, z: 40 })]]);
   w.seconds(0.5); assert.equal(ga.state, 'ride'); assert.equal(g.game.load.landed(), 1);
 });
 
@@ -442,9 +444,9 @@ test('the rate limits count in wall time: with the game frozen (rAF paused), a n
   const deliver = () => w.hub.tick(w.now); // messages arrive, but no frame runs: sim time stands still
   for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled, 60);
   wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled, 61, 'the host: a new second, a new window');
-  for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[0], away: false }] }, true); deliver();
-  wall += 1100; w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[3], away: false }] }, true); deliver();
-  assert.deepEqual(g.sync.players.map.get(1).paint, PAINTS[3], 'the guest: a new window too');
+  const horns = () => g.sync.out.filter(e => e.type === 'remoteHorn').length; // no frame runs, so the guest's events wait in out
+  for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 60);
+  wall += 1100; w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 61, 'the guest: a new window too');
 });
 
 test('a silent host (no fast message for 3 s) is shown away and boops pause; its messages back clear both (M-40)', async () => {
@@ -474,12 +476,11 @@ test('while a new farm waits for the guest show, the new herd is not put on the 
   assert.equal(g.game.farm.seed, 77); assert.equal(g.game.herd.animals.length, n); assert.equal(kinds(), before, 'the old farm keeps its animals');
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 78);
 });
-test('ignored herd data (an older ownership number) never changes an animal type (M-26)', async () => {
-  const { encodeHerd } = await import('../src/net/codec.js');
+test('ignored animal data (an older ownership number) never changes an animal type (M-26)', async () => {
   const w = await mpWorld({ seed: 79 }); w.seconds(1);
   const g = w.guests[0], ha = w.host.game.herd.free().find(a => !a.hidden && a.type !== 'cow'), ga = g.game.herd.animals[ha.id]; ha.epoch = 5; w.seconds(0.5); assert.equal(ga.epoch, 5);
   w.host.sync.after = () => {}; w.step();
-  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ id: ha.id, epoch: 4, type: 'cow', golden: !ha.golden, hidden: false, busy: false, x: 40, y: 0, z: 40, yaw: 0, anim: 'idle', leader: null, line: 0 }] }), false);
+  sendAnimals(w, g, [[ha.id, animalRec({ type: 'cow', golden: !ha.golden, epoch: 4, x: 40, z: 40 })]]);
   w.seconds(0.5); assert.equal(ga.type, ha.type); assert.equal(ga.golden, ha.golden);
 });
 test('a new farm while the host is silent keeps boops paused (M-19, M-40)', async () => {
@@ -491,14 +492,15 @@ test('a new farm while the host is silent keeps boops paused (M-19, M-40)', asyn
   w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false);
 });
 
-test('a flight waiting for the host answer is not sent as carried; once granted it is (M-22)', async () => {
-  const { vehicleOf } = await import('../src/net/players.js');
+test('a waiting flight is in the guest train record (the host sees it there), but nobody draws it in that train before the host gives it (M-22, M-57)', async () => {
+  const { trainRecord } = await import('../src/net/players.js');
   const w = await mpWorld({ seed: 82, link: { delay: 400 } }); w.seconds(2);
-  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], ids = () => vehicleOf(g.game, 2, w.now).carried.map(c => c.id);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], ids = () => trainRecord(g.game).riders.map(c => c.id);
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   let k = 0; while (!g.game.flights.some(f => f.animal === ga && f.u >= 0) && k++ < 200) w.step(1);
   const f = g.game.flights.find(x => x.animal === ga); assert.ok(f && f.claim === 'pending' && f.u >= 0, 'in the air, unanswered');
-  assert.ok(!ids().includes(ha.id), 'not ours yet');
+  assert.ok(ids().includes(ha.id), 'in its train record');
+  const x0 = ha.x; w.seconds(0.3); assert.ok(free(w.host.game, ha) && Math.abs(ha.x - x0) < 0.5, 'the host still has it free where it was');
   k = 0; while (f.claim === 'pending' && k++ < 120) w.step(1); assert.equal(f.claim, null, 'granted');
-  assert.ok(g.game.flights.includes(f), 'still in the air'); assert.ok(ids().includes(ha.id), 'ours now');
+  w.seconds(1); assert.equal(ha.owner, 2); assert.ok(dist(ha, ga) < 0.6, `the host draws it in the guest train (${dist(ha, ga).toFixed(2)} m)`);
 });

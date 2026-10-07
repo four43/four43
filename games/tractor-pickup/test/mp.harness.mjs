@@ -6,6 +6,8 @@ import { createMemoryHub } from '../src/net/link.js';
 import { createHostSync } from '../src/net/host.js';
 import { createGuestSync } from '../src/net/guest.js';
 import { quatAxes } from '../src/sim/tractor.js';
+import { encodeFrame } from '../src/net/replica.js';
+import { ANIMAL, TRAIN } from '../src/net/kinds.js';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
@@ -48,3 +50,8 @@ export const moveTrain = (g, x, z, yaw) => {
     b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
 };
+// A hand-made frame from one device to another (M-22): animal records from the host, or a train record from a player
+export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = {}) => w.host.net.send(to.net.id, encodeFrame({ key, sender: 1, time, groups: [{ kind: ANIMAL, records }] }), key);
+export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
+export const animalRec = o => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle', leader: null, line: 0, ...o });
+export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x, y: 1, z }, q: { x: 0, y: 0, z: 0, w: 1 } })), riders: [] });
