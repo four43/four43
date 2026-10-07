@@ -20,7 +20,7 @@ export async function mpWorld({ seed = 21, guests = 1, link = {}, join = true, c
   const addGuest = () => {
     const i = devs.length, g = { name: 'guest' + i, events: [], game: createGame(RAPIER, { seed: 1000 + i, power: 'medium' }) }; // its own solo farm until the welcome
     g.net = hub.join();
-    g.sync = createGuestSync({ game: g.game, net: g.net, paint: PAINTS[i], clock: wall, onFarm: (s, n) => (g.game = createGame(RAPIER, { seed: s, power: 'medium', player: n })) });
+    g.sync = createGuestSync({ game: g.game, net: g.net, paint: PAINTS[i % PAINTS.length], clock: wall, onFarm: (s, n) => (g.game = createGame(RAPIER, { seed: s, power: 'medium', player: n })) });
     devs.push(g); return g;
   };
   if (join) for (let i = 0; i < guests; i++) addGuest();

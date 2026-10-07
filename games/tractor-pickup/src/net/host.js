@@ -19,10 +19,10 @@ const REGROW_MS = 5000; // M-17, M-50: a guest regrow counts at most once in 5 s
 export function createHostSync({ game, net, paint, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper();
   const world = createTracker([ANIMAL, TREE, PLAYER]), mine = createTracker([TRAIN]), missing = new Map(); // missing: animal id -> ms it has been owned by a guest but not in that guest's train (M-57)
-  let lastWorld = -Infinity, lastTrain = -Infinity, lastKey = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0, lastBefore = null;
+  let joins = 0, lastWorld = -Infinity, lastTrain = -Infinity, lastKey = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0, lastBefore = null;
   const send = (n, m, rel = true) => { const p = players.map.get(n); if (p?.peer) net.send(p.peer, m, rel); };
   const all = (m, rel = true, except = 0) => { for (const p of players.list()) if (p.n !== except && p.peer && p.helloed) net.send(p.peer, m, rel); };
-  const roster = () => [{ n: 1, paint: myPaint, away: false }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away }))];
+  const roster = () => [{ n: 1, paint: myPaint, away: false, join: 0 }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away, join: p.join }))];
   const worldNow = () => ({ animal: animalRecords(game.herd), tree: treeRecords(game.trees), player: playerRecords(roster()) });
   const trainNow = () => ({ train: [[1, trainRecord(game)]] });
   const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, you: p.n, next: game.herd.animals.length }); // M-24: the first keyframe follows at once
@@ -56,7 +56,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) p.serverAway = false; });
   const silent = p => p.heardAt !== undefined && clock() - p.heardAt > SILENT_MS; // M-39: a stopped page whose socket the server still sees
   net.on('peerLeft', id => gone(id));
-  net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
+  net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; p.join = joins = (joins + 1) % 256; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
   function onTrain(p, f, data, reliable) {
     if ([...f.groups.keys()].some(k => k !== 'train')) return; // M-50: a guest is the authority for its own train only (decodeFrame checked the id)
     p.heardAt = clock();

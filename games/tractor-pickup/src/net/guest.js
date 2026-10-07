@@ -30,9 +30,12 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   const forgetOwner = n => { for (const k of KINDS) if (k.authority === 'owner') store.forget(k.name, n); }; // a player left or came: a new one with its number starts a fresh (lower) clock, and a late frame of the old one must not outrank it
   function applyRoster() { // M-22: the player objects. A new player gets this train's keyframe at once (M-23)
     const seen = new Set();
-    for (const [n, r] of store.all('player')) { if (n === you) continue; seen.add(n); if (!players.map.has(n)) { lastKey = -Infinity; forgetOwner(n); }
-      const p = players.ensure(n); p.paint = { body: r.body, trim: r.trim }; p.away = r.away || (n === 1 && paused); }
-    for (const p of players.list()) if (!seen.has(p.n)) { players.remove(p.n); forgetOwner(p.n); if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); }
+    const leave = p => { players.remove(p.n); forgetOwner(p.n); if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); };
+    for (const [n, r] of store.all('player')) { if (n === you) continue; seen.add(n);
+      const old = players.map.get(n); if (old && old.join !== r.join) leave(old); // M-39: its number was given again (in one host diff): a new player
+      if (!players.map.has(n)) { lastKey = -Infinity; forgetOwner(n); }
+      const p = players.ensure(n); p.join = r.join; p.paint = { body: r.body, trim: r.trim }; p.away = r.away || (n === 1 && paused); }
+    for (const p of players.list()) if (!seen.has(p.n)) leave(p);
   }
   function applyTree(id, state) { // M-17, M-56: the host's state wins, except for a tree this guest just broke itself
     const t = game.trees.list[id]; if (!t) return; // M-50: the id must exist

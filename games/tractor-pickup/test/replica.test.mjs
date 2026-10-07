@@ -20,7 +20,7 @@ test('an animal round-trips: every field, positions within a step, ownership num
 });
 test('a tree, a player and a train round-trip (M-22, M-53)', () => {
   assert.deepEqual(one(TREE, 12, { state: 'broken' }).groups.get('tree').records.get(12), { state: 'broken' });
-  assert.deepEqual(one(PLAYER, 3, { body: 'rainbow', trim: 'blue', away: true }).groups.get('player').records.get(3), { body: 'rainbow', trim: 'blue', away: true });
+  assert.deepEqual(one(PLAYER, 3, { body: 'rainbow', trim: 'blue', away: true, join: 255 }).groups.get('player').records.get(3), { body: 'rainbow', trim: 'blue', away: true, join: 255 });
   const t = train(3), r = one(TRAIN, 2, t, { sender: 2 }).groups.get('train').records.get(2);
   assert.deepEqual([r.mode, r.full, r.riders.map(c => [c.id, c.slot, c.flying])], ['drive', true, [[30, 0, false], [31, 1, true], [32, 2, false]]]);
   t.bodies.forEach((b, i) => { for (const k of 'xyz') near(r.bodies[i].p[k], b.p[k], 1 / 128, 'p' + k); for (const k of 'xyzw') near(r.bodies[i].q[k], b.q[k], 1e-3, 'q' + k); });
@@ -57,7 +57,7 @@ test('bad frames decode to null (M-50)', () => {
   b = bytes(); b[13] = 0xf0; assert.equal(decodeFrame(b.buffer, REGISTRY), null, 'unused flag bits');
   assert.equal(decodeFrame(frame([{ kind: ANIMAL, records: [[1, pig()]] }], { sender: 2 }), REGISTRY), null, 'a guest sending animals');
   assert.equal(decodeFrame(frame([{ kind: TRAIN, records: [[3, train(1)]] }], { sender: 2 }), REGISTRY), null, 'a guest sending another train');
-  b = new Uint8Array(frame([{ kind: PLAYER, records: [[1, { body: 'red', trim: 'red', away: false }]] }])); b[10] = 0; assert.equal(decodeFrame(b.buffer, REGISTRY), null, 'player 0');
+  b = new Uint8Array(frame([{ kind: PLAYER, records: [[1, { body: 'red', trim: 'red', away: false, join: 0 }]] }])); b[10] = 0; assert.equal(decodeFrame(b.buffer, REGISTRY), null, 'player 0');
   assert.equal(decodeFrame(encodeFrame({ key: true, sender: 1, time: 1, groups: [{ kind: TREE, records: [], removed: [3] }] }), REGISTRY), null, 'a keyframe that removes by name');
   const twice = encodeFrame({ key: false, sender: 1, time: 1, groups: [{ kind: TREE, records: [[1, { state: 'broken' }]] }, { kind: TREE, records: [] }] });
   assert.equal(decodeFrame(twice, REGISTRY), null, 'one kind twice');

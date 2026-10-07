@@ -524,3 +524,13 @@ test('a silent guest (its page stopped, its socket still open) is shown away on 
   g.sync.after = after; w.seconds(0.3); assert.equal(hp().away, false); assert.equal(op().away, false);
   w.hub.away(g.net.id); w.seconds(0.2); assert.equal(hp().away, true, 'the server still says away at once');
 });
+test('player 3 leaves and a new guest gets number 3 within one host diff: the other guests see the new train, though its clock starts lower (M-22, M-26, M-39)', async () => {
+  const w = await mpWorld({ seed: 85, guests: 3 }); w.seconds(1);
+  const [g2, g3, g4] = w.guests;
+  g3.net.send(w.host.net.id, trainFrame(3, 3, parked(40, 40), 1e9)); w.seconds(0.3); // the old player 3's clock was far ahead of the new one's
+  assert.ok(g4.sync.store.get('train', 3)?.bodies[0].p.x === 40, 'player 4 has the old train 3');
+  g3.net.leave(); const g = w.addGuest(); // the host frees number 3 and gives it again at once: the roster never goes without a player 3
+  w.seconds(1.5); assert.equal(g.sync.you, 3);
+  for (const o of [g2, g4]) { const seen = o.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, `${o.name} sees the new train where it is`); }
+  assert.ok(g4.events.some(e => e.type === 'playerGone' && e.n === 3), 'the old train poofs');
+});
