@@ -29,7 +29,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   function applyWelcome(m) {
     if (!you) lastFast = clock(); // the watchdog starts with the first welcome
     you = m.you; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
-    game.herd.remote = true; game.claims = true; pending.clear(); herdBuf.reset();
+    game.herd.remote = true; game.claims = true; game.boopsPaused = paused; pending.clear(); herdBuf.reset(); // a host that is away stays away on the new farm (M-40)
     const herd = game.herd, lim = idLimit(herd), got = [];
     for (const r of m.herd) { if (r.id > lim) continue; const a = herd.ensure(r.id, r.type, r.golden); got.push([a, r.leader]);
       Object.assign(a, { home: r.home, line: r.line, x: r.x, z: r.z, yaw: r.yaw, epoch: r.epoch, hidden: r.hidden });
@@ -94,8 +94,9 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     const prev = new Map(s.a.animals.map(a => [a.id, a])), seen = new Set(), herd = game.herd, lim = idLimit(herd);
     for (const r of s.b.animals) {
       if (r.id > lim) continue;
-      const a = herd.ensure(r.id, r.type, r.golden); seen.add(r.id);
-      if (pending.has(r.id) || r.epoch < a.epoch || HELD.has(a.state)) continue; // R-4: nothing leaves this guest's train or show
+      const old = herd.animals[r.id]; seen.add(r.id);
+      if (pending.has(r.id) || old && (r.epoch < old.epoch || HELD.has(old.state))) continue; // R-4: nothing leaves this guest's train or show
+      const a = herd.ensure(r.id, r.type, r.golden); // after the checks: ignored data never changes an animal
       const o = prev.get(r.id), k = o ? s.k : 1, f = o || r;
       a.epoch = r.epoch; a.x = lerp(f.x, r.x, k); a.z = lerp(f.z, r.z, k); a.y = lerp(f.y, r.y, k); a.yaw = lerpAngle(f.yaw, r.yaw, k);
       a.anim = r.anim; a.hidden = r.hidden; a.leader = leaderOf(herd, a, r.leader); a.line = r.line;
@@ -105,8 +106,8 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   }
   function applyCarried() { // M-11: animals in other trains, at the positions their owners send
     const lim = idLimit(game.herd);
-    for (const p of players.list()) for (const c of p.carried) { if (pending.has(c.id) || c.id > lim) continue; const a = game.herd.ensure(c.id, c.type, c.golden);
-      if (a.state === 'fly' || a.state === 'ride' || a.state === 'show') continue; // ours
+    for (const p of players.list()) for (const c of p.carried) { if (pending.has(c.id) || c.id > lim || HELD.has(game.herd.animals[c.id]?.state)) continue; // ours
+      const a = game.herd.ensure(c.id, c.type, c.golden);
       Object.assign(a, { state: 'carried', x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
   }
   const sync = {
@@ -116,7 +117,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
       nowMs = now; if (!you) return out.splice(0);
       if (!alone) { silent = clock() - lastFast > SILENT_MS; setPaused(); } // M-40: the silence watchdog
       if (deferred && game.mode === 'drive') { const m = deferred; deferred = null; applyWelcome(m); }
-      if (!alone) { applyHerd(now); players.sample(now); for (const a of game.herd.animals) if (a.state === 'carried') a.state = 'elsewhere'; applyCarried(); }
+      if (!alone) { players.sample(now); if (!deferred) { applyHerd(now); for (const a of game.herd.animals) if (a.state === 'carried') a.state = 'elsewhere'; applyCarried(); } } // M-19: a deferred welcome's herd is not put on the old farm
       game.others = players.others(); if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only (M-4)
       return out.splice(0);
     },

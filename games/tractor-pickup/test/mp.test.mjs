@@ -463,3 +463,29 @@ test('hostBack does not end the pause while the host is still silent; hostAway p
   w.hub.away(w.host.net.id); w.seconds(0.1); // the server says away; fast messages that were on their way may still come in
   assert.equal(g.game.boopsPaused, true); assert.equal(g.sync.players.map.get(1).away, true);
 });
+
+test('while a new farm waits for the guest show, the new herd is not put on the old farm (M-19)', async () => {
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
+  const w = await mpWorld({ seed: 77 }); w.seconds(1);
+  const g = w.guests[0]; g.game.mode = 'show'; w.seconds(0.3);
+  const kinds = () => g.game.herd.animals.map(a => a.type + a.golden).join(), before = kinds(), n = g.game.herd.animals.length;
+  w.host.game = createGame(RAPIER, { seed: 78, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.5);
+  assert.equal(g.game.farm.seed, 77); assert.equal(g.game.herd.animals.length, n); assert.equal(kinds(), before, 'the old farm keeps its animals');
+  g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 78);
+});
+test('ignored herd data (an older ownership number) never changes an animal type (M-26)', async () => {
+  const { encodeHerd } = await import('../src/net/codec.js');
+  const w = await mpWorld({ seed: 79 }); w.seconds(1);
+  const g = w.guests[0], ha = w.host.game.herd.free().find(a => !a.hidden && a.type !== 'cow'), ga = g.game.herd.animals[ha.id]; ha.epoch = 5; w.seconds(0.5); assert.equal(ga.epoch, 5);
+  w.host.sync.after = () => {}; w.step();
+  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ id: ha.id, epoch: 4, type: 'cow', golden: !ha.golden, hidden: false, busy: false, x: 40, y: 0, z: 40, yaw: 0, anim: 'idle', leader: null, line: 0 }] }), false);
+  w.seconds(0.5); assert.equal(ga.type, ha.type); assert.equal(ga.golden, ha.golden);
+});
+test('a new farm while the host is silent keeps boops paused (M-19, M-40)', async () => {
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
+  const w = await mpWorld({ seed: 80 }); w.seconds(1);
+  const g = w.guests[0], after = w.host.sync.after; w.host.sync.after = () => {}; w.seconds(3.5); assert.equal(g.game.boopsPaused, true);
+  w.host.game = createGame(RAPIER, { seed: 81, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.3);
+  assert.equal(g.game.farm.seed, 81); assert.equal(g.game.boopsPaused, true, 'the new game is paused too'); assert.equal(g.sync.players.map.get(1).away, true);
+  w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false);
+});
