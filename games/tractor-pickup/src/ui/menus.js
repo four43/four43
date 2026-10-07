@@ -208,14 +208,14 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     else if (v.state === 'starting') body = `<p>Making a room…</p>${err}<div class="row"><button data-a="stop">Cancel</button></div>`;
     else if (v.state === 'hosting') body = `<p class="room">${esc(v.name)}</p><div class="qr">${qrSvg(v.url)}</div>${playerRows(v, true)}
 <label><input type="checkbox" data-a="lock"${v.locked ? ' checked' : ''}> Lock: no new players</label><div class="row"><button data-a="stop">Stop hosting</button></div>${err}`;
-    else if (v.state === 'join' || v.state === 'checking') body = `<label>Room name <input name="room" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="tractor-pickup-K7MX2"></label>
+    else if (v.state === 'join' || v.state === 'checking') body = `<label>Room name <span class="pre">tractor-pickup-<input name="room" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7MX2" aria-label="Room code"></span></label>
 <div class="row"><button data-a="submit" class="primary"${v.state === 'checking' ? ' disabled' : ''}>Join</button><button data-a="cancel">Back</button></div>${err}`;
     else if (v.state === 'prompt' || v.state === 'joining') { const n = Number(v.info.players) | 0; body = `<p>Join <b>${esc(v.name)}</b>? ${n} ${n === 1 ? 'player' : 'players'}.</p>
 <div class="row"><button data-a="confirm" class="primary"${v.state === 'joining' ? ' disabled' : ''}>Join</button><button data-a="cancel">Cancel</button></div>${err}`; }
     else if (v.state === 'joined') body = `<p class="room">${esc(v.name)}</p>${playerRows(v, false)}<div class="row"><button data-a="leave">Leave</button></div>${err}`;
     const keep = box.querySelector('[name=room]')?.value ?? '';
     box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Multiplayer</h2>${body}`;
-    const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); }
+    const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); input.addEventListener('input', () => { input.value = input.value.replace(/^\s*tractor-pickup-/i, ''); }); } // the prefix is fixed text: a pasted full name keeps only its code
     box.onclick = e => {
       const t = e.target.closest?.('[data-a]'), a = t?.dataset.a; if (!a) return;
       if (a === 'close') { mpSession.cancel(); box.parentElement.remove(); return; } // a check or a prompt ends with the panel (its client closes); a room goes on

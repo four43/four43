@@ -19,7 +19,7 @@ export function signalServer(s, origin) {
 const CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/; // the server's join alphabet
 export const parseRoomInput = s => { const m = typeof s === 'string' && s.trim().toUpperCase().replace(/^TRACTOR-PICKUP-/, ''); return m && CODE.test(m) ? m : null; };
 export const ERRORS = {
-  badCode: 'Room names look like tractor-pickup-K7MX2.', not_found: 'No farm with that name.', full: 'That farm is full.', locked: 'That farm is locked.',
+  badCode: 'Type the 5 letters and numbers after tractor-pickup-, like K7MX2.', not_found: 'No farm with that name.', full: 'That farm is full.', locked: 'That farm is locked.',
   version_mismatch: 'Update the game on both devices.', rate_limited: 'Too many tries. Wait a minute.', network: "Can't reach the server. Trying again…",
   timeout: "Can't reach the server.", closed: "Can't reach the server.", other: 'Something went wrong. Try again.', joinNetwork: "Can't reach the server. Try again.",
   noFarm: "Can't connect to the farm.", // joined, but no welcome from the host in 10 s (no peer connection)
