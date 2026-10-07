@@ -515,3 +515,12 @@ test('a waiting flight is in the guest train record (the host sees it there), bu
   w.seconds(1); assert.equal(ha.owner, 2); assert.ok(dist(ha, ga) < 0.6, `the host draws it in the guest train (${dist(ha, ga).toFixed(2)} m)`);
   assert.equal(oa().state, 'carried'); assert.ok(dist(oa(), ga) < 0.6, `the other guest draws it in the guest train (${dist(oa(), ga).toFixed(2)} m)`);
 });
+test('a silent guest (its page stopped, its socket still open) is shown away on the host and the other guests; its frames back clear it (M-39)', async () => {
+  const w = await mpWorld({ seed: 84, guests: 2 }); w.seconds(1);
+  const [g, o] = w.guests, after = g.sync.after, hp = () => w.host.sync.players.map.get(2), op = () => o.sync.players.map.get(2);
+  g.sync.after = () => {}; // the guest's page stops: no frames, and no peerAway either
+  w.seconds(2.5); assert.equal(hp().away, false, 'not yet');
+  w.seconds(1); assert.equal(hp().away, true, 'away on the host'); w.seconds(0.2); assert.equal(op().away, true, 'and on the other guest');
+  g.sync.after = after; w.seconds(0.3); assert.equal(hp().away, false); assert.equal(op().away, false);
+  w.hub.away(g.net.id); w.seconds(0.2); assert.equal(hp().away, true, 'the server still says away at once');
+});

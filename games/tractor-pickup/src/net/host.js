@@ -4,7 +4,7 @@
 // their results go back as replicated state (M-24). Bad or too many messages are dropped (M-50); a handler error never reaches the game (M-44).
 import { encodeFrame, decodeFrame, createTracker, isFrame } from './replica.js';
 import { REGISTRY, ANIMAL, TREE, PLAYER, TRAIN, animalRecords, treeRecords, playerRecords } from './kinds.js';
-import { checkFromGuest, createRate, NET_VERSION, MAX_PLAYERS } from './protocol.js';
+import { checkFromGuest, createRate, NET_VERSION, MAX_PLAYERS, SILENT_MS } from './protocol.js';
 import { createPlayers, trainRecord, SEND } from './players.js';
 import { createBumper } from '../sim/bump.js';
 import { NOT_FREE } from '../sim/herd.js';
@@ -52,8 +52,9 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   const gone = id => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; const p = players.map.get(n);
     for (const a of owned(n)) { a.state = 'gone'; a.epoch++; missing.delete(a.id); } game.herd.respawn(); // M-39
     if (p?.pose) out.push({ type: 'playerGone', n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(n); };
-  net.on('peerAway', id => { const p = players.map.get(byPeer.get(id)); if (p) p.away = true; }); // M-39: the player object says so
-  net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) p.away = false; });
+  net.on('peerAway', id => { const p = players.map.get(byPeer.get(id)); if (p) p.serverAway = p.away = true; }); // M-39: the player object says so
+  net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) p.serverAway = false; });
+  const silent = p => p.heardAt !== undefined && clock() - p.heardAt > SILENT_MS; // M-39: a stopped page whose socket the server still sees
   net.on('peerLeft', id => gone(id));
   net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
   function onTrain(p, f, data, reliable) {
@@ -87,7 +88,8 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
     players, handlers, out, owned, freeUp,
     get game() { return game; }, you: 1,
     before(now) {
-      nowMs = now; players.sample(now); game.others = players.others(); repair(lastBefore === null ? 0 : now - lastBefore); lastBefore = now;
+      nowMs = now; for (const p of players.list()) p.away = !!p.serverAway || silent(p); // M-39: the roster, the drawing and the dodges use it
+      players.sample(now); game.others = players.others(); repair(lastBefore === null ? 0 : now - lastBefore); lastBefore = now;
       for (const p of players.list()) if (!p.away) for (const c of p.carried) { const a = game.herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) Object.assign(a, { x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
       for (const p of players.list()) if (p.pose && p.full && p.mode === 'drive' && !p.away) fullDodge(game.herd, p.pose.tractor.p, p.pose.tractor.q, p.pose.cars, out); // M-12, B-14
       if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only: a tractor in its show stays in the barn (M-4)

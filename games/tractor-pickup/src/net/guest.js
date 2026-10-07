@@ -4,7 +4,7 @@
 // at each keyframe from the host the guest repairs what a lost message left wrong (M-56).
 import { encodeFrame, decodeFrame, createTracker, createStore, isFrame } from './replica.js';
 import { REGISTRY, KINDS, TRAIN } from './kinds.js';
-import { checkFromHost, createRate, NET_VERSION } from './protocol.js';
+import { checkFromHost, createRate, NET_VERSION, SILENT_MS } from './protocol.js';
 import { createPlayers, trainRecord, SEND } from './players.js';
 import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
@@ -12,7 +12,6 @@ import { NOT_FREE } from '../sim/herd.js';
 
 const OWN = new Set(['fly', 'ride', 'show', 'gone']); // host data never moves these: this guest's own, or unknown since the welcome (Decision 10: not toBarn)
 const HELD = new Set(['fly', 'ride', 'show']); // in this guest's train or its show
-export const SILENT_MS = 3000; // M-40: no binary message from the host for this long: it is away, whatever the server says (a sleeping page, a dead channel)
 export const HELLO_MS = 2000; // M-24: a hello is said again this often until the welcome comes (a lost hello)
 export const TREE_GRACE = 1000; // ms: a keyframe does not grow back a tree this guest broke this recently (the keyframe may be older than the host's break) (M-17, M-56)
 const MAX_JSON = 2048; // M-50: a longer reliable message from the host is dropped (the welcome is the biggest: about 60 bytes)

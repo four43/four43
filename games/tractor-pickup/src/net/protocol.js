@@ -4,6 +4,7 @@
 import { START_PAINTS, NEW_PAINTS } from '../sim/progress.js';
 
 export const NET_VERSION = 2, MAX_PLAYERS = 4;
+export const SILENT_MS = 3000; // M-39, M-40: no frame from a device for this long: it is away, whatever the server says (a stopped page, a dead channel)
 export const PAINT_NAMES = [...START_PAINTS, ...NEW_PAINTS];
 const obj = m => m && typeof m === 'object' && !Array.isArray(m);
 const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
