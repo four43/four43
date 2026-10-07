@@ -16,6 +16,7 @@ export const REPAIR_MS = 3000; // M-57: a guest's animal missing from that guest
 const TALK_MS = 500; // M-57 counts only while the guest's frames come in (they come every 50 ms): an away guest loses nothing
 const MAX_JSON = 2048; // M-50: a longer reliable message from a guest is dropped (the biggest real one is a few hundred)
 const REGROW_MS = 5000; // M-17, M-50: a guest regrow counts at most once in 5 s, so one guest cannot flood the others
+const HORN_MS = 300; // M-8, M-50, R-8: a guest horn counts at most once in 300 ms, so the others never hear a blare
 export function createHostSync({ game, net, paint, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper();
   const world = createTracker([ANIMAL, TREE, PLAYER]), mine = createTracker([TRAIN]), missing = new Map(); // missing: animal id -> ms it has been owned by a guest but not in that guest's train (M-57)
@@ -46,7 +47,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
     tree(p, m) { const t = game.trees.list[m.id], at = guestAt(p); if (!t || !at || Math.hypot(t.x - at.x, t.z - at.z) > TREE_RANGE) return; // M-17, M-50
       const e = game.trees.breakById(m.id, { x: Math.sin(p.yaw), z: Math.cos(p.yaw) }); if (!e) return; out.push(e); all({ t: 'tree', id: m.id }, true, p.n); },
     regrow(p) { if (nowMs - (p.regrowAt ?? -Infinity) < REGROW_MS) return; p.regrowAt = nowMs; game.trees.reset(); all({ t: 'regrow' }, true, p.n); }, // M-17: any show regrows everything
-    horn(p) { if (!p.pose) return; game.herd.horn(tractorOf(p)); out.push({ type: 'remoteHorn', n: p.n }); all({ t: 'horn', n: p.n }, true, p.n); }, // M-8
+    horn(p) { if (!p.pose || nowMs - (p.hornAt ?? -Infinity) < HORN_MS) return; p.hornAt = nowMs; game.herd.horn(tractorOf(p)); out.push({ type: 'remoteHorn', n: p.n }); all({ t: 'horn', n: p.n }, true, p.n); }, // M-8
     help(p) { const c = p.pose ? game.herd.callHelp(tractorOf(p)) : null; send(p.n, { t: 'help', id: c ? c.id : null }); }, // M-9
   };
   const gone = id => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; const p = players.map.get(n);

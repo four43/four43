@@ -560,3 +560,11 @@ test('a boop of an animal the store already shows in another train is refused at
   assert.equal(g.events.find(e => e.type === 'unclaim' && e.animal === ga)?.reason, 'refused', 'poofed at once');
   assert.deepEqual(claims, [], 'no claim'); assert.ok(!g.sync.pending.has(ha.id));
 });
+test('a guest horn counts at most once in 300 ms; the extra ones are not passed on (M-8, M-50, R-8)', async () => {
+  const w = await mpWorld({ seed: 88, guests: 2 }); w.seconds(1);
+  const [g1, g2] = w.guests, H = w.host.net.id, heard = () => [w.host.events.filter(e => e.type === 'remoteHorn').length, g2.events.filter(e => e.type === 'remoteHorn' && e.n === 2).length];
+  for (let i = 0; i < 10; i++) g1.net.send(H, { t: 'horn' }, true);
+  w.seconds(0.2); assert.deepEqual(heard(), [1, 1]);
+  g1.net.send(H, { t: 'horn' }, true); w.seconds(0.05); assert.deepEqual(heard(), [1, 1], 'still within 300 ms');
+  w.seconds(0.1); g1.net.send(H, { t: 'horn' }, true); w.seconds(0.1); assert.deepEqual(heard(), [2, 2], 'after 300 ms');
+});
