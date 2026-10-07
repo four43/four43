@@ -20,6 +20,7 @@ export function createMemoryHub({ delay = 0, jitter = 0, loss = 0, rng = Math.ra
       send(to, data, reliable = false) {
         const dst = ends.get(to); if (!dst || !e.up || to === id || (!isHost && to !== hostId)) return; // star: guests reach only the host
         if (!reliable && rng() < loss) return;
+        if (hub.drop?.(id, to, data, reliable)) return; // M-53: a test drops chosen messages (both channels), as a connection change does
         let at = now + delay + (jitter ? rng() * jitter : 0); const k = id + '>' + to;
         if (reliable) { at = Math.max(at, lastRel.get(k) ?? 0); lastRel.set(k, at); }
         const d = copy(data); later(at, () => { const r = ends.get(to); if (r?.up) r.ev.emit('message', id, d, reliable); });
@@ -27,6 +28,7 @@ export function createMemoryHub({ delay = 0, jitter = 0, loss = 0, rng = Math.ra
     ends.set(id, e); return e;
   }
   const hub = {
+    drop: null, // (from, to, data, reliable) => true drops the message
     get now() { return now; },
     host() { const e = endpoint(true); hostId = e.id; return e.net; },
     join() { const e = endpoint(false); event(hostId, 'peer', e.id); event(e.id, 'peer', hostId); return e.net; },

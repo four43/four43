@@ -130,3 +130,10 @@ test('a tree or bush can be broken by id (M-17); brokenIds lists them', () => {
   assert.ok(trees.breakById(1)); assert.deepEqual(trees.brokenIds(), [0, 1]);
   trees.reset(); assert.deepEqual(trees.brokenIds(), []);
 });
+
+test('one broken tree grows back by id, with its trunk; the others stay broken (M-56)', () => {
+  const { trees } = setup([...oneTree(0, 0), ...oneTree(10, 0)]);
+  trees.breakById(0); trees.breakById(1);
+  assert.equal(trees.regrowById(0), true); assert.equal(trees.list[0].state, 'growing'); assert.ok(trees.list[0].collider, 'solid again'); assert.equal(trees.list[1].state, 'broken');
+  assert.equal(trees.regrowById(0), false, 'not broken'); assert.equal(trees.regrowById(99), false, 'no such tree');
+});

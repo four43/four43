@@ -95,3 +95,11 @@ test('roomLink follows a new Peer for a known id: its messages arrive, sends rea
   room.emit('peer', b); b.emit('message', { t: 'paint' }, { reliable: true });
   assert.equal(log.filter(e => e[0] === 'message').length, 2, 'a Peer is listened to once');
 });
+
+test('a test can drop chosen messages on both channels, as a connection change does (M-53)', () => {
+  const hub = createMemoryHub(), h = hub.host(), g = hub.join(), got = []; h.on('message', (f, d) => got.push(d instanceof ArrayBuffer ? 'frame' : d.t)); hub.tick(0);
+  hub.drop = (from, to, d) => d instanceof ArrayBuffer || d.t === 'claim';
+  g.send(h.id, new ArrayBuffer(1)); g.send(h.id, { t: 'claim' }, true); g.send(h.id, { t: 'horn' }, true); hub.tick(1);
+  hub.drop = null; g.send(h.id, { t: 'claim' }, true); g.send(h.id, new ArrayBuffer(1)); hub.tick(2);
+  assert.deepEqual(got, ['horn', 'claim', 'frame']);
+});

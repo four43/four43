@@ -51,6 +51,8 @@ export function createTrees(phys, items) {
     },
     // M-17: the host broke this one (or a guest asked it to): no speed check, no slowdown; null when it is not standing
     breakById(id, dir = { x: 0, z: 1 }) { const t = list[id]; if (!t || t.state !== 'standing') return null; dropCollider(t); t.state = 'broken'; t.wobble = 0; t.near = false; t.grow = 0; return { type: 'treeBreak', tree: t, dir, speed: 0, remote: true }; },
+    // M-56: the host has this one standing (or growing) again: it grows back like reset() does, alone; false when it is not broken
+    regrowById(id) { const t = list[id]; if (!t || t.state !== 'broken') return false; t.state = 'growing'; t.grow = 0; if (!t.collider) addCollider(t); t.wobble = 0; t.near = false; return true; },
     brokenIds: () => list.filter(t => t.state === 'broken').map(t => t.id),
     reset() { for (const t of list) { if (t.state === 'broken') { t.state = 'growing'; t.grow = 0; } if (!t.collider) addCollider(t); t.wobble = 0; t.near = false; } },
   };
