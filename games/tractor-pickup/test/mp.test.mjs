@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mpWorld, inFront, free, STILL, PAINTS, moveTrain } from './mp.harness.mjs';
 import { spawnPoint } from '../src/sim/spawn.js';
+import { makeRng } from '../src/sim/rng.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const drive = (d, i) => i === 1 ? { thr: 0.6, steer: 0.2, horn: false } : STILL;
@@ -31,7 +32,7 @@ test('the guest shows the host animals where the host has them (M-3, M-12, M-23)
     assert.ok(dist(a, b) < 0.5, `animal ${a.id} ${dist(a, b).toFixed(2)} m off`); assert.ok(free(w.guests[0].game, b) || a.hidden === b.hidden); }
 });
 test('it still works over a far network: 300 ms, jitter 80 ms, 5% loss (M-25, M-28)', async () => {
-  const w = await mpWorld({ seed: 24, link: { delay: 300, jitter: 80, loss: 0.05 } }); w.seconds(8, drive);
+  const w = await mpWorld({ seed: 24, link: { delay: 300, jitter: 80, loss: 0.05, rng: makeRng(24).next } }); w.seconds(8, drive); // a seeded link: the same run every time
   const g = w.guests[0]; assert.equal(g.game.farm.seed, 24);
   const seen = w.host.sync.players.map.get(2).pose.tractor.p; assert.ok(dist(seen, g.game.tractor) < 3, `${dist(seen, g.game.tractor)}`);
   const h = w.host.game.herd; let near = 0, all = 0;
