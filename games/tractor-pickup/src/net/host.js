@@ -54,6 +54,12 @@ export function createHostSync({ game, net, paint }) {
     horn(p) { if (!p.pose) return; game.herd.horn(tractorOf(p)); out.push({ type: 'remoteHorn', n: p.n }); all({ t: 'horn', n: p.n }, true, p.n); }, // M-8
     help(p) { const c = p.pose ? game.herd.callHelp(tractorOf(p)) : null; send(p.n, { t: 'help', id: c ? c.id : null }); }, // M-9
   });
+  const gone = id => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; const p = players.map.get(n);
+    for (const a of owned(n)) { a.state = 'gone'; a.epoch++; } game.herd.respawn(); // M-39
+    if (p?.pose) out.push({ type: 'playerGone', n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(n); all({ t: 'players', list: roster() }); };
+  net.on('peerAway', id => { const p = players.map.get(byPeer.get(id)); if (p) { p.away = true; all({ t: 'players', list: roster() }); } });
+  net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) { p.away = false; all({ t: 'players', list: roster() }); } });
+  net.on('peerLeft', id => gone(id));
   net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
   net.on('message', (from, data, reliable) => {
     try {
@@ -77,7 +83,7 @@ export function createHostSync({ game, net, paint }) {
     get game() { return game; }, you: 1,
     before(now) {
       nowMs = now; players.sample(now); game.others = players.others();
-      for (const p of players.list()) for (const c of p.carried) { const a = game.herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) Object.assign(a, { x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
+      for (const p of players.list()) if (!p.away) for (const c of p.carried) { const a = game.herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) Object.assign(a, { x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
       for (const p of players.list()) if (p.pose && p.full && p.mode === 'drive' && !p.away) fullDodge(game.herd, p.pose.tractor.p, p.pose.tractor.q, p.pose.cars, out); // M-12, B-14
       if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only: a tractor in its show stays in the barn (M-4)
       return out.splice(0);
@@ -93,7 +99,7 @@ export function createHostSync({ game, net, paint }) {
     setPaint(pt) { myPaint = { ...pt }; all({ t: 'players', list: roster() }); },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
     delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host (Task 15)
-    close() { closed = true; },
+    close() { closed = true; for (const p of players.list()) { for (const a of owned(p.n)) { a.state = 'gone'; a.epoch++; } players.remove(p.n); } game.herd.respawn(); }, // M-39: the host keeps playing alone and its herd refills
   };
   sync.owned = owned; sync.freeUp = freeUp; // for Tasks 10 and 12
   return sync;

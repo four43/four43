@@ -327,3 +327,50 @@ test('a repeated id in claim, release or delivered is handled once (M-50)', asyn
   near(b); g.net.send(H, { t: 'claim', ids: [b.id] }, true); w.seconds(0.2); assert.equal(b.owner, 2);
   const eb = b.epoch; g.net.send(H, { t: 'release', ids: [b.id, b.id] }, true); w.seconds(0.2); assert.equal(b.epoch, eb + 1);
 });
+
+test('a guest that drops is shown away; back in time it carries on (M-39)', async () => {
+  const w = await mpWorld({ seed: 61 }); w.seconds(1);
+  w.hub.away(w.guests[0].net.id); w.seconds(0.2); assert.equal(w.host.sync.players.map.get(2).away, true);
+  w.hub.back(w.guests[0].net.id); w.seconds(0.2); assert.equal(w.host.sync.players.map.get(2).away, false);
+});
+test('a guest that leaves: its tractor poofs and its animals are replaced (M-39)', async () => {
+  const w = await mpWorld({ seed: 62 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  w.seconds(3); assert.equal(ha.state, 'carried');
+  g.net.leave(); w.seconds(0.3);
+  assert.equal(ha.state, 'gone'); assert.equal(w.host.sync.players.list().length, 0);
+  assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.game.herd.free().filter(a => a.home === 'route').length, 18);
+});
+test('the host drops: boops pause; back in time they go on (M-40)', async () => {
+  const w = await mpWorld({ seed: 63 }); w.seconds(1);
+  const g = w.guests[0]; w.hub.away(w.host.net.id); w.seconds(0.2);
+  assert.equal(g.game.boopsPaused, true); assert.equal(g.sync.players.map.get(1).away, true);
+  w.hub.back(w.host.net.id); w.seconds(0.2); assert.equal(g.game.boopsPaused, false);
+});
+test('the room closes: the guest goes on alone on the same farm, keeps its riders, and the animals live again (M-41)', async () => {
+  const w = await mpWorld({ seed: 64 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  w.seconds(3); assert.equal(g.game.load.landed(), 1);
+  const game = g.game; w.hub.leave(w.host.net.id, 'left'); w.seconds(0.2);
+  assert.equal(g.sync.alone, true); assert.equal(g.game, game, 'nothing made again');
+  assert.equal(game.herd.remote, false); assert.equal(game.claims, false); assert.equal(game.load.landed(), 1, 'the rider stays (R-4)');
+  assert.ok(g.events.some(e => e.type === 'alone')); assert.ok(g.events.some(e => e.type === 'playerGone' && e.n === 1));
+  const x0 = game.herd.free().map(a => [a.x, a.z]); w.seconds(5);
+  assert.ok(game.herd.free().some((a, i) => x0[i] && Math.hypot(a.x - x0[i][0], a.z - x0[i][1]) > 1), 'the guest runs the animals now');
+  assert.equal(game.herd.free().filter(a => a.home === 'route').length, 18);
+});
+test('a kicked guest also goes on alone (M-41)', async () => {
+  const w = await mpWorld({ seed: 65 }); w.seconds(1);
+  w.hub.leave(w.guests[0].net.id, 'kicked'); w.seconds(0.2);
+  assert.ok(w.guests[0].events.some(e => e.type === 'alone' && e.reason === 'kicked'));
+});
+test('going alone with a claim still waiting keeps the animal (decision 3)', async () => {
+  const w = await mpWorld({ seed: 66, link: { delay: 500 } }); w.seconds(2);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.size && k++ < 120) w.step(1); assert.ok(g.sync.pending.size > 0); // the guest sees it ~600 ms late (500 ms link + 100 ms playback)
+  w.hub.leave(w.host.net.id, 'left'); w.seconds(2);
+  assert.ok(g.events.some(e => e.type === 'land' && e.animal === ga));
+});

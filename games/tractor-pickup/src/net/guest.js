@@ -52,6 +52,18 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     horn(m) { out.push({ type: 'remoteHorn', n: m.n }); }, // M-8
     help(m) { const a = m.id === null ? null : game.herd.animals[m.id]; if (a) out.push({ type: 'help', animal: a }); }, // M-9
   };
+  function goAlone(reason) { // M-41: carry on alone on the same farm; nothing is made again
+    if (alone) return; alone = true; deferred = null;
+    for (const f of game.flights.filter(f => f.claim === 'pending')) game.resolveClaim(f.animal.id, true); // decision 3: nobody else can have it now
+    pending.clear(); game.claims = false; game.boopsPaused = false; game.herd.remote = false;
+    for (const a of game.herd.animals) if (a.state === 'carried' || a.state === 'elsewhere') a.state = 'gone';
+    game.herd.respawn();
+    for (const p of players.list()) { if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(p.n); }
+    game.others = []; out.push({ type: 'alone', reason });
+  }
+  net.on('hostAway', () => { game.boopsPaused = true; const p = players.map.get(1); if (p) p.away = true; }); // M-40
+  net.on('hostBack', () => { game.boopsPaused = false; const p = players.map.get(1); if (p) p.away = false; });
+  net.on('closed', reason => goAlone(reason));
   net.on('peer', id => { hostPeer = id; toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); });
   net.on('message', (from, data, reliable) => {
     try {
@@ -111,7 +123,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     showStarted() { toHost({ t: 'regrow' }); }, // M-17
     delivered(riders) { const ids = riders.map(r => r.animal.id).filter(id => id < 0x10000); if (ids.length) toHost({ t: 'delivered', ids: ids.slice(0, 16) }); }, // M-6, M-16
     requestHelp() { if (!you || alone) return false; toHost({ t: 'help' }); return true; }, // M-9
-    close() { alone = true; },
+    close() { net.leave?.(); goAlone('left'); },
   };
   return sync;
 }
