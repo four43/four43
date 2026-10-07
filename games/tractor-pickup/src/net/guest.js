@@ -26,6 +26,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
   const toHost = (m, rel = true) => { if (hostPeer && !alone) net.send(hostPeer, m, rel); };
   const hello = () => { helloAt = clock(); toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); };
+  const taken = r => r && r.state !== 'free' && r.owner !== you; // M-14: the record shows the animal in another player's train (or walking into the barn)
   const holds = id => game.flights.some(f => f.animal.id === id) || game.load.slots.some(s => s.animal.id === id);
   const forgetOwner = n => { for (const k of KINDS) if (k.authority === 'owner') store.forget(k.name, n); }; // a player left or came: a new one with its number starts a fresh (lower) clock, and a late frame of the old one must not outrank it
   function applyRoster() { // M-22: the player objects. A new player gets this train's keyframe at once (M-23)
@@ -112,7 +113,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   function settleClaims() { // M-14: a claim's answer is the animal's replicated owner, with a newer ownership number than at the boop
     for (const [id, c] of pending) { if (c.done) continue; const r = store.get('animal', id); if (!r || r.epoch <= c.e0) continue;
       if (r.owner === you) { game.resolveClaim(id, true); pending.delete(id); } // it lands (or, if its flight is gone, the next keyframe gives it back)
-      else { out.push(...game.resolveClaim(id, false)); c.done = true; } } // somebody else has it: poof; the claim stays open until a keyframe, so the poofed animal stays hidden here until the next host keyframe (at most 2 s, within M-58)
+      else if (taken(r)) { out.push(...game.resolveClaim(id, false)); c.done = true; } } // somebody else has it: poof; the claim stays open until a keyframe, so the poofed animal stays hidden here until the next host keyframe (at most 2 s, within M-58). Newer but free: the 1 s hold decides
   }
   function applyHerd(now) { // M-23, M-25: the host's animals, smoothly; never our own (R-4) nor one with an open claim (M-14)
     const s = herdBuf.sample(now); if (!s) return;
@@ -150,7 +151,8 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
       nowMs = now; if (!you || alone) return;
       const ids = [];
       for (const e of events) {
-        if (e.type === 'launch') { ids.push(e.animal.id); pending.set(e.animal.id, { e0: store.get('animal', e.animal.id)?.epoch ?? e.animal.epoch, done: false }); }
+        if (e.type === 'launch') { const r = store.get('animal', e.animal.id); if (taken(r)) { out.push(...game.resolveClaim(e.animal.id, false)); continue; } // M-14: the store already has it in another train: refused, no claim
+          ids.push(e.animal.id); pending.set(e.animal.id, { e0: r?.epoch ?? e.animal.epoch, done: false }); }
         if (e.type === 'unclaim') { const c = pending.get(e.animal.id); if (c) c.done = true; } // M-14: no re-boop until a keyframe settles it
         if (e.type === 'treeBreak' && !e.remote) { myBreaks.set(e.tree.id, clock()); toHost({ t: 'tree', id: e.tree.id }); } // M-17
         if (e.type === 'horn') toHost({ t: 'horn' }); // M-8

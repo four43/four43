@@ -1,7 +1,7 @@
 // test/mp.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, inFront, free, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked } from './mp.harness.mjs';
+import { mpWorld, inFront, free, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle } from './mp.harness.mjs';
 import { spawnPoint } from '../src/sim/spawn.js';
 import { makeRng } from '../src/sim/rng.js';
 
@@ -533,4 +533,30 @@ test('player 3 leaves and a new guest gets number 3 within one host diff: the ot
   w.seconds(1.5); assert.equal(g.sync.you, 3);
   for (const o of [g2, g4]) { const seen = o.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, `${o.name} sees the new train where it is`); }
   assert.ok(g4.events.some(e => e.type === 'playerGone' && e.n === 3), 'the old train poofs');
+});
+test('a newer free record does not poof a waiting flight: the 1 s hold decides (M-14, M-26)', async () => {
+  const w = await mpWorld({ seed: 86 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  w.host.sync.handlers.claim = () => {}; // the host never answers
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 60) w.step(1);
+  ha.epoch = g.sync.pending.get(ha.id).e0 + 1; // the host raises the ownership number, and the animal stays free
+  w.seconds(0.4); assert.ok(g.sync.store.get('animal', ha.id).epoch > g.sync.pending.get(ha.id).e0, 'the newer record is here');
+  assert.ok(!g.events.some(e => e.type === 'unclaim'), 'no poof for a free record');
+  k = 0; while (!g.events.some(e => e.type === 'unclaim') && k++ < 120) w.step(1);
+  assert.equal(g.events.find(e => e.type === 'unclaim')?.reason, 'timeout', 'the hold ends it');
+  g.game.boopsPaused = true; assert.deepEqual(settle(w, 3), []);
+});
+test('a boop of an animal the store already shows in another train is refused at once, with no claim (M-14, M-22)', async () => {
+  const { decodeFrame, encodeFrame } = await import('../src/net/replica.js'), { REGISTRY, ANIMAL } = await import('../src/net/kinds.js');
+  const w = await mpWorld({ seed: 87 }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], claims = [];
+  w.hub.drop = (from, to, d) => { if (d?.t === 'claim') claims.push(d); return false; };
+  g.game.boopsPaused = true; { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  w.seconds(0.5); g.game.boopsPaused = false; // the guest draws it free in front of its tractor
+  g.sync.store.apply(decodeFrame(encodeFrame({ key: false, sender: 1, time: w.now + 1, groups: [{ kind: ANIMAL, records: [[ha.id, animalRec({ type: ha.type, state: 'carried', owner: 3, epoch: ha.epoch + 1 })]] }] }), REGISTRY)); // its record is newer than the drawing
+  let k = 0; while (!g.events.some(e => e.type === 'launch' && e.animal === ga) && k++ < 60) w.step(1);
+  assert.ok(g.events.some(e => e.type === 'launch' && e.animal === ga), 'booped'); w.step(2);
+  assert.equal(g.events.find(e => e.type === 'unclaim' && e.animal === ga)?.reason, 'refused', 'poofed at once');
+  assert.deepEqual(claims, [], 'no claim'); assert.ok(!g.sync.pending.has(ha.id));
 });
