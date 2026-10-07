@@ -180,3 +180,68 @@ test('a stale no drops the newer flight; its yes then finds no flight, so the gu
   assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
   assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
 });
+test('after a guest show, the host removes the delivered animals and makes new ones (M-6, M-16)', async () => {
+  const w = await mpWorld({ seed: 41 }); w.seconds(1);
+  const g = w.guests[0], h = w.host.game.herd, ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  w.seconds(3); assert.equal(ha.state, 'carried');
+  const before = h.animals.length, riders = g.game.startShow(); g.sync.showStarted(); riders.forEach(r => { r.animal.state = 'show'; }); g.game.finishShow(riders); g.sync.delivered(riders);
+  w.seconds(0.5);
+  assert.ok(['toBarn', 'gone'].includes(ha.state), ha.state); assert.equal(ha.epoch, 2); assert.ok(h.animals.length > before, 'new animals'); assert.equal(h.free().filter(a => a.home === 'route').length, 18);
+  w.seconds(1); assert.ok(g.game.herd.animals.length >= h.animals.length, 'the guest knows the new ones');
+  w.seconds(12); assert.equal(ha.state, 'gone'); assert.equal(ga.state, 'elsewhere', 'gone from the guest screen too: nothing stays at the barn (A-16)');
+});
+test('a guest trailer that is full makes animals hop out of its way on the host (M-12, B-14)', async () => {
+  const { newRider } = await import('../src/sim/slots.js');
+  const w = await mpWorld({ seed: 42 }); w.seconds(1);
+  const g = w.guests[0]; for (let i = 0; i < 12; i++) g.game.load.land(g.game.load.reserve({ id: 500 + i, state: 'ride', type: 'pig', golden: false, x: 0, y: 0, z: 0, ride: { rider: newRider() } })); // a rider needs its spring (game.step D-12)
+  w.seconds(0.5);
+  const ha = single(w.host.game), p = g.game.tractorWorld({ x: 3, y: 0, z: 0 }, {}); ha.x = p.x; ha.z = p.z; ha.state = 'idle'; ha.timer = 99;
+  w.seconds(0.3); assert.ok(w.host.events.some(e => e.type === 'dodge' && e.animal === ha));
+});
+test('trees: a guest break shows on the host and the other guests; the host break shows on guests; a show regrows them (M-17)', async () => {
+  const w = await mpWorld({ seed: 43, guests: 2 }); w.seconds(1);
+  const [g1, g2] = w.guests, t = g1.game.trees.list.find(x => x.kind === 'tree');
+  // move guest 1's tractor next to the tree on the host's view: use a broken-by-id break on the guest (as trees.step would) and let after() report it
+  g1.game.trees.breakById(t.id); g1.sync.after([{ type: 'treeBreak', tree: t, dir: { x: 1, z: 0 }, speed: 5 }], w.now);
+  w.seconds(0.3);
+  assert.notEqual(w.host.game.trees.list[t.id].state, 'broken', 'too far from guest 1 (12 m): refused');
+  const near = g1.game.trees.list.find(x => x.kind === 'tree' && Math.hypot(x.x - g1.game.tractor.x, x.z - g1.game.tractor.z) < 60);
+  assert.ok(near, 'a tree within reach of a moved tractor exists');
+  // put guest 1's tractor next to that tree (latest vehicle message is what the host checks)
+  moveTrain(g1.game, near.x - 3, near.z, Math.PI / 2); w.seconds(0.3);
+  g1.game.trees.breakById(near.id); g1.sync.after([{ type: 'treeBreak', tree: near, dir: { x: 1, z: 0 }, speed: 5 }], w.now); w.seconds(0.3);
+  assert.equal(w.host.game.trees.list[near.id].state, 'broken'); assert.equal(g2.game.trees.list[near.id].state, 'broken');
+  assert.ok(w.host.events.some(e => e.type === 'treeBreak' && e.tree.id === near.id), 'host bursts it');
+  const ht = w.host.game.trees.list.find(x => x.state === 'standing'); w.host.sync.after([{ type: 'treeBreak', tree: w.host.game.trees.breakById(ht.id).tree }], w.now); w.seconds(0.3);
+  assert.equal(g1.game.trees.list[ht.id].state, 'broken');
+  g2.game.startShow(); g2.sync.showStarted(); w.seconds(0.3);
+  for (const d of w.devs) assert.ok(!d.game.trees.list.some(x => x.state === 'broken'), `${d.name} regrew`);
+});
+test('the guest horn calls host animals to the guest tractor; the other devices hear it (M-8)', async () => {
+  const w = await mpWorld({ seed: 44 }); w.seconds(1);
+  const g = w.guests[0], gt = g.game.tractor, pig = w.host.game.herd.free().find(a => a.type === 'pig' && !a.hidden);
+  pig.x = gt.x + 10; pig.z = gt.z; pig.state = 'idle'; pig.timer = 99;
+  w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
+  assert.equal(pig.state, 'come'); assert.ok(Math.hypot(pig.tx - gt.x, pig.tz - gt.z) < 8);
+  assert.ok(w.host.events.some(e => e.type === 'remoteHorn' && e.n === 2));
+});
+test('help: the host sends a helper animal to the guest that asked (M-9)', async () => {
+  const w = await mpWorld({ seed: 45 }); w.seconds(1);
+  const g = w.guests[0]; assert.equal(g.sync.requestHelp(), true); w.seconds(0.3);
+  const h = g.events.find(e => e.type === 'help'); assert.ok(h && h.animal); assert.equal(w.host.game.herd.animals[h.animal.id].state, 'help');
+});
+test('paint changes reach the other devices (M-2)', async () => {
+  const w = await mpWorld({ seed: 46 }); w.seconds(1);
+  w.guests[0].sync.setPaint({ body: 'pink', trim: 'green' }); w.host.sync.setPaint({ body: 'white', trim: 'blue' }); w.seconds(0.3);
+  assert.deepEqual(w.host.sync.players.map.get(2).paint, { body: 'pink', trim: 'green' });
+  assert.deepEqual(w.guests[0].sync.players.map.get(1).paint, { body: 'white', trim: 'blue' });
+});
+test('a new farm on the host: the guest makes it too, after its own show (M-19)', async () => {
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
+  const w = await mpWorld({ seed: 47 }); w.seconds(1);
+  const g = w.guests[0]; g.game.mode = 'show';
+  w.host.game = createGame(RAPIER, { seed: 48, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.5);
+  assert.equal(g.game.farm.seed, 47, 'not during the show');
+  g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 48);
+});

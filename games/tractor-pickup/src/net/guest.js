@@ -46,6 +46,10 @@ export function createGuestSync({ game, net, paint, onFarm }) {
       for (const [id, e] of m.epochs) { const a = game.herd.animals[id]; if (a && e > a.epoch) a.epoch = e; }
       for (const id of m.no) { pending.delete(id); out.push(...game.resolveClaim(id, false)); }
     },
+    tree(m) { const e = game.trees.breakById(m.id); if (e) out.push(e); }, // M-17: gibs, no direction
+    regrow() { game.trees.reset(); },
+    horn(m) { out.push({ type: 'remoteHorn', n: m.n }); }, // M-8
+    help(m) { const a = m.id === null ? null : game.herd.animals[m.id]; if (a) out.push({ type: 'help', animal: a }); }, // M-9
   };
   net.on('peer', id => { hostPeer = id; toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); });
   net.on('message', (from, data, reliable) => {
@@ -94,14 +98,17 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     after(events, now) {
       nowMs = now; if (!you || alone) return;
       const ids = [], gone = [];
-      for (const e of events) { if (e.type === 'launch') { ids.push(e.animal.id); pending.add(e.animal.id); } if (e.type === 'unclaim') { pending.delete(e.animal.id); if (e.reason === 'timeout') gone.push(e.animal.id); } }
+      for (const e of events) { if (e.type === 'launch') { ids.push(e.animal.id); pending.add(e.animal.id); } if (e.type === 'unclaim') { pending.delete(e.animal.id); if (e.reason === 'timeout') gone.push(e.animal.id); }
+        if (e.type === 'treeBreak' && !e.remote) toHost({ t: 'tree', id: e.tree.id }); if (e.type === 'horn') toHost({ t: 'horn' }); } // M-17, M-8
       if (ids.length) toHost({ t: 'claim', ids: ids.slice(0, 16) }); // M-13: a chick line goes in one claim
       if (gone.length) toHost({ t: 'release', ids: gone });
       if (now - lastVeh >= SEND.vehicle) { lastVeh = now; toHost(encodeVehicle(vehicleOf(game, you, now)), false); }
     },
     setGame(g) { game = g; },
     setPaint(pt) { myPaint = { ...pt }; toHost({ t: 'paint', paint: myPaint }); },
-    showStarted() {}, delivered() {}, requestHelp() { return false; }, // filled in by Tasks 9 and 10
+    showStarted() { toHost({ t: 'regrow' }); }, // M-17
+    delivered(riders) { const ids = riders.map(r => r.animal.id).filter(id => id < 0x10000); if (ids.length) toHost({ t: 'delivered', ids: ids.slice(0, 16) }); }, // M-6, M-16
+    requestHelp() { if (!you || alone) return false; toHost({ t: 'help' }); return true; }, // M-9
     close() { alone = true; },
   };
   return sync;

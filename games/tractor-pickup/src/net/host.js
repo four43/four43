@@ -6,10 +6,12 @@ import { checkFromGuest, createRate, NET_VERSION, MAX_PLAYERS } from './protocol
 import { createPlayers, vehicleOf, SEND } from './players.js';
 import { createBumper } from '../sim/bump.js';
 import { NOT_FREE } from '../sim/herd.js';
+import { fullDodge } from '../sim/game.js';
 
 const HERD_OUT = new Set(['gone', 'fly', 'ride', 'show', 'carried', 'elsewhere']); // not in the herd message: gone, or in a train (the owner's vehicle message has them)
 const TAU = Math.PI * 2;
 export const CLAIM_RANGE = 8; // m: a claim is granted only near the guest's last real tractor position (M-50)
+export const TREE_RANGE = 12; // m: a guest tree break counts only near its last real tractor position (M-17, M-50)
 export function herdRecords(herd) { // M-24: every animal not gone, for a welcome (ids grow with every respawn; the welcome holds 512). Yaw in 0..2 pi: herd yaws drift without bound, and checkFromHost allows |yaw| <= 100
   return herd.animals.filter(a => a.state !== 'gone').map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
     state: HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
@@ -39,6 +41,17 @@ export function createHostSync({ game, net, paint }) {
     },
     release(p, m) { for (const id of m.ids) { const a = game.herd.animals[id]; if (a?.state === 'carried' && a.owner === p.n) freeUp(a); } }, // M-14 timeout
   });
+  const guestAt = p => p.latest?.bodies[0].p; // the guest's last real tractor position (M-50)
+  const tractorOf = p => ({ x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed });
+  Object.assign(handlers, {
+    // M-6, M-16, Decision 10: the host walks the delivered animals into the barn; every guest sees it in the herd message (busy), then they are gone
+    delivered(p, m) { const list = m.ids.map(id => game.herd.animals[id]).filter(a => a?.state === 'carried' && a.owner === p.n); for (const a of list) { a.epoch++; a.owner = null; } if (list.length) { game.herd.toBarn(list); game.herd.respawn(); } },
+    tree(p, m) { const t = game.trees.list[m.id], at = guestAt(p); if (!t || !at || Math.hypot(t.x - at.x, t.z - at.z) > TREE_RANGE) return; // M-17, M-50
+      const e = game.trees.breakById(m.id, { x: Math.sin(p.yaw), z: Math.cos(p.yaw) }); if (!e) return; out.push(e); all({ t: 'tree', id: m.id }, true, p.n); },
+    regrow(p) { game.trees.reset(); all({ t: 'regrow' }, true, p.n); }, // M-17: any show regrows everything
+    horn(p) { if (!p.pose) return; game.herd.horn(tractorOf(p)); out.push({ type: 'remoteHorn', n: p.n }); all({ t: 'horn', n: p.n }, true, p.n); }, // M-8
+    help(p) { const c = p.pose ? game.herd.callHelp(tractorOf(p)) : null; send(p.n, { t: 'help', id: c ? c.id : null }); }, // M-9
+  });
   net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
   net.on('message', (from, data, reliable) => {
     try {
@@ -62,18 +75,21 @@ export function createHostSync({ game, net, paint }) {
     before(now) {
       nowMs = now; players.sample(now); game.others = players.others();
       for (const p of players.list()) for (const c of p.carried) { const a = game.herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) Object.assign(a, { x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
+      for (const p of players.list()) if (p.pose && p.full && p.mode === 'drive' && !p.away) fullDodge(game.herd, p.pose.tractor.p, p.pose.tractor.q, p.pose.cars, out); // M-12, B-14
       if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only: a tractor in its show stays in the barn (M-4)
       return out.splice(0);
     },
     after(events, now) {
       nowMs = now;
-      for (const e of events) if (e.type === 'launch') e.animal.epoch++; // M-15, M-26: the host's own boop changes the owner
+      for (const e of events) { if (e.type === 'launch') e.animal.epoch++; // M-15, M-26: the host's own boop changes the owner
+        if (e.type === 'treeBreak' && !e.remote) all({ t: 'tree', id: e.tree.id }); if (e.type === 'horn') all({ t: 'horn', n: 1 }); } // M-17, M-8
       if (now - lastVeh >= SEND.vehicle) { lastVeh = now; all(encodeVehicle(vehicleOf(game, 1, now)), false); }
       if (now - lastHerd >= SEND.herd) { lastHerd = now; all(encodeHerd(herdMessage(game.herd, now)), false); }
     },
     setGame(g) { game = g; for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; if (p.helloed) send(p.n, welcome(p)); } }, // M-19
     setPaint(pt) { myPaint = { ...pt }; all({ t: 'players', list: roster() }); },
-    showStarted() {}, delivered() {}, requestHelp() {}, // filled in by Tasks 9 and 10
+    showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
+    delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host (Task 15)
     close() { closed = true; },
   };
   sync.owned = owned; sync.freeUp = freeUp; // for Tasks 10 and 12
