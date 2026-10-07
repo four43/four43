@@ -1,6 +1,6 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.8 (multiplayer)
+Version: 1.9 (multiplayer: replicated objects)
 Date: 6 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
@@ -59,6 +59,13 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - The paint screen has a row of the unlocked hats: each hat can be turned off or on (W-4).
 - The parent gear is at the top left. Every close button is a red X at the top right (U-3, U-7).
 - The horn button shows a classic bulb horn (U-2). Every hat sits on the top of the head, with no head poking through it (W-4).
+
+### 1.2.9 Change in version 1.9 (multiplayer phase 1.5)
+
+- All shared game state is replicated objects (14.4): animals, trees, players and trains. Each kind of object has a list of fields and one authority. The authority sends a keyframe (the full state) every 2 s and diffs (only the changed objects) between keyframes. A lost message does not cause an error, because the next diff or keyframe has the correct state.
+- A claim (M-13) is a request to own an animal. The answer is the animal's replicated owner, not a different message. Thus no answer can be lost.
+- Each device repairs its state from each keyframe (M-56 to M-58).
+- The welcome no longer carries the animals and the trees: the first keyframe after the welcome carries them.
 
 ### 1.2.8 Change in version 1.8
 
@@ -578,6 +585,11 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 | Owner | TN | The device that moves an object and sends its position to the other devices. |
 | Claim | TN | A request from a guest to the host for an animal that the guest booped. |
 | Ownership number | TN | A number on each animal. It increases each time the animal changes owner. |
+| Replicated object | TN | A game object that all devices in a room share: an animal, a tree, a player or a train. It has an id, a kind and fields. |
+| Kind | TN | The type of a replicated object. A kind gives the fields that are sent, the size of each field and the authority. |
+| Authority | TN | The one device that can change a replicated object. The host is the authority for animals, trees and players. Each player is the authority for its own train. |
+| Keyframe | TN | A message with the full state of all replicated objects of one authority. |
+| Diff | TN | A message with only the replicated objects that changed since the last diff. Each object in a diff has all of its fields, not only the changed fields. |
 | Handshake | TN | The signaling server (`https://handshake.four43.com`) and its client library `handshake.js`. It finds the room and connects the devices. It does not carry game data. |
 
 ### 14.2 Play
@@ -601,8 +613,8 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 |---|---|---|
 | M-11 | Own vehicle | Each device moves its own tractor, trailer and wagon and the animals in flight to them or in them. It sends their positions to the other devices. Thus driving has no delay on any device. |
 | M-12 | Host animals | The host owns all free animals and their behavior (section 5.2). Only the host runs the animal behavior. An animal reacts to the nearest tractor (flee, look, come to the horn). When a guest's train is full, the host makes animals hop out of its way (B-14). |
-| M-13 | Boop by a guest | The guest launches the animal at once (B-4) and sends a claim. A booped hen sends a claim for the whole chick line (A-12). The host gives an animal to the first claim that it gets. If the host gives the animal, its ownership number increases and it belongs to the guest. If the animal is not free, the host refuses. |
-| M-14 | Land after a yes | An animal in flight lands only after the host gives it. If the yes is late, the animal stays at the top of its arc for up to 1 s more. If the host refuses, the animal disappears with a "poof" (stars and a soft sound) and shows again where the host has it. Thus an animal that landed never goes away (R-4). A refusal is rare: it occurs only when two players boop the same animal at almost the same time. |
+| M-13 | Boop by a guest | The guest launches the animal at once (B-4) and sends a claim. A claim is a request to own the animal. A booped hen sends a claim for the whole chick line (A-12). The host gives an animal to the first claim that it gets: the animal's owner becomes that guest and its ownership number increases. If the animal is not free, the host does not change it. The host sends no separate answer: the guest learns the result from the animal's replicated owner (M-22). |
+| M-14 | Land after a yes | An animal in flight lands only when its replicated owner is this guest, with an ownership number higher than when the guest booped it. If the result is late, the animal stays at the top of its arc for up to 1 s more. If the replicated owner is a different player, or the result does not come in that time, the animal disappears with a "poof" (stars and a soft sound) and shows again where the host has it. The claim stays open until a keyframe shows the result; the guest does not boop that animal again before then. Thus an animal that landed never goes away (R-4). A refusal is rare: it occurs only when two players boop the same animal at almost the same time. |
 | M-15 | Boop by the host | The host's own boops do not need a claim. The host is first for every animal that it boops. |
 | M-16 | Delivery | After a guest's show, the guest tells the host which animals it delivered. The host removes them and makes new animals (M-6). |
 | M-17 | Trees and bushes | The host owns the state of each tree and bush (T-34, T-35). A guest breaks a tree on its own screen at once and tells the host. The host breaks it on all devices. When the show of any player starts, broken trees and bushes grow back on all devices (T-32). |
@@ -615,11 +627,11 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 |---|---|---|
 | M-20 | Connections | The devices connect directly with WebRTC data channels, in a star: each guest connects only to the host. Handshake helps them connect and does not carry game data. If a direct connection is not possible, a TURN server relays the data. All game data is encrypted (DTLS). |
 | M-21 | Channels | Each connection has two channels. The fast channel does not resend lost messages and does not keep the order. It carries positions. The reliable channel resends and keeps the order. It carries all other messages. |
-| M-22 | Vehicle message | Approximately 20 times each second, on the fast channel, binary. From each device: a time stamp, the tractor, trailer and wagon positions and rotations, the tractor's mode (drive, show, held), and each owned animal in flight or in a slot (id, type, golden, position, rotation). The host sends the messages of all players to each guest. |
-| M-23 | Herd message | Approximately 15 times each second, on the fast channel, binary. From the host only: a time stamp and each free animal (id, ownership number, type, golden, position, rotation, animation, hidden). |
-| M-24 | Event messages | On the reliable channel, JSON: welcome (seed, game version, player number, paints, all animals with ownership numbers, broken trees), claim and its answer, delivery, tree break, trees regrow, horn, help request and answer, new farm, paint change. |
+| M-22 | Replicated objects | All shared state is replicated objects. The kinds are: animal (authority: host; fields: type, golden, state, owner, ownership number, position, rotation, animation, hidden, chick line), tree (authority: host; field: state), player (authority: host; fields: player number, paints, away) and train (authority: the player; fields: the tractor, trailer and wagon positions and rotations, mode, full, and the animals in its slots or in flight to it, by id and slot). Game code registers its objects; it does not make network messages. A new kind of shared object in a later version is a new kind, not a new message. |
+| M-23 | Keyframes and diffs | Each authority sends a keyframe on the reliable channel every 2 s, and at once to a new guest. Between keyframes it sends diffs on the fast channel: from the host approximately 15 times each second, and for a train approximately 20 times each second. Both are binary, with a time stamp. A diff has each changed object with all its fields, so a lost diff is not a problem: the next diff or keyframe has the correct state. The host sends each guest's train to the other guests. |
+| M-24 | Event messages | On the reliable channel, JSON. They are requests and one-time effects, not state: welcome (seed, game version, player number), claim, delivery, tree break, trees regrow, horn, help request and answer, new farm. The result of a request comes back as replicated state. |
 | M-25 | Smooth motion | A device shows the other tractors and the host's animals approximately 100 ms behind their time stamps, and moves them smoothly between two messages. When the messages arrive unevenly, this delay increases, up to 300 ms. |
-| M-26 | Old messages | A device ignores a message that is older than the last message it used. It ignores animal data that has a lower ownership number than the number it knows. |
+| M-26 | Old messages | A device ignores a message that is older than the last message it used. It ignores animal data that has a lower ownership number than the number it knows. A keyframe replaces the state of every object that this device is not the authority for. |
 | M-27 | Game version | The game has a network version number. It increases when the network messages change. A device with a different number cannot join (Handshake refuses it). The join prompt (M-32) then says "Update the game on both devices". |
 | M-28 | Lag test | The URL parameter `?lag=ms` (with optional jitter and loss, for example `?lag=300,80,5`) delays all network messages on this device. The URL parameter `?signal=url` uses a different Handshake server. These are for tests. |
 
@@ -647,6 +659,9 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 | M-41 | Alone on the same farm | When a guest leaves a room for any reason (Leave, Remove, room closed, host gone), it continues alone on the same farm. Its device starts to run the animal behavior with the animals where they are. The animals in its slots stay. Nothing is made again. |
 | M-42 | Network change | When a device changes network (for example, from Wi-Fi to mobile data), the connection is made again without a stop of the game. |
 | M-43 | Screen on | While the device is in a room, the screen does not go dark (Screen Wake Lock). |
+| M-56 | Guest repair | At each keyframe from the host, a guest makes its state agree. An open claim that the keyframe does not give to this guest ends (M-14). An animal that the keyframe gives to this guest but that the guest does not have goes back to the host (the guest sends a release). Trees agree with the keyframe. |
+| M-57 | Host repair | If an animal is owned by a guest but is not in that guest's train for 3 s, the host makes it free again (its ownership number increases). |
+| M-58 | Repair time | After a message is lost, or after a connection is made again (M-42), all devices agree again in 3 s or less. |
 | M-44 | Failure | No network failure stops the game or shows an error to the child (R-1). Errors show only in the Multiplayer panel. |
 
 ### 14.7 Safety
@@ -668,6 +683,6 @@ The players are children. These rules apply to all items in section 14.
 | ID | Item | Description |
 |---|---|---|
 | M-52 | Two games in one test | Automated tests run a host game and a guest game in Node, connected by an in-memory link that can add delay, jitter and loss (as M-28). They check: the guest makes the same farm; both see the same animals; a claim, a refusal (the "poof") and a late yes (M-14); delivery and respawn; tree breaks and regrow; away, back and alone on the same farm (M-39 to M-41); new farm; old messages (M-26); bad messages (M-50). |
-| M-53 | Messages | Automated tests encode and decode each binary message, and check the size limits. |
+| M-53 | Messages | Automated tests encode and decode each kind, keyframe and diff, check the size limits, and check that bad data is refused. Loss tests drop all claim messages and replicated messages during a connection change, and check that all devices agree again in 3 s (M-58). |
 | M-54 | Browser | A desktop check with two browser windows: host, join with the code, drive both tractors, boop, bump, show, leave. |
 | M-55 | Handshake | Handshake has its own tests (its `SPEC.md`). |
