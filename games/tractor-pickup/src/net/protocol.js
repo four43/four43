@@ -22,7 +22,8 @@ const GUEST = {
 };
 const HOST = {
   welcome: m => int(m.v, 0, 0xffff) && int(m.seed, 0, 0xffffffff) && int(m.you, 2, MAX_PLAYERS) && Array.isArray(m.players) && m.players.length <= MAX_PLAYERS && m.players.every(playerOk)
-    && Array.isArray(m.herd) && m.herd.length <= 512 && m.herd.every(animalOk) && ids(m.trees, 256),
+    && Array.isArray(m.herd) && m.herd.length <= 512 && m.herd.every(animalOk) && ids(m.trees, 256)
+    && int(m.next, 0, 0xffff) && m.herd.every(a => a.id < m.next), // next: the host's herd size, past every id it sent (the gone ones are left out)
   players: m => Array.isArray(m.list) && m.list.length <= MAX_PLAYERS && m.list.every(playerOk),
   claimed: m => ids(m.ok) && ids(m.no) && Array.isArray(m.epochs) && m.epochs.length <= 16 && m.epochs.every(e => Array.isArray(e) && e.length === 2 && int(e[0], 0, 0xffff) && int(e[1], 0, 0xffffffff)),
   tree: m => int(m.id, 0, 0xffff), regrow: () => true, horn: m => int(m.n, 1, MAX_PLAYERS), help: m => m.id === null || int(m.id, 0, 0xffff),

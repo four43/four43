@@ -9,9 +9,9 @@ import { NOT_FREE } from '../sim/herd.js';
 
 const HERD_OUT = new Set(['gone', 'fly', 'ride', 'show', 'carried', 'elsewhere']); // not in the herd message: gone, or in a train (the owner's vehicle message has them)
 const TAU = Math.PI * 2;
-export function herdRecords(herd) { // M-24: every animal for a welcome. Yaw in 0..2 pi: herd yaws drift without bound, and checkFromHost allows |yaw| <= 100
-  return herd.animals.map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
-    state: a.state === 'gone' ? 'gone' : HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
+export function herdRecords(herd) { // M-24: every animal not gone, for a welcome (ids grow with every respawn; the welcome holds 512). Yaw in 0..2 pi: herd yaws drift without bound, and checkFromHost allows |yaw| <= 100
+  return herd.animals.filter(a => a.state !== 'gone').map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
+    state: HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
 }
 export function createHostSync({ game, net, paint }) {
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper();
@@ -19,7 +19,7 @@ export function createHostSync({ game, net, paint }) {
   const send = (n, m, rel = true) => { const p = players.map.get(n); if (p?.peer) net.send(p.peer, m, rel); };
   const all = (m, rel = true, except = 0) => { for (const p of players.list()) if (p.n !== except && p.peer) net.send(p.peer, m, rel); };
   const roster = () => [{ n: 1, paint: myPaint, away: false }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away }))];
-  const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, you: p.n, players: roster(), herd: herdRecords(game.herd), trees: game.trees.brokenIds() });
+  const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, you: p.n, players: roster(), herd: herdRecords(game.herd), next: game.herd.animals.length, trees: game.trees.brokenIds() });
   const freeNumber = () => { for (let n = 2; n <= MAX_PLAYERS; n++) if (![...players.map.keys()].includes(n)) return n; return 0; };
   const handlers = {
     hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; send(p.n, welcome(p)); all({ t: 'players', list: roster() }, true, p.n); },

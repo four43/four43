@@ -8,12 +8,12 @@ import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
 
 const OWN = new Set(['fly', 'ride', 'show', 'gone']); // this guest's own animals: herd messages never move them. Not toBarn: the host walks delivered animals in (Decision 10)
-const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the herd is dropped, never grown into
-const idLimit = herd => herd.animals.length + ID_ROOM;
+const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
 export function createGuestSync({ game, net, paint, onFarm }) {
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), pending = new Set(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
-  let you = 0, hostPeer = null, lastVeh = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null;
+  let you = 0, hostNext = 0, hostPeer = null, lastVeh = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null;
+  const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
   const toHost = (m, rel = true) => { if (hostPeer && !alone) net.send(hostPeer, m, rel); };
   const applyRoster = list => {
     const seen = new Set();
@@ -21,13 +21,14 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     for (const p of players.list()) if (!seen.has(p.n)) { players.remove(p.n); if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); }
   };
   function applyWelcome(m) {
-    you = m.you; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
+    you = m.you; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
     game.herd.remote = true; game.claims = true; pending.clear(); herdBuf.reset();
     const herd = game.herd, lim = idLimit(herd), got = [];
     for (const r of m.herd) { if (r.id > lim) continue; const a = herd.ensure(r.id, r.type, r.golden); got.push([a, r.leader]);
       Object.assign(a, { home: r.home, line: r.line, x: r.x, z: r.z, yaw: r.yaw, epoch: r.epoch, hidden: r.hidden });
       a.state = r.state === 'gone' ? 'gone' : r.state === 'carried' ? 'elsewhere' : r.state === 'busy' ? 'toBarn' : r.hidden ? 'hide' : 'idle'; }
     for (const [a, id] of got) a.leader = leaderOf(herd, a, id); // after every animal is in: a leader may come later in the list
+    const sent = new Set(got.map(([a]) => a)); for (const a of herd.animals) if (!sent.has(a)) a.state = 'gone'; // the welcome leaves gone animals out
     for (const id of m.trees) game.trees.breakById(id); // already broken: no burst (M-17)
     for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; }
     applyRoster(m.players);

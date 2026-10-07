@@ -52,11 +52,25 @@ test('a guest joins a host whose animals have turned many times: yaws go out in 
 test('a host id far past the herd is dropped and a leader the guest lacks is no leader (M-44, M-50)', async () => {
   const w = await mpWorld({ seed: 27 }); w.seconds(0.5);
   const g = w.guests[0], rec = (id, leader) => ({ id, type: 'pig', golden: false, home: 'yard', leader, line: 1, x: 1, z: 2, yaw: 0, epoch: 0, state: 'free', hidden: true });
-  g.sync.handlers.welcome({ t: 'welcome', v: 1, seed: 27, you: 2, players: [{ n: 1, paint: PAINTS[0], away: false }], herd: [rec(0, 40000), rec(1, 0), rec(60000, null)], trees: [] });
+  g.sync.handlers.welcome({ t: 'welcome', v: 1, seed: 27, you: 2, players: [{ n: 1, paint: PAINTS[0], away: false }], herd: [rec(0, 40000), rec(1, 0), rec(60000, null)], trees: [], next: 2 });
   const n = g.game.herd.animals.length; assert.ok(n < 100, `${n} animals`);
   const [a0, a1] = g.game.herd.animals; assert.equal(a0.leader, null); assert.equal(a1.leader, 0); assert.equal(a0.home, 'yard'); assert.equal(a0.hidden, true);
   const { encodeHerd } = await import('../src/net/codec.js');
-  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ ...rec(0, 50000), hidden: false, busy: false, y: 0, anim: 'idle' }, { ...rec(65000, null), hidden: false, busy: false, y: 0, anim: 'idle' }] }), false);
+  w.host.sync.after = () => {}; w.step(); // the host goes quiet: only the herd message below reaches the guest
+  w.host.net.send(g.net.id, encodeHerd({ time: w.now + 1, animals: [{ ...rec(0, 50000), x: 33, z: 44, hidden: false, busy: false, y: 0, anim: 'idle' }, { ...rec(65000, null), hidden: false, busy: false, y: 0, anim: 'idle' }] }), false);
   w.seconds(1);
-  assert.equal(g.game.herd.animals.length, n); assert.notEqual(g.game.herd.animals[0].leader, 50000);
+  const b0 = g.game.herd.animals[0]; assert.equal(g.game.herd.animals.length, n);
+  assert.deepEqual([b0.x, b0.z, b0.hidden, b0.state, b0.leader], [33, 44, false, 'idle', null], 'the message was applied, without its unknown leader');
+});
+test('a guest joins a host that has played long (most of 600+ animals gone): it sees the live ones by their real ids (M-24, M-50)', async () => {
+  const w = await mpWorld({ seed: 28, join: false }), h = w.host.game.herd, old = h.animals.slice();
+  for (let i = 0; i < 600; i++) h.ensure(h.animals.length, 'pig', false).state = 'gone';
+  for (const a of old) { const b = h.animals[a.id + 600]; Object.assign(b, { type: a.type, golden: a.golden, home: a.home, x: a.x, z: a.z, yaw: a.yaw, state: 'idle', timer: 99, leader: null, line: 0, hidden: false }); a.state = 'gone'; a.leader = null; }
+  assert.ok(h.animals.length > 512);
+  const g = w.addGuest(); w.seconds(1);
+  assert.equal(g.sync.you, 2); assert.equal(g.game.farm.seed, 28);
+  const live = h.free(); assert.ok(live.length >= old.length && live.every(a => a.id >= 600));
+  for (const a of live) { const b = g.game.herd.animals[a.id]; assert.ok(b, `guest has ${a.id}`); assert.equal(b.type, a.type);
+    assert.ok(free(g.game, b), `${a.id} is ${b.state}`); assert.ok(dist(a, b) < 0.5, `animal ${a.id} ${dist(a, b).toFixed(2)} m off`); }
+  assert.equal(g.game.herd.animals[0].state, 'gone');
 });
