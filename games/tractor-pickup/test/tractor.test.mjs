@@ -68,3 +68,11 @@ test('rights itself when tipped past 35 degrees', () => {
   const a = 1.2; t.body.setRotation({ x: Math.sin(a / 2), y: 0, z: 0, w: Math.cos(a / 2) }, true); t.body.setTranslation({ x: 0, y: 1.5, z: 0 }, true);
   run(4, 0, 0); assert.ok(quatAxes(t.body.rotation()).u.y > 0.95);
 });
+
+test('the wheel layout is data, the same for every tractor (for drawing other players)', async () => {
+  const { TRACTOR_WHEELS, createTractor } = await import('../src/sim/tractor.js');
+  const { createPhysics } = await import('../src/sim/physics.js');
+  const t = createTractor(createPhysics(RAPIER), { x: 0, z: 0, yaw: 0 });
+  assert.equal(TRACTOR_WHEELS.length, 4); assert.deepEqual(t.W.map(w => [w.name, w.cx, w.cz, w.radius]), TRACTOR_WHEELS.map(w => [w.name, w.cx, w.cz, w.radius]));
+  assert.notEqual(t.W[0], TRACTOR_WHEELS[0], 'each tractor has its own copy');
+});

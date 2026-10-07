@@ -31,22 +31,27 @@ export function createAnimals3D(scene, herd) {
     const parts = geos[a.type].map(geo => { const m = new THREE.Mesh(geo, mat); m.matrixAutoUpdate = false; m.castShadow = true; inner.add(m); return m; });
     const hat = new THREE.Group(); hat.visible = false; hat.matrixAutoUpdate = false; inner.add(hat); scene.add(g);
     if (hatMake) applyHat({ a, hat });
-    return { a, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
+    return { a, type: a.type, golden: a.golden, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
   };
-  const views = herd.animals.map(makeView);
+  const views = herd.animals.map(makeView); // by animal id; null while that animal is gone
+  const drop = i => { const v = views[i]; if (!v) return; scene.remove(v.g); v.parts[0]?.material.dispose(); views[i] = null; }; // its own material clone; geometries are shared
   return {
     views,
     hat: hatOf,
     // make(animal) -> a hat from hat(id), or null. New animals (respawns) get the same rule. Hats show only on riders (W-4).
-    setHats(make) { hatMake = make; for (const v of views) applyHat(v); },
+    setHats(make) { hatMake = make; for (const v of views) if (v) applyHat(v); },
     // view: the interpolated car poses ({ p, q } per car) and the step alpha, so riders and fliers move with the drawn train (X-1)
     update(dt, game, view) {
       flightOf.clear(); for (const f of game.flights) flightOf.set(f.animal, f);
-      while (views.length < herd.animals.length) views.push(makeView(herd.animals[views.length])); // respawned animals (G-3)
-      for (const v of views) {
-        const a = v.a; v.t += dt;
-        v.g.visible = a.state !== 'gone'; if (!v.g.visible) continue;
-        v.hat.visible = a.state === 'ride';
+      while (views.length < herd.animals.length) views.push(null); // respawned animals (G-3)
+      for (let i = 0; i < views.length; i++) {
+        const a = herd.animals[i]; if (!a || a.state === 'gone') { drop(i); continue; } // G-3: a gone animal keeps no view; its slot may get a new animal
+        let v = views[i];
+        if (v && (v.a !== a || v.type !== a.type || v.golden !== a.golden)) { drop(i); v = null; } // a new animal in the slot, or a placeholder from herd.ensure got its real type (M-11)
+        v ||= views[i] = makeView(a);
+        v.t += dt;
+        v.g.visible = a.state !== 'elsewhere'; if (!v.g.visible) continue;
+        v.hat.visible = a.state === 'ride' || (a.state === 'carried' && !!a.riding);
         const fl = flightOf.get(a);
         v.g.position.set(a.x, a.y || 0, a.z); v.g.rotation.set(0, a.yaw, 0);
         if (fl) v.g.position.set(fl.prev.x + (fl.pos.x - fl.prev.x) * view.alpha, fl.prev.y + (fl.pos.y - fl.prev.y) * view.alpha, fl.prev.z + (fl.pos.z - fl.prev.z) * view.alpha);

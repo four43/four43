@@ -10,6 +10,7 @@ export function createLoad(capacity) {
     capacity, slots,
     reserve(animal) { if (slots.length >= capacity) return null; const n = slots.length, s = { car: Math.floor(n / CAR_SLOTS), k: n % CAR_SLOTS, animal, landed: false }; slots.push(s); return s; },
     land(s) { s.landed = true; },
+    release(s) { const i = slots.indexOf(s); if (i < 0) return; slots.splice(i, 1); slots.forEach((t, n) => { t.car = Math.floor(n / CAR_SLOTS); t.k = n % CAR_SLOTS; }); }, // M-14: a refused flight frees its slot; later ones move up
     landed: () => slots.filter(s => s.landed).length,
     full: () => slots.length >= capacity,
   };

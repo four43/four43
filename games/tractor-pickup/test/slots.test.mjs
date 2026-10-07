@@ -34,3 +34,13 @@ test('slotPoint: the slot on the bed plus the rider offset, in car axes (rendere
 test('slotIndex: trailer slots 0-5, wagon slots 6-11, in reserve order', () => {
   const L = createLoad(12); for (let i = 0; i < 12; i++) assert.equal(slotIndex(L.reserve({})), i);
 });
+
+test('release removes a slot and packs the later ones forward (M-14)', () => {
+  const L = createLoad(12), s = [0, 1, 2, 3, 4, 5, 6].map(i => L.reserve({ id: i }));
+  L.land(s[0]); L.land(s[6]);
+  L.release(s[2]);
+  assert.equal(L.slots.length, 6); assert.deepEqual(L.slots.map(x => x.animal.id), [0, 1, 3, 4, 5, 6]);
+  assert.deepEqual(L.slots.map(x => [x.car, x.k]), [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5]]);
+  assert.equal(s[6].car, 0, 'the wagon rider moved up into the trailer'); assert.equal(L.landed(), 2);
+  L.release({}); assert.equal(L.slots.length, 6, 'an unknown slot changes nothing');
+});

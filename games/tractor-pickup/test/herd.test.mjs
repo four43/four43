@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHerd, MAIN_TYPES } from '../src/sim/herd.js';
+import { createHerd, MAIN_TYPES, GONE_KEEP } from '../src/sim/herd.js';
 import { makeRng } from '../src/sim/rng.js';
 
 // A straight east-west route along z = 0 (walkable |z| <= 6.5), a 60 m farmyard at the center with a pond and the barn.
@@ -110,4 +110,59 @@ test('respawn refill with only cows spawned still leaves the hen with chicks out
   h.toBarn(h.free().filter(a => a.home === 'route' && a.type !== 'cow' && a !== hen && a.type !== 'chick'));
   cows = true; h.respawn();
   assert.ok(!hen.hidden && hen.state !== 'hide', 'hen with chicks hid');
+});
+
+test('animals react to the nearest of several tractors (M-12)', () => {
+  const h = createHerd({ rng: makeRng(31), env }), s = h.animals.find(a => a.type === 'sheep' && !a.hidden && a.home === 'route');
+  s.state = 'idle'; s.timer = 99; s.z = 0;
+  const other = { x: s.x - 4, z: s.z, yaw: Math.PI / 2, speed: 5 };
+  h.step(1 / 60, { tractor: far, others: [other] });
+  assert.equal(s.state, 'flee', 'the other tractor scares it');
+});
+test('a remote herd does not move: the host runs it (M-12)', () => {
+  const h = createHerd({ rng: makeRng(32), env }), x0 = h.animals.map(a => [a.x, a.z]);
+  h.remote = true; run(h, 5);
+  assert.deepEqual(h.animals.map(a => [a.x, a.z]), x0);
+});
+test('ensure fills the herd up to an id from the host, and every animal has an ownership number (M-26)', () => {
+  const h = createHerd({ rng: makeRng(33), env }), n = h.animals.length;
+  assert.ok(h.animals.every(a => a.epoch === 0));
+  const a = h.ensure(n + 2, 'cow', true);
+  assert.equal(h.animals.length, n + 3); assert.equal(a.id, n + 2); assert.equal(a.type, 'cow'); assert.equal(a.golden, true);
+  assert.equal(h.animals[n].state, 'elsewhere'); assert.ok(!h.free().includes(h.animals[n]));
+  assert.equal(h.ensure(0, h.animals[0].type, false), h.animals[0]);
+});
+test('carried and elsewhere animals are not free and do not move', () => {
+  const h = createHerd({ rng: makeRng(34), env }), a = h.animals.find(x => !x.hidden && x.home === 'route');
+  a.state = 'carried'; const p = [a.x, a.z]; run(h, 2);
+  assert.ok(!h.free().includes(a)); assert.deepEqual([a.x, a.z], p);
+});
+test('a respawn reuses the slot of an animal gone for GONE_KEEP: a long game keeps a small herd (G-3)', () => {
+  const h = createHerd({ rng: makeRng(35), env }), n = h.animals.length;
+  for (let round = 0; round < 40; round++) { // 40 deliveries of 6, far more than the herd
+    const list = h.free().filter(a => a.home === 'route' && !a.hidden).slice(0, 6); h.toBarn(list); h.respawn();
+    run(h, GONE_KEEP + 25); // they walk in (gone), then stay gone for GONE_KEEP
+  }
+  assert.ok(h.animals.length < n + 20, `herd array ${h.animals.length} (started at ${n})`);
+  assert.equal(h.free().filter(a => a.home === 'route').length, 18);
+  h.animals.forEach((a, i) => assert.equal(a.id, i, 'an id is its index'));
+});
+test('a reused slot is a new animal with a higher ownership number; a slot gone for less than GONE_KEEP is kept (M-26)', () => {
+  const h = createHerd({ rng: makeRng(36), env }), a = h.free().find(x => x.home === 'route' && !x.hidden && x.type !== 'chick'), n = h.animals.length;
+  a.epoch = 7; a.state = 'gone'; run(h, GONE_KEEP - 1); h.toBarn([h.free().find(x => x.home === 'route' && !x.hidden && x !== a)]); h.respawn();
+  assert.equal(h.animals[a.id], a, 'gone for less than GONE_KEEP: not reused'); assert.equal(h.animals.length, n + 2, 'new slots for both');
+  run(h, 2); const b = h.free().find(x => x.home === 'route' && !x.hidden); h.toBarn([b]); h.respawn();
+  const c = h.animals[a.id];
+  assert.notEqual(c, a, 'a new object: whoever still holds the old one sees it gone'); assert.equal(a.state, 'gone');
+  assert.equal(c.id, a.id); assert.ok(c.epoch > 7, 'a late claim answer or record for the old animal is older'); assert.ok(h.free().includes(c));
+});
+test('a reused slot is nobody\'s leader any more', () => {
+  const h = createHerd({ rng: makeRng(37), env }), hen = h.animals.find(a => a.type === 'chicken' && h.animals.some(c => c.leader === a.id));
+  hen.state = 'gone'; for (const c of h.animals) if (c.leader === hen.id) { c.state = 'idle'; } // a chick that lost its hen but kept the id
+  run(h, GONE_KEEP + 1); h.toBarn([h.free().find(x => x.home === 'route' && !x.hidden && x.type !== 'chick')]); h.respawn();
+  assert.notEqual(h.animals[hen.id], hen); assert.ok(!h.animals.some(c => c.leader === hen.id && c !== h.animals[hen.id]), 'no chick follows the new animal');
+});
+test('ensure never reuses a slot: the host owns the ids', () => {
+  const h = createHerd({ rng: makeRng(38), env }), n = h.animals.length; h.animals[3].state = 'gone'; run(h, GONE_KEEP + 1);
+  h.remote = true; h.ensure(n, 'pig', false); assert.equal(h.animals.length, n + 1); assert.equal(h.animals[n].id, n);
 });

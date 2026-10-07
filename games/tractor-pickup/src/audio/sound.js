@@ -92,7 +92,7 @@ export class Sound {
   boing(v = 0.5) { if (this.ok) this.tone(180, 720, 0.35, v, 'triangle'); }
   plop() { if (this.ok) { this.tone(500, 160, 0.12, 0.5); this.noise(0.05, 0.2, 400); } }
   whee() { if (this.ok) this.tone(400, 1400, 0.6, 0.3, 'triangle'); }
-  horn() { if (!this.ok) return; for (const w of [0, 0.32]) { this.tone(392, 392, 0.24, 0.15, 'triangle', w); this.tone(494, 494, 0.24, 0.1, 'triangle', w); } }
+  horn(v = 1) { if (!this.ok) return; for (const w of [0, 0.32]) { this.tone(392, 392, 0.24, 0.15 * v, 'triangle', w); this.tone(494, 494, 0.24, 0.1 * v, 'triangle', w); } } // M-8: v 0.4 for an other tractor's horn
   bells() { if (this.ok) [1319, 1568, 1976, 2637].forEach((f, i) => this.tone(f, f, 0.8, 0.25, 'sine', i * 0.12)); }
   squelch() { if (this.ok) { this.noise(0.2, 0.35, 300, 0, 2); this.tone(220, 90, 0.2, 0.25, 'sine', 0.05); } }
   // quick rising chime arpeggio with a little shimmer on top

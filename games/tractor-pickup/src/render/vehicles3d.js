@@ -26,19 +26,22 @@ export function paintable(parts) {
   };
   return g;
 }
-export function createVehicles3D(scene, tractor, train) {
+// wheelShadows: false for the other players' trains (M-2): 8 fewer shadow draws each, and nobody sees a wheel's shadow under a moving train
+export function createVehicles3D(scene, tractor, train, { wheelShadows = true } = {}) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const dirty = base => { const m = base.clone(), d = dirtify(m); m.userData.dirt = d.uniforms.uDirt; return m; }; // one clone per thing that gets dirty on its own (T-16)
   const modelRot = new THREE.Matrix4().makeRotationY(Math.PI / 2).multiply(new THREE.Matrix4().makeScale(S, S, S));
   const bodyMat = dirty(mat), wheelsMat = dirty(mat), body = new THREE.Mesh(paintable(Object.entries(ASSETS.tractor).filter(([k]) => !k.startsWith('wheel')).map(([, p]) => p)), bodyMat); body.castShadow = true; body.matrixAutoUpdate = false; scene.add(body);
-  const wheels = tractor.W.map(w => { const g = paintable([ASSETS.tractor[w.name]]); g.translate(-w.mx, -w.my, -w.mz); const m = new THREE.Mesh(g, wheelsMat); m.castShadow = true; m.matrixAutoUpdate = false; scene.add(m); return m; });
+  const wheels = tractor.W.map(w => { const g = paintable([ASSETS.tractor[w.name]]); g.translate(-w.mx, -w.my, -w.mz); const m = new THREE.Mesh(g, wheelsMat); m.castShadow = wheelShadows; m.matrixAutoUpdate = false; scene.add(m); return m; });
+  const all = [body, ...wheels];
   const setPaint = p => { for (const m of [body, ...wheels]) m.geometry.userData.paint(p); };
   setPaint({ body: 'red', trim: 'yellow' });
   // trailer and wagon: the bed (rails, tongue) and two wheels each
   const carGeo = geoFrom([ASSETS.trailer.bed]), wheelGeo = geoFrom([ASSETS.trailer.wheel]), baseWheelMat = mat; // trailer.glb, in car space
   const cars = train.cars.map(() => {
     const carMat = dirty(mat), wheelMat = dirty(baseWheelMat), m = new THREE.Mesh(carGeo, carMat); m.castShadow = true; m.matrixAutoUpdate = false; scene.add(m);
-    const ws = [0, 1].map(() => { const w = new THREE.Mesh(wheelGeo, wheelMat); w.castShadow = true; w.matrixAutoUpdate = false; scene.add(w); return w; });
+    const ws = [0, 1].map(() => { const w = new THREE.Mesh(wheelGeo, wheelMat); w.castShadow = wheelShadows; w.matrixAutoUpdate = false; scene.add(w); return w; });
+    all.push(m, ...ws);
     return { m, ws, mats: [carMat, wheelMat] };
   });
   const M = new THREE.Matrix4(), T = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1);
@@ -63,5 +66,8 @@ export function createVehicles3D(scene, tractor, train) {
         });
       });
     },
+    // M-39, M-40: an away player's train is half transparent, with no shadow (a full shadow under a see-through train looks solid)
+    setGhost(on) { for (const m of all) { m.castShadow = !on && (wheelShadows || m === body || cars.some(c => c.m === m)); m.material.transparent = on; m.material.opacity = on ? 0.45 : 1; m.material.depthWrite = !on; m.material.needsUpdate = true; } },
+    dispose() { for (const m of all) scene.remove(m); for (const x of new Set(all.flatMap(m => [m.geometry, m.material]))) x.dispose(); },
   };
 }
