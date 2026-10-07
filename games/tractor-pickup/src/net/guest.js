@@ -8,6 +8,7 @@ import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
 
 const OWN = new Set(['fly', 'ride', 'show', 'gone']); // this guest's own animals: herd messages never move them. Not toBarn: the host walks delivered animals in (Decision 10)
+const HELD = new Set(['fly', 'ride', 'show']); // in this guest's train or its show
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
 export function createGuestSync({ game, net, paint, onFarm }) {
@@ -38,7 +39,10 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     players(m) { applyRoster(m.list); },
     claimed(m) { // M-14. M-26: ownership numbers only go up. Answers come in claim order, so a yes below the animal's number answers an older claim (it timed out): it never lands a newer flight
       const ep = new Map(m.epochs);
-      for (const id of m.ok) { const a = game.herd.animals[id], e = ep.get(id); if (!a || e === undefined || e < a.epoch) continue; pending.delete(id); game.resolveClaim(id, true); }
+      const lost = []; // a current yes for a flight this guest no longer has (a stale no dropped it): give it back, or the host keeps it for us forever
+      for (const id of m.ok) { const a = game.herd.animals[id], e = ep.get(id); if (!a || e === undefined || e < a.epoch) continue; pending.delete(id);
+        if (!game.flights.some(f => f.animal.id === id && f.claim === 'pending') && !HELD.has(a.state)) lost.push(id); else game.resolveClaim(id, true); }
+      if (lost.length) toHost({ t: 'release', ids: lost.slice(0, 16) });
       for (const [id, e] of m.epochs) { const a = game.herd.animals[id]; if (a && e > a.epoch) a.epoch = e; }
       for (const id of m.no) { pending.delete(id); out.push(...game.resolveClaim(id, false)); }
     },

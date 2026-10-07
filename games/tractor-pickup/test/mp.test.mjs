@@ -163,3 +163,20 @@ test('a yes that arrives after the guest gave up: nothing lands and the host fre
   assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
   assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
 });
+test('a stale no drops the newer flight; its yes then finds no flight, so the guest releases it and the host frees it (M-14, M-26)', async () => {
+  const w = await mpWorld({ seed: 39, link: { delay: 100 } }); w.seconds(1);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  const released = []; const orig = w.host.sync.handlers.release; w.host.sync.handlers.release = (p, m) => { released.push(...m.ids); return orig(p, m); };
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it (flight B)');
+  let grant = null; k = 0; while (grant === null && k++ < 60) { w.step(1); if (ha.state === 'carried') grant = ha.epoch; }
+  assert.ok(grant !== null, 'the host granted B'); assert.ok(g.sync.pending.has(ha.id), "B's yes is still on the wire");
+  g.game.boopsPaused = true; // the guest's snapshots still show it free for ~150 ms: a re-boop would take B's yes and land (also consistent), so hold boops to see the lone yes
+  g.sync.handlers.claimed({ t: 'claimed', ok: [], no: [ha.id], epochs: [] }); w.step(1); // the no to an older claim A arrives first
+  assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'refused'), 'B poofed');
+  k = 0; while (ha.state === 'carried' && k++ < 60) w.step(1); // B's yes reaches the guest, which has no flight: it releases
+  assert.deepEqual(released, [ha.id], 'the guest released it');
+  assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`); assert.ok(ha.epoch > grant, `epoch ${ha.epoch} > ${grant}`);
+  assert.ok(!g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'nothing landed');
+});
