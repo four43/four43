@@ -18,17 +18,20 @@ test('room names and codes (M-31, M-32)', () => {
 test('qrSvg makes an svg', () => { const s = qrSvg('https://four43.com/exp/tractor-pickup/?r=K7MX2'); assert.match(s, /^<svg/); assert.match(s, /<\/svg>$/); });
 
 // A fake Handshake with the same contract (the real one is vendored in Task 15)
-function fakeHandshake({ peekResult, failCreate = 0 } = {}) {
+function fakeHandshake({ peekResult, failCreate = 0, failCode = 'network', failJoin = null, roomCode = 'K7MX2', gate } = {}) {
   const made = [];
   class HandshakeError extends Error { constructor(code) { super(code); this.code = code; } }
   class Handshake {
-    constructor(opts) { this.opts = opts; made.push(this); }
-    async peek(code) { if (peekResult instanceof Error) throw peekResult; return { code, name: '', players: 1, maxPlayers: 4, locked: false, full: false, ...peekResult }; }
-    async createRoom(o) { if (failCreate-- > 0) throw new HandshakeError('network'); this.created = o; return (this.room = room(true)); }
-    async joinRoom(code) { this.joined = code; return (this.room = room(false)); }
-    close() { this.closed = true; }
+    constructor(opts) { this.opts = opts; this.pending = new Set(); this.creates = 0; made.push(this); }
+    call(fn) { // like the real client: close() rejects every pending call with HandshakeError('closed') (handshake.js close())
+      return new Promise((res, rej) => { const w = { rej }; this.pending.add(w); Promise.resolve(gate).then(() => { if (!this.pending.delete(w)) return; try { res(fn()); } catch (e) { rej(e); } }); });
+    }
+    peek(code) { return this.call(() => { if (peekResult instanceof Error) throw peekResult; return { code, name: '', players: 1, maxPlayers: 4, locked: false, full: false, ...peekResult }; }); }
+    createRoom(o) { this.creates++; return this.call(() => { if (failCreate-- > 0) throw new HandshakeError(failCode); this.created = o; return (this.room = room(true)); }); }
+    joinRoom(code) { return this.call(() => { if (failJoin) throw new HandshakeError(failJoin); this.joined = code; return (this.room = room(false)); }); }
+    close() { this.closed = true; for (const w of this.pending) w.rej(new HandshakeError('closed')); this.pending.clear(); }
   }
-  const room = isHost => Object.assign(emitter(), { code: 'K7MX2', key: 'k', isHost, you: isHost ? 'h' : 'g', hostId: 'h', locked: false, members: [], peers: new Map(),
+  const room = isHost => Object.assign(emitter(), { code: roomCode, key: 'k', isHost, you: isHost ? 'h' : 'g', hostId: 'h', locked: false, members: [], peers: new Map(),
     closed: false, lock(on) { this.locked = on; this.emit('meta', { meta: {}, locked: on }); }, kick(id) { this.kicked = id; }, leave() { if (this.closed) return; this.left = true; this.closed = true; this.emit('closed', 'left'); } });
   return { Handshake, HandshakeError, made };
 }
@@ -89,4 +92,45 @@ test('guest: the panel redraws when the host connection opens and its type is kn
   assert.equal(t.s.view().players.find(p => p.n === 1 && !p.you).status, 'connecting');
   peer.connectionType = 'direct'; c = t.changes; peer.emit('type', 'direct'); assert.ok(t.changes > c, 'redraw on type');
   assert.equal(t.s.view().players.find(p => p.n === 1 && !p.you).status, 'direct');
+});
+
+const held = () => { let open; const gate = new Promise(r => { open = r; }); return { gate, open }; };
+test('host: a second tap while the room is being made makes no second room', async () => {
+  const g = held(), fh = fakeHandshake({ gate: g.gate }), t = setup(fh);
+  const a = t.s.host(), b = t.s.host(); g.open(); await a; await b;
+  assert.equal(fh.made.length, 1); assert.equal(fh.made[0].creates, 1); assert.equal(t.s.view().state, 'hosting');
+});
+test('host: a failure that is not retried closes the client; a bad room code is an error, and the room is left (M-31, M-44)', async () => {
+  const fh = fakeHandshake({ failCreate: 1, failCode: 'rate_limited' }), t = setup(fh);
+  await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.rate_limited); assert.ok(fh.made[0].closed, 'client closed');
+  for (const roomCode of ['k0', '<b>X</b>', 'K7MX2/../x']) {
+    const fh2 = fakeHandshake({ roomCode }), t2 = setup(fh2); await t2.s.host();
+    assert.equal(t2.s.view().state, 'idle', roomCode); assert.equal(t2.s.view().error, ERRORS.other); assert.equal(t2.s.view().url, null); assert.equal(t2.s.sync, null);
+    assert.ok(fh2.made[0].room.left, 'room left'); assert.ok(fh2.made[0].closed, 'client closed');
+  }
+});
+test('host: when the host sync cannot be made the room is left and nothing is kept', async () => {
+  const fh = fakeHandshake(), t = setup(fh, { getGame: () => { throw new Error('no game'); } });
+  await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.other); assert.equal(t.s.sync, null); assert.equal(t.s.view().code, null);
+  assert.ok(fh.made[0].room.left, 'room left'); assert.ok(fh.made[0].closed, 'client closed');
+});
+test('host: Cancel while the room is being made shows no error afterwards', async () => {
+  const g = held(), fh = fakeHandshake({ gate: g.gate }), t = setup(fh);
+  const p = t.s.host(); assert.equal(t.s.view().state, 'starting'); t.s.stopHosting(); g.open(); await p;
+  assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, null); assert.ok(fh.made[0].closed); assert.equal(fh.made[0].room, undefined);
+});
+test('join: a failed join closes the client; Back or the X during a check or at the prompt ends it with no stale error (M-32, M-33)', async () => {
+  const fh = fakeHandshake({ failJoin: 'full' }), t = setup(fh);
+  t.s.openJoin(); await t.s.submitCode('K7MX2'); await t.s.confirmJoin();
+  assert.equal(t.s.view().state, 'join'); assert.equal(t.s.view().error, ERRORS.full); assert.ok(fh.made[0].closed, 'client closed');
+  const g = held(), fh2 = fakeHandshake({ gate: g.gate }), t2 = setup(fh2);
+  t2.s.openJoin(); const p = t2.s.submitCode('K7MX2'); assert.equal(t2.s.view().state, 'checking'); t2.s.cancel(); g.open(); await p;
+  assert.equal(t2.s.view().state, 'idle'); assert.equal(t2.s.view().error, null); assert.equal(t2.s.view().info, null); assert.ok(fh2.made[0].closed);
+  const fh3 = fakeHandshake(), t3 = setup(fh3);
+  t3.s.openJoin(); await t3.s.submitCode('K7MX2'); assert.equal(t3.s.view().state, 'prompt'); t3.s.cancel();
+  assert.equal(t3.s.view().state, 'idle'); assert.equal(t3.s.view().name, null); assert.ok(fh3.made[0].closed);
+});
+test('join: a network error does not promise to try again (only Host retries)', async () => {
+  const e = Object.assign(new Error('network'), { code: 'network' }), fh = fakeHandshake({ peekResult: e }), t = setup(fh);
+  t.s.openJoin(); await t.s.submitCode('K7MX2'); assert.equal(t.s.view().error, ERRORS.joinNetwork); assert.doesNotMatch(ERRORS.joinNetwork, /again…/);
 });

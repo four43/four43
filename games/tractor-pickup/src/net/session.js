@@ -9,14 +9,15 @@ import { NET_VERSION, MAX_PLAYERS } from './protocol.js';
 export const SERVER = 'https://handshake.four43.com', APP = 'tractor-pickup';
 export const roomName = code => 'tractor-pickup-' + code;
 export const joinUrl = (code, loc = location) => loc.origin + loc.pathname + '?r=' + code;
-export const parseRoomInput = s => { const m = typeof s === 'string' && s.trim().toUpperCase().match(/^(?:TRACTOR-PICKUP-)?([ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5})$/); return m ? m[1] : null; };
+const CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/; // the server's join alphabet
+export const parseRoomInput = s => { const m = typeof s === 'string' && s.trim().toUpperCase().replace(/^TRACTOR-PICKUP-/, ''); return m && CODE.test(m) ? m : null; };
 export const ERRORS = {
   badCode: 'Room names look like tractor-pickup-K7MX2.', not_found: 'No farm with that name.', full: 'That farm is full.', locked: 'That farm is locked.',
   version_mismatch: 'Update the game on both devices.', rate_limited: 'Too many tries. Wait a minute.', network: "Can't reach the server. Trying again…",
-  timeout: "Can't reach the server.", closed: "Can't reach the server.", other: 'Something went wrong. Try again.',
+  timeout: "Can't reach the server.", closed: "Can't reach the server.", other: 'Something went wrong. Try again.', joinNetwork: "Can't reach the server. Try again.",
 };
 ERRORS.bad_key = ERRORS.not_found; // a private room without its key looks like no room (tractor rooms are public; peek(code) sends no key)
-const errText = e => ERRORS[e?.code] || ERRORS.other;
+const errText = e => ERRORS[e?.code] || ERRORS.other, joinText = e => e?.code === 'network' ? ERRORS.joinNetwork : errText(e); // only Host retries by itself
 export function createSession({ Handshake, server = SERVER, lag = null, getGame, onFarm, getPaint, onChange = () => {}, retryMs = 10000 }) {
   let hs = null, room = null, sync = null, state = 'idle', error = null, code = null, info = null, retry = 0;
   const changed = () => { try { onChange(); } catch (e) { console.warn(e); } };
@@ -37,14 +38,21 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
         players.sort((a, b) => a.n - b.n); }
       return { state, code, name: code && roomName(code), url: code && (typeof location === 'undefined' ? '?r=' + code : joinUrl(code)), locked: !!room?.locked, players, info, error };
     },
+    // after every await: a result for a client that was closed (Cancel, Back, Stop) or a state that moved on is stale and changes nothing
     async host() {
-      if (sync) return; state = 'starting'; error = null; changed();
+      if (state !== 'idle') return; state = 'starting'; error = null; changed(); // a second tap makes no second room
+      const h = client(), stale = () => hs !== h || state !== 'starting'; let r = null;
       try {
-        const r = await client().createRoom({ public: true, maxPlayers: MAX_PLAYERS, meta: {} });
-        if (state !== 'starting') { r.leave(); return; }
-        room = r; code = r.code; sync = createHostSync({ game: getGame(), net: link(r), paint: getPaint() }); watch(r); state = 'hosting';
+        r = await h.createRoom({ public: true, maxPlayers: MAX_PLAYERS, meta: {} });
+        if (stale()) { if (!r.closed) r.leave(); return; }
+        if (!CODE.test(r.code)) throw { code: 'other' }; // the code goes into the QR link
+        const y = createHostSync({ game: getGame(), net: link(r), paint: getPaint() });
+        room = r; code = r.code; sync = y; watch(r); state = 'hosting';
         r.on('members', changed); r.on('meta', changed); r.on('peerAway', changed); r.on('peerBack', changed); r.on('peerLeft', changed); r.on('peer', p => { p.on?.('type', changed); changed(); });
-      } catch (e) { error = errText(e); if (e?.code === 'network' || e?.code === 'timeout') { clearTimeout(retry); retry = setTimeout(() => { if (state === 'starting') { state = 'idle'; s.host(); } }, retryMs); } else state = 'idle'; } // M-31
+      } catch (e) {
+        if (r && room !== r && !r.closed) r.leave(); if (stale()) return;
+        error = errText(e); if (e?.code === 'network' || e?.code === 'timeout') { clearTimeout(retry); retry = setTimeout(() => { if (state === 'starting') { state = 'idle'; s.host(); } }, retryMs); } else { state = 'idle'; idleClient(); } // M-31
+      }
       changed();
     },
     stopHosting() { clearTimeout(retry); const r = room; drop(); if (r && !r.closed) r.leave(); idleClient(); state = 'idle'; error = null; changed(); },
@@ -52,15 +60,18 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
     async submitCode(text) {
       const c = parseRoomInput(text); if (!c) { error = ERRORS.badCode; changed(); return; }
       state = 'checking'; error = null; changed();
-      try { const i = await client().peek(c); if (i.locked) throw { code: 'locked' }; if (i.full) throw { code: 'full' }; code = c; info = { players: i.players }; state = 'prompt'; }
-      catch (e) { state = 'join'; error = errText(e); }
+      const h = client(), stale = () => hs !== h || state !== 'checking';
+      try { const i = await h.peek(c); if (stale()) return; if (i.locked) throw { code: 'locked' }; if (i.full) throw { code: 'full' }; code = c; info = { players: i.players }; state = 'prompt'; }
+      catch (e) { if (stale()) return; state = 'join'; error = joinText(e); }
       changed();
     },
     async confirmJoin() {
       if (state !== 'prompt') return; state = 'joining'; changed();
-      try { const r = await client().joinRoom(code); room = r; sync = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm }); watch(r); state = 'joined';
+      const h = client(), stale = () => hs !== h || state !== 'joining'; let r = null;
+      try { r = await h.joinRoom(code); if (stale()) { if (!r.closed) r.leave(); return; }
+        const y = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm }); room = r; sync = y; watch(r); state = 'joined';
         r.on('members', changed); r.on('hostAway', changed); r.on('hostBack', changed); r.on('peer', p => { p.on?.('type', changed); changed(); }); } // the host row follows the real connection
-      catch (e) { state = 'join'; error = errText(e); code = null; }
+      catch (e) { if (r && room !== r && !r.closed) r.leave(); if (stale()) return; state = 'join'; error = joinText(e); code = null; info = null; idleClient(); }
       changed();
     },
     cancel() { if (state === 'prompt' || state === 'join' || state === 'checking') { state = 'idle'; code = null; info = null; error = null; idleClient(); changed(); } },

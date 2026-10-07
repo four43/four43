@@ -163,7 +163,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
   for (const n of ['pointerup', 'pointercancel', 'lostpointercapture']) gear.addEventListener(n, stop);
   gear.addEventListener('contextmenu', e => e.preventDefault());
 
-  function openParent(settings, seed, { inRoom = false } = {}) {
+  function openParent(settings, seed, { guest = false } = {}) { // M-19: only the host makes a new farm in a room
     root.querySelector('.parent')?.remove();
     const p = el('parent', 'div', root), box = el('box', 'div', p);
     box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Parent menu</h2>
@@ -172,7 +172,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
 <fieldset><legend>Voice</legend><label><input type="radio" name="voice" value="1"> On</label><label><input type="radio" name="voice" value="0"> Off</label></fieldset>
 <fieldset><legend>Music</legend><label><input type="radio" name="music" value="1"> On</label><label><input type="radio" name="music" value="0"> Off</label></fieldset>
 <fieldset><legend>Farm seed (this farm: ${seed})</legend><label>Seed <input type="number" name="seed" min="0" step="1"></label><label><input type="checkbox" name="useSeed"> Use this seed</label></fieldset>
-<div class="row"><button data-a="new"${inRoom ? ' disabled title="Leave the room first"' : ''}>New farm</button><button data-a="clear">Clear stickers</button></div>
+<div class="row"><button data-a="new"${guest ? ' disabled title="Leave the room first"' : ''}>New farm</button><button data-a="clear">Clear stickers</button></div>
 <div class="row"><button data-a="apply" class="primary">Apply</button></div>`;
     const q = n => box.querySelector(`[name=${n}]`), pick = (n, v) => { box.querySelector(`[name=${n}][value="${v}"]`).checked = true; };
     pick('power', settings.power); pick('voice', settings.voice ? 1 : 0); pick('music', settings.music ? 1 : 0);
@@ -210,15 +210,15 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
 <label><input type="checkbox" data-a="lock"${v.locked ? ' checked' : ''}> Lock: no new players</label><div class="row"><button data-a="stop">Stop hosting</button></div>${err}`;
     else if (v.state === 'join' || v.state === 'checking') body = `<label>Room name <input name="room" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="tractor-pickup-K7MX2"></label>
 <div class="row"><button data-a="submit" class="primary"${v.state === 'checking' ? ' disabled' : ''}>Join</button><button data-a="cancel">Back</button></div>${err}`;
-    else if (v.state === 'prompt' || v.state === 'joining') body = `<p>Join <b>${esc(v.name)}</b>? ${v.info.players} ${v.info.players === 1 ? 'player' : 'players'}.</p>
-<div class="row"><button data-a="confirm" class="primary"${v.state === 'joining' ? ' disabled' : ''}>Join</button><button data-a="cancel">Cancel</button></div>${err}`;
+    else if (v.state === 'prompt' || v.state === 'joining') { const n = Number(v.info.players) | 0; body = `<p>Join <b>${esc(v.name)}</b>? ${n} ${n === 1 ? 'player' : 'players'}.</p>
+<div class="row"><button data-a="confirm" class="primary"${v.state === 'joining' ? ' disabled' : ''}>Join</button><button data-a="cancel">Cancel</button></div>${err}`; }
     else if (v.state === 'joined') body = `<p class="room">${esc(v.name)}</p>${playerRows(v, false)}<div class="row"><button data-a="leave">Leave</button></div>${err}`;
     const keep = box.querySelector('[name=room]')?.value ?? '';
     box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Multiplayer</h2>${body}`;
     const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); }
     box.onclick = e => {
       const t = e.target.closest?.('[data-a]'), a = t?.dataset.a; if (!a) return;
-      if (a === 'close') { box.parentElement.remove(); return; }
+      if (a === 'close') { mpSession.cancel(); box.parentElement.remove(); return; } // a check or a prompt ends with the panel (its client closes); a room goes on
       ({ host: () => mpSession.host(), join: () => mpSession.openJoin(), stop: () => mpSession.stopHosting(), submit: () => mpSession.submitCode(input.value), cancel: () => mpSession.cancel(),
         confirm: () => { mpSession.confirmJoin().then(() => { if (mpSession.view().state === 'joined') box.parentElement?.remove(); }); }, leave: () => mpSession.leave(),
         remove: () => mpSession.remove(Number(t.dataset.n)), lock: () => mpSession.lock(t.checked) })[a]?.();
