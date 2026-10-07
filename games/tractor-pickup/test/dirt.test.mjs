@@ -26,19 +26,11 @@ test('riders get splashed in mud only while moving, and washed too', () => {
 // In the game: mud dirties and squelches, the sprinkler washes the tractor and both cars and says so once.
 import RAPIER from '@dimforge/rapier3d-compat';
 import { createGame } from '../src/sim/game.js';
-import { quatAxes } from '../src/sim/tractor.js';
 import { WASH } from '../src/sim/track.js';
+import { moveTrain as moveTrainBy } from './train.mjs';
 await RAPIER.init();
 const GO = { thr: 1, steer: 0, horn: false };
-const moveTrain = (g, x, z, yaw) => {
-  const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
-  const dy = g.terrain.height(x, z) - g.terrain.height(p0.x, p0.z) + 0.3;
-  const list = [tb, ...g.train.cars.map(c => c.body)].map(b => { const t = b.translation(); return [b, g.tractorLocal(t.x, t.y, t.z, {})]; });
-  for (const [b, l] of list) {
-    b.setTranslation({ x: x + f.x * l.x + u.x * l.y + r.x * l.z, y: p0.y + dy + f.y * l.x + u.y * l.y + r.y * l.z, z: z + f.z * l.x + u.z * l.y + r.z * l.z }, true);
-    b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
-  }
-};
+const moveTrain = (g, x, z, yaw) => moveTrainBy(g, x, z, yaw, { ground: true });
 const feature = (g, type) => { for (const [r, R] of g.farm.routes.entries()) for (const [k, t] of R.tiles.entries()) if (t.type === type) return g.road.featureCenter(r, k); };
 const approach = (g, c, back) => { moveTrain(g, c.x - Math.sin(c.yaw) * back, c.z - Math.cos(c.yaw) * back, c.yaw); for (let i = 0; i < 90; i++) g.step({ thr: 0, steer: 0, horn: false }); };
 

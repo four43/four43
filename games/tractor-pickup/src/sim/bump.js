@@ -1,6 +1,7 @@
 // M-7 soft bump: each device pushes only its own tractor gently away from an other tractor (about 2 m/s, away from the other's center
 // line), with a "boing" and a short horn, then waits 0.6 s. Tractors are capsules along their heading: no colliders for other players.
-export const BUMP = { push: 2, front: 1.8, back: 1.3, r: 1.1, cool: 0.6 };
+import { DT } from './physics.js';
+export const BUMP = { push: 2, front: 1.8, back: 1.3, r: 1.1, cool: 0.6 }; // m/s, m, m, m, s (sim time)
 const seg = t => { const fx = Math.sin(t.yaw), fz = Math.cos(t.yaw); return [t.x - fx * BUMP.back, t.z - fz * BUMP.back, t.x + fx * BUMP.front, t.z + fz * BUMP.front]; };
 const clamp01 = v => Math.max(0, Math.min(1, v));
 function closest([ax, az, bx, bz], [cx, cz, dx, dz]) { // closest points of two 2D segments (sampled refinement: exact enough for 2 short segments)
@@ -17,7 +18,9 @@ export function bumpNormal(own, other) {
 }
 export function createBumper() {
   let cool = 0;
-  return { step(dt, tractor, others, events) {
+  return {
+  drive(game, events) { if (game.mode === 'drive') this.step(DT, game.tractor, game.others, events); }, // M-7 while driving only: a tractor in its show stays in the barn (M-4)
+  step(dt, tractor, others, events) {
     if ((cool -= dt) > 0) return;
     for (const o of others) {
       const n = bumpNormal(tractor, o); if (!n) continue;

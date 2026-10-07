@@ -1,4 +1,5 @@
 // src/net/link.js
+import { createWarnOnce } from './protocol.js';
 // The game-level link (M-20, M-21). Sync code (host.js, guest.js) talks only to a "net", never to handshake.js, so a host and guests
 // run in one Node process over the in-memory hub (M-52). A net: { isHost, id, hostId, send(to, data, reliable), on, off, leave }.
 // Events: peer(id), message(from, data, reliable), peerAway(id), peerBack(id), peerLeft(id, reason), hostAway(), hostBack(), closed(reason).
@@ -64,13 +65,13 @@ export function withLag(net, { delay, jitter, loss }, { rng = Math.random, timer
 const exact = d => ArrayBuffer.isView(d) ? d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) : d;
 // A handshake Room (vendored src/net/handshake.js, Task 15) as a net
 export function roomLink(room) {
-  const ev = emitter(), seen = new Set(), heard = new WeakSet(); // the library replaces a Peer (resume, a guest's new offer) without peerLeft: every Peer object is listened to, each id is one player
+  const warn = createWarnOnce(), ev = emitter(), seen = new Set(), heard = new WeakSet(); // the library replaces a Peer (resume, a guest's new offer) without peerLeft: every Peer object is listened to, each id is one player
   const attach = p => { if (!heard.has(p)) { heard.add(p); p.on('message', (d, o) => ev.emit('message', p.id, exact(d), !!o?.reliable)); } if (!seen.has(p.id)) { seen.add(p.id); ev.emit('peer', p.id); } };
   room.on('peer', attach); for (const p of room.peers.values()) if (p.open) attach(p);
   room.on('peerLeft', (id, why) => { seen.delete(id); ev.emit('peerLeft', id, why); });
   for (const e of ['peerAway', 'peerBack', 'hostBack', 'closed']) room.on(e, (...a) => ev.emit(e, ...a));
   room.on('hostAway', () => ev.emit('hostAway'));
   return { isHost: room.isHost, id: room.you, get hostId() { return room.hostId; }, on: ev.on, off: ev.off, leave: () => room.leave(),
-    send(to, data, reliable = false) { // binary on the fast channel, JSON only on the reliable one (the library throws otherwise); send() is false when the channel is closed (M-44: failures are swallowed)
-      if (!reliable && !(data instanceof ArrayBuffer)) return; const p = room.peers.get(to); if (!p?.open) return; try { p.send(data, { reliable }); } catch (e) { console.warn('send', e); } } };
+    send(to, data, reliable = false) { // binary on the fast channel, JSON only on the reliable one (the library throws otherwise); a send on a closed channel is skipped, and a failed one is logged once (M-44)
+      if (!reliable && !(data instanceof ArrayBuffer)) return; const p = room.peers.get(to); if (!p?.open) return; try { p.send(data, { reliable }); } catch (e) { warn('send', e); } } };
 }

@@ -16,7 +16,7 @@ test('host messages are checked the same way; the herd, trees and players are no
   const w = { t: 'welcome', v: NET_VERSION, seed: 42, farm: 3, you: 2, next: 30 };
   assert.deepEqual(checkFromHost(w), w);
   for (const m of [{ t: 'tree', id: 3 }, { t: 'regrow' }, { t: 'horn', n: 1 }, { t: 'help', id: null }, { t: 'help', id: 7 }]) assert.deepEqual(checkFromHost(m), m, m.t);
-  for (const m of [{ ...w, you: 5 }, { ...w, you: 1 }, { ...w, seed: -1 }, { ...w, farm: undefined }, { ...w, farm: 1.5 }, { ...w, next: undefined }, { ...w, next: 70000 }, { ...w, next: 1.5 },
+  for (const m of [{ ...w, v: NET_VERSION + 1 }, { ...w, you: 5 }, { ...w, you: 1 }, { ...w, seed: -1 }, { ...w, farm: undefined }, { ...w, farm: 1.5 }, { ...w, next: undefined }, { ...w, next: 70000 }, { ...w, next: 1.5 },
     { t: 'horn', n: 9 }, { t: 'hello', v: NET_VERSION, paint }, { t: 'claimed', ok: [1], no: [], epochs: [[1, 4]] }, { t: 'players', list: [] }]) assert.equal(checkFromHost(m), null, JSON.stringify(m).slice(0, 60));
   assert.equal(NET_VERSION, 2, 'M-27: the messages changed');
 });

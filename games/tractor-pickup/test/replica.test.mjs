@@ -2,7 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { F, kind, createRegistry, encodeFrame, decodeFrame, encodeRecord, createTracker, createStore, isFrame, FRAME, MAX_FRAME, REPEAT } from '../src/net/replica.js';
-import { ANIMAL, TREE, PLAYER, TRAIN, KINDS, REGISTRY, LIMIT, animalRecord } from '../src/net/kinds.js';
+import { ANIMAL, TREE, PLAYER, TRAIN, KINDS, LIMIT, animalRecord } from '../src/net/kinds.js';
+import { BINDINGS, registryOf } from '../src/net/bindings.js';
+const REGISTRY = registryOf(BINDINGS); // the game's own
 
 const near = (a, b, e, msg) => assert.ok(Math.abs(a - b) <= e, `${msg}: ${a} vs ${b}`);
 const q = (a = 0.3) => ({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) });

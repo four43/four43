@@ -5,9 +5,10 @@ import { DT } from '../src/sim/physics.js';
 import { createMemoryHub } from '../src/net/link.js';
 import { createHostSync } from '../src/net/host.js';
 import { createGuestSync } from '../src/net/guest.js';
-import { quatAxes } from '../src/sim/tractor.js';
 import { encodeFrame } from '../src/net/replica.js';
 import { ANIMAL, TRAIN, animalRecord } from '../src/net/kinds.js';
+import { HELD } from '../src/sim/herd.js';
+export { moveTrain } from './train.mjs';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
@@ -41,15 +42,14 @@ export async function mpWorld({ seed = 21, guests = 1, link = {}, join = true, c
 // Put an animal (by id) in front of a device's tractor, standing still
 export function inFront(dev, a, ahead = 2.5) { const p = dev.game.tractorWorld({ x: ahead, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; a.hidden = false; }
 export const free = (game, a) => game.herd.free().includes(a);
-// Move a device's whole (straight, parked) train so the tractor stands at (x, z) facing yaw (copied unchanged from test/game.test.mjs)
-export const moveTrain = (g, x, z, yaw) => {
-  const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
-  const list = [tb, ...g.train.cars.map(c => c.body)].map(b => { const t = b.translation(); return [b, g.tractorLocal(t.x, t.y, t.z, {})]; });
-  for (const [b, l] of list) {
-    b.setTranslation({ x: x + f.x * l.x + u.x * l.y + r.x * l.z, y: p0.y + f.y * l.x + u.y * l.y + r.y * l.z, z: z + f.z * l.x + u.z * l.y + r.z * l.z }, true);
-    b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
-  }
-};
+// A free route animal that is no chick and leads none: a boop takes it alone
+export const single = g => g.herd.free().find(x => !x.hidden && x.type !== 'chick' && !g.herd.animals.some(c => c.leader === x.id) && x.home === 'route');
+// Put a host animal in front of a guest's tractor, on both devices; returns the guest's copy
+export const inFrontOf = (g, ha) => { const ga = g.game.herd.animals[ha.id]; inFront(g, ga); ha.x = ga.x; ha.z = ga.z; ha.state = 'idle'; ha.timer = 99; ha.hidden = false; return ga; };
+// Count the calls of one sync handler (it still runs): returns () => the count
+export const countCalls = (sync, name) => { const orig = sync.handlers[name]; let n = 0; sync.handlers[name] = (...a) => { n++; return orig(...a); }; return () => n; };
+// Run fn with console.warn captured (a test that makes the game warn keeps its output clean): returns the warnings
+export const quietWarn = fn => { const warn = console.warn, warned = []; console.warn = (...a) => warned.push(a); try { fn(); } finally { console.warn = warn; } return warned; };
 // A hand-made frame from one device to another (M-22): animal records from the host, or a train record from a player
 export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = {}) => w.host.net.send(to.net.id, encodeFrame({ key, sender: 1, time, groups: [{ kind: ANIMAL, records }] }), key);
 export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
@@ -61,7 +61,6 @@ export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2]
 //   not free on the host (held, carried or walking in) -> this guest's replicated record has the host's owner and ownership number (epoch)
 // - every animal held here is carried by this guest on the host; no open claims; every tree broken here exactly when broken on the host
 // - the host's farm (its seed); the same players: every host roster number (but its own) is in this guest's players, and no other number is
-const HELD = ['fly', 'ride', 'show'];
 export function disagreements(w) {
   const out = [], H = w.host.game, roster = [1, ...w.host.sync.players.list().map(p => p.n)];
   for (const g of w.guests) {
@@ -70,16 +69,16 @@ export function disagreements(w) {
     for (const a of H.herd.animals) {
       const b = G.herd.animals[a.id];
       if (a.state === 'gone') { if (b && b.state !== 'gone' && b.state !== 'elsewhere') at(a.id, `gone on the host, here ${b.state}`); continue; }
-      const owner = HELD.includes(a.state) ? 1 : a.state === 'carried' ? a.owner : 0;
+      const owner = HELD.has(a.state) ? 1 : a.state === 'carried' ? a.owner : 0;
       if (!b) { at(a.id, 'missing'); continue; }
-      if (owner === you) { if (!HELD.includes(b.state)) at(a.id, `the host says mine, here ${b.state}`); }
+      if (owner === you) { if (!HELD.has(b.state)) at(a.id, `the host says mine, here ${b.state}`); }
       else if (owner) { if (b.state !== 'carried' && b.state !== 'elsewhere') at(a.id, `player ${owner} has it, here ${b.state}`); }
       else if (a.state === 'toBarn') { if (b.state !== 'toBarn') at(a.id, `walking in on the host, here ${b.state}`); }
       else if (!free(G, b)) at(a.id, `free on the host, here ${b.state}`);
       if (owner || a.state === 'toBarn') { const h = animalRecord(a), r = g.sync.store.get('animal', a.id);
         if (!r || r.owner !== h.owner || r.epoch !== h.epoch) at(a.id, `owner ${h.owner} epoch ${h.epoch} on the host, here ${r ? `owner ${r.owner} epoch ${r.epoch}` : 'no record'}`); }
     }
-    for (const b of G.herd.animals) if (HELD.includes(b.state) && !(H.herd.animals[b.id]?.state === 'carried' && H.herd.animals[b.id].owner === you)) at(b.id, `held here, ${H.herd.animals[b.id]?.state} on the host`);
+    for (const b of G.herd.animals) if (HELD.has(b.state) && !(H.herd.animals[b.id]?.state === 'carried' && H.herd.animals[b.id].owner === you)) at(b.id, `held here, ${H.herd.animals[b.id]?.state} on the host`);
     if (g.sync.pending.size) out.push(`${g.name}: ${g.sync.pending.size} open claims`);
     for (const t of H.trees.list) if ((t.state === 'broken') !== (G.trees.list[t.id].state === 'broken')) out.push(`${g.name} tree ${t.id}: ${t.state} on the host, ${G.trees.list[t.id].state} here`);
     for (const n of roster) if (n !== you && !g.sync.players.map.has(n)) out.push(`${g.name}: no player ${n}`);

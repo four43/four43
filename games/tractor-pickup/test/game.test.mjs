@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { createGame, CAPACITY } from '../src/sim/game.js';
-import { quatAxes } from '../src/sim/tractor.js';
+import { moveTrain } from './train.mjs';
 await RAPIER.init();
 
 const STILL = { thr: 0, steer: 0, horn: false };
@@ -12,15 +12,6 @@ const quiet = g => g.herd.animals.filter(a => a.home === 'yard').forEach(a => { 
 const pickable = g => g.herd.free().filter(x => !x.hidden && x.type !== 'chick' && !g.herd.animals.some(c => c.leader === x.id));
 const unhide = g => g.herd.animals.forEach(a => { if (a.hidden) { a.hidden = false; a.state = 'idle'; } });
 const place = (g, a) => { const p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; for (let i = 0; i < 90; i++) g.step(STILL); };
-// Move the whole (straight, parked) train so the tractor stands at (x, z) facing yaw; the cars keep their offsets in the tractor frame.
-const moveTrain = (g, x, z, yaw) => {
-  const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
-  const list = [tb, ...g.train.cars.map(c => c.body)].map(b => { const t = b.translation(); return [b, g.tractorLocal(t.x, t.y, t.z, {})]; });
-  for (const [b, l] of list) {
-    b.setTranslation({ x: x + f.x * l.x + u.x * l.y + r.x * l.z, y: p0.y + f.y * l.x + u.y * l.y + r.y * l.z, z: z + f.z * l.x + u.z * l.y + r.z * l.z }, true);
-    b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
-  }
-};
 
 test('an animal in the catch zone is booped, flies, and lands in slot 0', () => {
   const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g);

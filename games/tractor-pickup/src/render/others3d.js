@@ -19,7 +19,7 @@ export function createOthers3D(scene) {
       if (players) for (const p of players.map.values()) {
         if (!p.pose) continue;
         let v = views.get(p.n);
-        if (!v) { const s = stub(); v = { s, veh: createVehicles3D(scene, s.tractor, s.train), body: '', trim: '', ghost: false, stamp, snap: { tractor: snapObj(), cars: [snapObj(), snapObj()], dirt: 0 } }; views.set(p.n, v); }
+        if (!v) { const s = stub(); v = { s, veh: createVehicles3D(scene, s.tractor, s.train, { wheelShadows: false }), body: '', trim: '', ghost: false, stamp, snap: { tractor: snapObj(), cars: [snapObj(), snapObj()], dirt: 0 } }; views.set(p.n, v); }
         v.stamp = stamp;
         if (p.paint.body !== v.body || p.paint.trim !== v.trim) { v.body = p.paint.body; v.trim = p.paint.trim; v.veh.setPaint(p.paint); }
         if (p.away !== v.ghost) { v.ghost = p.away; v.veh.setGhost(p.away); }

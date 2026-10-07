@@ -31,6 +31,7 @@ import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
 import { Handshake } from './net/handshake.js';
 import { createSession, parseRoomInput, signalServer } from './net/session.js';
+import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice } from './sim/progress.js';
@@ -144,9 +145,9 @@ async function main() {
   const session = sandbox ? null : createSession({ Handshake, server: signal, lag, getGame: () => game, getPaint: () => progress.paint,
     onFarm: (s, n) => { startFarm({ seed: s, power: powerNow, player: n }); if (!started) play(); return game; }, // M-1: the guest makes the host's farm
     onChange: () => menus.refreshMultiplayer() });
-  const warned = new Set(), warnOnce = (kind, e) => { if (warned.has(kind)) return; warned.add(kind); console.warn(kind, e); }; // M-44: once per kind, never a flood each frame
+  const warnOnce = createWarnOnce(); // M-44: once per kind, never a flood each frame
   let lastSync = null; // a room that just ended: the events its sync pushed on the way out (playerGone poofs, M-39, M-41) still play
-  const netEvents = now => { try { const y = session.sync, left = lastSync && lastSync !== y ? lastSync.out.splice(0) : []; lastSync = y; const e = session.before(now); return left.length ? [...left, ...e] : e; } catch (e) { console.warn('net before', e); return []; } }; // M-44: a sync error never stops the frame loop
+  const netEvents = now => { try { const y = session.sync, left = lastSync && lastSync !== y ? lastSync.out.splice(0) : []; lastSync = y; const e = session.before(now); return left.length ? [...left, ...e] : e; } catch (e) { warnOnce('net before', e); return []; } }; // M-44: a sync error never stops the frame loop
 
   // U-6: while driving, the paint screen and the sticker book are a tap away (bottom left); the tractor is held while one is open
   const driveBtns = sandbox ? null : Object.assign(document.createElement('div'), { id: 'drivebtns', hidden: true });
@@ -167,7 +168,7 @@ async function main() {
       if (gen !== g0) { acc -= DT; continue; } // a new farm: fresh bodies and snapshots, its first step comes next
       const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
       const ev = [...netEv, ...(game.step(stepIn) || [])]; hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
-      if (session) try { session.after(ev, nowMs); } catch (e) { console.warn('net after', e); } // M-44
+      if (session) try { session.after(ev, nowMs); } catch (e) { warnOnce('net after', e); } // M-44
       for (const e of ev) try {
         if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', k = bush ? 0.7 : t.young ? 0.8 : 1.3; gibs.burst(t.x, (bush ? 0.8 : 1.6) * k, t.z, e.dir, k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
         if (e.type === 'horn') sound.horn();

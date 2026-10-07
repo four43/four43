@@ -16,8 +16,10 @@ export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3, WALK_HALF = 6.5;
 const FILL = ['pig', 'cow', 'sheep', 'chicken', 'duck', 'bunny', 'pig', 'cow'];
 export const DODGE = { dur: 0.5, h: 0.9 }; // B-14: the hop out of the way of a full train: s, m high
 const FLEE_R = 7, FLEE_V = 2.2, HORN_R = 25, WALK = { walk: 'walk', flee: 'run', come: 'walk', follow: 'walk', help: 'run', toBarn: 'walk' };
-const SKIP = new Set(['fly', 'ride', 'show', 'gone', 'carried', 'elsewhere']);
-export const NOT_FREE = new Set(['fly', 'ride', 'show', 'toBarn', 'gone', 'carried', 'elsewhere']); // carried: another player has it; elsewhere: no news from the host (M-11)
+export const HELD = new Set(['fly', 'ride', 'show']); // in this device's own train or its show
+const SKIP = new Set([...HELD, 'gone', 'carried', 'elsewhere']);
+export const NOT_FREE = new Set([...SKIP, 'toBarn']); // carried: another player has it; elsewhere: no news from the host (M-11)
+export const GONE_KEEP = 10; // s: a gone animal keeps its slot this long before a new animal may take it (G-3), so late news about it (a claim, a record) finds it gone
 const turn = (a, b, max) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + Math.max(-max, Math.min(max, d)); };
 
 export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_ANIMALS }) {
@@ -31,16 +33,26 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     const n = env.roadNearest(x, z); if (n.d <= WALK_HALF) return { x, z };
     const k = WALK_HALF / n.d; return { x: n.pt.x + (x - n.pt.x) * k, z: n.pt.z + (z - n.pt.z) * k };
   };
-  const add = (type, at, home = 'route') => { const a = { id: animals.length, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, epoch: 0, lookT: 0, tx: at.x, tz: at.z, trail: [] }; animals.push(a); return a; };
-  for (const t of MAIN_TYPES) add(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad(), t === 'duck' ? 'yard' : 'route');
-  const hen = add('chicken', spawnNearRoad());
-  for (let i = 1; i <= 2; i++) { const c = add('chick', { x: hen.x - i * 0.8, z: hen.z }); c.leader = hen.id; c.line = i; c.state = 'follow'; }
+  let births = 0;
+  const make = (id, type, at, home, epoch = 0) => ({ id, type, golden: false, home, x: at.x, y: 0, z: at.z, yaw: rng.range(0, 6.28), state: 'idle', timer: rng.range(0, 3), anim: 'idle', leader: null, line: 0, hidden: false, dirt: 0, epoch, lookT: 0, tx: at.x, tz: at.z, trail: [], born: births++ });
+  const grow = (type, at, home = 'route') => { const a = make(animals.length, type, at, home); animals.push(a); return a; };
+  // G-3: a new animal takes the slot of the one gone longest (at least GONE_KEEP), so the herd array stays small in a long game. It is a new
+  // object with a higher ownership number (M-26): whoever still holds the old one sees it gone, and late news about the old one is older.
+  const add = (type, at, home = 'route') => {
+    let old = null; for (const a of animals) if (a.state === 'gone' && a.goneT >= GONE_KEEP && !(old && old.goneT >= a.goneT)) old = a;
+    if (!old) return grow(type, at, home);
+    for (const o of animals) if (o.leader === old.id) o.leader = null;
+    return (animals[old.id] = make(old.id, type, at, home, old.epoch + 1));
+  };
+  for (const t of MAIN_TYPES) grow(t, t === 'duck' ? { x: env.pond.x + rng.range(-3, 3), z: env.pond.z + env.pond.r + 1 } : spawnNearRoad(), t === 'duck' ? 'yard' : 'route');
+  const hen = grow('chicken', spawnNearRoad());
+  for (let i = 1; i <= 2; i++) { const c = grow('chick', { x: hen.x - i * 0.8, z: hen.z }); c.leader = hen.id; c.line = i; c.state = 'follow'; }
   const routeCount = () => animals.filter(a => a.home === 'route').length;
-  while (routeCount() < count) add(rng.pick(FILL), spawnNearRoad()); // the pond duck is a yard animal, so it does not count here
+  while (routeCount() < count) grow(rng.pick(FILL), spawnNearRoad()); // the pond duck is a yard animal, so it does not count here
   // two hide in the bushes (A-13), taken from the random fill so the first animal of each type stays in view
   rng.shuffle(animals.slice(MAIN_TYPES.length + 3).filter(a => a.type !== 'cow')).slice(0, env.hideSpots.length)
     .forEach((a, i) => { a.hidden = true; a.state = 'hide'; a.x = env.hideSpots[i].x; a.z = env.hideSpots[i].z; });
-  for (let i = 1; i < yardCount; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard'); // the pond duck is the first
+  for (let i = 1; i < yardCount; i++) grow(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard'); // the pond duck is the first
   if (rng.chance(0.5)) rng.pick(animals.filter(a => a.type !== 'chick' && !a.hidden)).golden = true; // A-8
 
   const free = () => animals.filter(a => !NOT_FREE.has(a.state));
@@ -92,13 +104,14 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
       for (let i = 0; i < nYard; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard');
       // refill empty hiding bushes with the newest route animals
       env.hideSpots.forEach(h => { if (free().some(a => a.hidden && Math.hypot(a.x - h.x, a.z - h.z) < 1)) return;
-        const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !['help', 'wave', 'come'].includes(b.state) && !b.hidden && !b.golden && b.type !== 'cow' && b.type !== 'chick' && !animals.some(c => c.leader === b.id && !NOT_FREE.has(c.state))).at(-1); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
+        const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !['help', 'wave', 'come'].includes(b.state) && !b.hidden && !b.golden && b.type !== 'cow' && b.type !== 'chick' && !animals.some(c => c.leader === b.id && !NOT_FREE.has(c.state))).reduce((m, b) => !m || b.born > m.born ? b : m, null); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
     },
-    // M-11: hold an animal with this id (the host's ids are its array indexes); placeholders fill any gap until the host tells about them
-    ensure(id, type, golden) { while (animals.length <= id) add(type, { x: 0, z: 0 }).state = 'elsewhere'; const a = animals[id]; a.type = type; a.golden = golden; return a; },
+    // M-11: hold an animal with this id (the host's ids are its array indexes, so never a reused slot); placeholders fill any gap until the host tells about them
+    ensure(id, type, golden) { while (animals.length <= id) grow(type, { x: 0, z: 0 }).state = 'elsewhere'; const a = animals[id]; a.type = type; a.golden = golden; return a; },
     step(dt, { tractor: t, others = [] }) {
       if (h.remote) return;
       for (const a of animals) {
+        if (a.state === 'gone') { a.goneT = (a.goneT || 0) + dt; continue; } // G-3: how long its slot has been free
         if (SKIP.has(a.state)) continue;
         let tt = t, dT = Math.hypot(a.x - t.x, a.z - t.z); // M-12: the nearest tractor
         for (const o of others) { const d = Math.hypot(a.x - o.x, a.z - o.z); if (d < dT) { dT = d; tt = o; } }

@@ -4,7 +4,8 @@
 // from them and the sync code writes records back. A frame is binary, little-endian: a keyframe (every object of one authority) or a diff
 // (the objects that changed, each with all its fields), with the sender's time stamp. decodeFrame checks everything and returns null for
 // anything odd (M-50): a bad frame is dropped, never thrown.
-export const FRAME = { KEY: 0x10, DIFF: 0x11 }, MAX_FRAME = 16384, NONE = 0xffff;
+export const FRAME = { KEY: 0x10, DIFF: 0x11 }, MAX_FRAME = 16384;
+const NONE = 0xffff;
 export const REPEAT = 3; // M-23: a changed or removed object stays in this many diffs, so one lost diff never hides a change
 const TAU = Math.PI * 2, HEAD = 7, BAD = new Error('bad frame');
 const boolsOf = fields => Object.keys(fields).filter(k => fields[k].t === 'bool');
@@ -60,7 +61,7 @@ function get(c, f) {
     case 'list': { const n = v.getUint8(c.o++); if (n > f.max || n < f.min) throw BAD; const a = []; for (let i = 0; i < n; i++) a.push(get(c, f.of)); return a; }
   }
 }
-const scratch = new DataView(new ArrayBuffer(MAX_FRAME));
+const scratch = new DataView(new ArrayBuffer(MAX_FRAME)), scratchBytes = new Uint8Array(scratch.buffer);
 const putRecord = (c, k, id, rec) => { if (!Number.isInteger(id) || id < k.idMin || id > k.idMax) throw new Error(`bad ${k.name} id ${id}`); c.v.setUint16(c.o, id, true); c.o += 2; put(c, k.rec, rec); };
 // one record's bytes (the tracker compares these, so a change smaller than a field's step is no change)
 export function encodeRecord(k, id, rec) { const c = { v: scratch, o: 0 }; putRecord(c, k, id, rec); return new Uint8Array(scratch.buffer.slice(0, c.o)); }
@@ -105,18 +106,20 @@ export function decodeFrame(buf, reg) {
 }
 // The sending side (M-23): objs is { kindName: [[id, rec], ...] }, every object this device is the authority for, now.
 export function createTracker(kinds) {
-  const last = new Map(kinds.map(k => [k.name, new Map()])); // id -> { bytes, hot, gone }
-  const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const last = new Map(kinds.map(k => [k.name, new Map()])); // id -> { bytes, hot, gone, at }
+  const c = { v: scratch, o: 0 }; let tick = 0; // at: the diff that last saw the object
+  const same = (a, n) => { if (a.length !== n) return false; for (let i = 0; i < n; i++) if (a[i] !== scratchBytes[i]) return false; return true; };
   return {
-    diff(objs) {
+    diff(objs) { // each record is encoded into the scratch buffer and copied only when it changed (most trees never do)
+      tick++;
       return kinds.map(k => {
-        const seen = last.get(k.name), now = new Set(), records = [], removed = [];
+        const seen = last.get(k.name), records = [], removed = [];
         for (const [id, rec] of objs[k.name] || []) {
-          now.add(id); const bytes = encodeRecord(k, id, rec), o = seen.get(id);
-          if (!o || o.gone || !same(o.bytes, bytes)) seen.set(id, { bytes, hot: REPEAT, gone: false });
-          const e = seen.get(id); if (e.hot > 0) { e.hot--; records.push([id, rec]); }
+          c.o = 0; putRecord(c, k, id, rec); let e = seen.get(id);
+          if (!e || e.gone || !same(e.bytes, c.o)) seen.set(id, e = { bytes: scratchBytes.slice(0, c.o), hot: REPEAT, gone: false, at: 0 });
+          e.at = tick; if (e.hot > 0) { e.hot--; records.push([id, rec]); }
         }
-        for (const [id, e] of seen) if (!now.has(id)) { if (!e.gone) { e.gone = true; e.hot = REPEAT; } if (e.hot > 0) { e.hot--; removed.push(id); } else seen.delete(id); }
+        for (const [id, e] of seen) if (e.at !== tick) { if (!e.gone) { e.gone = true; e.hot = REPEAT; } if (e.hot > 0) { e.hot--; removed.push(id); } else seen.delete(id); }
         return { kind: k, records, removed };
       });
     },

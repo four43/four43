@@ -66,6 +66,7 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - A claim (M-13) is a request to own an animal. The answer is the animal's replicated owner, not a different message. Thus no answer can be lost.
 - Each device repairs its state from each keyframe (M-56 to M-58).
 - The welcome no longer carries the animals and the trees: the first keyframe after the welcome carries them.
+- A new animal takes the place (the id) of an animal that has been gone for 10 s or more (G-3), so a long game does not slow down. Each player and the solo game do this.
 
 ### 1.2.8 Change in version 1.8
 
@@ -167,7 +168,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 |---|---|---|
 | G-1 | Slots | 12: 6 in the trailer, then 6 in the wagon |
 | G-2 | Trip size | 1 to 12 animals. There is no fixed goal. |
-| G-3 | Free animals | 18 on the routes and 3 in the farmyard. After each show, new animals walk in along the routes to replace the delivered animals. |
+| G-3 | Free animals | 18 on the routes and 3 in the farmyard. After each show, new animals walk in along the routes to replace the delivered animals. A new animal takes the id of the animal that has been gone longest, if that animal has been gone for 10 s or more; otherwise it gets a new id. The new animal has a higher ownership number than the old one (M-26), so a late message about the old animal does not change the new one. |
 
 ### 3.3 Help to find animals
 
@@ -505,7 +506,7 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 
 ## 13. Test results
 
-State at version 1.9 (`npm test`: 634 tests, all pass). Version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.9 (`npm test`: 640 tests, all pass). Version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|
@@ -663,7 +664,7 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 | M-56 | Guest repair | At each keyframe from the host, a guest makes its state agree. An open claim that the keyframe does not give to this guest ends (M-14). An animal that the keyframe gives to this guest but that the guest does not have goes back to the host (the guest sends a release). Trees agree with the keyframe. |
 | M-57 | Host repair | If an animal is owned by a guest but is not in that guest's train for 3 s, the host makes it free again (its ownership number increases). |
 | M-58 | Repair time | After a message is lost, or after a connection is made again (M-42), all devices agree again in 3 s or less. |
-| M-44 | Failure | No network failure stops the game or shows an error to the child (R-1). Errors show only in the Multiplayer panel. |
+| M-44 | Failure | No network failure stops the game or shows an error to the child (R-1). Errors show only in the Multiplayer panel. The browser console shows each kind of network error once, not once for each message. |
 
 ### 14.7 Safety
 
@@ -676,7 +677,7 @@ The players are children. These rules apply to all items in section 14.
 | M-47 | Guessing | Handshake limits wrong room codes for each address (20 each minute) and for the whole game (200 each minute). A peek counts as a join attempt. |
 | M-48 | Hidden addresses | When a guest is not on the same network as the host, both devices connect only through the TURN relay. Thus neither device gets the public IP address of the other. |
 | M-49 | Host control | The host can remove a guest and lock the room (M-31). A removed guest cannot come back while the room is locked. |
-| M-50 | Check all data | The host checks each message from a guest: the size, that each number is a valid number in its range, that each id exists, and the message rate (a maximum of 60 messages each second on each channel). The host ignores a bad message. The host refuses a claim when the guest's tractor is more than 8 m from the animal, and a tree break when the guest's tractor is more than 12 m from the tree. The guest checks the messages from the host in the same way. |
+| M-50 | Check all data | The host checks each message from a guest: the size, that each number is a valid number in its range, that each id exists, and the message rate (a maximum of 60 messages each second on each channel, counted in wall time, so a page that stops does not block messages after it starts again). The host ignores a bad message. The host refuses a claim when the guest's tractor is more than 8 m from the animal, and a tree break when the guest's tractor is more than 12 m from the tree. The guest checks the messages from the host in the same way, including the game version in the welcome (M-27), but accepts up to 120 messages each second on the fast channel, because the host also sends the trains of the other guests on that channel. |
 | M-51 | No personal data | The game sends no name, account, place or device data. Handshake keeps rooms in memory only. |
 
 ### 14.8 Tests

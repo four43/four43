@@ -1,9 +1,11 @@
 // test/mp.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, inFront, free, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle } from './mp.harness.mjs';
+import { mpWorld, inFront, free, single, countCalls, quietWarn, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle } from './mp.harness.mjs';
+import { CLAIM_RANGE, TREE_RANGE } from '../src/net/host.js';
 import { spawnPoint } from '../src/sim/spawn.js';
 import { makeRng } from '../src/sim/rng.js';
+import { GONE_KEEP } from '../src/sim/herd.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const drive = (d, i) => i === 1 ? { thr: 0.6, steer: 0.2, horn: false } : STILL;
@@ -74,7 +76,6 @@ test('a guest joins a host that has played long (most of 600+ animals gone): it 
   assert.equal(g.game.herd.animals[0].state, 'gone');
 });
 
-const single = g => g.herd.free().find(x => !x.hidden && x.type !== 'chick' && !g.herd.animals.some(c => c.leader === x.id) && x.home === 'route');
 
 test('a guest boop is claimed and granted: the animal lands in the guest wagon, and the host shows it there (M-13, M-14)', async () => {
   const w = await mpWorld({ seed: 31 }); w.seconds(1);
@@ -127,10 +128,10 @@ test('no answer within 1 s: the guest poofs it; the next keyframe gives it back 
 test('the host refuses a claim from a tractor more than 8 m away (M-50)', async () => {
   const w = await mpWorld({ seed: 35 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game);
-  let seen = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { seen++; return orig(...a); };
-  const t = w.host.sync.players.map.get(2).latest.bodies[0].p; assert.ok(Math.hypot(ha.x - t.x, ha.z - t.z) > 8, 'the guest tractor is more than 8 m away');
+  const seen = countCalls(w.host.sync, 'claim');
+  const t = w.host.sync.players.map.get(2).latest.bodies[0].p; assert.ok(Math.hypot(ha.x - t.x, ha.z - t.z) > CLAIM_RANGE, 'the guest tractor is more than 8 m away');
   g.net.send(w.host.net.id, { t: 'claim', ids: [ha.id] }, true); w.seconds(0.3);
-  assert.equal(seen, 1, 'the claim was handled'); assert.ok(free(w.host.game, ha), 'still free');
+  assert.equal(seen(), 1, 'the claim was handled'); assert.ok(free(w.host.game, ha), 'still free');
 });
 test('the host boop raises the ownership number and the animal leaves the guest free list (M-15, M-26)', async () => {
   const w = await mpWorld({ seed: 36 }); w.seconds(1);
@@ -203,7 +204,8 @@ test('trees: a guest break shows on the host and the other guests; the host brea
   // move guest 1's tractor next to the tree on the host's view: use a broken-by-id break on the guest (as trees.step would) and let after() report it
   g1.game.trees.breakById(t.id); g1.sync.after([{ type: 'treeBreak', tree: t, dir: { x: 1, z: 0 }, speed: 5 }], w.now);
   w.seconds(0.3);
-  assert.notEqual(w.host.game.trees.list[t.id].state, 'broken', 'too far from guest 1 (12 m): refused');
+  const g1p = w.host.sync.players.map.get(2).latest.bodies[0].p; assert.ok(Math.hypot(t.x - g1p.x, t.z - g1p.z) > TREE_RANGE, 'the tree is out of reach');
+  assert.notEqual(w.host.game.trees.list[t.id].state, 'broken', 'too far from guest 1: refused');
   const near = g1.game.trees.list.find(x => x.kind === 'tree' && Math.hypot(x.x - g1.game.tractor.x, x.z - g1.game.tractor.z) < 60);
   assert.ok(near, 'a tree within reach of a moved tractor exists');
   // put guest 1's tractor next to that tree (latest vehicle message is what the host checks)
@@ -260,9 +262,9 @@ test('a guest cannot speak for another player: the host writes its number over t
 });
 test('a flood of claims: at most 60 each second are handled (M-50)', async () => {
   const w = await mpWorld({ seed: 53 }); w.seconds(1);
-  let handled = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { handled++; return orig(...a); };
+  const handled = countCalls(w.host.sync, 'claim');
   for (let i = 0; i < 300; i++) w.guests[0].net.send(w.host.net.id, { t: 'claim', ids: [0] }, true);
-  w.seconds(0.2); assert.ok(handled > 50 && handled <= 60, `${handled}`); // the window may already hold a few earlier messages
+  w.seconds(0.2); assert.ok(handled() > 50 && handled() <= 60, `${handled()}`); // the window may already hold a few earlier messages
 });
 test('old messages are ignored: an older train position, and animal data with a lower ownership number (M-26)', async () => {
   const w = await mpWorld({ seed: 55 }); w.seconds(1);
@@ -277,8 +279,7 @@ test('old messages are ignored: an older train position, and animal data with a 
 test('a handler that throws is contained (M-44)', async () => {
   const w = await mpWorld({ seed: 54 }); w.seconds(1);
   const orig = w.host.sync.handlers.horn; w.host.sync.handlers.horn = () => { throw new Error('boom'); };
-  const warn = console.warn, warned = []; console.warn = (...a) => warned.push(a); // the host logs the error: keep the test output clean
-  try { w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3); } finally { console.warn = warn; } // the throw stays inside the host's message handler (w.step would throw otherwise)
+  const warned = quietWarn(() => { w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3); }); // the throw stays inside the host's message handler (w.step would throw otherwise)
   assert.equal(warned.length, 1);
   w.host.sync.handlers.horn = orig; w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
   assert.ok(w.host.events.some(e => e.type === 'remoteHorn' && e.n === 2), 'the host still handles messages');
@@ -286,8 +287,7 @@ test('a handler that throws is contained (M-44)', async () => {
 test('a guest handler that throws is contained too (M-44)', async () => {
   const w = await mpWorld({ seed: 56 }); w.seconds(1);
   const g = w.guests[0], orig = g.sync.handlers.horn; g.sync.handlers.horn = () => { throw new Error('boom'); };
-  const warn = console.warn, warned = []; console.warn = (...a) => warned.push(a);
-  try { w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3); } finally { console.warn = warn; }
+  const warned = quietWarn(() => { w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3); });
   assert.equal(warned.length, 1);
   g.sync.handlers.horn = orig; w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
   assert.ok(g.events.some(e => e.type === 'remoteHorn' && e.n === 1), 'the guest still handles messages');
@@ -302,13 +302,12 @@ test('a reliable message that is too big is dropped: over 2048 from a guest or f
 });
 test('a guest regrow counts at most once in 5 s; the extra ones are not passed on (M-17, M-50)', async () => {
   const w = await mpWorld({ seed: 58, guests: 2 }); w.seconds(1);
-  const [g1, g2] = w.guests; let resets = 0, relayed = 0;
+  const [g1, g2] = w.guests; let resets = 0; const relayedN = countCalls(g2.sync, 'regrow');
   const reset = w.host.game.trees.reset; w.host.game.trees.reset = (...a) => { resets++; return reset(...a); };
-  const orig = g2.sync.handlers.regrow; g2.sync.handlers.regrow = (...a) => { relayed++; return orig(...a); };
   for (let i = 0; i < 10; i++) g1.net.send(w.host.net.id, { t: 'regrow' }, true);
-  w.seconds(4.5); assert.deepEqual([resets, relayed], [1, 1]);
-  g1.net.send(w.host.net.id, { t: 'regrow' }, true); w.seconds(0.3); assert.deepEqual([resets, relayed], [1, 1], 'still within 5 s');
-  w.seconds(0.5); g1.net.send(w.host.net.id, { t: 'regrow' }, true); w.seconds(0.3); assert.deepEqual([resets, relayed], [2, 2], 'after 5 s');
+  w.seconds(4.5); assert.deepEqual([resets, relayedN()], [1, 1]);
+  g1.net.send(w.host.net.id, { t: 'regrow' }, true); w.seconds(0.3); assert.deepEqual([resets, relayedN()], [1, 1], 'still within 5 s');
+  w.seconds(0.5); g1.net.send(w.host.net.id, { t: 'regrow' }, true); w.seconds(0.3); assert.deepEqual([resets, relayedN()], [2, 2], 'after 5 s');
 });
 test('a repeated id in claim, release or delivered is handled once (M-50)', async () => {
   const w = await mpWorld({ seed: 59 }); w.seconds(1);
@@ -412,9 +411,8 @@ test('a host that stops hosting poofs every guest tractor (M-39)', async () => {
 });
 test('a throw while going alone never reaches the link (M-44)', async () => {
   const w = await mpWorld({ seed: 70 }); w.seconds(1);
-  const g = w.guests[0], warn = console.warn; let warned = 0; console.warn = () => { warned++; };
-  try { g.game.herd.respawn = () => { throw new Error('boom'); }; assert.doesNotThrow(() => g.sync.close()); assert.equal(warned, 1); assert.equal(g.sync.alone, true); }
-  finally { console.warn = warn; }
+  const g = w.guests[0]; g.game.herd.respawn = () => { throw new Error('boom'); };
+  const warned = quietWarn(() => assert.doesNotThrow(() => g.sync.close())); assert.equal(warned.length, 1); assert.equal(g.sync.alone, true);
 });
 
 test('after a timeout the claim stays open: no re-boop until a keyframe settles it (M-14, M-56)', async () => {
@@ -448,11 +446,10 @@ test('host data never pulls an animal out of the guest trailer, whatever its own
 
 test('the rate limits count in wall time: with the game frozen (rAF paused), a new window still opens (M-50)', async () => {
   let wall = 0; const w = await mpWorld({ seed: 74, clock: () => wall }); w.seconds(1); wall = 5000;
-  const g = w.guests[0], H = w.host.net.id, G = g.net.id; let handled = 0;
-  const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { handled++; return orig(...a); };
+  const g = w.guests[0], H = w.host.net.id, G = g.net.id, handled = countCalls(w.host.sync, 'claim');
   const deliver = () => w.hub.tick(w.now); // messages arrive, but no frame runs: sim time stands still
-  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled, 60);
-  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled, 61, 'the host: a new second, a new window');
+  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled(), 60);
+  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled(), 61, 'the host: a new second, a new window');
   const horns = () => g.sync.out.filter(e => e.type === 'remoteHorn').length; // no frame runs, so the guest's events wait in out
   for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 60);
   wall += 1100; w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 61, 'the guest: a new window too');
@@ -548,7 +545,7 @@ test('a newer free record does not poof a waiting flight: the 1 s hold decides (
   g.game.boopsPaused = true; assert.deepEqual(settle(w, 3), []);
 });
 test('a boop of an animal the store already shows in another train is refused at once, with no claim (M-14, M-22)', async () => {
-  const { decodeFrame, encodeFrame } = await import('../src/net/replica.js'), { REGISTRY, ANIMAL } = await import('../src/net/kinds.js');
+  const { decodeFrame, encodeFrame } = await import('../src/net/replica.js'), { ANIMAL } = await import('../src/net/kinds.js'), { BINDINGS, registryOf } = await import('../src/net/bindings.js'), REGISTRY = registryOf(BINDINGS);
   const w = await mpWorld({ seed: 87 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], claims = [];
   w.hub.drop = (from, to, d) => { if (d?.t === 'claim') claims.push(d); return false; };
@@ -580,4 +577,25 @@ test('a new kind of shared object is a kind and a row in the binding table: it r
   assert.deepEqual(g2.sync.store.get('gate', 2), { open: true }, 'host -> guest'); assert.deepEqual(g3.sync.store.get('flag', 2), { up: true }, 'guest -> host -> other guest');
   assert.deepEqual(g3.sync.store.get('flag', 1), { up: true }, 'the host has its own too');
   assert.ok(json.every(t => t === 'welcome'), `no new message: ${json}`);
+});
+
+test('a slot the host reuses reaches the guest as the new animal (G-3, M-26)', async () => {
+  const w = await mpWorld({ seed: 81 }); w.seconds(1);
+  const g = w.guests[0], H = w.host.game.herd, old = H.free().find(a => a.home === 'route' && !a.hidden && a.type !== 'chick' && !H.animals.some(c => c.leader === a.id));
+  old.state = 'gone'; old.epoch = 3; w.seconds(GONE_KEEP + 1); // gone long enough on the host; the guest dropped its record
+  assert.equal(g.game.herd.animals[old.id].state, 'elsewhere');
+  const n = H.animals.length; H.respawn(); const b = H.animals[old.id];
+  assert.notEqual(b, old); assert.equal(H.animals.length, n, 'the slot was reused');
+  w.seconds(2.5); // a keyframe
+  const gb = g.game.herd.animals[old.id];
+  assert.equal(gb.type, b.type); assert.ok(free(g.game, gb), `free on the guest, here ${gb.state}`); assert.equal(gb.epoch, b.epoch);
+  assert.ok(Math.hypot(gb.x - b.x, gb.z - b.z) < 0.5, 'where the host has it');
+  assert.deepEqual(settle(w, 1), []);
+});
+test('the host counts a guest horn in wall time: a stopped frame clock never shuts it out (M-8, M-50)', async () => {
+  let wall = 0; const w = await mpWorld({ seed: 82, clock: () => wall }); w.seconds(1);
+  const h = w.host.sync, p = h.players.map.get(2), horns = () => w.host.events.filter(e => e.type === 'remoteHorn').length;
+  wall = 1000; h.handlers.horn(p); wall = 1100; h.handlers.horn(p); assert.equal(horns(), 0, 'events wait for before()');
+  wall = 1400; h.handlers.horn(p); w.host.events.push(...h.before(w.now)); // no frame between them: only the wall clock moved
+  assert.equal(horns(), 2, 'the first, and the one 400 ms later; the one after 100 ms is dropped');
 });
