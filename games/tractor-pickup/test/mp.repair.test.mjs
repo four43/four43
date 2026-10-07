@@ -1,7 +1,7 @@
 // test/mp.repair.test.mjs — repair after lost messages (M-56..M-58, M-53 loss tests)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, settle } from './mp.harness.mjs';
+import { mpWorld, settle, trainFrame, parked } from './mp.harness.mjs';
 import { createLoad } from '../src/sim/slots.js';
 import { CAPACITY } from '../src/sim/game.js';
 
@@ -23,6 +23,12 @@ test('an away guest keeps its animals: the 3 s count only while its frames come 
   const w = await mpWorld({ seed: 92 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = inFrontOf(g, ha);
   w.seconds(3); assert.equal(ga.state, 'ride');
-  w.hub.away(g.net.id); w.seconds(10); w.hub.back(g.net.id); w.seconds(1);
+  const hp = w.host.sync.players.map.get(2), t = hp.latest.bodies[0].p, empty = trainFrame(2, 2, { ...parked(t.x, t.z), riders: [] }, w.now + 1);
+  w.hub.drop = (from, to, d) => from === g.net.id && d instanceof ArrayBuffer && d !== empty; // the guest's own train frames are lost; the host's last one has no riders
+  g.net.send(w.host.net.id, empty, false); w.step(1); w.hub.drop = null;
+  assert.ok(hp.latest.riders.length === 0, 'the host last heard a train without the animal');
+  w.hub.away(g.net.id); w.seconds(10);
+  assert.equal(ha.state, 'carried', 'not freed while away'); assert.equal(ha.owner, 2);
+  w.hub.back(g.net.id); w.seconds(1);
   assert.equal(ha.state, 'carried'); assert.equal(ha.owner, 2); assert.equal(ga.state, 'ride');
 });

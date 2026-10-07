@@ -7,7 +7,7 @@ import { createHostSync } from '../src/net/host.js';
 import { createGuestSync } from '../src/net/guest.js';
 import { quatAxes } from '../src/sim/tractor.js';
 import { encodeFrame } from '../src/net/replica.js';
-import { ANIMAL, TRAIN } from '../src/net/kinds.js';
+import { ANIMAL, TRAIN, animalRecord } from '../src/net/kinds.js';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
@@ -55,24 +55,34 @@ export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = 
 export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
 export const animalRec = o => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle', leader: null, line: 0, ...o });
 export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x, y: 1, z }, q: { x: 0, y: 0, z: 0, w: 1 } })), riders: [] });
-// M-58: what a guest shows that the host does not (empty: all devices agree). Animals carried by somebody else may be drawn or not (carried or elsewhere).
+// M-58: what a guest shows that the host does not (empty: all devices agree). Per guest that is not alone:
+// - every host animal: gone on the host -> gone, not drawn (elsewhere) or missing here; held by this guest -> held here (fly, ride, show);
+//   held by another player -> carried or not drawn here; walking into the barn -> toBarn here; free -> free here;
+//   not free on the host (held, carried or walking in) -> this guest's replicated record has the host's owner and ownership number (epoch)
+// - every animal held here is carried by this guest on the host; no open claims; every tree broken here exactly when broken on the host
+// - the same players: every host roster number (but its own) is in this guest's players, and no other number is
 const HELD = ['fly', 'ride', 'show'];
 export function disagreements(w) {
-  const out = [], H = w.host.game;
+  const out = [], H = w.host.game, roster = [1, ...w.host.sync.players.list().map(p => p.n)];
   for (const g of w.guests) {
     if (g.sync.alone) continue; const G = g.game, you = g.sync.you, at = (b, what) => out.push(`${g.name} animal ${b}: ${what}`);
     for (const a of H.herd.animals) {
-      if (a.state === 'gone') continue; const b = G.herd.animals[a.id], owner = HELD.includes(a.state) ? 1 : a.state === 'carried' ? a.owner : 0;
+      const b = G.herd.animals[a.id];
+      if (a.state === 'gone') { if (b && b.state !== 'gone' && b.state !== 'elsewhere') at(a.id, `gone on the host, here ${b.state}`); continue; }
+      const owner = HELD.includes(a.state) ? 1 : a.state === 'carried' ? a.owner : 0;
       if (!b) { at(a.id, 'missing'); continue; }
       if (owner === you) { if (!HELD.includes(b.state)) at(a.id, `the host says mine, here ${b.state}`); }
       else if (owner) { if (b.state !== 'carried' && b.state !== 'elsewhere') at(a.id, `player ${owner} has it, here ${b.state}`); }
       else if (a.state === 'toBarn') { if (b.state !== 'toBarn') at(a.id, `walking in on the host, here ${b.state}`); }
       else if (!free(G, b)) at(a.id, `free on the host, here ${b.state}`);
+      if (owner || a.state === 'toBarn') { const h = animalRecord(a), r = g.sync.store.get('animal', a.id);
+        if (!r || r.owner !== h.owner || r.epoch !== h.epoch) at(a.id, `owner ${h.owner} epoch ${h.epoch} on the host, here ${r ? `owner ${r.owner} epoch ${r.epoch}` : 'no record'}`); }
     }
     for (const b of G.herd.animals) if (HELD.includes(b.state) && !(H.herd.animals[b.id]?.state === 'carried' && H.herd.animals[b.id].owner === you)) at(b.id, `held here, ${H.herd.animals[b.id]?.state} on the host`);
     if (g.sync.pending.size) out.push(`${g.name}: ${g.sync.pending.size} open claims`);
     for (const t of H.trees.list) if ((t.state === 'broken') !== (G.trees.list[t.id].state === 'broken')) out.push(`${g.name} tree ${t.id}: ${t.state} on the host, ${G.trees.list[t.id].state} here`);
-    for (const n of [1, ...w.host.sync.players.list().map(p => p.n)]) if (n !== you && !g.sync.players.map.has(n)) out.push(`${g.name}: no player ${n}`);
+    for (const n of roster) if (n !== you && !g.sync.players.map.has(n)) out.push(`${g.name}: no player ${n}`);
+    for (const n of g.sync.players.map.keys()) if (n !== you && !roster.includes(n)) out.push(`${g.name}: player ${n} is not on the host`);
   }
   return out;
 }
