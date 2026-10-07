@@ -161,6 +161,12 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .parent button{font:inherit;min-height:48px;padding:6px 18px;border-radius:12px;border:2px solid #6b4428;background:#fff;color:#3a2412;cursor:pointer}
 .parent button.primary{background:#f5c84c;font-weight:700}
 .parent button.x{position:absolute;top:10px;right:10px;width:48px;height:48px;min-height:0;padding:0;border-radius:50%;background:#d8342c;border-color:#8f1f1a;display:grid;place-items:center}.parent button.x svg{width:55%;height:55%}
+.parent.mp .room{font:700 26px/1.2 Andika,system-ui,sans-serif;letter-spacing:.02em;margin:6px 0 10px;word-break:break-all}
+.parent.mp .qr{width:min(260px,70vw);margin:0 auto 10px;background:#fff;padding:6px;border-radius:10px}.parent.mp .qr svg{width:100%;height:auto;display:block}
+.parent.mp .players{list-style:none;padding:0;margin:8px 0}.parent.mp .players li{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid #eadcc6}
+.parent.mp .players img{width:64px;height:48px;object-fit:contain}.parent.mp .players em{margin-left:auto;font-style:normal;color:#7a5a3a}.parent.mp .players button{min-height:40px;padding:4px 12px}
+.parent.mp .row.big button{flex:1;min-height:72px;font-size:22px}.parent.mp input[name=room]{font:inherit;width:14em;padding:8px;border:2px solid #a98a63;border-radius:8px;text-transform:uppercase}
+.parent.mp .err{color:#b3261e;font-weight:700}.parent button:disabled{opacity:.45;cursor:default}
 @keyframes bob{50%{transform:translateY(-8px) rotate(-1.5deg)}}
 @keyframes grow{0%{transform:scale(0) rotate(-12deg)}100%{transform:scale(1) rotate(0)}}
 @keyframes bounce{0%{transform:scale(0)}55%{transform:scale(1.3)}75%{transform:scale(.9)}100%{transform:scale(1)}}

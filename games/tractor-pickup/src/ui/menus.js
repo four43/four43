@@ -3,6 +3,7 @@
 import { clampSettings, unlockedPaints, unlockedHats, wornHats, toggleHat, placeSticker, unplaceSticker, bookPages } from '../sim/progress.js';
 import { PAINTS } from '../render/vehicles3d.js';
 import { SCALE } from '../render/petScale.js';
+import { qrSvg } from './qr.js';
 
 const el = (cls, tag = 'div', parent) => { const e = document.createElement(tag); if (cls) e.className = cls; parent?.appendChild(e); return e; };
 const RB = '<linearGradient id="rb" x1="0" x2="1"><stop offset="0" stop-color="#e53935"/><stop offset=".25" stop-color="#fdd835"/><stop offset=".5" stop-color="#43a047"/><stop offset=".75" stop-color="#1e88e5"/><stop offset="1" stop-color="#8e24aa"/></linearGradient>';
@@ -46,7 +47,7 @@ const pageSvg = k => { const [s0, s1, h0, h1, extra] = PAGE_ART[k % PAGE_ART.len
 const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${RB}</defs><path d="M14 26 H66 L62 70 Q40 76 18 70 Z" fill="#c9ccd4" stroke="#4a3a2c" stroke-width="4" stroke-linejoin="round"/>
 <ellipse cx="40" cy="26" rx="26" ry="8" fill="url(#rb)" stroke="#4a3a2c" stroke-width="4"/><path d="M18 22 Q40 2 62 22" fill="none" stroke="#4a3a2c" stroke-width="4"/></svg>`;
 
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onParent }) {
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onParent, onMultiplayer }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
@@ -162,15 +163,16 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
   for (const n of ['pointerup', 'pointercancel', 'lostpointercapture']) gear.addEventListener(n, stop);
   gear.addEventListener('contextmenu', e => e.preventDefault());
 
-  function openParent(settings, seed) {
+  function openParent(settings, seed, { inRoom = false } = {}) {
     root.querySelector('.parent')?.remove();
     const p = el('parent', 'div', root), box = el('box', 'div', p);
     box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Parent menu</h2>
+<div class="row"><button data-a="mp" class="primary">Multiplayer</button></div>
 <fieldset><legend>Power</legend>${['low', 'medium', 'high'].map(v => `<label><input type="radio" name="power" value="${v}"> ${v[0].toUpperCase() + v.slice(1)}</label>`).join('')}</fieldset>
 <fieldset><legend>Voice</legend><label><input type="radio" name="voice" value="1"> On</label><label><input type="radio" name="voice" value="0"> Off</label></fieldset>
 <fieldset><legend>Music</legend><label><input type="radio" name="music" value="1"> On</label><label><input type="radio" name="music" value="0"> Off</label></fieldset>
 <fieldset><legend>Farm seed (this farm: ${seed})</legend><label>Seed <input type="number" name="seed" min="0" step="1"></label><label><input type="checkbox" name="useSeed"> Use this seed</label></fieldset>
-<div class="row"><button data-a="new">New farm</button><button data-a="clear">Clear stickers</button></div>
+<div class="row"><button data-a="new"${inRoom ? ' disabled title="Leave the room first"' : ''}>New farm</button><button data-a="clear">Clear stickers</button></div>
 <div class="row"><button data-a="apply" class="primary">Apply</button></div>`;
     const q = n => box.querySelector(`[name=${n}]`), pick = (n, v) => { box.querySelector(`[name=${n}][value="${v}"]`).checked = true; };
     pick('power', settings.power); pick('voice', settings.voice ? 1 : 0); pick('music', settings.music ? 1 : 0);
@@ -184,10 +186,43 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
       const a = e.target.closest?.('[data-a]')?.dataset.a; if (!a) return; // (the close X holds an svg: the tap can land on it)
       if (a === 'apply') { onSettings(values()); done(); }
       else if (a === 'close') done();
+      else if (a === 'mp') { done(); onMultiplayer(); }
       else if (a === 'new') { onSettings(values()); done(); close(); onNewFarm(); } // a screen left open would hide the new farm; onNewFarm itself brings back the start screen when play has not begun
       else if (a === 'clear' && confirm('Clear all stickers? This cannot be undone.')) { onClearStickers(); done(); }
     });
     p.addEventListener('pointerdown', e => e.stopPropagation());
   }
-  return { showStart, showReward, showBook, openPaint, openParent, hide: close, get open() { return !!screen; } };
+  // M-29..M-34: the Multiplayer panel (text, like the parent menu). It redraws on every session change while it is open.
+  let mpSession = null;
+  function openMultiplayer(session) { mpSession = session; root.querySelector('.parent.mp')?.remove(); const p = el('parent mp', 'div', root), box = el('box', 'div', p); p.addEventListener('pointerdown', e => e.stopPropagation()); drawMp(box); }
+  function refreshMultiplayer() { const box = root.querySelector('.parent.mp .box'); if (box && mpSession) drawMp(box); }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const STATUS = { connecting: 'connecting…', direct: 'direct', relayed: 'relayed', away: 'away', '': '' };
+  function playerRows(v, removable) {
+    return `<ul class="players">${v.players.map(p => `<li><img alt="" src="${tractorPic(p.paint)}"><span>Player ${p.n}${p.you ? ' (this device)' : p.host ? ' (host)' : ''}</span><em>${STATUS[p.status] ?? ''}</em>${removable && !p.you ? `<button data-a="remove" data-n="${p.n}">Remove</button>` : ''}</li>`).join('')}</ul>`;
+  }
+  function drawMp(box) {
+    const v = mpSession.view(), err = v.error ? `<p class="err">${esc(v.error)}</p>` : '';
+    let body = '';
+    if (v.state === 'idle') body = `<div class="row big"><button data-a="host" class="primary">Host</button><button data-a="join" class="primary">Join</button></div>${err}`;
+    else if (v.state === 'starting') body = `<p>Making a room…</p>${err}<div class="row"><button data-a="stop">Cancel</button></div>`;
+    else if (v.state === 'hosting') body = `<p class="room">${esc(v.name)}</p><div class="qr">${qrSvg(v.url)}</div>${playerRows(v, true)}
+<label><input type="checkbox" data-a="lock"${v.locked ? ' checked' : ''}> Lock: no new players</label><div class="row"><button data-a="stop">Stop hosting</button></div>${err}`;
+    else if (v.state === 'join' || v.state === 'checking') body = `<label>Room name <input name="room" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="tractor-pickup-K7MX2"></label>
+<div class="row"><button data-a="submit" class="primary"${v.state === 'checking' ? ' disabled' : ''}>Join</button><button data-a="cancel">Back</button></div>${err}`;
+    else if (v.state === 'prompt' || v.state === 'joining') body = `<p>Join <b>${esc(v.name)}</b>? ${v.info.players} ${v.info.players === 1 ? 'player' : 'players'}.</p>
+<div class="row"><button data-a="confirm" class="primary"${v.state === 'joining' ? ' disabled' : ''}>Join</button><button data-a="cancel">Cancel</button></div>${err}`;
+    else if (v.state === 'joined') body = `<p class="room">${esc(v.name)}</p>${playerRows(v, false)}<div class="row"><button data-a="leave">Leave</button></div>${err}`;
+    const keep = box.querySelector('[name=room]')?.value ?? '';
+    box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Multiplayer</h2>${body}`;
+    const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); }
+    box.onclick = e => {
+      const t = e.target.closest?.('[data-a]'), a = t?.dataset.a; if (!a) return;
+      if (a === 'close') { box.parentElement.remove(); return; }
+      ({ host: () => mpSession.host(), join: () => mpSession.openJoin(), stop: () => mpSession.stopHosting(), submit: () => mpSession.submitCode(input.value), cancel: () => mpSession.cancel(),
+        confirm: () => { mpSession.confirmJoin().then(() => { if (mpSession.view().state === 'joined') box.parentElement?.remove(); }); }, leave: () => mpSession.leave(),
+        remove: () => mpSession.remove(Number(t.dataset.n)), lock: () => mpSession.lock(t.checked) })[a]?.();
+    };
+  }
+  return { showStart, showReward, showBook, openPaint, openParent, openMultiplayer, refreshMultiplayer, hide: close, get open() { return !!screen; } };
 }
