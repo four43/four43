@@ -1,6 +1,6 @@
 // src/net/kinds.js
 // The kinds of replicated objects (M-22) and how the host reads animal and tree records from its game (trains: players.js trainRecord).
-// A new kind of shared object in a later version is a new entry here, not a new message.
+// A new kind of shared object in a later version is a new entry here and a row in bindings.js, not a new message.
 import { F, kind, createRegistry } from './replica.js';
 import { TYPES } from '../sim/herd.js';
 import { PAINT_NAMES, MAX_PLAYERS } from './protocol.js';
@@ -19,7 +19,7 @@ export const PLAYER = kind({ name: 'player', code: 3, authority: 'host', max: MA
 export const TRAIN = kind({ name: 'train', code: 4, authority: 'owner', max: 1, idMin: 1, idMax: MAX_PLAYERS,
   fields: { mode: F.oneOf(MODES), full: F.bool(), bodies: F.list(POSE, 3, 3), // tractor, trailer, wagon
     riders: F.list(F.obj({ id: F.uint(2, 0xfffe), slot: F.uint(1, 11), flying: F.bool(), x: XZ, y: Y, z: XZ, yaw: F.angle() }), LIMIT.riders) } });
-export const KINDS = [ANIMAL, TREE, PLAYER, TRAIN], REGISTRY = createRegistry(KINDS);
+export const KINDS = [ANIMAL, TREE, PLAYER, TRAIN], REGISTRY = createRegistry(KINDS, { maxSender: MAX_PLAYERS });
 // M-22: a carried animal's position comes from its owner's train, so its record holds none (and does not change while it rides)
 export function animalRecord(a) {
   if (a.state === 'gone') return null; // not replicated: a keyframe leaves it out

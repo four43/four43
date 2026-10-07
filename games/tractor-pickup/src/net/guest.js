@@ -3,9 +3,9 @@
 // trees and players, and the other trains, from the replicated objects in its store. A claim's answer is the animal's replicated owner (M-13, M-14);
 // at each keyframe from the host the guest repairs what a lost message left wrong (M-56).
 import { encodeFrame, decodeFrame, createTracker, createStore, isFrame } from './replica.js';
-import { REGISTRY, KINDS, TRAIN } from './kinds.js';
+import { BINDINGS, ofAuthority, registryOf, readAll } from './bindings.js';
 import { checkFromHost, createRate, NET_VERSION, SILENT_MS } from './protocol.js';
-import { createPlayers, trainRecord, SEND } from './players.js';
+import { createPlayers, SEND } from './players.js';
 import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
 import { NOT_FREE } from '../sim/herd.js';
@@ -17,9 +17,10 @@ export const TREE_GRACE = 1000; // ms: a keyframe does not grow back a tree this
 const MAX_JSON = 2048; // M-50: a longer reliable message from the host is dropped (the welcome is the biggest: about 60 bytes)
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
-export function createGuestSync({ game, net, paint, onFarm, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
+export function createGuestSync({ game, net, paint, onFarm, clock = () => performance.now(), bindings = BINDINGS }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps); bindings: the replicated kinds
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
-  const store = createStore(KINDS), mine = createTracker([TRAIN]), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
+  const reg = registryOf(bindings), ownRows = ofAuthority(bindings, 'owner');
+  const store = createStore(bindings.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
   let you = 0, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
   let hostAway = false, silent = false, paused = false, lastFast = 0; // M-40: two sources (the server's hostAway, the silence watchdog); the host is away while either says so
   const setPaused = () => { const v = hostAway || silent; if (v === paused) return; paused = v; game.boopsPaused = v; const p = players.map.get(1); if (p) p.away = v; };
@@ -28,7 +29,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   const hello = () => { helloAt = clock(); toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); };
   const taken = r => r && r.state !== 'free' && r.owner !== you; // M-14: the record shows the animal in another player's train (or walking into the barn)
   const holds = id => game.flights.some(f => f.animal.id === id) || game.load.slots.some(s => s.animal.id === id);
-  const forgetOwner = n => { for (const k of KINDS) if (k.authority === 'owner') store.forget(k.name, n); }; // a player left or came: a new one with its number starts a fresh (lower) clock, and a late frame of the old one must not outrank it
+  const forgetOwner = n => { for (const b of ownRows) store.forget(b.kind.name, n); }; // a player left or came: a new one with its number starts a fresh (lower) clock, and a late frame of the old one must not outrank it
   function applyRoster() { // M-22: the player objects. A new player gets this train's keyframe at once (M-23)
     const seen = new Set();
     const leave = p => { players.remove(p.n); forgetOwner(p.n); if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); };
@@ -51,15 +52,16 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     for (let i = 0; i < lost.length; i += 16) toHost({ t: 'release', ids: lost.slice(i, i + 16) });
     const me = store.get('player', you); if (me && (me.body !== myPaint.body || me.trim !== myPaint.trim)) toHost({ t: 'paint', paint: myPaint }); // a lost paint (M-2)
   }
+  const SHOW = { // how this game shows each kind once the store has taken a frame: (that kind's accepted changes, the frame). A kind not here lives in the store only
+    animal(ch, f) { if (f.groups.has('animal') && !deferred) herdBuf.push(f.time, nowMs, store.all('animal')); }, // M-25: a snapshot of every animal at the frame's time
+    tree(ch) { if (!deferred) for (const c of ch) if (c.rec) applyTree(c.id, c.rec.state); },
+    player(ch) { if (ch.length) applyRoster(); },
+    train(ch, f) { for (const c of ch) if (c.rec && players.map.has(c.id)) { const first = !players.map.get(c.id).latest; // after the players (the binding table's order)
+      if (players.push(c.id, f.time, c.rec, nowMs) && first) out.push({ type: 'playerJoined', n: c.id, x: c.rec.bodies[0].p.x, z: c.rec.bodies[0].p.z }); } },
+  };
   function applyFrame(f) {
     const changes = store.apply(f);
-    if (changes.some(c => c.kind === 'player')) applyRoster();
-    for (const c of changes) {
-      if (c.kind === 'tree' && c.rec && !deferred) applyTree(c.id, c.rec.state);
-      if (c.kind === 'train' && c.rec && players.map.has(c.id)) { const first = !players.map.get(c.id).latest;
-        if (players.push(c.id, f.time, c.rec, nowMs) && first) out.push({ type: 'playerJoined', n: c.id, x: c.rec.bodies[0].p.x, z: c.rec.bodies[0].p.z }); }
-    }
-    if (f.groups.has('animal') && !deferred) herdBuf.push(f.time, nowMs, store.all('animal')); // M-25: a snapshot of every animal at the frame's time
+    for (const b of bindings) SHOW[b.kind.name]?.(changes.filter(c => c.kind === b.kind.name), f);
     if (f.key && f.sender === 1 && !deferred) repair();
   }
   function applyWelcome(m) {
@@ -101,7 +103,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
       if (from !== hostPeer || alone || !(reliable ? rate.rel : rate.fast).allow(clock())) return; // M-50: the guest checks the host's messages too (in wall time)
       if (data instanceof ArrayBuffer) {
         if (!you) return; lastFast = clock();
-        const f = isFrame(data) && decodeFrame(data, REGISTRY); if (!f || f.sender === you) return;
+        const f = isFrame(data) && decodeFrame(data, reg); if (!f || f.sender === you) return;
         if (deferred && f.key && f.sender === 1) deferredKey = f; // M-19: the new farm's state, for when its welcome is used
         applyFrame(f);
         return;
@@ -135,7 +137,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
       if (!r || r.owner !== p.n || !a || pending.has(c.id) || HELD.has(a.state)) continue;
       Object.assign(a, { state: 'carried', x: c.x, y: c.y, z: c.z, yaw: c.yaw, riding: c.riding, anim: c.flying ? 'run' : 'idle' }); }
   }
-  const trainNow = () => ({ train: [[you, trainRecord(game)]] });
+  const mineNow = () => readAll(ownRows, { game, you });
   const sync = {
     players, handlers, out, pending, store,
     get game() { return game; }, get you() { return you; }, get alone() { return alone; },
@@ -158,8 +160,8 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
         if (e.type === 'horn') toHost({ t: 'horn' }); // M-8
       }
       if (ids.length) toHost({ t: 'claim', ids: ids.slice(0, 16) }); // M-13: a chick line goes in one claim
-      if (now - lastKey >= SEND.key) { lastKey = now; toHost(encodeFrame({ key: true, sender: you, time: now, groups: mine.key(trainNow()) }), true); } // M-23
-      if (now - lastTrain >= SEND.train) { lastTrain = now; toHost(encodeFrame({ key: false, sender: you, time: now, groups: mine.diff(trainNow()) }), false); }
+      if (now - lastKey >= SEND.key) { lastKey = now; toHost(encodeFrame({ key: true, sender: you, time: now, groups: mine.key(mineNow()) }), true); } // M-23
+      if (now - lastTrain >= SEND.train) { lastTrain = now; toHost(encodeFrame({ key: false, sender: you, time: now, groups: mine.diff(mineNow()) }), false); }
     },
     setGame(g) { game = g; },
     setPaint(pt) { myPaint = { ...pt }; toHost({ t: 'paint', paint: myPaint }); },

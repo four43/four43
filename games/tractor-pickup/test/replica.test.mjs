@@ -119,3 +119,10 @@ test('defining a kind is loud about mistakes', () => {
   assert.throws(() => createRegistry([mk('a', 1), mk('a', 2)]), /duplicate/); assert.throws(() => createRegistry([mk('a', 1), mk('b', 1)]), /duplicate/);
   assert.throws(() => mk('c', 256), /bad kind code/);
 });
+test('the registry sets the highest sender; a guest frame with any host kind group, even an empty one, is dropped (M-50)', () => {
+  const BALE = kind({ name: 'bale', code: 9, authority: 'owner', max: 4, idMin: 1, idMax: 4, fields: { on: F.bool() } });
+  const f = (sender, reg) => decodeFrame(encodeFrame({ key: false, sender, time: 1, groups: [{ kind: BALE, records: [[sender, { on: true }]] }] }), reg);
+  assert.ok(f(4, createRegistry([BALE], { maxSender: 4 }))); assert.equal(f(3, createRegistry([BALE], { maxSender: 2 })), null, 'over the highest sender');
+  assert.equal(decodeFrame(encodeFrame({ key: false, sender: 2, time: 1, groups: [{ kind: ANIMAL, records: [] }] }), REGISTRY), null, 'an empty animal group from a guest');
+  assert.equal(REGISTRY.maxSender, 4);
+});

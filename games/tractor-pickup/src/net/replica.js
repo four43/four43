@@ -20,7 +20,8 @@ export const F = {
   list: (of, max, min = 0) => ({ t: 'list', of, max, min }), // u8 count
 };
 export const kind = def => { if (!Number.isInteger(def.code) || def.code < 0 || def.code > 255) throw new Error('bad kind code ' + def.code); return { idMin: 0, ...def, rec: F.obj(def.fields) }; }; // { name, code, authority: 'host' | 'owner', max, idMin, idMax, fields, newer? }
-export const createRegistry = kinds => { for (const [i, k] of kinds.entries()) if (kinds.some((o, j) => j < i && (o.name === k.name || o.code === k.code))) throw new Error('duplicate kind ' + k.name); return { list: kinds, byName: new Map(kinds.map(k => [k.name, k])), byCode: new Map(kinds.map(k => [k.code, k])) }; };
+// maxSender: the highest device number (the host is 1); a frame from a higher one is dropped
+export const createRegistry = (kinds, { maxSender = 255 } = {}) => { for (const [i, k] of kinds.entries()) if (kinds.some((o, j) => j < i && (o.name === k.name || o.code === k.code))) throw new Error('duplicate kind ' + k.name); return { list: kinds, byName: new Map(kinds.map(k => [k.name, k])), byCode: new Map(kinds.map(k => [k.code, k])), maxSender }; };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(v) ? v : 0));
 function put(c, f, val) {
@@ -78,15 +79,15 @@ export function encodeFrame({ key, sender, time, groups }) {
 }
 export const isFrame = buf => buf instanceof ArrayBuffer && buf.byteLength >= HEAD && (new Uint8Array(buf)[0] === FRAME.KEY || new Uint8Array(buf)[0] === FRAME.DIFF);
 // -> { key, sender, time, groups: Map(kindName -> { records: Map(id -> rec), removed: [id] }) } or null. Every record must be one the sender is the
-// authority for (M-50: a device speaks only for itself); every id appears once; a keyframe removes nothing by name (what it leaves out is gone).
+// authority for (M-50: a device speaks only for itself), and only the host sends a host kind's group; every id appears once; a keyframe removes nothing by name (what it leaves out is gone).
 export function decodeFrame(buf, reg) {
   if (!isFrame(buf) || buf.byteLength > MAX_FRAME) return null;
   try {
     const v = new DataView(buf), c = { v, o: 0 }, key = v.getUint8(c.o++) === FRAME.KEY, sender = v.getUint8(c.o++), time = v.getUint32(c.o, true); c.o += 4;
-    if (sender < 1 || sender > 4) return null;
+    if (sender < 1 || sender > reg.maxSender) return null;
     const n = v.getUint8(c.o++), groups = new Map();
     for (let i = 0; i < n; i++) {
-      const k = reg.byCode.get(v.getUint8(c.o++)); if (!k || groups.has(k.name)) return null;
+      const k = reg.byCode.get(v.getUint8(c.o++)); if (!k || groups.has(k.name) || (k.authority === 'host' && sender !== 1)) return null; // a host kind only from the host, even with no records
       const count = v.getUint16(c.o, true); c.o += 2; if (count > k.max) return null;
       const records = new Map();
       for (let j = 0; j < count; j++) {

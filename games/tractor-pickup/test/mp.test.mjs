@@ -568,3 +568,16 @@ test('a guest horn counts at most once in 300 ms; the extra ones are not passed 
   g1.net.send(H, { t: 'horn' }, true); w.seconds(0.05); assert.deepEqual(heard(), [1, 1], 'still within 300 ms');
   w.seconds(0.1); g1.net.send(H, { t: 'horn' }, true); w.seconds(0.1); assert.deepEqual(heard(), [2, 2], 'after 300 ms');
 });
+test('a new kind of shared object is a kind and a row in the binding table: it replicates with no new message, from the host and from a guest (M-22)', async () => {
+  const { F, kind } = await import('../src/net/replica.js'), { BINDINGS } = await import('../src/net/bindings.js');
+  const GATE = kind({ name: 'gate', code: 9, authority: 'host', max: 4, idMax: 3, fields: { open: F.bool() } }); // the host's
+  const FLAG = kind({ name: 'flag', code: 10, authority: 'owner', max: 1, idMin: 1, idMax: 4, fields: { up: F.bool() } }); // each player's own
+  const bindings = [...BINDINGS, { kind: GATE, read: at => [[2, { open: !!at.game.gateOpen }]] }, { kind: FLAG, read: at => [[at.you, { up: !!at.game.flagUp }]] }];
+  const w = await mpWorld({ seed: 89, guests: 2, bindings }); w.seconds(1);
+  const [g2, g3] = w.guests, json = []; w.hub.drop = (from, to, d) => { if (!(d instanceof ArrayBuffer)) json.push(d.t); return false; };
+  assert.deepEqual(g2.sync.store.get('gate', 2), { open: false }); assert.deepEqual(g3.sync.store.get('flag', 2), { up: false });
+  w.host.game.gateOpen = true; g2.game.flagUp = true; w.host.game.flagUp = true; w.seconds(0.3);
+  assert.deepEqual(g2.sync.store.get('gate', 2), { open: true }, 'host -> guest'); assert.deepEqual(g3.sync.store.get('flag', 2), { up: true }, 'guest -> host -> other guest');
+  assert.deepEqual(g3.sync.store.get('flag', 1), { up: true }, 'the host has its own too');
+  assert.ok(json.every(t => t === 'welcome'), `no new message: ${json}`);
+});

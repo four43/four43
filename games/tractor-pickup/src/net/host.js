@@ -3,9 +3,9 @@
 // own train (M-22). The host sends keyframes and diffs (M-23) and passes each guest's train on. Requests from guests come as JSON events;
 // their results go back as replicated state (M-24). Bad or too many messages are dropped (M-50); a handler error never reaches the game (M-44).
 import { encodeFrame, decodeFrame, createTracker, isFrame } from './replica.js';
-import { REGISTRY, ANIMAL, TREE, PLAYER, TRAIN, animalRecords, treeRecords, playerRecords } from './kinds.js';
+import { BINDINGS, ofAuthority, registryOf, readAll } from './bindings.js';
 import { checkFromGuest, createRate, NET_VERSION, MAX_PLAYERS, SILENT_MS } from './protocol.js';
-import { createPlayers, trainRecord, SEND } from './players.js';
+import { createPlayers, SEND } from './players.js';
 import { createBumper } from '../sim/bump.js';
 import { NOT_FREE } from '../sim/herd.js';
 import { fullDodge } from '../sim/game.js';
@@ -17,15 +17,16 @@ const TALK_MS = 500; // M-57 counts only while the guest's frames come in (they 
 const MAX_JSON = 2048; // M-50: a longer reliable message from a guest is dropped (the biggest real one is a few hundred)
 const REGROW_MS = 5000; // M-17, M-50: a guest regrow counts at most once in 5 s, so one guest cannot flood the others
 const HORN_MS = 300; // M-8, M-50, R-8: a guest horn counts at most once in 300 ms, so the others never hear a blare
-export function createHostSync({ game, net, paint, clock = () => performance.now() }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps)
+export function createHostSync({ game, net, paint, clock = () => performance.now(), bindings = BINDINGS }) { // clock: wall time for the rate limits (the sim clock stops while the page sleeps); bindings: the replicated kinds
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper();
-  const world = createTracker([ANIMAL, TREE, PLAYER]), mine = createTracker([TRAIN]), missing = new Map(); // missing: animal id -> ms it has been owned by a guest but not in that guest's train (M-57)
+  const reg = registryOf(bindings), hostRows = ofAuthority(bindings, 'host'), ownRows = ofAuthority(bindings, 'owner');
+  const world = createTracker(hostRows.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), missing = new Map(); // missing: animal id -> ms it has been owned by a guest but not in that guest's train (M-57)
   let joins = 0, lastWorld = -Infinity, lastTrain = -Infinity, lastKey = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0, lastBefore = null;
   const send = (n, m, rel = true) => { const p = players.map.get(n); if (p?.peer) net.send(p.peer, m, rel); };
   const all = (m, rel = true, except = 0) => { for (const p of players.list()) if (p.n !== except && p.peer && p.helloed) net.send(p.peer, m, rel); };
   const roster = () => [{ n: 1, paint: myPaint, away: false, join: 0 }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away, join: p.join }))];
-  const worldNow = () => ({ animal: animalRecords(game.herd), tree: treeRecords(game.trees), player: playerRecords(roster()) });
-  const trainNow = () => ({ train: [[1, trainRecord(game)]] });
+  const at = { get game() { return game; }, get roster() { return roster(); }, you: 1 };
+  const worldNow = () => readAll(hostRows, at), mineNow = () => readAll(ownRows, at);
   const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, you: p.n, next: game.herd.animals.length }); // M-24: the first keyframe follows at once
   const freeNumber = () => { for (let n = 2; n <= MAX_PLAYERS; n++) if (![...players.map.keys()].includes(n)) return n; return 0; };
   const owned = n => game.herd.animals.filter(a => a.state === 'carried' && a.owner === n);
@@ -59,9 +60,8 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   net.on('peerLeft', id => gone(id));
   net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; p.join = joins = (joins + 1) % 256; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
   function onTrain(p, f, data, reliable) {
-    if ([...f.groups.keys()].some(k => k !== 'train')) return; // M-50: a guest is the authority for its own train only (decodeFrame checked the id)
     p.heardAt = clock();
-    const rec = f.groups.get('train')?.records.get(p.n); // a frame may hold no train group
+    const rec = f.groups.get('train')?.records.get(p.n); // a frame may hold no train group (decodeFrame let through only this guest's own objects, M-50)
     if (rec) { const first = !p.latest; if (players.push(p.n, f.time, rec, nowMs) && first) out.push({ type: 'playerJoined', n: p.n, x: rec.bodies[0].p.x, z: rec.bodies[0].p.z }); }
     for (const q of players.list()) if (q.n !== p.n && q.peer && q.helloed) net.send(q.peer, data, reliable); // M-23: the host sends each guest's train to the other guests
   }
@@ -72,7 +72,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
       if (data instanceof ArrayBuffer) {
         if (!p.helloed || !isFrame(data)) return;
         new DataView(data).setUint8(1, n); // M-50: a guest speaks only for itself
-        const f = decodeFrame(data, REGISTRY); if (f) onTrain(p, f, data, reliable);
+        const f = decodeFrame(data, reg); if (f) onTrain(p, f, data, reliable);
         return;
       }
       if (!(JSON.stringify(data)?.length <= MAX_JSON)) return; // M-50: checks the size first
@@ -102,9 +102,9 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
         if (e.type === 'treeBreak' && !e.remote) all({ t: 'tree', id: e.tree.id }); if (e.type === 'horn') all({ t: 'horn', n: 1 }); } // M-17, M-8
       if (!players.list().some(p => p.helloed)) return; // nobody to send to yet: a joiner's first keyframe has everything
       if (now - lastKey >= SEND.key) { lastKey = now; for (const p of players.list()) if (p.helloed) send(p.n, welcome(p)); // M-19: again with each keyframe, so a lost one heals (a guest ignores one it has)
-        all(encodeFrame({ key: true, sender: 1, time: now, groups: [...world.key(worldNow()), ...mine.key(trainNow())] }), true); } // M-23
+        all(encodeFrame({ key: true, sender: 1, time: now, groups: [...world.key(worldNow()), ...mine.key(mineNow())] }), true); } // M-23
       if (now - lastWorld >= SEND.world) { lastWorld = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: world.diff(worldNow()) }), false); }
-      if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(trainNow()) }), false); }
+      if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(mineNow()) }), false); }
     },
     setGame(g) { game = g; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity; for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; if (p.helloed) send(p.n, welcome(p)); } }, // M-19
     setPaint(pt) { myPaint = { ...pt }; },
