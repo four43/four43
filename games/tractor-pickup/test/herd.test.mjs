@@ -111,3 +111,29 @@ test('respawn refill with only cows spawned still leaves the hen with chicks out
   cows = true; h.respawn();
   assert.ok(!hen.hidden && hen.state !== 'hide', 'hen with chicks hid');
 });
+
+test('animals react to the nearest of several tractors (M-12)', () => {
+  const h = createHerd({ rng: makeRng(31), env }), s = h.animals.find(a => a.type === 'sheep' && !a.hidden && a.home === 'route');
+  s.state = 'idle'; s.timer = 99; s.z = 0;
+  const other = { x: s.x - 4, z: s.z, yaw: Math.PI / 2, speed: 5 };
+  h.step(1 / 60, { tractor: far, others: [other] });
+  assert.equal(s.state, 'flee', 'the other tractor scares it');
+});
+test('a remote herd does not move: the host runs it (M-12)', () => {
+  const h = createHerd({ rng: makeRng(32), env }), x0 = h.animals.map(a => [a.x, a.z]);
+  h.remote = true; run(h, 5);
+  assert.deepEqual(h.animals.map(a => [a.x, a.z]), x0);
+});
+test('ensure fills the herd up to an id from the host, and every animal has an ownership number (M-26)', () => {
+  const h = createHerd({ rng: makeRng(33), env }), n = h.animals.length;
+  assert.ok(h.animals.every(a => a.epoch === 0));
+  const a = h.ensure(n + 2, 'cow', true);
+  assert.equal(h.animals.length, n + 3); assert.equal(a.id, n + 2); assert.equal(a.type, 'cow'); assert.equal(a.golden, true);
+  assert.equal(h.animals[n].state, 'elsewhere'); assert.ok(!h.free().includes(h.animals[n]));
+  assert.equal(h.ensure(0, h.animals[0].type, false), h.animals[0]);
+});
+test('carried and elsewhere animals are not free and do not move', () => {
+  const h = createHerd({ rng: makeRng(34), env }), a = h.animals.find(x => !x.hidden && x.home === 'route');
+  a.state = 'carried'; const p = [a.x, a.z]; run(h, 2);
+  assert.ok(!h.free().includes(a)); assert.deepEqual([a.x, a.z], p);
+});
