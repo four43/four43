@@ -489,3 +489,15 @@ test('a new farm while the host is silent keeps boops paused (M-19, M-40)', asyn
   assert.equal(g.game.farm.seed, 81); assert.equal(g.game.boopsPaused, true, 'the new game is paused too'); assert.equal(g.sync.players.map.get(1).away, true);
   w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false);
 });
+
+test('a flight waiting for the host answer is not sent as carried; once granted it is (M-22)', async () => {
+  const { vehicleOf } = await import('../src/net/players.js');
+  const w = await mpWorld({ seed: 82, link: { delay: 400 } }); w.seconds(2);
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], ids = () => vehicleOf(g.game, 2, w.now).carried.map(c => c.id);
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.game.flights.some(f => f.animal === ga && f.u >= 0) && k++ < 200) w.step(1);
+  const f = g.game.flights.find(x => x.animal === ga); assert.ok(f && f.claim === 'pending' && f.u >= 0, 'in the air, unanswered');
+  assert.ok(!ids().includes(ha.id), 'not ours yet');
+  k = 0; while (f.claim === 'pending' && k++ < 120) w.step(1); assert.equal(f.claim, null, 'granted');
+  assert.ok(g.game.flights.includes(f), 'still in the air'); assert.ok(ids().includes(ha.id), 'ours now');
+});

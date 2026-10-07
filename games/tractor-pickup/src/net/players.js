@@ -30,11 +30,11 @@ export function createPlayers() {
     others: () => [...map.values()].filter(p => p.pose).map(p => ({ n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed })),
   };
 }
-// M-22: this device's own train and the animals it owns (in flight to it or in a slot)
+// M-22: this device's own train and the animals it owns (in flight to it or in a slot; a flight still waiting for the host's answer is not owned yet)
 export function vehicleOf(game, player, time) {
   const bodies = [game.tractor.body, ...game.train.cars.map(c => c.body)].map(b => ({ p: b.translation(), q: b.rotation() }));
   const carried = [];
-  for (const f of game.flights) if (f.u >= 0) carried.push({ id: f.animal.id, type: f.animal.type, golden: f.animal.golden, flying: true, riding: false, x: f.pos.x, y: f.pos.y, z: f.pos.z, yaw: f.animal.yaw });
+  for (const f of game.flights) if (f.u >= 0 && f.claim !== 'pending') carried.push({ id: f.animal.id, type: f.animal.type, golden: f.animal.golden, flying: true, riding: false, x: f.pos.x, y: f.pos.y, z: f.pos.z, yaw: f.animal.yaw });
   for (const s of game.load.slots) if (s.landed && s.animal.state === 'ride') { const a = s.animal, c = game.train.cars[s.car].body;
     carried.push({ id: a.id, type: a.type, golden: a.golden, flying: false, riding: true, x: a.x, y: a.y, z: a.z, yaw: yawOfQuat(c.rotation()) }); }
   const mode = game.mode === 'drive' ? 'drive' : game.mode === 'arrive' || game.mode === 'show' ? 'show' : 'held';
