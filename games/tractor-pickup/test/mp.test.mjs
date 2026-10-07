@@ -392,7 +392,9 @@ test('alone, an animal walking into the barn goes by the door first and is gone 
 });
 test('a host that stops hosting poofs every guest tractor (M-39)', async () => {
   const w = await mpWorld({ seed: 69 }); w.seconds(1);
-  w.host.sync.close(); w.step(1);
+  assert.equal(w.host.game.others.length, 1); w.host.sync.close();
+  assert.deepEqual(w.host.game.others, [], 'the herd forgets the guest tractors at once: the session drops the sync, so no before() clears them later');
+  w.step(1);
   assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.sync.players.list().length, 0);
 });
 test('a throw while going alone never reaches the link (M-44)', async () => {
