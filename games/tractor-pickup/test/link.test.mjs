@@ -81,3 +81,17 @@ test('roomLink hands binary to the sync layer as an exact ArrayBuffer and swallo
     assert.doesNotThrow(() => net.send('g1', { a: 1 }, true));
   } finally { console.warn = warn; }
 });
+test('roomLink follows a new Peer for a known id: its messages arrive, sends reach it, and peer fires once (the library replaces Peers without peerLeft)', () => {
+  const room = Object.assign(emitter(), { isHost: true, you: 'h1', hostId: 'h1', peers: new Map(), leave() {} });
+  const mk = () => Object.assign(emitter(), { id: 'g1', open: true, sent: [], send(d) { this.sent.push(d); return true; } });
+  const net = roomLink(room), log = record(net), a = mk(), b = mk();
+  room.peers.set('g1', a); room.emit('peer', a);
+  room.peers.set('g1', b); room.emit('peer', b); // Room._resumed / #onSignal: a new Peer object with the same id
+  b.emit('message', { t: 'hello' }, { reliable: true });
+  net.send('g1', { t: 'welcome' }, true);
+  assert.deepEqual(log.filter(e => e[0] === 'peer').map(e => e[1]), ['g1'], 'one player, not two');
+  assert.deepEqual(log.filter(e => e[0] === 'message').map(e => e.slice(1)), [['g1', { t: 'hello' }, true]]);
+  assert.deepEqual([a.sent, b.sent], [[], [{ t: 'welcome' }]]);
+  room.emit('peer', b); b.emit('message', { t: 'paint' }, { reliable: true });
+  assert.equal(log.filter(e => e[0] === 'message').length, 2, 'a Peer is listened to once');
+});
