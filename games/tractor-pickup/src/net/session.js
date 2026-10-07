@@ -23,6 +23,7 @@ export const ERRORS = {
   version_mismatch: 'Update the game on both devices.', rate_limited: 'Too many tries. Wait a minute.', network: "Can't reach the server. Trying again…",
   timeout: "Can't reach the server.", closed: "Can't reach the server.", other: 'Something went wrong. Try again.', joinNetwork: "Can't reach the server. Try again.",
   noFarm: "Can't connect to the farm.", // joined, but no welcome from the host in 10 s (no peer connection)
+  lost: 'The room closed.', kicked: 'You were removed from the farm.', // closed reasons: the room ended without a tap here
 };
 ERRORS.bad_key = ERRORS.not_found; // a private room without its key looks like no room (tractor rooms are public; peek(code) sends no key)
 const errText = e => ERRORS[e?.code] || ERRORS.other, joinText = e => e?.code === 'network' ? ERRORS.joinNetwork : errText(e); // only Host retries by itself
@@ -35,7 +36,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
   const drop = () => { sync?.close(); sync = null; room = null; code = null; info = null; };
   const idleClient = () => { if (!room) { hs?.close(); hs = null; } }; // a Handshake that has peeked keeps its socket open until close()
   // any closed reason ('kicked', 'left', 'replaced', 'lost', host gone) ends the room; the guest sync has already gone alone (M-41)
-  const watch = r => r.on('closed', () => { if (room !== r) return; unstick(); if (state === 'joined') { room = null; sync = null; code = null; state = 'idle'; } else if (state === 'hosting') { drop(); state = 'idle'; } idleClient(); changed(); });
+  const watch = r => r.on('closed', why => { if (room !== r) return; unstick(); error = why === 'lost' || why === 'kicked' ? ERRORS[why] : null; if (state === 'joined') { room = null; sync = null; code = null; state = 'idle'; } else if (state === 'hosting') { drop(); state = 'idle'; } idleClient(); changed(); });
   const statusOf = p => { if (p.away) return 'away'; const id = p.peer || (state === 'joined' && p.n === 1 ? room?.hostId : null), peer = id && room?.peers.get(id); return peer?.connectionType || 'connecting'; }; // a guest's store has no peer ids: its host row uses room.hostId
   const s = {
     get sync() { return sync; }, get isGuest() { return state === 'joined'; }, get inRoom() { return !!sync; },

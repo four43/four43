@@ -152,3 +152,13 @@ test('join: no welcome 10 s after joining says the farm cannot be reached; still
   t2.s.openJoin(); await t2.s.submitCode('K7MX2'); await t2.s.confirmJoin(); await new Promise(r => setTimeout(r, 40)); assert.equal(t2.s.view().error, ERRORS.noFarm);
   t2.s.leave(); assert.equal(t2.s.view().state, 'idle'); assert.equal(t2.s.view().error, null, 'Leave ends it');
 });
+test('a room that ends by itself says why: lost and kicked get panel text; leaving yourself does not (M-41)', async () => {
+  const joined = async () => { const fh = fakeHandshake({ peekResult: { players: 1 } }), t = setup(fh); t.s.openJoin(); await t.s.submitCode('K7MX2'); await t.s.confirmJoin(); return { t, r: fh.made.at(-1).room }; };
+  for (const [why, text] of [['lost', 'The room closed.'], ['kicked', 'You were removed from the farm.']]) {
+    const { t, r } = await joined(); r.closed = true; r.emit('closed', why);
+    assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, text, why); assert.equal(ERRORS[why], text);
+  }
+  const fh = fakeHandshake(), t = setup(fh); await t.s.host(); const r = fh.made[0].room; r.closed = true; r.emit('closed', 'lost'); assert.equal(t.s.view().error, ERRORS.lost, 'the host too');
+  const j = await joined(); j.t.s.leave(); assert.equal(j.t.s.view().error, null);
+  await j.t.s.host(); assert.equal(j.t.s.view().error, null, 'a new room clears it');
+});
