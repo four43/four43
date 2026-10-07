@@ -12,22 +12,22 @@ function stub() { // looks like a sim tractor and train to vehicles3d
 const toSnap = (src, dst) => { dst.p.set(src.p.x, src.p.y, src.p.z); dst.q.set(src.q.x, src.q.y, src.q.z, src.q.w); return dst; };
 const snapObj = () => ({ p: new THREE.Vector3(), q: new THREE.Quaternion() });
 export function createOthers3D(scene) {
-  const views = new Map();
+  const views = new Map(); let stamp = 0; // allocation free per frame: a view not stamped this update belongs to a player who is gone
   return {
     update(dt, players) {
-      const live = new Set(players ? players.list().filter(p => p.pose).map(p => p.n) : []);
-      for (const [n, v] of views) if (!live.has(n)) { v.veh.dispose(); views.delete(n); }
-      if (!players) return;
-      for (const p of players.list()) {
+      stamp++;
+      if (players) for (const p of players.map.values()) {
         if (!p.pose) continue;
         let v = views.get(p.n);
-        if (!v) { const s = stub(); v = { s, veh: createVehicles3D(scene, s.tractor, s.train), paint: '', ghost: false, snap: { tractor: snapObj(), cars: [snapObj(), snapObj()], dirt: 0 } }; views.set(p.n, v); }
-        const key = p.paint.body + '/' + p.paint.trim; if (key !== v.paint) { v.paint = key; v.veh.setPaint(p.paint); }
+        if (!v) { const s = stub(); v = { s, veh: createVehicles3D(scene, s.tractor, s.train), body: '', trim: '', ghost: false, stamp, snap: { tractor: snapObj(), cars: [snapObj(), snapObj()], dirt: 0 } }; views.set(p.n, v); }
+        v.stamp = stamp;
+        if (p.paint.body !== v.body || p.paint.trim !== v.trim) { v.body = p.paint.body; v.trim = p.paint.trim; v.veh.setPaint(p.paint); }
         if (p.away !== v.ghost) { v.ghost = p.away; v.veh.setGhost(p.away); }
         if (!p.away) v.s.wheel.rot += p.speed * dt;
         toSnap(p.pose.tractor, v.snap.tractor); toSnap(p.pose.cars[0], v.snap.cars[0]); toSnap(p.pose.cars[1], v.snap.cars[1]);
         v.veh.update(v.snap);
       }
+      for (const [n, v] of views) if (v.stamp !== stamp) { v.veh.dispose(); views.delete(n); }
     },
     dispose() { for (const v of views.values()) v.veh.dispose(); views.clear(); },
   };
