@@ -16,7 +16,7 @@
 - Tests: `npm test` (runs `node --test test/`). Every task ends with the full suite passing. The baseline is 490 tests (spec 13); record the real count in Task 0.
 - Commits: conventional commits (`feat:`, `fix:`, `test:`, `docs:`). **No `Co-Authored-By` trailer and no Claude attribution of any kind** (user rule).
 - Single-player behavior must not change: with no room, every existing test passes unchanged and the game plays exactly as 1.3.0.
-- Sim modules (`src/sim/`, `src/net/`) import no three.js and touch no DOM.
+- Sim modules (`src/sim/`, `src/net/`) import no three.js and touch no DOM. Exceptions: the vendored `src/net/handshake.js` (browser library, has classes; not edited here) and `src/net/session.js`, which reads `location` for the join link (guarded, so Node tests run).
 - Code style: dense lines, terse comments that cite spec IDs (`// M-14: ...`), `const` arrow helpers, no classes in game code, names as in the existing files.
 - Handshake server: `https://handshake.four43.com`, app `tractor-pickup`, `NET_VERSION = 1` (sent as the Handshake `version`), rooms `public: true`, `maxPlayers: 4`, `relayUnlessNearby: true` (M-48). Room name = `'tractor-pickup-' + code`.
 - Join code alphabet (from the server): `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, 5 characters.
@@ -27,14 +27,16 @@
 
 ## Decisions this plan makes (the spec leaves them open)
 
-1. **Spawn places (M-10):** the spec says "8 m apart, beside the farm start". The farm start is 12 m out of the barn with the train inside the barn, so beside it is barn wall. Player `n` starts **ahead** of the start along its heading, `12 × (n − 1)` m (a train is about 10 m long), shifted sideways by 8 m steps only when that spot is blocked. Task 16 updates M-10's text.
+1. **Spawn places (M-10):** the spec says "8 m apart, beside the farm start". The farm start is 12 m out of the barn with the train inside the barn, so beside it is barn wall. Player `n` starts **ahead** of the start along its heading, `12 × (n − 1)` m (a train is about 10 m long), shifted sideways by 8 m steps only when that spot is blocked. Task 6 updates M-10's text in the same commit as the code, so the spec and the code never disagree.
 2. **Claim timeout (M-14):** if no answer comes in the 1 s hold, the guest treats it as a refusal (poof) and sends `release`, so the host frees the animal if it had granted it late.
 3. **Going alone with a claim pending (M-41):** pending claims count as granted (the host is gone, so nobody else has the animal).
-4. **Soft bump (M-7):** done in sim code, not Rapier: each tractor is a capsule along its heading; on overlap the own tractor's velocity gets at least 2 m/s away from the other, with a 0.6 s cooldown. No colliders for other tractors.
+4. **Soft bump (M-7):** done in sim code, not Rapier: each tractor is a capsule along its heading; on overlap the own tractor's velocity gets at least 2 m/s away from the other, with a 0.6 s cooldown. No colliders for other tractors. The push direction is from the closest point of the other capsule (for two tractors side by side this is the same as "away from the other tractor's center", M-7; nose to nose it is straight back). The bump runs only while this device is in `drive` mode, so a tractor in its show stays in the barn (M-4).
 5. **Rebuild on every welcome:** a guest always rebuilds the farm from the welcome (also for the same seed), so no solo riders carry into a room. The host re-sends a welcome to every guest after its own new farm (M-19).
 6. **Who renders whom:** every device keeps every animal id in its herd. Animals another player carries get state `'carried'` (drawn from that player's vehicle messages); animals this device knows nothing current about get `'elsewhere'` (not drawn, not free). Both are added to the herd's not-free states.
 7. **Host relays guests' vehicle messages** byte for byte, after overwriting byte 1 (player number) with the sender's real number.
 8. **QR library:** `qrcode-generator` (MIT, ~20 KB minified, no dependencies).
+9. **Guest rate limit (M-50 "the guest checks the messages from the host in the same way"):** the guest drops host messages above 60 each second on the reliable channel and above 120 each second on the fast channel. 60 would drop real traffic with 4 players: each guest gets the host's train and the 2 other guests' trains (3 × 20) plus the herd (15) = 75 fast messages each second.
+10. **Delivered animals walk in on every device (A-16, M-16):** when a guest reports a delivery, the host walks those animals into the barn (`herd.toBarn`) instead of removing them at once; the herd message shows them walking (busy) on every guest, then they are gone. A guest never runs the walk itself (its herd is remote).
 
 ---
 
@@ -77,7 +79,7 @@ Modified files:
 | `template.html` | panel CSS |
 | `src/main.js` | wire session, sync, render, events, `?r=`, `?signal=`, `?lag=` |
 | `package.json` | `qrcode-generator` dependency; version 1.4.0 |
-| `docs/tractor-pickup-spec.md` | M-10 text, section 13 test results |
+| `docs/tractor-pickup-spec.md` | M-10 text (Task 6), section 13 test results (Task 16) |
 
 ---
 
@@ -300,13 +302,13 @@ test('the hub connects a host and guests in a star; messages arrive after the de
   hub.tick(100); assert.deepEqual(hl.filter(e => e[0] === 'message').map(e => e.slice(1)), [[g.id, { t: 'hello' }, true]]);
 });
 test('binary data is copied, and the reliable channel keeps the order under jitter (M-21)', () => {
-  const hub = createMemoryHub({ delay: 50, jitter: 200, rng: makeRng(4) }), h = hub.host(), g = hub.join(), got = [];
-  h.on('message', (from, d, rel) => got.push(rel ? d.n : new Uint8Array(d)[0]));
+  const hub = createMemoryHub({ delay: 50, jitter: 200, rng: makeRng(4).next }), h = hub.host(), g = hub.join(), bin = [], rel = []; // the hub takes a () => number
+  h.on('message', (from, d, r) => r ? rel.push(d.n) : bin.push(new Uint8Array(d)[0]));
   hub.tick(0);
   const b = new Uint8Array([7]).buffer; g.send(h.id, b); new Uint8Array(b)[0] = 9; // the sender changes its buffer afterwards
   for (let n = 0; n < 20; n++) g.send(h.id, { n }, true);
   hub.tick(1000);
-  assert.ok(got.includes(7)); assert.deepEqual(got.filter(x => x !== 7), Array.from({ length: 20 }, (_, n) => n));
+  assert.deepEqual(bin, [7], 'the copy, not the changed buffer'); assert.deepEqual(rel, Array.from({ length: 20 }, (_, n) => n));
 });
 test('loss drops only fast-channel messages', () => {
   const hub = createMemoryHub({ loss: 1 }), h = hub.host(), g = hub.join(); let fast = 0, rel = 0;
@@ -569,7 +571,7 @@ git commit -m "feat: Tractor Pickup multiplayer - interpolation buffer with adap
 - Produces:
   - `NET_VERSION = 1`, `MAX_PLAYERS = 4`, `PAINT_NAMES` (all paints from `progress.js`)
   - `checkFromGuest(msg) -> msg | null` for `hello {v, paint}`, `claim {ids}`, `release {ids}`, `delivered {ids}`, `tree {id}`, `regrow {}`, `horn {}`, `help {}`, `paint {paint}`
-  - `checkFromHost(msg) -> msg | null` for `welcome {v, seed, you, players, herd, trees}`, `players {list}`, `claimed {ok, no, epochs}`, `tree {id}`, `regrow {}`, `horn {n}`, `help {id}`, `bye {reason}`
+  - `checkFromHost(msg) -> msg | null` for `welcome {v, seed, you, players, herd, trees}`, `players {list}`, `claimed {ok, no, epochs}`, `tree {id}`, `regrow {}`, `horn {n}`, `help {id}`
   - `createRate(perSec = 60) -> { allow(nowMs) -> bool }`
 - Shapes: `players` entries `{ n: 1..4, paint: { body, trim }, away: bool }`; `herd` entries (welcome) `{ id, type, golden, home: 'route'|'yard', leader: id|null, line, x, z, yaw, epoch, state: 'free'|'busy'|'carried'|'gone', hidden }`; `epochs` is `[[id, epoch], ...]`. Id lists hold at most 16 integers 0..65535; `welcome.herd` at most 512 entries; `welcome.trees` at most 256 ids.
 
@@ -629,7 +631,7 @@ const ids = (a, max = 16) => Array.isArray(a) && a.length <= max && a.every(v =>
 const paintOk = p => obj(p) && PAINT_NAMES.includes(p.body) && PAINT_NAMES.includes(p.trim);
 const playerOk = p => obj(p) && int(p.n, 1, MAX_PLAYERS) && paintOk(p.paint) && typeof p.away === 'boolean';
 const STATES = ['free', 'busy', 'carried', 'gone'];
-const animalOk = a => obj(a) && int(a.id, 0, 0xffff) && a.type in TYPES && typeof a.golden === 'boolean' && (a.home === 'route' || a.home === 'yard')
+const animalOk = a => obj(a) && int(a.id, 0, 0xffff) && Object.hasOwn(TYPES, a.type) && typeof a.golden === 'boolean' && (a.home === 'route' || a.home === 'yard')
   && (a.leader === null || int(a.leader, 0, 0xffff)) && int(a.line, 0, 255) && num(a.x) && num(a.z) && num(a.yaw, 100) && int(a.epoch, 0, 0xffffffff)
   && STATES.includes(a.state) && typeof a.hidden === 'boolean';
 const GUEST = {
@@ -642,7 +644,6 @@ const HOST = {
   players: m => Array.isArray(m.list) && m.list.length <= MAX_PLAYERS && m.list.every(playerOk),
   claimed: m => ids(m.ok) && ids(m.no) && Array.isArray(m.epochs) && m.epochs.length <= 16 && m.epochs.every(e => Array.isArray(e) && e.length === 2 && int(e[0], 0, 0xffff) && int(e[1], 0, 0xffffffff)),
   tree: m => int(m.id, 0, 0xffff), regrow: () => true, horn: m => int(m.n, 1, MAX_PLAYERS), help: m => m.id === null || int(m.id, 0, 0xffff),
-  bye: m => typeof m.reason === 'string' && m.reason.length <= 32,
 };
 const check = table => m => obj(m) && Object.hasOwn(table, m.t) && table[m.t](m) ? m : null;
 export const checkFromGuest = check(GUEST), checkFromHost = check(HOST);
@@ -766,7 +767,7 @@ git commit -m "feat: Tractor Pickup multiplayer - herd reacts to the nearest tra
 
 **Files:**
 - Create: `src/sim/spawn.js`
-- Modify: `src/sim/slots.js`, `src/sim/launch.js`, `src/sim/trees.js`, `src/sim/game.js`
+- Modify: `src/sim/slots.js`, `src/sim/launch.js`, `src/sim/trees.js`, `src/sim/game.js`, `docs/tractor-pickup-spec.md` (M-10 text)
 - Test: `test/spawn.test.mjs` (new), `test/slots.test.mjs`, `test/trees.test.mjs`, `test/game.test.mjs` (append)
 
 **Interfaces:**
@@ -830,12 +831,12 @@ test('release removes a slot and packs the later ones forward (M-14)', () => {
 Append to `test/trees.test.mjs`:
 ```js
 test('a tree or bush can be broken by id (M-17); brokenIds lists them', () => {
-  const { trees, phys } = setup([...oneTree(0, 0), ...oneBush(20, 0)]);
+  const { trees } = setup([...oneTree(0, 0), ...oneBush(20, 0)]);
   const ev = trees.breakById(0, { x: 1, z: 0 });
   assert.equal(ev.type, 'treeBreak'); assert.equal(ev.tree.id, 0); assert.equal(ev.remote, true); assert.equal(trees.list[0].collider, null);
   assert.equal(trees.breakById(0), null, 'already broken'); assert.equal(trees.breakById(99), null, 'no such tree');
   assert.ok(trees.breakById(1)); assert.deepEqual(trees.brokenIds(), [0, 1]);
-  trees.reset(); assert.deepEqual(trees.brokenIds(), []); void phys;
+  trees.reset(); assert.deepEqual(trees.brokenIds(), []);
 });
 ```
 
@@ -850,7 +851,7 @@ test('with claims on, a booped animal waits at the top of its arc for the answer
   const g = createGame(RAPIER, { seed: 42, power: 'medium' }); quiet(g); g.claims = true;
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
-  let ev = []; for (let i = 0; i < 150; i++) ev.push(...g.step(STILL)); // longer than any flight: it waits
+  let ev = []; for (let i = 0; i < 90; i++) ev.push(...g.step(STILL)); // 1.5 s: past the top of every arc (at most 0.75 x 1.4 s), inside the 1 s hold (ends at 1.75 s at the earliest)
   assert.ok(ev.some(e => e.type === 'launch')); assert.ok(!ev.some(e => e.type === 'land'), 'no landing without a yes');
   assert.equal(g.flights.length, 1); assert.equal(g.flights[0].claim, 'pending');
   assert.deepEqual(g.resolveClaim(a.id, true), []);
@@ -966,7 +967,7 @@ If the spawn test fails for some seeds on the "players too close" check because 
         if (fl.claim === 'pending' && fl.u > SPLIT) { fl.u = SPLIT; if ((fl.hold += DT) > CLAIM_WAIT) { dropFlight(i, events, 'timeout'); continue; } } // M-14: no landing before the host's yes
 ```
 10. In `launch`, add `claim: game.claims ? 'pending' : null, hold: 0,` to the pushed flight object.
-11. Replace the inner `dodgeFrom` function and add `dropFlight` (inside `createGame`, next to `launch`):
+11. Add `dropFlight` (inside `createGame`, next to `launch`):
 ```js
   function dropFlight(i, events, reason) { const fl = flights.splice(i, 1)[0], a = fl.animal; fl.load.release(fl.slot); a.state = 'elsewhere'; events.push({ type: 'unclaim', animal: a, reason, pos: { ...fl.pos } }); }
 ```
@@ -994,6 +995,8 @@ function dodgeFrom(herd, a, ax, side, clear, events) {
 ```
 and delete the old inner `dodgeFrom`.
 
+`docs/tractor-pickup-spec.md`, M-10 (Decision 1; the spec and the code change together): replace "its tractor appears beside the farm start with a sparkle and a short horn. Each player number has its own place, 8 m apart, clear of obstacles." with "its tractor appears ahead of the farm start with a sparkle and a short horn. Each player number has its own place, 12 m apart along the farm start's heading (8 m to the side when that place is blocked), clear of obstacles."
+
 - [ ] **Step 4: Run to verify they pass**
 
 Run: `node --test test/spawn.test.mjs test/slots.test.mjs test/trees.test.mjs test/game.test.mjs` — Expected: all pass, including the existing B-14 test.
@@ -1002,7 +1005,7 @@ Run: `node --test test/spawn.test.mjs test/slots.test.mjs test/trees.test.mjs te
 
 ```bash
 npm test 2>&1 | tail -4
-git add src/sim/spawn.js src/sim/slots.js src/sim/launch.js src/sim/trees.js src/sim/game.js test/spawn.test.mjs test/slots.test.mjs test/trees.test.mjs test/game.test.mjs
+git add src/sim/spawn.js src/sim/slots.js src/sim/launch.js src/sim/trees.js src/sim/game.js test/spawn.test.mjs test/slots.test.mjs test/trees.test.mjs test/game.test.mjs docs/tractor-pickup-spec.md
 git commit -m "feat: Tractor Pickup multiplayer - sim hooks: spawn places, claims and the hold, tree by id, full dodge (M-10, M-14, M-17)"
 ```
 
@@ -1123,6 +1126,7 @@ import { DT } from '../src/sim/physics.js';
 import { createMemoryHub } from '../src/net/link.js';
 import { createHostSync } from '../src/net/host.js';
 import { createGuestSync } from '../src/net/guest.js';
+import { quatAxes } from '../src/sim/tractor.js';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
@@ -1156,6 +1160,15 @@ export async function mpWorld({ seed = 21, guests = 1, link = {}, join = true } 
 // Put an animal (by id) in front of a device's tractor, standing still
 export function inFront(dev, a, ahead = 2.5) { const p = dev.game.tractorWorld({ x: ahead, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; a.hidden = false; }
 export const free = (game, a) => game.herd.free().includes(a);
+// Move a device's whole (straight, parked) train so the tractor stands at (x, z) facing yaw (copied unchanged from test/game.test.mjs)
+export const moveTrain = (g, x, z, yaw) => {
+  const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
+  const list = [tb, ...g.train.cars.map(c => c.body)].map(b => { const t = b.translation(); return [b, g.tractorLocal(t.x, t.y, t.z, {})]; });
+  for (const [b, l] of list) {
+    b.setTranslation({ x: x + f.x * l.x + u.x * l.y + r.x * l.z, y: p0.y + f.y * l.x + u.y * l.y + r.y * l.z, z: z + f.z * l.x + u.z * l.y + r.z * l.z }, true);
+    b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  }
+};
 ```
 
 - [ ] **Step 2: Write the failing tests**
@@ -1164,7 +1177,7 @@ export const free = (game, a) => game.herd.free().includes(a);
 // test/mp.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, inFront, free, STILL, PAINTS } from './mp.harness.mjs';
+import { mpWorld, inFront, free, STILL, PAINTS, moveTrain } from './mp.harness.mjs';
 import { spawnPoint } from '../src/sim/spawn.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -1206,6 +1219,11 @@ test('three guests: players 2, 3 and 4 each see all the others (M-2, M-22 relay)
   assert.deepEqual(w.guests.map(g => g.sync.you), [2, 3, 4]);
   for (const g of w.guests) assert.deepEqual(g.sync.players.list().map(p => p.n).sort(), [1, 2, 3, 4].filter(n => n !== g.sync.you));
   const g4 = w.guests[2], seen = g4.sync.players.map.get(2).pose.tractor.p; assert.ok(dist(seen, w.guests[0].game.tractor) < 0.3);
+});
+test('a guest joins a host whose animals have turned many times: yaws go out in 0..2 pi (M-24)', async () => {
+  const w = await mpWorld({ seed: 26, join: false }); w.host.game.herd.animals.forEach((a, i) => { a.yaw = 500 + i; }); // herd yaws drift without bound in play (171 rad after 20 min)
+  const g = w.addGuest(); w.seconds(0.5);
+  assert.equal(g.sync.you, 2); assert.equal(g.game.farm.seed, 26);
 });
 ```
 
@@ -1275,8 +1293,9 @@ import { createBumper } from '../sim/bump.js';
 import { NOT_FREE } from '../sim/herd.js';
 
 const HERD_OUT = new Set(['gone', 'fly', 'ride', 'show', 'carried', 'elsewhere']); // not in the herd message: gone, or in a train (the owner's vehicle message has them)
-export function herdRecords(herd) { // M-24: every animal for a welcome
-  return herd.animals.map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: a.yaw, epoch: a.epoch, hidden: a.hidden,
+const TAU = Math.PI * 2;
+export function herdRecords(herd) { // M-24: every animal for a welcome. Yaw in 0..2 pi: herd yaws drift without bound, and checkFromHost allows |yaw| <= 100
+  return herd.animals.map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
     state: a.state === 'gone' ? 'gone' : HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
 }
 export function createHostSync({ game, net, paint }) {
@@ -1313,7 +1332,7 @@ export function createHostSync({ game, net, paint }) {
     get game() { return game; }, you: 1,
     before(now) {
       nowMs = now; players.sample(now); game.others = players.others();
-      bumper.step(1 / 60, game.tractor, game.others, out);
+      if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only: a tractor in its show stays in the barn (M-4)
       return out.splice(0);
     },
     after(events, now) {
@@ -1343,14 +1362,14 @@ export function herdMessage(herd, time) {
 // Guest sync (M-1, M-11..M-19, M-24..M-26, M-40, M-41). The guest drives its own train; it shows the host's animals from herd messages and
 // every other train from vehicle messages. Its claims wait for the host's answer (M-13, M-14).
 import { encodeVehicle, decodeVehicle, decodeHerd, kindOf, KIND } from './codec.js';
-import { checkFromHost, NET_VERSION } from './protocol.js';
+import { checkFromHost, createRate, NET_VERSION } from './protocol.js';
 import { createPlayers, vehicleOf, SEND } from './players.js';
 import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
 
-const OWN = new Set(['fly', 'ride', 'show', 'toBarn', 'gone']); // states this guest's own animals can have: herd messages never move them
+const OWN = new Set(['fly', 'ride', 'show', 'gone']); // this guest's own animals: herd messages never move them. Not toBarn: the host walks delivered animals in (Decision 10)
 export function createGuestSync({ game, net, paint, onFarm }) {
-  const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), pending = new Set();
+  const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), pending = new Set(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
   let you = 0, hostPeer = null, lastVeh = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null;
   const toHost = (m, rel = true) => { if (hostPeer && !alone) net.send(hostPeer, m, rel); };
   const applyRoster = list => {
@@ -1372,9 +1391,9 @@ export function createGuestSync({ game, net, paint, onFarm }) {
     players(m) { applyRoster(m.list); },
   };
   net.on('peer', id => { hostPeer = id; toHost({ t: 'hello', v: NET_VERSION, paint: myPaint }); });
-  net.on('message', (from, data) => {
+  net.on('message', (from, data, reliable) => {
     try {
-      if (from !== hostPeer || alone) return;
+      if (from !== hostPeer || alone || !(reliable ? rate.rel : rate.fast).allow(nowMs)) return; // M-50: the guest checks the host's messages too
       if (data instanceof ArrayBuffer) {
         if (!you) return;
         if (kindOf(data) === KIND.VEHICLE) { const v = decodeVehicle(data); if (v && v.player !== you && players.map.has(v.player)) { const first = !players.map.get(v.player).latest;
@@ -1410,7 +1429,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
       nowMs = now; if (!you) return out.splice(0);
       if (deferred && game.mode === 'drive') { const m = deferred; deferred = null; applyWelcome(m); }
       if (!alone) { applyHerd(now); players.sample(now); for (const a of game.herd.animals) if (a.state === 'carried') a.state = 'elsewhere'; applyCarried(); }
-      game.others = players.others(); bumper.step(1 / 60, game.tractor, game.others, out);
+      game.others = players.others(); if (game.mode === 'drive') bumper.step(1 / 60, game.tractor, game.others, out); // M-7 while driving only (M-4)
       return out.splice(0);
     },
     after(events, now) {
@@ -1430,7 +1449,7 @@ export function createGuestSync({ game, net, paint, onFarm }) {
 
 - [ ] **Step 7: Run to verify they pass**
 
-Run: `node --test test/mp.test.mjs` — Expected: 5 pass. If the "far network" test fails only on the animal check, print the worst distance; the threshold may move to 2 m only if the cause is the 300 ms delay with running animals (≤ 2.2 m/s × 0.3 s + jitter). Do not loosen the other tests.
+Run: `node --test test/mp.test.mjs` — Expected: 6 pass. If the "far network" test fails only on the animal check, print the worst distance; the threshold may move to 2 m only if the cause is the 300 ms delay with running animals (≤ 2.2 m/s × 0.3 s + jitter). Do not loosen the other tests.
 
 - [ ] **Step 8: Full suite and commit**
 
@@ -1447,7 +1466,7 @@ git commit -m "feat: Tractor Pickup multiplayer - join, roster, vehicle and herd
 - Test: `test/mp.test.mjs` (append)
 
 **Interfaces:**
-- Consumes: `game.resolveClaim`, `unclaim` events, `CLAIM_WAIT` (Task 6); `players.map.get(n).latest.bodies[0].p` (latest real position of a guest tractor).
+- Consumes: `game.resolveClaim`, `unclaim` events (Task 6); `players.map.get(n).latest.bodies[0].p` (latest real position of a guest tractor); harness `moveTrain` (Task 8).
 - Produces:
   - Guest → host `claim {ids}` (all animals launched in one step, a chick line in one claim) and `release {ids}` (after a timeout).
   - Host → guest `claimed { ok, no, epochs: [[id, epoch]] }`.
@@ -1457,14 +1476,12 @@ git commit -m "feat: Tractor Pickup multiplayer - join, roster, vehicle and herd
 - [ ] **Step 1: Write the failing tests** (append to `test/mp.test.mjs`)
 
 ```js
-const boopAt = (w, dev, pick) => { const a = pick(dev.game); inFront(dev, a); return a; };
 const single = g => g.herd.free().find(x => !x.hidden && x.type !== 'chick' && !g.herd.animals.some(c => c.leader === x.id) && x.home === 'route');
 
 test('a guest boop is claimed and granted: the animal lands in the guest wagon, and the host shows it there (M-13, M-14)', async () => {
   const w = await mpWorld({ seed: 31 }); w.seconds(1);
-  const g = w.guests[0], ha = single(w.host.game);
-  const ga = g.game.herd.animals[ha.id]; inFront(g, ga); inFront(w.host, ha, 999); // move it in front of the guest on both devices
-  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = p.x; ha.z = p.z; ha.state = 'idle'; ha.timer = 99; }
+  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; } // in front of the guest on both devices
   w.seconds(3);
   assert.ok(g.events.some(e => e.type === 'land' && e.animal.id === ha.id), 'it landed on the guest');
   assert.equal(ha.state, 'carried'); assert.equal(ha.owner, 2); assert.equal(ha.epoch, 1);
@@ -1474,9 +1491,12 @@ test('a guest boop is claimed and granted: the animal lands in the guest wagon, 
 test('when host and guest boop the same animal at once, the host is first; the guest copy poofs (M-14, M-15)', async () => {
   const w = await mpWorld({ seed: 32, link: { delay: 80 } }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
-  inFront(w.host, ha); { const p = w.host.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ga.x = p.x; ga.z = p.z; } // the guest sees it at the host's nose
-  // put the guest's tractor right behind the animal too: teleport the guest train next to the host's
-  ga.x = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}).x; ga.z = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}).z; ga.state = 'idle'; ga.timer = 99;
+  // the guest sees an animal only through the host's snapshots, so it boops first; then, while its claim is on the wire (80 ms),
+  // the host's train moves so the same animal is 2.5 m ahead of the host's nose: the host boops it before the claim arrives
+  { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  assert.ok(g.sync.pending.has(ha.id), 'the guest launched it');
+  const yaw = w.host.game.tractor.yaw; moveTrain(w.host.game, ha.x - Math.sin(yaw) * 2.5, ha.z - Math.cos(yaw) * 2.5, yaw); w.step(1);
   w.seconds(3);
   assert.ok(w.host.events.some(e => e.type === 'land' && e.animal === ha), 'host got it');
   assert.ok(g.events.some(e => e.type === 'unclaim' && e.animal.id === ha.id && e.reason === 'refused'), 'guest poofed');
@@ -1491,20 +1511,22 @@ test('a late yes: the animal waits at the top of its arc, then lands (M-14)', as
   const fl = g.events.find(e => e.type === 'launch' && e.animal.id === ha.id), land = g.events.find(e => e.type === 'land' && e.animal.id === ha.id);
   assert.ok(fl && land, 'launched and landed'); assert.ok(!g.events.some(e => e.type === 'unclaim'));
 });
-test('no answer within 1 s: the guest poofs it and releases it; the host frees it (M-14)', async () => {
-  const w = await mpWorld({ seed: 34 }); w.seconds(1);
+test('no answer within 1 s: the guest poofs it and releases it; the host frees it (M-14, Decision 2)', async () => {
+  const w = await mpWorld({ seed: 34, link: { delay: 100 } }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
-  w.hub.away(w.host.net.id); w.seconds(0.05); w.hub.back(w.host.net.id); // (messages sent while away are lost)
-  w.hub.away(g.net.id); w.seconds(2.5); w.hub.back(g.net.id); w.seconds(1);
+  let k = 0; while (!g.sync.pending.has(ha.id) && k++ < 120) w.step(1);
+  w.seconds(0.15); assert.equal(ha.state, 'carried', 'the host granted it'); // the claim arrived (100 ms); the answer is on the wire
+  w.hub.away(g.net.id); w.seconds(0.15); w.hub.back(g.net.id); w.seconds(2.5); // the answer is lost: the guest times out and releases it
   assert.ok(g.events.some(e => e.type === 'unclaim' && e.reason === 'timeout'));
   assert.ok(free(w.host.game, ha) || ha.state === 'dodge', `host freed it (${ha.state})`);
 });
 test('the host refuses a claim from a tractor more than 8 m away (M-50)', async () => {
   const w = await mpWorld({ seed: 35 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game);
+  let seen = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { seen++; return orig(...a); };
   g.net.send(w.host.net.id, { t: 'claim', ids: [ha.id] }, true); w.seconds(0.3);
-  assert.ok(free(w.host.game, ha), 'still free');
+  assert.equal(seen, 1, 'the claim was handled'); assert.ok(free(w.host.game, ha), 'still free');
 });
 test('the host boop raises the ownership number and the animal leaves the guest free list (M-15, M-26)', async () => {
   const w = await mpWorld({ seed: 36 }); w.seconds(1);
@@ -1514,7 +1536,7 @@ test('the host boop raises the ownership number and the animal leaves the guest 
 });
 ```
 
-The second test teleports positions only through animal placement; if the two tractors cannot both reach the same animal in time with the default spawn places, change the test to place the guest's train with a helper that sets the guest tractor's body next to the host's (copy `moveTrain` from `test/game.test.mjs` into `mp.harness.mjs` as `moveTrain(game, x, z, yaw)` and export it), then put the animal 2.5 m in front of both noses. Keep the assertions.
+A guest sees free animals only through the host's snapshots (about 100 ms plus the link delay behind), so every claim test puts the animal at the guest's nose on **both** devices and waits for `g.sync.pending` rather than for a fixed time.
 
 - [ ] **Step 2: Run to verify they fail** — `node --test test/mp.test.mjs`: the 6 new tests fail (no claims are sent or answered).
 
@@ -1570,7 +1592,7 @@ In `after(events, now)`, before the vehicle send:
 
 ```bash
 npm test 2>&1 | tail -4
-git add src/net/host.js src/net/guest.js test/mp.test.mjs test/mp.harness.mjs
+git add src/net/host.js src/net/guest.js test/mp.test.mjs
 git commit -m "feat: Tractor Pickup multiplayer - boop claims, first come, land after a yes (M-13..M-15, M-26)"
 ```
 
@@ -1581,9 +1603,9 @@ git commit -m "feat: Tractor Pickup multiplayer - boop claims, first come, land 
 - Test: `test/mp.test.mjs` (append)
 
 **Interfaces:**
-- Consumes: `fullDodge` (Task 6), `trees.breakById` (Task 6), `herd.callHelp`, `herd.horn`, `herd.respawn`.
+- Consumes: `fullDodge` (Task 6), `trees.breakById` (Task 6), `herd.callHelp`, `herd.horn`, `herd.toBarn`, `herd.respawn`; harness `moveTrain` (Task 8).
 - Produces:
-  - Guest → host: `delivered {ids}` (from `sync.delivered(riders)`), `tree {id}` (own breaks), `regrow {}` (from `sync.showStarted()`), `horn {}`, `help {}` (from `sync.requestHelp()`, returns true when sent).
+  - Guest → host: `delivered {ids}` (from `sync.delivered(riders)`; the host walks them into the barn on every device, Decision 10), `tree {id}` (own breaks), `regrow {}` (from `sync.showStarted()`), `horn {}`, `help {}` (from `sync.requestHelp()`, returns true when sent).
   - Host → guests: `tree {id}`, `regrow {}`, `horn {n}`, `help {id|null}`, a new `welcome` after `setGame` (already in Task 8).
   - Events from `before()`: `{ type: 'treeBreak', tree, dir, speed: 0, remote: true }` (gibs), `{ type: 'remoteHorn', n }`, `{ type: 'help', animal }` (guest only).
   - `TREE_RANGE = 12`.
@@ -1598,12 +1620,14 @@ test('after a guest show, the host removes the delivered animals and makes new o
   w.seconds(3); assert.equal(ha.state, 'carried');
   const before = h.animals.length, riders = g.game.startShow(); g.sync.showStarted(); riders.forEach(r => { r.animal.state = 'show'; }); g.game.finishShow(riders); g.sync.delivered(riders);
   w.seconds(0.5);
-  assert.equal(ha.state, 'gone'); assert.ok(h.animals.length > before, 'new animals'); assert.equal(h.free().filter(a => a.home === 'route').length, 18);
+  assert.ok(['toBarn', 'gone'].includes(ha.state), ha.state); assert.equal(ha.epoch, 2); assert.ok(h.animals.length > before, 'new animals'); assert.equal(h.free().filter(a => a.home === 'route').length, 18);
   w.seconds(1); assert.ok(g.game.herd.animals.length >= h.animals.length, 'the guest knows the new ones');
+  w.seconds(12); assert.equal(ha.state, 'gone'); assert.equal(ga.state, 'elsewhere', 'gone from the guest screen too: nothing stays at the barn (A-16)');
 });
 test('a guest trailer that is full makes animals hop out of its way on the host (M-12, B-14)', async () => {
+  const { newRider } = await import('../src/sim/slots.js');
   const w = await mpWorld({ seed: 42 }); w.seconds(1);
-  const g = w.guests[0]; for (let i = 0; i < 12; i++) g.game.load.land(g.game.load.reserve({ id: 500 + i, state: 'ride', type: 'pig', golden: false, x: 0, y: 0, z: 0 }));
+  const g = w.guests[0]; for (let i = 0; i < 12; i++) g.game.load.land(g.game.load.reserve({ id: 500 + i, state: 'ride', type: 'pig', golden: false, x: 0, y: 0, z: 0, ride: { rider: newRider() } })); // a rider needs its spring (game.step D-12)
   w.seconds(0.5);
   const ha = single(w.host.game), p = g.game.tractorWorld({ x: 3, y: 0, z: 0 }, {}); ha.x = p.x; ha.z = p.z; ha.state = 'idle'; ha.timer = 99;
   w.seconds(0.3); assert.ok(w.host.events.some(e => e.type === 'dodge' && e.animal === ha));
@@ -1618,7 +1642,7 @@ test('trees: a guest break shows on the host and the other guests; the host brea
   const near = g1.game.trees.list.find(x => x.kind === 'tree' && Math.hypot(x.x - g1.game.tractor.x, x.z - g1.game.tractor.z) < 60);
   assert.ok(near, 'a tree within reach of a moved tractor exists');
   // put guest 1's tractor next to that tree (latest vehicle message is what the host checks)
-  const { moveTrain } = await import('./mp.harness.mjs'); moveTrain(g1.game, near.x - 3, near.z, Math.PI / 2); w.seconds(0.3);
+  moveTrain(g1.game, near.x - 3, near.z, Math.PI / 2); w.seconds(0.3);
   g1.game.trees.breakById(near.id); g1.sync.after([{ type: 'treeBreak', tree: near, dir: { x: 1, z: 0 }, speed: 5 }], w.now); w.seconds(0.3);
   assert.equal(w.host.game.trees.list[near.id].state, 'broken'); assert.equal(g2.game.trees.list[near.id].state, 'broken');
   assert.ok(w.host.events.some(e => e.type === 'treeBreak' && e.tree.id === near.id), 'host bursts it');
@@ -1656,8 +1680,6 @@ test('a new farm on the host: the guest makes it too, after its own show (M-19)'
 });
 ```
 
-Add `moveTrain` to `test/mp.harness.mjs` (copied from `test/game.test.mjs`, unchanged, plus `import { quatAxes } from '../src/sim/tractor.js';`) and export it.
-
 - [ ] **Step 2: Run to verify they fail** — the 7 new tests fail.
 
 - [ ] **Step 3: Implement in `src/net/host.js`**
@@ -1667,7 +1689,8 @@ Add `import { fullDodge } from '../sim/game.js';` and `export const TREE_RANGE =
   const guestAt = p => p.latest?.bodies[0].p; // the guest's last real tractor position (M-50)
   const tractorOf = p => ({ x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed });
   Object.assign(handlers, {
-    delivered(p, m) { let any = false; for (const id of m.ids) { const a = game.herd.animals[id]; if (a?.state === 'carried' && a.owner === p.n) { a.state = 'gone'; a.epoch++; any = true; } } if (any) game.herd.respawn(); }, // M-6, M-16
+    // M-6, M-16, Decision 10: the host walks the delivered animals into the barn; every guest sees it in the herd message (busy), then they are gone
+    delivered(p, m) { const list = m.ids.map(id => game.herd.animals[id]).filter(a => a?.state === 'carried' && a.owner === p.n); for (const a of list) { a.epoch++; a.owner = null; } if (list.length) { game.herd.toBarn(list); game.herd.respawn(); } },
     tree(p, m) { const t = game.trees.list[m.id], at = guestAt(p); if (!t || !at || Math.hypot(t.x - at.x, t.z - at.z) > TREE_RANGE) return; // M-17, M-50
       const e = game.trees.breakById(m.id, { x: Math.sin(p.yaw), z: Math.cos(p.yaw) }); if (!e) return; out.push(e); all({ t: 'tree', id: m.id }, true, p.n); },
     regrow(p) { game.trees.reset(); all({ t: 'regrow' }, true, p.n); }, // M-17: any show regrows everything
@@ -1705,11 +1728,11 @@ Replace the stubs:
 
 ```bash
 npm test 2>&1 | tail -4
-git add src/net/host.js src/net/guest.js test/mp.test.mjs test/mp.harness.mjs
+git add src/net/host.js src/net/guest.js test/mp.test.mjs
 git commit -m "feat: Tractor Pickup multiplayer - delivery and respawn, trees, horn, help, paints, new farm (M-6, M-8, M-9, M-12, M-16, M-17, M-19)"
 ```
 
-### Task 11: Bad and excessive messages (M-44, M-50)
+### Task 11: Bad, old and excessive messages (M-26, M-44, M-50)
 
 **Files:**
 - Modify: `src/net/host.js`, `src/net/guest.js` (only if a test finds a gap)
@@ -1739,13 +1762,25 @@ test('a flood of claims: at most 60 each second are handled (M-50)', async () =>
   const w = await mpWorld({ seed: 53 }); w.seconds(1);
   let handled = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { handled++; return orig(...a); };
   for (let i = 0; i < 300; i++) w.guests[0].net.send(w.host.net.id, { t: 'claim', ids: [0] }, true);
-  w.seconds(0.2); assert.ok(handled <= 60, `${handled}`);
+  w.seconds(0.2); assert.ok(handled > 50 && handled <= 60, `${handled}`); // the window may already hold a few earlier messages
+});
+test('old messages are ignored: an older train position, and animal data with a lower ownership number (M-26)', async () => {
+  const { encodeHerd } = await import('../src/net/codec.js');
+  const w = await mpWorld({ seed: 55 }); w.seconds(1);
+  const g = w.guests[0], G = g.net.id, far = { x: 40, y: 1, z: 40 };
+  w.host.net.send(G, encodeVehicle({ player: 1, time: 1, mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: far, q: { x: 0, y: 0, z: 0, w: 1 } })), carried: [] })); // time 1: older than all
+  w.seconds(0.3); const hp = g.sync.players.map.get(1).pose.tractor.p; assert.ok(Math.hypot(hp.x - 40, hp.z - 40) > 5, 'the host tractor did not jump back');
+  const ha = w.host.game.herd.free().find(a => !a.hidden), ga = g.game.herd.animals[ha.id]; ha.epoch = 5; w.seconds(0.5); assert.equal(ga.epoch, 5);
+  w.host.net.send(G, encodeHerd({ time: w.now + 1, animals: [{ ...ha, epoch: 4, busy: false, x: 40, y: 0, z: 40, anim: 'idle' }] })); // newer time, older owner
+  for (let i = 0; i < 30; i++) { w.step(1); assert.ok(Math.hypot(ga.x - 40, ga.z - 40) > 5, 'ignored'); }
+  assert.equal(ga.epoch, 5);
 });
 test('a handler that throws is contained (M-44)', async () => {
   const w = await mpWorld({ seed: 54 }); w.seconds(1);
-  w.host.sync.handlers.horn = () => { throw new Error('boom'); };
-  w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
-  assert.equal(w.guests[0].sync.you, 2);
+  const orig = w.host.sync.handlers.horn; w.host.sync.handlers.horn = () => { throw new Error('boom'); };
+  w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3); // the throw stays inside the host's message handler (w.step would throw otherwise)
+  w.host.sync.handlers.horn = orig; w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
+  assert.ok(w.host.events.some(e => e.type === 'remoteHorn' && e.n === 2), 'the host still handles messages');
 });
 ```
 
@@ -1758,7 +1793,7 @@ The host's rate limiter uses the clock passed to `before/after` (`nowMs`); the w
 ```bash
 npm test 2>&1 | tail -4
 git add test/mp.test.mjs src/net/host.js src/net/guest.js
-git commit -m "test: Tractor Pickup multiplayer - bad messages, player spoofing, floods (M-44, M-50)"
+git commit -m "test: Tractor Pickup multiplayer - bad and old messages, player spoofing, floods (M-26, M-44, M-50)"
 ```
 
 ### Task 12: Connection loss — away, back, left, alone on the same farm (M-39, M-40, M-41)
@@ -1818,7 +1853,7 @@ test('going alone with a claim still waiting keeps the animal (decision 3)', asy
   const w = await mpWorld({ seed: 66, link: { delay: 500 } }); w.seconds(2);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
-  w.seconds(0.4); assert.ok(g.sync.pending.size > 0);
+  let k = 0; while (!g.sync.pending.size && k++ < 120) w.step(1); assert.ok(g.sync.pending.size > 0); // the guest sees it ~600 ms late (500 ms link + 100 ms playback)
   w.hub.leave(w.host.net.id, 'left'); w.seconds(2);
   assert.ok(g.events.some(e => e.type === 'land' && e.animal === ga));
 });
@@ -1829,14 +1864,14 @@ test('going alone with a claim still waiting keeps the animal (decision 3)', asy
 - [ ] **Step 3: Implement in `src/net/host.js`**
 
 ```js
-  const gone = (id, why) => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; const p = players.map.get(n);
+  const gone = id => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; const p = players.map.get(n);
     for (const a of owned(n)) { a.state = 'gone'; a.epoch++; } game.herd.respawn(); // M-39
-    if (p?.pose) out.push({ type: 'playerGone', n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(n); all({ t: 'players', list: roster() }); void why; };
+    if (p?.pose) out.push({ type: 'playerGone', n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); players.remove(n); all({ t: 'players', list: roster() }); };
   net.on('peerAway', id => { const p = players.map.get(byPeer.get(id)); if (p) { p.away = true; all({ t: 'players', list: roster() }); } });
   net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) { p.away = false; all({ t: 'players', list: roster() }); } });
   net.on('peerLeft', id => gone(id));
 ```
-(`owned` is defined in Task 9; place these after it.) In `before()`, skip `fullDodge` and carried positions for players with `away` (already guarded for dodge). Set `sync.close = () => { closed = true; for (const p of players.list()) { for (const a of owned(p.n)) { a.state = 'gone'; a.epoch++; } players.remove(p.n); } game.herd.respawn(); }` — when the host stops hosting it keeps playing alone and its herd refills.
+(`owned` is defined in Task 9; place these after it.) In `before()`, the carried-positions loop from Task 9 becomes `for (const p of players.list()) if (!p.away) for (const c of p.carried) { … }` (the `fullDodge` line already skips away players). Set `sync.close = () => { closed = true; for (const p of players.list()) { for (const a of owned(p.n)) { a.state = 'gone'; a.epoch++; } players.remove(p.n); } game.herd.respawn(); }` — when the host stops hosting it keeps playing alone and its herd refills.
 
 - [ ] **Step 4: Implement in `src/net/guest.js`**
 
@@ -1856,7 +1891,7 @@ test('going alone with a claim still waiting keeps the animal (decision 3)', asy
 ```
 `sync.close()` becomes `close() { net.leave?.(); goAlone('left'); }`. Animals that a guest sees as `toBarn` (busy) when going alone are left as they are; the guest's own herd step walks them into the barn.
 
-In `before()`, while `alone`, skip `applyHerd` and `applyCarried` (already guarded), and do not run the bumper (no others): leave `game.others = []`.
+`before()` needs no change: while `alone` it already skips `applyHerd` and `applyCarried`, and `players.others()` is empty, so the bumper has nothing to push against.
 
 - [ ] **Step 5: Run to verify they pass.**
 
@@ -1882,7 +1917,7 @@ git commit -m "feat: Tractor Pickup multiplayer - away, back, left and alone on 
 **Interfaces:**
 - Produces:
   - `TRACTOR_WHEELS` (tractor.js): the four wheel records with `name, mx, my, mz, r, front, cx, cy, cz, radius` computed at module level; `createTractor` uses `const W = TRACTOR_WHEELS.map(w => ({ ...w }))`.
-  - `vehicles3d`: `setGhost(on)` (all its materials `transparent`, `opacity 0.45` when on), `dispose()` (removes its meshes from the scene and disposes per-instance geometries).
+  - `vehicles3d`: `setGhost(on)` (all its materials `transparent`, `opacity 0.45` when on), `dispose()` (removes its meshes from the scene and disposes its geometries and its cloned materials; all of them are made per `createVehicles3D` call).
   - `animals3d`: draws state `'carried'` at `a.x/a.y/a.z/a.yaw` with `a.anim`, hat when `a.riding`; hides `'elsewhere'`; rebuilds a view whose animal changed type or golden.
   - `createOthers3D(scene) -> { update(dt, players), dispose() }` where `players` is `sync.players` (or null).
 
@@ -1912,19 +1947,19 @@ export const TRACTOR_WHEELS = [
   { name: 'wheel-back-right', mx: -0.465, my: 0.525, mz: -0.575, r: 0.525, front: false },
 ].map(w => ({ ...w, cx: w.mz * TP.scale, cy: w.my * TP.scale, cz: -w.mx * TP.scale, radius: w.r * TP.scale }));
 ```
-(place it after `TP`), and in `createTractor` replace the `W` literal and the `w.cx = ...; w.radius = ...;` assignments with `const W = TRACTOR_WHEELS.map(w => ({ ...w }));` keeping the `vc.addWheel(...)` loop as is.
+(place it after `TP`), and in `createTractor` replace the `W` literal and the `w.cx = ...; w.radius = ...;` assignments with `const W = TRACTOR_WHEELS.map(w => ({ ...w }));` keeping the `vc.addWheel(...)` loop as is. `S` is then unused: `const { RAPIER, world } = phys, S = TP.scale;` becomes `const { RAPIER, world } = phys;`.
 
 `src/render/vehicles3d.js`: collect every mesh in an array `all` as they are created (`body`, `wheels`, each car's `m` and `ws`), and add to the returned object:
 ```js
     // M-39, M-40: an away player's train is half transparent
     setGhost(on) { for (const m of all) { m.material.transparent = on; m.material.opacity = on ? 0.45 : 1; m.material.depthWrite = !on; m.material.needsUpdate = true; } },
-    dispose() { for (const m of all) scene.remove(m); body.geometry.dispose(); for (const w of wheels) w.geometry.dispose(); },
+    dispose() { for (const m of all) scene.remove(m); for (const x of new Set(all.flatMap(m => [m.geometry, m.material]))) x.dispose(); },
 ```
 Note: the wheels of one tractor share `wheelsMat` and each car shares `carMat`/`wheelMat`, so setting a material twice is harmless.
 
 `src/render/animals3d.js`:
 1. `makeView` stores `type: a.type, golden: a.golden` on the view object.
-2. At the top of the views loop in `update`: `if (v.type !== a.type || v.golden !== a.golden) { scene.remove(v.g); const i = views.indexOf(v); views[i] = makeView(a); continue; }` — the next frame draws the new view (a placeholder from `herd.ensure` got its real type).
+2. At the top of the views loop in `update`: `if (v.type !== a.type || v.golden !== a.golden) { scene.remove(v.g); v.parts[0]?.material.dispose(); const i = views.indexOf(v); views[i] = makeView(a); continue; }` (each view has its own material clone; the geometries are shared) — the next frame draws the new view (a placeholder from `herd.ensure` got its real type).
 3. `v.g.visible = a.state !== 'gone';` becomes `v.g.visible = a.state !== 'gone' && a.state !== 'elsewhere';`
 4. `v.hat.visible = a.state === 'ride';` becomes `v.hat.visible = a.state === 'ride' || (a.state === 'carried' && !!a.riding);`
 5. The anim line: `const anim = fl ? 'run' : a.state === 'ride' ? (...) : a.anim;` stays; `carried` animals use `a.anim` set by the sync.
@@ -1986,7 +2021,7 @@ git commit -m "feat: Tractor Pickup multiplayer - draw the other trains and carr
 - Test: `test/session.test.mjs`
 
 **Interfaces:**
-- Consumes: `roomLink`, `withLag`, `parseLag` (Task 2), `createHostSync`, `createGuestSync` (Tasks 8–12), `NET_VERSION` (Task 4). A `Handshake` class with the contract in the Global Constraints (injected, so tests use a fake).
+- Consumes: `roomLink`, `withLag` (Task 2), `createHostSync`, `createGuestSync` (Tasks 8–12), `NET_VERSION` (Task 4). A `Handshake` class with the contract in the Global Constraints (injected, so tests use a fake).
 - Produces:
   - `SERVER = 'https://handshake.four43.com'`, `APP = 'tractor-pickup'`, `roomName(code)`, `parseRoomInput(text) -> code | null`, `ERRORS` (code → panel text), `joinUrl(code, loc = location)`.
   - `createSession({ Handshake, server = SERVER, lag = null, getGame, onFarm, getPaint, onChange, retryMs = 10000 })` returning:
@@ -2000,7 +2035,7 @@ git commit -m "feat: Tractor Pickup multiplayer - draw the other trains and carr
 - [ ] **Step 1: Add the QR dependency**
 
 Run: `npm install qrcode-generator@^1.4.4`
-Expected: `package.json` gains `"qrcode-generator": "^1.4.4"` under `dependencies`.
+Expected: `package.json` gains a `qrcode-generator` entry under `dependencies` (npm writes the newest 1.x it installs, for example `"^1.5.2"`).
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -2065,6 +2100,8 @@ test('join: a code is checked first, then a prompt, then the room (M-32, M-33)',
   await t.s.submitCode('nope'); assert.equal(t.s.view().error, ERRORS.badCode);
   await t.s.submitCode('tractor-pickup-k7mx2'); const v = t.s.view(); assert.equal(v.state, 'prompt'); assert.equal(v.name, 'tractor-pickup-K7MX2'); assert.equal(v.info.players, 1);
   await t.s.confirmJoin(); assert.equal(fh.made.at(-1).joined, 'K7MX2'); assert.equal(t.s.view().state, 'joined'); assert.equal(t.s.isGuest, true);
+  t.s.sync.players.ensure(1); fh.made.at(-1).room.peers.set('h', { connectionType: 'relayed' }); // the guest's row for the host shows the real connection (M-31, M-33)
+  assert.equal(t.s.view().players.find(p => p.n === 1 && !p.you).status, 'relayed');
   t.s.leave(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.isGuest, false); assert.ok(fh.made.at(-1).closed, 'the client socket is closed when not in a room');
 });
 test('a room lost by the server ends joining and hosting (closed reason lost, M-41)', async () => {
@@ -2129,7 +2166,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
   const idleClient = () => { if (!room) { hs?.close(); hs = null; } }; // a Handshake that has peeked keeps its socket open until close()
   // any closed reason ('kicked', 'left', 'replaced', 'lost', host gone) ends the room; the guest sync has already gone alone (M-41)
   const watch = r => r.on('closed', () => { if (room !== r) return; if (state === 'joined') { room = null; sync = null; code = null; state = 'idle'; } else if (state === 'hosting') { drop(); state = 'idle'; } idleClient(); changed(); });
-  const statusOf = p => { if (p.away) return 'away'; const peer = p.peer && room?.peers.get(p.peer); return peer?.connectionType || 'connecting'; };
+  const statusOf = p => { if (p.away) return 'away'; const id = p.peer || (state === 'joined' && p.n === 1 ? room?.hostId : null), peer = id && room?.peers.get(id); return peer?.connectionType || 'connecting'; }; // a guest's store has no peer ids: its host row uses room.hostId
   const s = {
     get sync() { return sync; }, get isGuest() { return state === 'joined'; }, get inRoom() { return !!sync; },
     view() {
@@ -2223,7 +2260,7 @@ and in the click handler: `else if (a === 'mp') { done(); onMultiplayer(); }`.
     const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); }
     box.onclick = e => {
       const t = e.target.closest?.('[data-a]'), a = t?.dataset.a; if (!a) return;
-      if (a === 'close') { box.parentElement.remove(); mpSession = mpSession; return; }
+      if (a === 'close') { box.parentElement.remove(); return; }
       ({ host: () => mpSession.host(), join: () => mpSession.openJoin(), stop: () => mpSession.stopHosting(), submit: () => mpSession.submitCode(input.value), cancel: () => mpSession.cancel(),
         confirm: () => { mpSession.confirmJoin().then(() => { if (mpSession.view().state === 'joined') box.parentElement?.remove(); }); }, leave: () => mpSession.leave(),
         remove: () => mpSession.remove(Number(t.dataset.n)), lock: () => mpSession.lock(t.checked) })[a]?.();
@@ -2328,7 +2365,7 @@ with
         if (e.type === 'playerGone') { fx.stars(e.x, 1.2, e.z); sound.plop(); } // M-39
 ```
 (`treeBreak` events from the network already match the existing handler.)
-8. Trip cues: `if (c === 'help') { if (session?.requestHelp()) {} else { const h = game.herd.callHelp(game.tractor); ... } }` — only a guest asks the host. `if (c === 'show') { ...; riders = game.startShow(); session?.showStarted(); ... }`. `if (c === 'reward') { ...; game.finishShow(riders); session?.delivered(riders); ... }`.
+8. Trip cues: `if (c === 'help') { if (!session?.requestHelp()) { const h = game.herd.callHelp(game.tractor); ... } }` — only a guest asks the host. `if (c === 'show') { ...; riders = game.startShow(); session?.showStarted(); ... }`. `if (c === 'reward') { ...; game.finishShow(riders); session?.delivered(riders); ... }`.
 9. Render: after `animals3d?.update(...)`: `others3d?.update(dt, session?.sync?.players ?? null);`.
 10. `?r=` link (M-34), after `enterStart();`:
 ```js
@@ -2349,7 +2386,7 @@ git add src/net/handshake.js test/handshake-contract.test.mjs src/main.js src/au
 git commit -m "feat: Tractor Pickup multiplayer - vendor handshake.js and wire the game (M-2..M-10, M-28, M-34)"
 ```
 
-### Task 16: Two-window check, spec results, version 1.4.0 (M-54, M-10 text, section 13)
+### Task 16: Two-window check, spec results, version 1.4.0 (M-54, section 13)
 
 **Files:**
 - Modify: `docs/tractor-pickup-spec.md`, `package.json`, `package-lock.json`
@@ -2403,9 +2440,8 @@ Run: `docker stop hs-local`
 
 - [ ] **Step 4: Update the spec**
 
-In `docs/tractor-pickup-spec.md`:
-1. M-10: replace "its tractor appears beside the farm start with a sparkle and a short horn. Each player number has its own place, 8 m apart, clear of obstacles." with "its tractor appears ahead of the farm start with a sparkle and a short horn. Each player number has its own place, 12 m apart along the farm start's heading (8 m to the side when that place is blocked), clear of obstacles."
-2. Section 13: change the first line to "State at version 1.8 (`npm test`: N tests, all pass)..." with the real count, and add rows:
+In `docs/tractor-pickup-spec.md` (the M-10 text changed in Task 6):
+1. Section 13: change the first line to "State at version 1.8 (`npm test`: N tests, all pass)..." with the real count, and add rows:
 ```
 | 1.8 M-22..M-26 Messages and smooth motion | `codec.test.mjs`, `interp.test.mjs`, `protocol.test.mjs`, `link.test.mjs` | — | — |
 | 1.8 M-1..M-19 Play together | `mp.test.mjs` (two to four games in one process over the in-memory link, with 300 ms delay, jitter and loss), `spawn.test.mjs`, `bump.test.mjs`, `game.test.mjs`, `herd.test.mjs` | Two browser windows with a local Handshake: <results from Step 2> | Two iPads on one home network; one iPad over mobile data (TURN) |
@@ -2423,7 +2459,7 @@ Run: `npm version 1.4.0 --no-git-tag-version`
 ```bash
 npm test 2>&1 | tail -4 && npm run build 2>&1 | tail -2
 git add docs/tractor-pickup-spec.md package.json package-lock.json
-git commit -m "docs: Tractor Pickup 1.4.0 - multiplayer test results, spawn places (M-10)"
+git commit -m "docs: Tractor Pickup 1.4.0 - multiplayer test results (M-54)"
 ```
 Do not commit `site/exp/tractor-pickup/` build output unless the user asks for a deploy (deploys go through gh-pages with the user's OK).
 
@@ -2440,7 +2476,7 @@ Do not commit `site/exp/tractor-pickup/` build output unless the user asks for a
 | M-6, M-16 delivery and respawn | 6, 10 |
 | M-7 soft bump | 7, 8, 15 |
 | M-8 horn, M-9 help | 10, 15 |
-| M-10 spawn places | 6, 15, 16 (text) |
+| M-10 spawn places | 6 (code and spec text), 15 |
 | M-11 own vehicle, M-12 host animals and B-14 | 5, 6, 8, 10 |
 | M-17 trees, M-18 props stay local | 6, 10 (props: nothing to sync — `startShow` keeps resetting local props) |
 | M-20, M-21 connections and channels | 2, 15 (handshake.js) |
