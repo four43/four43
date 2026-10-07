@@ -139,3 +139,16 @@ test('?signal= takes only a local server or this page\'s own origin; anything el
   for (const ok of ['http://localhost:8787', 'https://localhost', 'http://127.0.0.1:9000', 'https://127.0.0.1', 'https://four43.com', 'https://four43.com/handshake']) assert.equal(signalServer(ok, origin), ok, ok);
   for (const bad of [null, '', 'evil.com', 'https://evil.com', 'http://localhost.evil.com', 'http://localhost@evil.com', 'wss://localhost', 'javascript:alert(1)', 'https://four43.com.evil.com', 'http://four43.com', 'ftp://127.0.0.1']) assert.equal(signalServer(bad, origin), undefined, String(bad));
 });
+test('join: no welcome 10 s after joining says the farm cannot be reached; still joined, Leave works; a late welcome clears it (M-33, M-44)', async () => {
+  const fh = fakeHandshake({ peekResult: { players: 1 } }), t = setup(fh, { welcomeMs: 20 });
+  t.s.openJoin(); await t.s.submitCode('K7MX2'); await t.s.confirmJoin(); assert.equal(t.s.view().error, null);
+  await new Promise(r => setTimeout(r, 40));
+  assert.equal(t.s.view().state, 'joined'); assert.equal(t.s.view().error, ERRORS.noFarm); assert.equal(ERRORS.noFarm, "Can't connect to the farm.");
+  const r = fh.made.at(-1).room, peer = Object.assign(emitter(), { id: 'h', open: true, send: () => true }); r.peers.set('h', peer); r.emit('peer', peer);
+  peer.emit('message', { t: 'welcome', v: NET_VERSION, seed: 9, you: 2, players: [{ n: 1, paint: { body: 'red', trim: 'yellow' }, away: false }], herd: [], trees: [], next: 0 }, { reliable: true });
+  const c = t.changes; t.s.before(1); assert.equal(t.s.view().error, null, 'connected after all'); assert.ok(t.changes > c, 'the panel redraws');
+  t.s.leave(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, null);
+  const fh2 = fakeHandshake({ peekResult: { players: 1 } }), t2 = setup(fh2, { welcomeMs: 20 });
+  t2.s.openJoin(); await t2.s.submitCode('K7MX2'); await t2.s.confirmJoin(); await new Promise(r => setTimeout(r, 40)); assert.equal(t2.s.view().error, ERRORS.noFarm);
+  t2.s.leave(); assert.equal(t2.s.view().state, 'idle'); assert.equal(t2.s.view().error, null, 'Leave ends it');
+});
