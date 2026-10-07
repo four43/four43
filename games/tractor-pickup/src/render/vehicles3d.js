@@ -65,8 +65,8 @@ export function createVehicles3D(scene, tractor, train) {
         });
       });
     },
-    // M-39, M-40: an away player's train is half transparent
-    setGhost(on) { for (const m of all) { m.material.transparent = on; m.material.opacity = on ? 0.45 : 1; m.material.depthWrite = !on; m.material.needsUpdate = true; } },
+    // M-39, M-40: an away player's train is half transparent, with no shadow (a full shadow under a see-through train looks solid)
+    setGhost(on) { for (const m of all) { m.castShadow = !on; m.material.transparent = on; m.material.opacity = on ? 0.45 : 1; m.material.depthWrite = !on; m.material.needsUpdate = true; } },
     dispose() { for (const m of all) scene.remove(m); for (const x of new Set(all.flatMap(m => [m.geometry, m.material]))) x.dispose(); },
   };
 }
