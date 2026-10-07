@@ -1,10 +1,10 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.7 (drive buttons, sticker book with die-cut stickers, hats on or off)
+Version: 1.8 (multiplayer)
 Date: 6 October 2026
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
-Status of items: Each design item has an ID (for example, **[C-1]**). All items in this document are accepted for the first version.
+Status of items: Each design item has an ID (for example, **[C-1]**). All items in this document are accepted for the first version. Items marked **Phase 2** in section 14 are accepted but come after version 1.8.
 
 ---
 
@@ -59,6 +59,12 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - The paint screen has a row of the unlocked hats: each hat can be turned off or on (W-4).
 - The parent gear is at the top left. Every close button is a red X at the top right (U-3, U-7).
 - The horn button shows a classic bulb horn (U-2). Every hat sits on the top of the head, with no head poking through it (W-4).
+
+### 1.2.8 Change in version 1.8
+
+- Multiplayer (section 14): two to four players drive on one farm, each on a different device, each with a tractor, a trailer and a wagon. Animals are shared: the first tractor that boops an animal gets it. Each player has a show and stickers on that device.
+- The parent menu has a "Multiplayer" button at the top (P-10). Its panel has "Host" and "Join". A guest joins with the 5-character room code, a link or a QR code.
+- The signaling server is a different project: Handshake (`https://handshake.four43.com`).
 
 ### 1.2.6 Change in version 1.6 (after review 2)
 
@@ -128,6 +134,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 | Sticker | TN | A reward picture that the player gets after each show. |
 | Sticker book | TN | The screen that shows all stickers. |
 | Parent menu | TN | The settings screen. A long press opens it. |
+| Room, host, guest, room code | TN | See section 14.1 for the multiplayer terms. |
 
 ---
 
@@ -393,7 +400,7 @@ The tractor drives like a car. The chase camera (V-1) always stays behind the tr
 | U-3 | Parent menu | Top left. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
 | U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4) and "New sticker!" on the sticker card (F-3). The voice says each of them (R-2). The parent menu can use text. |
 | U-5 | Skip | During the show only: top right. A fast-forward picture (F-13). |
-| U-7 | Close buttons | Every close button is a red X in the top right corner of what it closes: the paint screen and the sticker book (top right of the screen) and the parent menu (top right of its panel). |
+| U-7 | Close buttons | Every close button is a red X in the top right corner of what it closes: the paint screen and the sticker book (top right of the screen) the parent menu (top right of its panel) and the Multiplayer panel (top right of its panel, M-29). |
 | U-6 | Drive buttons | While driving only (not during the start screen, the show or the sticker card): two round buttons stacked at the bottom left, clear of the slot bar. The upper button (a paint pot) opens the paint screen (W-3); the lower button (a book) opens the sticker book (W-2). A tap on a button never moves the stick. While either screen is open, the tractor is held (like the sticker card) and nothing is booped; a close button (a red X, top right) goes back to driving. |
 
 ### 8.2 Sounds
@@ -439,6 +446,7 @@ All items in this section are accepted for the first version.
 | P-4 | Music | On, Off | On |
 | P-5 | Farm seed | A number | Random |
 | P-8 | New farm | Button | — |
+| P-10 | Multiplayer | A button at the top of the parent menu. It opens the Multiplayer panel (M-29). | — |
 | P-9 | Apply and close | An Apply button saves the settings and closes the menu. The red X at the top right of the panel (U-7) closes it without saving. | — |
 | P-6 | Clear stickers | Button with a confirmation | — |
 | P-7 | Power | Low (6 m/s, small slides), Medium (9 m/s), High (12 m/s, large slides) | Medium |
@@ -451,7 +459,7 @@ All items in this section are accepted for the first version.
 |---|---|---|
 | X-1 | Libraries | three.js and `@dimforge/rapier3d-compat`. Fixed physics step at 60 Hz with render interpolation. |
 | X-2 | Assets | Kenney Cube Pets, Nature Kit and the Pig Pens tractor. Bake them into the single HTML file. |
-| X-3 | Devices | The main device is an iPad in landscape. A desktop with a keyboard or a gamepad is for tests. Single player only. |
+| X-3 | Devices | The main device is an iPad in landscape. A desktop with a keyboard or a gamepad is for tests. One player on each device; multiplayer connects 2 to 4 devices (section 14). |
 | X-4 | Frame rate | 60 frames per second on an iPad of 2020 or newer. |
 | X-5 | Offline | The game operates offline after the first load (PWA). |
 | X-6 | Source | `games/tractor-pickup/` |
@@ -541,3 +549,120 @@ Performance (X-4), desktop proxy: an RTX 5070 Ti is too fast to show an iPad lim
 | After: grass skips rock samples, ground in 6 by 6 chunks | 0.35 ms | 124 | 1.66 M |
 
 At 2360 by 1640 the time went from 0.63 ms to 0.54 ms. The shadow pass is about 40 % of the triangles and of the GPU time. The shadow map and the shadow box were not reduced, because the desktop frame time gives no reason. They are the next step if the iPad drops below 55 fps: map 1024 and box 22 m.
+
+---
+
+## 14. Multiplayer
+
+Two to four players drive on the same farm at the same time, each on a different device. Each player has a tractor, a trailer and a wagon. The animals are shared: the first tractor that boops an animal gets it. This is not a competition. There is no score, no winner and no timer.
+
+The usual players are a parent and a child on the same home network. Players on different networks (for example, a hotel on a different continent) must also be able to play. Some delay is acceptable.
+
+Items marked **Phase 2** are part of the design but not part of version 1.8.
+
+### 14.1 Terms
+
+| Term | Type | Definition |
+|---|---|---|
+| Room | TN | One multiplayer game: one host and its guests. |
+| Host | TN | The device that makes the room. Its farm is the farm of the room. |
+| Guest | TN | A device that joins a room. |
+| Room code | TN | 5 letters and digits that identify a room, for example `K7MX2`. The signaling server makes it. It does not use 0, O, 1, I or L. |
+| Room name | TN | `tractor-pickup-` and the room code, for example `tractor-pickup-K7MX2`. |
+| Other tractor | TN | A tractor of a different player, as it shows on this device. |
+| Owner | TN | The device that moves an object and sends its position to the other devices. |
+| Claim | TN | A request from a guest to the host for an animal that the guest booped. |
+| Ownership number | TN | A number on each animal. It increases each time the animal changes owner. |
+| Handshake | TN | The signaling server (`https://handshake.four43.com`) and its client library `handshake.js`. It finds the room and connects the devices. It does not carry game data. |
+
+### 14.2 Play
+
+| ID | Item | Description |
+|---|---|---|
+| M-1 | Shared farm | All players drive on the host's farm. Each guest makes the same farm from the host's seed (P-5). |
+| M-2 | Own vehicles | Each player has a tractor, a trailer and a wagon, with 12 slots (G-1). The other tractors show in their own paint (W-3). |
+| M-3 | Shared animals | All players see the same free animals. The first tractor that boops an animal gets it (M-12). |
+| M-4 | Own show | When a player drives into the barn, that player gets a show (section 3.4) on that device. The other players continue to drive. On the other devices, that player's tractor stops in the barn until the show ends. The other devices do not show the show. |
+| M-5 | Own rewards | Stickers, paints, hats (section 9), settings (section 10) and the voice stay on each device. A guest's progress does not change when it joins or leaves. |
+| M-6 | Respawn | After a player's show, the delivered animals go away and new animals walk in along the routes (G-3), on all devices. |
+| M-7 | Soft bump | When two tractors touch, each device pushes its own tractor gently away from the other tractor, with a "boing" and a short horn. The push is approximately 2 m/s, away from the other tractor's center. The tractors do not stay together. Trailers and wagons do not touch other vehicles. |
+| M-8 | Horn | The horn (U-2) calls animals to that player's tractor on all devices (C-6, A-11). The horn of an other tractor sounds more quietly. |
+| M-9 | Help | The help animal (F-4) comes to the tractor of the player who needs help. |
+| M-10 | Join on screen | When a guest joins, its tractor appears beside the farm start with a sparkle and a short horn. Each player number has its own place, 8 m apart, clear of obstacles. |
+
+### 14.3 What each device owns
+
+| ID | Item | Description |
+|---|---|---|
+| M-11 | Own vehicle | Each device moves its own tractor, trailer and wagon and the animals in flight to them or in them. It sends their positions to the other devices. Thus driving has no delay on any device. |
+| M-12 | Host animals | The host owns all free animals and their behavior (section 5.2). Only the host runs the animal behavior. An animal reacts to the nearest tractor (flee, look, come to the horn). When a guest's train is full, the host makes animals hop out of its way (B-14). |
+| M-13 | Boop by a guest | The guest launches the animal at once (B-4) and sends a claim. A booped hen sends a claim for the whole chick line (A-12). The host gives an animal to the first claim that it gets. If the host gives the animal, its ownership number increases and it belongs to the guest. If the animal is not free, the host refuses. |
+| M-14 | Land after a yes | An animal in flight lands only after the host gives it. If the yes is late, the animal stays at the top of its arc for up to 1 s more. If the host refuses, the animal disappears with a "poof" (stars and a soft sound) and shows again where the host has it. Thus an animal that landed never goes away (R-4). A refusal is rare: it occurs only when two players boop the same animal at almost the same time. |
+| M-15 | Boop by the host | The host's own boops do not need a claim. The host is first for every animal that it boops. |
+| M-16 | Delivery | After a guest's show, the guest tells the host which animals it delivered. The host removes them and makes new animals (M-6). |
+| M-17 | Trees and bushes | The host owns the state of each tree and bush (T-34, T-35). A guest breaks a tree on its own screen at once and tells the host. The host breaks it on all devices. When the show of any player starts, broken trees and bushes grow back on all devices (T-32). |
+| M-18 | Yard props | Hay bales, cones and barrels (T-31) are not shared. Each device moves its own props, and both tractors can push them. Props can be in different positions on different devices. Each device resets its props at its own show. |
+| M-19 | New farm | When the host makes a new farm (P-8), each guest makes the same new farm. A guest in its show makes it after the show. A guest cannot make a new farm while it is in a room. |
+
+### 14.4 Network data
+
+| ID | Item | Description |
+|---|---|---|
+| M-20 | Connections | The devices connect directly with WebRTC data channels, in a star: each guest connects only to the host. Handshake helps them connect and does not carry game data. If a direct connection is not possible, a TURN server relays the data. All game data is encrypted (DTLS). |
+| M-21 | Channels | Each connection has two channels. The fast channel does not resend lost messages and does not keep the order. It carries positions. The reliable channel resends and keeps the order. It carries all other messages. |
+| M-22 | Vehicle message | Approximately 20 times each second, on the fast channel, binary. From each device: a time stamp, the tractor, trailer and wagon positions and rotations, the tractor's mode (drive, show, held), and each owned animal in flight or in a slot (id, type, golden, position, rotation). The host sends the messages of all players to each guest. |
+| M-23 | Herd message | Approximately 15 times each second, on the fast channel, binary. From the host only: a time stamp and each free animal (id, ownership number, type, golden, position, rotation, animation, hidden). |
+| M-24 | Event messages | On the reliable channel, JSON: welcome (seed, game version, player number, paints, all animals with ownership numbers, broken trees), claim and its answer, delivery, tree break, trees regrow, horn, help request and answer, new farm, paint change. |
+| M-25 | Smooth motion | A device shows the other tractors and the host's animals approximately 100 ms behind their time stamps, and moves them smoothly between two messages. When the messages arrive unevenly, this delay increases, up to 300 ms. |
+| M-26 | Old messages | A device ignores a message that is older than the last message it used. It ignores animal data that has a lower ownership number than the number it knows. |
+| M-27 | Game version | The game has a network version number. It increases when the network messages change. A device with a different number cannot join (Handshake refuses it). The join prompt (M-32) then says "Update the game on both devices". |
+| M-28 | Lag test | The URL parameter `?lag=ms` (with optional jitter and loss, for example `?lag=300,80,5`) delays all network messages on this device. The URL parameter `?signal=url` uses a different Handshake server. These are for tests. |
+
+### 14.5 Parent menu: the Multiplayer panel
+
+| ID | Item | Description |
+|---|---|---|
+| M-29 | Multiplayer button | At the top of the parent menu (section 10), a "Multiplayer" button opens the Multiplayer panel. A red X at the top right closes the panel (U-7). The panel has text, like the parent menu. A child cannot open it, because the parent menu needs a long press (U-3). |
+| M-30 | Start | When the device is not in a room, the panel shows two buttons: "Host" and "Join". |
+| M-31 | Host | "Host" makes a room. The panel shows: the room name in large letters; a QR code of the full game URL with the room code (for example `https://four43.com/exp/tractor-pickup/?r=K7MX2`); and the player list. Each row of the player list shows a small tractor picture in that player's paints, the player number and the state (connecting, direct, relayed or away). Each guest row has a "Remove" button. A "Lock" switch stops new players. A "Stop hosting" button closes the room. When Handshake cannot be reached, the panel says so and tries again every 10 s. |
+| M-32 | Join | "Join" shows a text box for the room name and a "Join" button. The text box accepts the room name or only the room code, in upper or lower case. The game asks Handshake whether the room exists (peek). Then a prompt shows the room name and the number of players, with "Join" and "Cancel". If the room does not exist, is full, is locked or has a different game version, the panel says so. |
+| M-33 | Joined | A "Join" in the prompt closes the panel and the guest goes onto the host's farm. While the device is in a room as a guest, the panel shows the room name, the player list (without "Remove") and a "Leave" button. |
+| M-34 | Link | When the game opens with `?r=<code>` (for example from the QR code and the camera of a phone or tablet), it shows the join prompt (M-32) at once. The game then removes `?r` from the address, so a reload does not show the prompt again. |
+| M-35 | No names | Players have no names. A player is a player number and a tractor in its paints. |
+| M-36 | Not kept | A room does not continue after a reload or after the game closes. "Host" must be selected again. |
+| M-37 | Nearby list | **Phase 2.** The Join panel also shows the rooms on the same network. A tap on a room sends a knock to the host. The host shows a prompt over the game: "Let a tractor join?" with a button that the parent must hold for 2 s (as U-3), and "No". A join with the room code does not need a knock. |
+| M-38 | Scan in the game | **Phase 2.** The Join panel has a camera button. It opens the camera and reads the QR code (M-31), then shows the join prompt. It uses the browser's barcode reader when it has one, and a small QR library (approximately 50 KB) when it does not (Safari on iPad). |
+
+### 14.6 Connection loss
+
+| ID | Item | Description |
+|---|---|---|
+| M-39 | Guest away | When a guest's connection stops (for example, the screen locks), its tractor stops on the other devices and becomes half transparent. If the guest comes back in 30 s, it continues. If not, its tractor disappears with a "poof". The host removes the animals of that guest and makes new animals (M-6). |
+| M-40 | Host away | When the host's connection stops, the guests continue to drive. The host's tractor becomes half transparent. The free animals stop, and boops stop until the host comes back. If the host does not come back in 30 s, each guest continues alone (M-41). |
+| M-41 | Alone on the same farm | When a guest leaves a room for any reason (Leave, Remove, room closed, host gone), it continues alone on the same farm. Its device starts to run the animal behavior with the animals where they are. The animals in its slots stay. Nothing is made again. |
+| M-42 | Network change | When a device changes network (for example, from Wi-Fi to mobile data), the connection is made again without a stop of the game. |
+| M-43 | Screen on | While the device is in a room, the screen does not go dark (Screen Wake Lock). |
+| M-44 | Failure | No network failure stops the game or shows an error to the child (R-1). Errors show only in the Multiplayer panel. |
+
+### 14.7 Safety
+
+The players are children. These rules apply to all items in section 14.
+
+| ID | Rule |
+|---|---|
+| M-45 | No talk | There is no chat, voice, picture or free text between players. The only text from the network that shows is the room name and the player numbers, and only in the Multiplayer panel. |
+| M-46 | Code to join | In Phase 1, the only way into a room is its room code (typed, from the link or from the QR code). Handshake does not list the rooms of this game (`list = "none"`). Phase 2 adds the nearby list with a knock (M-37). |
+| M-47 | Guessing | Handshake limits wrong room codes for each address (20 each minute) and for the whole game (200 each minute). A peek counts as a join attempt. |
+| M-48 | Hidden addresses | When a guest is not on the same network as the host, both devices connect only through the TURN relay. Thus neither device gets the public IP address of the other. |
+| M-49 | Host control | The host can remove a guest and lock the room (M-31). A removed guest cannot come back while the room is locked. |
+| M-50 | Check all data | The host checks each message from a guest: the size, that each number is a valid number in its range, that each id exists, and the message rate (a maximum of 60 messages each second on each channel). The host ignores a bad message. The host refuses a claim when the guest's tractor is more than 8 m from the animal, and a tree break when the guest's tractor is more than 12 m from the tree. The guest checks the messages from the host in the same way. |
+| M-51 | No personal data | The game sends no name, account, place or device data. Handshake keeps rooms in memory only. |
+
+### 14.8 Tests
+
+| ID | Item | Description |
+|---|---|---|
+| M-52 | Two games in one test | Automated tests run a host game and a guest game in Node, connected by an in-memory link that can add delay, jitter and loss (as M-28). They check: the guest makes the same farm; both see the same animals; a claim, a refusal (the "poof") and a late yes (M-14); delivery and respawn; tree breaks and regrow; away, back and alone on the same farm (M-39 to M-41); new farm; old messages (M-26); bad messages (M-50). |
+| M-53 | Messages | Automated tests encode and decode each binary message, and check the size limits. |
+| M-54 | Browser | A desktop check with two browser windows: host, join with the code, drive both tractors, boop, bump, show, leave. |
+| M-55 | Handshake | Handshake has its own tests (its `SPEC.md`). |
