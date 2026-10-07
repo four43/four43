@@ -55,3 +55,26 @@ export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = 
 export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
 export const animalRec = o => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle', leader: null, line: 0, ...o });
 export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x, y: 1, z }, q: { x: 0, y: 0, z: 0, w: 1 } })), riders: [] });
+// M-58: what a guest shows that the host does not (empty: all devices agree). Animals carried by somebody else may be drawn or not (carried or elsewhere).
+const HELD = ['fly', 'ride', 'show'];
+export function disagreements(w) {
+  const out = [], H = w.host.game;
+  for (const g of w.guests) {
+    if (g.sync.alone) continue; const G = g.game, you = g.sync.you, at = (b, what) => out.push(`${g.name} animal ${b}: ${what}`);
+    for (const a of H.herd.animals) {
+      if (a.state === 'gone') continue; const b = G.herd.animals[a.id], owner = HELD.includes(a.state) ? 1 : a.state === 'carried' ? a.owner : 0;
+      if (!b) { at(a.id, 'missing'); continue; }
+      if (owner === you) { if (!HELD.includes(b.state)) at(a.id, `the host says mine, here ${b.state}`); }
+      else if (owner) { if (b.state !== 'carried' && b.state !== 'elsewhere') at(a.id, `player ${owner} has it, here ${b.state}`); }
+      else if (a.state === 'toBarn') { if (b.state !== 'toBarn') at(a.id, `walking in on the host, here ${b.state}`); }
+      else if (!free(G, b)) at(a.id, `free on the host, here ${b.state}`);
+    }
+    for (const b of G.herd.animals) if (HELD.includes(b.state) && !(H.herd.animals[b.id]?.state === 'carried' && H.herd.animals[b.id].owner === you)) at(b.id, `held here, ${H.herd.animals[b.id]?.state} on the host`);
+    if (g.sync.pending.size) out.push(`${g.name}: ${g.sync.pending.size} open claims`);
+    for (const t of H.trees.list) if ((t.state === 'broken') !== (G.trees.list[t.id].state === 'broken')) out.push(`${g.name} tree ${t.id}: ${t.state} on the host, ${G.trees.list[t.id].state} here`);
+    for (const n of [1, ...w.host.sync.players.list().map(p => p.n)]) if (n !== you && !g.sync.players.map.has(n)) out.push(`${g.name}: no player ${n}`);
+  }
+  return out;
+}
+// step until every device agrees, at most s seconds; returns the disagreements left (empty: agreed in time)
+export function settle(w, s) { let left = disagreements(w); for (let i = 0; i < Math.round(s * 60) && left.length; i++) { w.step(1); left = disagreements(w); } return left; }
