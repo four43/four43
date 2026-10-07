@@ -21,7 +21,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), rate = { fast: createRate(120), rel: createRate(60) }; // M-50, Decision 9
   const reg = registryOf(bindings), ownRows = ofAuthority(bindings, 'owner');
   const store = createStore(bindings.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
-  let you = 0, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
+  let you = 0, farm = -1, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
   let hostAway = false, silent = false, paused = false, lastFast = 0; // M-40: two sources (the server's hostAway, the silence watchdog); the host is away while either says so
   const setPaused = () => { const v = hostAway || silent; if (v === paused) return; paused = v; game.boopsPaused = v; const p = players.map.get(1); if (p) p.away = v; };
   const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
@@ -66,14 +66,14 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   }
   function applyWelcome(m) {
     if (!you) lastFast = clock(); // the watchdog starts with the first welcome
-    you = m.you; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
+    you = m.you; farm = m.farm; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
     game.herd.remote = true; game.claims = true; game.boopsPaused = paused; // a host that is away stays away on the new farm (M-40)
     pending.clear(); myBreaks.clear(); handedIn.clear(); herdBuf.reset(); store.clear(); mine.reset(); lastKey = -Infinity;
     for (const a of game.herd.animals) a.state = 'gone'; // M-24: nothing is free until the host's keyframe says so
     for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; }
   }
   const handlers = {
-    welcome(m) { if (m.v !== NET_VERSION) return; if (you && m.you === you && m.seed === game.farm.seed) return; if (deferred?.seed === m.seed) return; // the host repeats it with each keyframe: one we have, or one that waits for the show, changes nothing
+    welcome(m) { if (m.v !== NET_VERSION) return; if (you && m.you === you && m.farm === farm) return; if (deferred && deferred.farm === m.farm) return; // the host repeats it with each keyframe: one we have, or one that waits for the show, changes nothing (by farm number: a new farm may have the same seed)
       if (['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show
     tree(m) { if (deferred) return; const e = game.trees.breakById(m.id); if (e) out.push(e); }, // M-17: gibs, no direction (not on the old farm while a new one waits)
     regrow() { if (!deferred) game.trees.reset(); },

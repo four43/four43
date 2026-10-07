@@ -136,3 +136,17 @@ test('a tree broken through its record (its tree message lost) breaks quietly: n
   w.hub.drop = (from, to, d) => d?.t === 'regrow'; g.game.startShow(); g.sync.showStarted(); w.seconds(0.2); w.hub.drop = null; // the guest's own show regrew it; the host did not hear
   w.seconds(2.5); assert.equal(g.game.trees.list[t.id].state, 'broken', 'broken again from the records'); assert.equal(bursts(), 0, 'still no burst');
 });
+test('a new farm with the same seed (a set seed): the guest builds it again, also after its show, and all agree within 3 s (M-19, M-26, M-58)', async () => {
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
+  const w = await mpWorld({ seed: 103, guests: 2 }); w.seconds(1);
+  const [g, s] = w.guests; s.game.mode = 'show';
+  for (const a of w.host.game.herd.animals) a.epoch += 5; // the old farm's ownership numbers are high; the new farm's start at 0
+  w.seconds(2.5); const id = single(w.host.game).id; assert.equal(g.sync.store.get('animal', id).epoch, 5);
+  const old = g.game, oldS = s.game; w.host.game = createGame(RAPIER, { seed: 103, power: 'medium' }); w.host.sync.setGame(w.host.game);
+  const t0 = w.now; let k = 0; while (g.game === old && k++ < 180) w.step(1);
+  assert.notEqual(g.game, old, 'built again'); assert.ok(w.now - t0 <= 3000);
+  w.seconds(2.5); assert.equal(s.game, oldS, 'the show guest waits'); assert.equal(g.sync.store.get('animal', id).epoch, 0, 'the new herd is taken');
+  const built = g.game; s.game.mode = 'drive'; w.step(1); const sb = s.game; assert.notEqual(sb, oldS, 'after its show');
+  w.seconds(4.5); assert.equal(s.game, sb, 'built once'); assert.equal(g.game, built, 'built once');
+  assert.deepEqual(settle(w, 3), []);
+});

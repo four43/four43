@@ -15,7 +15,7 @@ const GUEST = {
   tree: m => int(m.id, 0, 0xffff), regrow: () => true, horn: () => true, help: () => true, paint: m => paintOk(m.paint),
 };
 const HOST = { // M-24: the herd, the trees and the players come as replicated objects (kinds.js), not in these messages
-  welcome: m => int(m.v, 0, 0xffff) && int(m.seed, 0, 0xffffffff) && int(m.you, 2, MAX_PLAYERS) && int(m.next, 0, 0xffff), // next: the host's herd size (the guest's id guard)
+  welcome: m => int(m.v, 0, 0xffff) && int(m.seed, 0, 0xffffffff) && int(m.farm, 0, 0xffffffff) && int(m.you, 2, MAX_PLAYERS) && int(m.next, 0, 0xffff), // farm: which farm of this host (a new farm may have the same seed); next: the host's herd size (the guest's id guard)
   tree: m => int(m.id, 0, 0xffff), regrow: () => true, horn: m => int(m.n, 1, MAX_PLAYERS), help: m => m.id === null || int(m.id, 0, 0xffff),
 };
 const check = table => m => obj(m) && Object.hasOwn(table, m.t) && table[m.t](m) ? m : null;

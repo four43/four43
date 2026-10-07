@@ -21,13 +21,13 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper();
   const reg = registryOf(bindings), hostRows = ofAuthority(bindings, 'host'), ownRows = ofAuthority(bindings, 'owner');
   const world = createTracker(hostRows.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), missing = new Map(); // missing: animal id -> ms it has been owned by a guest but not in that guest's train (M-57)
-  let joins = 0, lastWorld = -Infinity, lastTrain = -Infinity, lastKey = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0, lastBefore = null;
+  let joins = 0, farm = 0, lastWorld = -Infinity, lastTrain = -Infinity, lastKey = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0, lastBefore = null;
   const send = (n, m, rel = true) => { const p = players.map.get(n); if (p?.peer) net.send(p.peer, m, rel); };
   const all = (m, rel = true, except = 0) => { for (const p of players.list()) if (p.n !== except && p.peer && p.helloed) net.send(p.peer, m, rel); };
   const roster = () => [{ n: 1, paint: myPaint, away: false, join: 0 }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away, join: p.join }))];
   const at = { get game() { return game; }, get roster() { return roster(); }, you: 1 };
   const worldNow = () => readAll(hostRows, at), mineNow = () => readAll(ownRows, at);
-  const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, you: p.n, next: game.herd.animals.length }); // M-24: the first keyframe follows at once
+  const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, farm, you: p.n, next: game.herd.animals.length }); // M-24: the first keyframe follows at once
   const freeNumber = () => { for (let n = 2; n <= MAX_PLAYERS; n++) if (![...players.map.keys()].includes(n)) return n; return 0; };
   const owned = n => game.herd.animals.filter(a => a.state === 'carried' && a.owner === n);
   const freeUp = a => { a.state = 'idle'; a.timer = 1; a.owner = null; a.epoch++; a.y = 0; missing.delete(a.id); };
@@ -106,7 +106,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
       if (now - lastWorld >= SEND.world) { lastWorld = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: world.diff(worldNow()) }), false); }
       if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(mineNow()) }), false); }
     },
-    setGame(g) { game = g; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity; for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; if (p.helloed) send(p.n, welcome(p)); } }, // M-19
+    setGame(g) { game = g; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity; for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; if (p.helloed) send(p.n, welcome(p)); } }, // M-19
     setPaint(pt) { myPaint = { ...pt }; },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
     delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host

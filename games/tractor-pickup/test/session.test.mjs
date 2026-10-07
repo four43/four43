@@ -145,7 +145,7 @@ test('join: no welcome 10 s after joining says the farm cannot be reached; still
   await new Promise(r => setTimeout(r, 40));
   assert.equal(t.s.view().state, 'joined'); assert.equal(t.s.view().error, ERRORS.noFarm); assert.equal(ERRORS.noFarm, "Can't connect to the farm.");
   const r = fh.made.at(-1).room, peer = Object.assign(emitter(), { id: 'h', open: true, send: () => true }); r.peers.set('h', peer); r.emit('peer', peer);
-  peer.emit('message', { t: 'welcome', v: NET_VERSION, seed: 9, you: 2, players: [{ n: 1, paint: { body: 'red', trim: 'yellow' }, away: false }], herd: [], trees: [], next: 0 }, { reliable: true });
+  peer.emit('message', { t: 'welcome', v: NET_VERSION, seed: 9, farm: 0, you: 2, players: [{ n: 1, paint: { body: 'red', trim: 'yellow' }, away: false }], herd: [], trees: [], next: 0 }, { reliable: true });
   const c = t.changes; t.s.before(1); assert.equal(t.s.view().error, null, 'connected after all'); assert.ok(t.changes > c, 'the panel redraws');
   t.s.leave(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, null);
   const fh2 = fakeHandshake({ peekResult: { players: 1 } }), t2 = setup(fh2, { welcomeMs: 20 });
