@@ -252,10 +252,11 @@ test('garbage, wrong kinds, odd JSON and a flood never break the host or the gue
   w.seconds(0.5);
   assert.equal(g.game.farm.seed, 51); assert.equal(g.sync.you, 2); assert.equal(w.host.sync.players.list().length, 1);
 });
-test('a guest cannot speak for another player: a train record for another number is dropped (M-50)', async () => {
-  const w = await mpWorld({ seed: 52, guests: 2 }); w.seconds(1);
-  const [g1] = w.guests; g1.net.send(w.host.net.id, trainFrame(2, 3, parked(40, 40), 1e9)); w.seconds(0.3); // the host writes 2 over the sender: id 3 is not its own
-  const p3 = w.host.sync.players.map.get(3).pose.tractor.p; assert.ok(Math.hypot(p3.x - 40, p3.z - 40) > 1, 'player 3 did not move');
+test('a guest cannot speak for another player: the host writes its number over the sender, so a train record for another number is dropped (M-50)', async () => {
+  const w = await mpWorld({ seed: 52, guests: 3 }); w.seconds(1);
+  const [g2, g3] = w.guests; g2.net.send(w.host.net.id, trainFrame(4, 4, parked(40, 40), 1e9)); w.seconds(0.3); // a forged sender byte: player 4's train
+  const p4 = g3.sync.players.map.get(4).pose.tractor.p; assert.ok(Math.hypot(p4.x - 40, p4.z - 40) > 1, 'player 3 does not see player 4 move');
+  const p2 = g3.sync.players.map.get(2).pose.tractor.p; assert.ok(dist(p2, g2.game.tractor) < 0.3, 'guest 2 frames of its own still reach the others');
 });
 test('a flood of claims: at most 60 each second are handled (M-50)', async () => {
   const w = await mpWorld({ seed: 53 }); w.seconds(1);
@@ -344,6 +345,14 @@ test('player 3 leaves and a new guest gets number 3: the other guest sees the ne
   assert.ok(g2.sync.store.get('train', 3), 'player 2 has the old train 3');
   g3.net.leave(); w.seconds(0.5); assert.ok(!g2.sync.players.map.has(3), 'gone from the roster');
   const g = w.addGuest(); w.seconds(1); assert.equal(g.sync.you, 3);
+  const seen = g2.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, 'player 2 sees the new train where it is');
+});
+test('a straggling frame from the old player 3 after it left does not hide the new player 3: seen within 3 s (M-26, M-39, M-58)', async () => {
+  const w = await mpWorld({ seed: 64, guests: 2 }); w.seconds(1);
+  const [g2, g3] = w.guests;
+  g3.net.leave(); w.seconds(0.5); assert.ok(!g2.sync.players.map.has(3), 'gone from the roster');
+  w.host.net.send(g2.net.id, trainFrame(3, 3, parked(40, 40), 1e9)); w.seconds(0.2); // late, after the forget, stamped far ahead
+  const g = w.addGuest(); w.seconds(3); assert.equal(g.sync.you, 3);
   const seen = g2.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, 'player 2 sees the new train where it is');
 });
 test('the host drops: boops pause; back in time they go on (M-40)', async () => {
@@ -494,13 +503,15 @@ test('a new farm while the host is silent keeps boops paused (M-19, M-40)', asyn
 
 test('a waiting flight is in the guest train record (the host sees it there), but nobody draws it in that train before the host gives it (M-22, M-57)', async () => {
   const { trainRecord } = await import('../src/net/players.js');
-  const w = await mpWorld({ seed: 82, link: { delay: 400 } }); w.seconds(2);
-  const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], ids = () => trainRecord(g.game).riders.map(c => c.id);
+  const w = await mpWorld({ seed: 82, guests: 2, link: { delay: 400 } }); w.seconds(2);
+  const [g, o] = w.guests, ha = single(w.host.game), ga = g.game.herd.animals[ha.id], oa = () => o.game.herd.animals[ha.id], ids = () => trainRecord(g.game).riders.map(c => c.id);
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   let k = 0; while (!g.game.flights.some(f => f.animal === ga && f.u >= 0) && k++ < 200) w.step(1);
   const f = g.game.flights.find(x => x.animal === ga); assert.ok(f && f.claim === 'pending' && f.u >= 0, 'in the air, unanswered');
   assert.ok(ids().includes(ha.id), 'in its train record');
   const x0 = ha.x; w.seconds(0.3); assert.ok(free(w.host.game, ha) && Math.abs(ha.x - x0) < 0.5, 'the host still has it free where it was');
-  k = 0; while (f.claim === 'pending' && k++ < 120) w.step(1); assert.equal(f.claim, null, 'granted');
+  k = 0; while (f.claim === 'pending' && k++ < 120) { w.step(1); if (f.claim === 'pending') assert.notEqual(oa()?.state, 'carried', 'the other guest does not draw it in a train before the grant'); }
+  assert.equal(f.claim, null, 'granted');
   w.seconds(1); assert.equal(ha.owner, 2); assert.ok(dist(ha, ga) < 0.6, `the host draws it in the guest train (${dist(ha, ga).toFixed(2)} m)`);
+  assert.equal(oa().state, 'carried'); assert.ok(dist(oa(), ga) < 0.6, `the other guest draws it in the guest train (${dist(oa(), ga).toFixed(2)} m)`);
 });

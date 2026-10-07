@@ -26,10 +26,10 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
   const toHost = (m, rel = true) => { if (hostPeer && !alone) net.send(hostPeer, m, rel); };
   const holds = id => game.flights.some(f => f.animal.id === id) || game.load.slots.some(s => s.animal.id === id);
-  const forgetOwner = n => { for (const k of KINDS) if (k.authority === 'owner') store.forget(k.name, n); }; // a player left: a new one with its number starts a fresh (lower) clock
+  const forgetOwner = n => { for (const k of KINDS) if (k.authority === 'owner') store.forget(k.name, n); }; // a player left or came: a new one with its number starts a fresh (lower) clock, and a late frame of the old one must not outrank it
   function applyRoster() { // M-22: the player objects. A new player gets this train's keyframe at once (M-23)
     const seen = new Set();
-    for (const [n, r] of store.all('player')) { if (n === you) continue; seen.add(n); if (!players.map.has(n)) lastKey = -Infinity;
+    for (const [n, r] of store.all('player')) { if (n === you) continue; seen.add(n); if (!players.map.has(n)) { lastKey = -Infinity; forgetOwner(n); }
       const p = players.ensure(n); p.paint = { body: r.body, trim: r.trim }; p.away = r.away || (n === 1 && paused); }
     for (const p of players.list()) if (!seen.has(p.n)) { players.remove(p.n); forgetOwner(p.n); if (p.pose) out.push({ type: 'playerGone', n: p.n, x: p.pose.tractor.p.x, z: p.pose.tractor.p.z }); }
   }
@@ -104,7 +104,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   function settleClaims() { // M-14: a claim's answer is the animal's replicated owner, with a newer ownership number than at the boop
     for (const [id, c] of pending) { if (c.done) continue; const r = store.get('animal', id); if (!r || r.epoch <= c.e0) continue;
       if (r.owner === you) { game.resolveClaim(id, true); pending.delete(id); } // it lands (or, if its flight is gone, the next keyframe gives it back)
-      else { out.push(...game.resolveClaim(id, false)); c.done = true; } } // somebody else has it: poof; the claim stays open until a keyframe
+      else { out.push(...game.resolveClaim(id, false)); c.done = true; } } // somebody else has it: poof; the claim stays open until a keyframe, so the poofed animal stays hidden here until the next host keyframe (at most 2 s, within M-58)
   }
   function applyHerd(now) { // M-23, M-25: the host's animals, smoothly; never our own (R-4) nor one with an open claim (M-14)
     const s = herdBuf.sample(now); if (!s) return;
