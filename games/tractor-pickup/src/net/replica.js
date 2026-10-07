@@ -10,17 +10,17 @@ const TAU = Math.PI * 2, HEAD = 7, BAD = new Error('bad frame');
 const boolsOf = fields => Object.keys(fields).filter(k => fields[k].t === 'bool');
 export const F = {
   bool: () => ({ t: 'bool' }), // the bools of one obj share a flags byte (at most 8)
-  uint: (bytes, max = 2 ** (8 * bytes) - 1) => ({ t: 'uint', bytes, max }),
+  uint: (bytes, max = 2 ** (8 * bytes) - 1) => { if (![1, 2, 4].includes(bytes)) throw new Error('bad uint width ' + bytes); return { t: 'uint', bytes, max }; },
   id: () => ({ t: 'id' }), // u16; null travels as 0xffff
   oneOf: list => ({ t: 'enum', list }), // u8 index
   fixed: (lo, hi, step) => ({ t: 'fixed', lo, hi, step, n: Math.round((hi - lo) / step) }), // u16 steps from lo; values are clamped into lo..hi
   angle: () => ({ t: 'angle' }), // u16 over a full turn
   quat: () => ({ t: 'quat' }), // 4 x i16, normalized on decode
-  obj: fields => ({ t: 'obj', fields, bools: boolsOf(fields) }),
+  obj: fields => { const bools = boolsOf(fields); if (bools.length > 8) throw new Error('too many bools: ' + bools.length); return { t: 'obj', fields, bools }; },
   list: (of, max, min = 0) => ({ t: 'list', of, max, min }), // u8 count
 };
-export const kind = def => ({ idMin: 0, ...def, rec: F.obj(def.fields) }); // { name, code, authority: 'host' | 'owner', max, idMin, idMax, fields, newer? }
-export const createRegistry = kinds => ({ list: kinds, byName: new Map(kinds.map(k => [k.name, k])), byCode: new Map(kinds.map(k => [k.code, k])) });
+export const kind = def => { if (!Number.isInteger(def.code) || def.code < 0 || def.code > 255) throw new Error('bad kind code ' + def.code); return { idMin: 0, ...def, rec: F.obj(def.fields) }; }; // { name, code, authority: 'host' | 'owner', max, idMin, idMax, fields, newer? }
+export const createRegistry = kinds => { for (const [i, k] of kinds.entries()) if (kinds.some((o, j) => j < i && (o.name === k.name || o.code === k.code))) throw new Error('duplicate kind ' + k.name); return { list: kinds, byName: new Map(kinds.map(k => [k.name, k])), byCode: new Map(kinds.map(k => [k.code, k])) }; };
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(v) ? v : 0));
 function put(c, f, val) {
@@ -31,7 +31,7 @@ function put(c, f, val) {
     case 'enum': { const i = f.list.indexOf(val); if (i < 0) throw new Error('bad value ' + val); v.setUint8(c.o++, i); return; }
     case 'fixed': v.setUint16(c.o, Math.round((clamp(val, f.lo, f.hi) - f.lo) / f.step), true); c.o += 2; return;
     case 'angle': { const a = Number.isFinite(val) ? ((val % TAU) + TAU) % TAU : 0; v.setUint16(c.o, Math.round(a / TAU * 65536) % 65536, true); c.o += 2; return; }
-    case 'quat': for (const k of 'xyzw') { v.setInt16(c.o, Math.round(clamp(val[k], -1, 1) * 32767), true); c.o += 2; } return;
+    case 'quat': { const n = Math.hypot(val.x, val.y, val.z, val.w), ok = Number.isFinite(n) && n > 0; for (const k of 'xyzw') { v.setInt16(c.o, Math.round((ok ? val[k] / n : k === 'w' ? 1 : 0) * 32767), true); c.o += 2; } return; }
     case 'obj': {
       if (f.bools.length) { let m = 0; f.bools.forEach((k, i) => { if (val[k]) m |= 1 << i; }); v.setUint8(c.o++, m); }
       for (const k in f.fields) if (f.fields[k].t !== 'bool') put(c, f.fields[k], val[k]); return;
@@ -138,10 +138,11 @@ export function createStore(kinds) {
         const g = f.groups.get(k.name); if (!g) continue; const m = maps.get(k.name);
         for (const [id, rec] of g.records) { const e = m.get(id); if (e && (f.time <= e.t || (e.rec && k.newer && !k.newer(e.rec, rec)))) continue; m.set(id, { rec, t: f.time }); changes.push({ kind: k.name, id, rec }); }
         for (const id of g.removed) { const e = m.get(id); if (e && f.time <= e.t) continue; m.set(id, { rec: null, t: f.time }); if (e?.rec) changes.push({ kind: k.name, id, rec: null }); }
-        if (f.key) for (const [id, e] of m) if (!g.records.has(id) && authority(k, id, f.sender) && e.t < f.time) { m.delete(id); if (e.rec) changes.push({ kind: k.name, id, rec: null }); }
+        if (f.key) for (const [id, e] of m) if (!g.records.has(id) && authority(k, id, f.sender) && e.t < f.time) { m.set(id, { rec: null, t: f.time }); if (e.rec) changes.push({ kind: k.name, id, rec: null }); }
       }
       return changes;
     },
+    forget(kind, id) { maps.get(kind).delete(id); }, // a player left: its next object (any sender clock) is accepted
     clear() { for (const m of maps.values()) m.clear(); },
   };
 }

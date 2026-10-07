@@ -97,3 +97,25 @@ test('a kind is plain data: a new kind needs no new message (M-22)', () => {
   const f = decodeFrame(encodeFrame({ key: true, sender: 4, time: 7, groups: [{ kind: BALE, records: [[4, { x: 2.5, on: true }]] }] }), reg);
   assert.deepEqual(f.groups.get('bale').records.get(4), { on: true, x: 2.5 }); assert.equal(encodeRecord(BALE, 4, { x: 2.5, on: true }).length, 5, 'id 2, flags 1, x 2');
 });
+test('a keyframe leaves a tombstone: a late older diff does not bring the object back (M-26)', () => {
+  const s = createStore(KINDS), at = (time, groups, key = false) => s.apply(decodeFrame(encodeFrame({ key, sender: 1, time, groups }), REGISTRY));
+  at(1000, [{ kind: ANIMAL, records: [[2, pig()]] }]); at(2000, [{ kind: ANIMAL, records: [] }], true); assert.equal(s.get('animal', 2), null);
+  assert.deepEqual(at(1990, [{ kind: ANIMAL, records: [[2, pig()]] }]), []); assert.equal(s.get('animal', 2), null);
+});
+test('the store forgets an owner object, so a reused player number is accepted again (M-26)', () => {
+  const s = createStore(KINDS), at = (time, sender) => s.apply(decodeFrame(encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[sender, train(0)]] }] }), REGISTRY));
+  assert.equal(at(500000, 3).length, 1); assert.equal(at(50, 3).length, 0, 'older'); s.forget('train', 3); assert.equal(s.get('train', 3), null); assert.equal(at(50, 3).length, 1);
+});
+test('the encoder normalizes quaternions and falls back to identity, so our own frames always decode (M-57)', () => {
+  for (const bad of [{ x: NaN, y: 0, z: 0, w: 1 }, { x: 0, y: 0, z: 0, w: 0.85 }, { x: 0, y: 0, z: 0, w: 0 }, { x: Infinity, y: 0, z: 0, w: 0 }]) {
+    const t = train(0); t.bodies[0].q = bad; const f = one(TRAIN, 2, t, { sender: 2 }); assert.ok(f, JSON.stringify(bad));
+    near(Math.hypot(...'xyzw'.split('').map(k => f.groups.get('train').records.get(2).bodies[0].q[k])), 1, 1e-3, 'unit');
+  }
+});
+test('defining a kind is loud about mistakes', () => {
+  assert.throws(() => F.uint(3), /bad uint width/);
+  assert.throws(() => F.obj(Object.fromEntries(Array.from({ length: 9 }, (_, i) => ['b' + i, F.bool()]))), /too many bools/);
+  const mk = (name, code) => kind({ name, code, authority: 'host', max: 1, idMax: 1, fields: { a: F.bool() } });
+  assert.throws(() => createRegistry([mk('a', 1), mk('a', 2)]), /duplicate/); assert.throws(() => createRegistry([mk('a', 1), mk('b', 1)]), /duplicate/);
+  assert.throws(() => mk('c', 256), /bad kind code/);
+});
