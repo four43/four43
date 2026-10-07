@@ -235,3 +235,17 @@ test('fullDodge makes animals hop out of the way of any full train given as pose
   const ev = []; fullDodge(g.herd, g.tractor.body.translation(), g.tractor.body.rotation(), g.train.cars.map(c => ({ p: c.body.translation(), q: c.body.rotation() })), ev);
   assert.equal(a.state, 'dodge'); assert.ok(ev.some(e => e.type === 'dodge' && e.animal === a));
 });
+test('a guest whose only flight is refused in the barn gets no show: the train drives on (M-14, F-1)', () => {
+  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g); g.claims = true;
+  const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
+  moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
+  const along = () => { const t = g.tractor.body.translation(); return (t.x - b.x) * f[0] + (t.z - b.z) * f[1]; };
+  const a = pickable(g)[0], ev = [];
+  for (let i = 0; i < 60 * 8 && g.mode === 'drive'; i++) { // run up; just inside the barn, an animal is booped (a pending claim) as the only one aboard
+    if (a.state !== 'fly' && along() > -3 && !g.flights.length) { const p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; }
+    ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
+  }
+  assert.equal(g.mode, 'arrive'); assert.equal(g.flights.length, 1); assert.equal(g.flights[0].claim, 'pending'); assert.equal(g.load.landed(), 0);
+  ev.push(...g.resolveClaim(a.id, false)); for (let i = 0; i < 30; i++) ev.push(...g.step(STILL));
+  assert.ok(ev.some(e => e.type === 'unclaim')); assert.ok(!ev.some(e => e.type === 'barnPass'), 'no show for no animals'); assert.equal(g.mode, 'drive');
+});
