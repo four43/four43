@@ -12,6 +12,8 @@ const HERD_OUT = new Set(['gone', 'fly', 'ride', 'show', 'carried', 'elsewhere']
 const TAU = Math.PI * 2;
 export const CLAIM_RANGE = 8; // m: a claim is granted only near the guest's last real tractor position (M-50)
 export const TREE_RANGE = 12; // m: a guest tree break counts only near its last real tractor position (M-17, M-50)
+const MAX_JSON = 2048; // M-50: a longer reliable message from a guest is dropped (the biggest real one is a few hundred)
+const REGROW_MS = 5000; // M-17, M-50: a guest regrow counts at most once in 5 s, so one guest cannot flood the others
 export function herdRecords(herd) { // M-24: every animal not gone, for a welcome (ids grow with every respawn; the welcome holds 512). Yaw in 0..2 pi: herd yaws drift without bound, and checkFromHost allows |yaw| <= 100
   return herd.animals.filter(a => a.state !== 'gone').map(a => ({ id: a.id, type: a.type, golden: a.golden, home: a.home, leader: a.leader, line: a.line, x: a.x, z: a.z, yaw: ((a.yaw % TAU) + TAU) % TAU, epoch: a.epoch, hidden: a.hidden,
     state: HERD_OUT.has(a.state) ? 'carried' : NOT_FREE.has(a.state) ? 'busy' : 'free' }));
@@ -34,21 +36,21 @@ export function createHostSync({ game, net, paint }) {
     // M-13: first claim wins; the guest's last real tractor position must be within 8 m of the animal (M-50)
     claim(p, m) {
       const ok = [], no = [], epochs = [], t = p.latest?.bodies[0].p;
-      for (const id of m.ids) { const a = game.herd.animals[id];
+      for (const id of new Set(m.ids)) { const a = game.herd.animals[id]; // M-50: a repeated id counts once
         if (a && t && !NOT_FREE.has(a.state) && Math.hypot(a.x - t.x, a.z - t.z) <= CLAIM_RANGE) { a.state = 'carried'; a.owner = p.n; a.epoch++; a.hidden = false; ok.push(id); epochs.push([id, a.epoch]); }
         else no.push(id); }
       send(p.n, { t: 'claimed', ok, no, epochs });
     },
-    release(p, m) { for (const id of m.ids) { const a = game.herd.animals[id]; if (a?.state === 'carried' && a.owner === p.n) freeUp(a); } }, // M-14 timeout
+    release(p, m) { for (const id of new Set(m.ids)) { const a = game.herd.animals[id]; if (a?.state === 'carried' && a.owner === p.n) freeUp(a); } }, // M-14 timeout
   });
   const guestAt = p => p.latest?.bodies[0].p; // the guest's last real tractor position (M-50)
   const tractorOf = p => ({ x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed });
   Object.assign(handlers, {
     // M-6, M-16, Decision 10: the host walks the delivered animals into the barn; every guest sees it in the herd message (busy), then they are gone
-    delivered(p, m) { const list = m.ids.map(id => game.herd.animals[id]).filter(a => a?.state === 'carried' && a.owner === p.n); for (const a of list) { a.epoch++; a.owner = null; } if (list.length) { game.herd.toBarn(list); game.herd.respawn(); } },
+    delivered(p, m) { const list = [...new Set(m.ids)].map(id => game.herd.animals[id]).filter(a => a?.state === 'carried' && a.owner === p.n); for (const a of list) { a.epoch++; a.owner = null; } if (list.length) { game.herd.toBarn(list); game.herd.respawn(); } },
     tree(p, m) { const t = game.trees.list[m.id], at = guestAt(p); if (!t || !at || Math.hypot(t.x - at.x, t.z - at.z) > TREE_RANGE) return; // M-17, M-50
       const e = game.trees.breakById(m.id, { x: Math.sin(p.yaw), z: Math.cos(p.yaw) }); if (!e) return; out.push(e); all({ t: 'tree', id: m.id }, true, p.n); },
-    regrow(p) { game.trees.reset(); all({ t: 'regrow' }, true, p.n); }, // M-17: any show regrows everything
+    regrow(p) { if (nowMs - (p.regrowAt ?? -Infinity) < REGROW_MS) return; p.regrowAt = nowMs; game.trees.reset(); all({ t: 'regrow' }, true, p.n); }, // M-17: any show regrows everything
     horn(p) { if (!p.pose) return; game.herd.horn(tractorOf(p)); out.push({ type: 'remoteHorn', n: p.n }); all({ t: 'horn', n: p.n }, true, p.n); }, // M-8
     help(p) { const c = p.pose ? game.herd.callHelp(tractorOf(p)) : null; send(p.n, { t: 'help', id: c ? c.id : null }); }, // M-9
   });
@@ -65,6 +67,7 @@ export function createHostSync({ game, net, paint }) {
         for (const q of players.list()) if (q.n !== n && q.peer) net.send(q.peer, data, false); // M-22: the host passes each train on
         return;
       }
+      if (!(JSON.stringify(data)?.length <= MAX_JSON)) return; // M-50: checks the size first
       const m = checkFromGuest(data); if (!m || (!p.helloed && m.t !== 'hello')) return;
       handlers[m.t]?.(p, m);
     } catch (e) { console.warn('net message', e); } // M-44

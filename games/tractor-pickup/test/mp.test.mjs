@@ -245,3 +245,85 @@ test('a new farm on the host: the guest makes it too, after its own show (M-19)'
   assert.equal(g.game.farm.seed, 47, 'not during the show');
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 48);
 });
+
+import { encodeVehicle } from '../src/net/codec.js';
+test('garbage, wrong kinds, odd JSON and a flood never break the host or the guest (M-44, M-50)', async () => {
+  const w = await mpWorld({ seed: 51 }); w.seconds(1);
+  const g = w.guests[0], H = w.host.net.id, G = g.net.id;
+  const junk = [new ArrayBuffer(0), new Uint8Array([2, 0, 0]).buffer, new Uint8Array(500).fill(255).buffer, { t: 'welcome', v: 1 }, { t: 'claim', ids: [99999] }, { t: 'tree', id: -1 }, null, 'text', 42, { t: 'claim', ids: [1e9] }];
+  for (const j of junk) { g.net.send(H, j, typeof j === 'object' && !(j instanceof ArrayBuffer)); w.host.net.send(G, j, typeof j === 'object' && !(j instanceof ArrayBuffer)); }
+  w.seconds(0.5);
+  assert.equal(g.game.farm.seed, 51); assert.equal(g.sync.you, 2); assert.equal(w.host.sync.players.list().length, 1);
+});
+test('a guest cannot speak for another player: the host rewrites the player number (M-50)', async () => {
+  const w = await mpWorld({ seed: 52, guests: 2 }); w.seconds(1);
+  const [g1] = w.guests, fake = encodeVehicle({ player: 3, time: 1e9, mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x: 40, y: 1, z: 40 }, q: { x: 0, y: 0, z: 0, w: 1 } })), carried: [] });
+  g1.net.send(w.host.net.id, fake); w.seconds(0.3);
+  const p3 = w.host.sync.players.map.get(3).pose.tractor.p; assert.ok(Math.hypot(p3.x - 40, p3.z - 40) > 1, 'player 3 did not move');
+});
+test('a flood of claims: at most 60 each second are handled (M-50)', async () => {
+  const w = await mpWorld({ seed: 53 }); w.seconds(1);
+  let handled = 0; const orig = w.host.sync.handlers.claim; w.host.sync.handlers.claim = (...a) => { handled++; return orig(...a); };
+  for (let i = 0; i < 300; i++) w.guests[0].net.send(w.host.net.id, { t: 'claim', ids: [0] }, true);
+  w.seconds(0.2); assert.ok(handled > 50 && handled <= 60, `${handled}`); // the window may already hold a few earlier messages
+});
+test('old messages are ignored: an older train position, and animal data with a lower ownership number (M-26)', async () => {
+  const { encodeHerd } = await import('../src/net/codec.js');
+  const w = await mpWorld({ seed: 55 }); w.seconds(1);
+  const g = w.guests[0], G = g.net.id, far = { x: 40, y: 1, z: 40 };
+  w.host.net.send(G, encodeVehicle({ player: 1, time: 1, mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: far, q: { x: 0, y: 0, z: 0, w: 1 } })), carried: [] })); // time 1: older than all
+  w.seconds(0.3); const hp = g.sync.players.map.get(1).pose.tractor.p; assert.ok(Math.hypot(hp.x - 40, hp.z - 40) > 5, 'the host tractor did not jump back');
+  const ha = w.host.game.herd.free().find(a => !a.hidden), ga = g.game.herd.animals[ha.id]; ha.epoch = 5; w.seconds(0.5); assert.equal(ga.epoch, 5);
+  w.host.net.send(G, encodeHerd({ time: w.now + 1, animals: [{ ...ha, epoch: 4, busy: false, x: 40, y: 0, z: 40, anim: 'idle' }] })); // newer time, older owner
+  for (let i = 0; i < 30; i++) { w.step(1); assert.ok(Math.hypot(ga.x - 40, ga.z - 40) > 5, 'ignored'); }
+  assert.equal(ga.epoch, 5);
+});
+test('a handler that throws is contained (M-44)', async () => {
+  const w = await mpWorld({ seed: 54 }); w.seconds(1);
+  const orig = w.host.sync.handlers.horn; w.host.sync.handlers.horn = () => { throw new Error('boom'); };
+  const warn = console.warn, warned = []; console.warn = (...a) => warned.push(a); // the host logs the error: keep the test output clean
+  try { w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3); } finally { console.warn = warn; } // the throw stays inside the host's message handler (w.step would throw otherwise)
+  assert.equal(warned.length, 1);
+  w.host.sync.handlers.horn = orig; w.step(1, [STILL, { thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
+  assert.ok(w.host.events.some(e => e.type === 'remoteHorn' && e.n === 2), 'the host still handles messages');
+});
+test('a guest handler that throws is contained too (M-44)', async () => {
+  const w = await mpWorld({ seed: 56 }); w.seconds(1);
+  const g = w.guests[0], orig = g.sync.handlers.horn; g.sync.handlers.horn = () => { throw new Error('boom'); };
+  const warn = console.warn, warned = []; console.warn = (...a) => warned.push(a);
+  try { w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3); } finally { console.warn = warn; }
+  assert.equal(warned.length, 1);
+  g.sync.handlers.horn = orig; w.step(1, [{ thr: 0, steer: 0, horn: true }]); w.seconds(0.3);
+  assert.ok(g.events.some(e => e.type === 'remoteHorn' && e.n === 1), 'the guest still handles messages');
+});
+test('a reliable message that is too big is dropped: over 2048 from a guest, over 65536 from the host (M-50)', async () => {
+  const w = await mpWorld({ seed: 57 }); w.seconds(1);
+  const g = w.guests[0], H = w.host.net.id, G = g.net.id, hp = () => w.host.sync.players.map.get(2).paint, gp = () => g.sync.players.map.get(1).paint;
+  g.net.send(H, { t: 'paint', paint: { ...PAINTS[3], pad: 'x'.repeat(2048) } }, true); w.seconds(0.3); assert.deepEqual(hp(), PAINTS[1], 'dropped by the host');
+  g.net.send(H, { t: 'paint', paint: { ...PAINTS[3], pad: 'x'.repeat(1900) } }, true); w.seconds(0.3); assert.equal(hp().body, PAINTS[3].body, 'under the cap: handled');
+  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(65536) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[0], 'dropped by the guest');
+  w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[2], away: false, pad: 'x'.repeat(65000) }] }, true); w.seconds(0.3); assert.deepEqual(gp(), PAINTS[2], 'under the cap: handled');
+});
+test('a guest regrow counts at most once in 5 s; the extra ones are not passed on (M-17, M-50)', async () => {
+  const w = await mpWorld({ seed: 58, guests: 2 }); w.seconds(1);
+  const [g1, g2] = w.guests; let resets = 0, relayed = 0;
+  const reset = w.host.game.trees.reset; w.host.game.trees.reset = (...a) => { resets++; return reset(...a); };
+  const orig = g2.sync.handlers.regrow; g2.sync.handlers.regrow = (...a) => { relayed++; return orig(...a); };
+  for (let i = 0; i < 10; i++) g1.net.send(w.host.net.id, { t: 'regrow' }, true);
+  w.seconds(4.5); assert.deepEqual([resets, relayed], [1, 1]);
+  g1.net.send(w.host.net.id, { t: 'regrow' }, true); w.seconds(0.3); assert.deepEqual([resets, relayed], [1, 1], 'still within 5 s');
+  w.seconds(0.5); g1.net.send(w.host.net.id, { t: 'regrow' }, true); w.seconds(0.3); assert.deepEqual([resets, relayed], [2, 2], 'after 5 s');
+});
+test('a repeated id in claim, release or delivered is handled once (M-50)', async () => {
+  const w = await mpWorld({ seed: 59 }); w.seconds(1);
+  const g = w.guests[0], H = w.host.net.id, answers = []; g.sync.handlers.claimed = m => answers.push(m); // the guest only records the answers
+  const near = a => { const t = w.host.sync.players.map.get(2).latest.bodies[0].p; Object.assign(a, { x: t.x + 2, z: t.z, state: 'idle', timer: 99, hidden: false }); };
+  const [a, b] = w.host.game.herd.free().filter(x => !x.hidden && x.type !== 'chick');
+  near(a); g.net.send(H, { t: 'claim', ids: [a.id, a.id] }, true); w.seconds(0.2);
+  assert.deepEqual([answers[0].ok, answers[0].no, answers[0].epochs.length], [[a.id], [], 1]); assert.equal(a.owner, 2);
+  let barn = 0; const toBarn = w.host.game.herd.toBarn; w.host.game.herd.toBarn = list => { barn += list.length; return toBarn(list); };
+  const e = a.epoch; g.net.send(H, { t: 'delivered', ids: [a.id, a.id] }, true); w.seconds(0.2);
+  assert.deepEqual([barn, a.epoch], [1, e + 1]);
+  near(b); g.net.send(H, { t: 'claim', ids: [b.id] }, true); w.seconds(0.2); assert.equal(b.owner, 2);
+  const eb = b.epoch; g.net.send(H, { t: 'release', ids: [b.id, b.id] }, true); w.seconds(0.2); assert.equal(b.epoch, eb + 1);
+});
