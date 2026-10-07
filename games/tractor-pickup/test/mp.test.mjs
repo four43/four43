@@ -445,3 +445,21 @@ test('the rate limits count in wall time: with the game frozen (rAF paused), a n
   wall += 1100; w.host.net.send(G, { t: 'players', list: [{ n: 1, paint: PAINTS[3], away: false }] }, true); deliver();
   assert.deepEqual(g.sync.players.map.get(1).paint, PAINTS[3], 'the guest: a new window too');
 });
+
+test('a silent host (no fast message for 3 s) is shown away and boops pause; its messages back clear both (M-40)', async () => {
+  const w = await mpWorld({ seed: 75 }); w.seconds(1);
+  const g = w.guests[0], after = w.host.sync.after, p1 = () => g.sync.players.map.get(1);
+  w.host.sync.after = () => {}; // the host's page sleeps: nothing comes, and no hostAway either
+  w.seconds(2.5); assert.equal(g.game.boopsPaused, false, 'not yet'); assert.equal(p1().away, false);
+  w.seconds(1); assert.equal(g.game.boopsPaused, true); assert.equal(p1().away, true, 'a ghost');
+  w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false); assert.equal(p1().away, false);
+});
+test('hostBack does not end the pause while the host is still silent; hostAway pauses at once, before any silence (M-40)', async () => {
+  const w = await mpWorld({ seed: 76 }); w.seconds(1);
+  const g = w.guests[0], after = w.host.sync.after;
+  w.host.sync.after = () => {}; w.hub.away(w.host.net.id); w.seconds(3.5); assert.equal(g.game.boopsPaused, true);
+  w.hub.back(w.host.net.id); w.seconds(0.2); assert.equal(g.game.boopsPaused, true, 'still silent'); assert.equal(g.sync.players.map.get(1).away, true);
+  w.hub.away(w.host.net.id); w.hub.back(w.host.net.id); w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false, 'back and talking');
+  w.hub.away(w.host.net.id); w.seconds(0.1); // the server says away; fast messages that were on their way may still come in
+  assert.equal(g.game.boopsPaused, true); assert.equal(g.sync.players.map.get(1).away, true);
+});
