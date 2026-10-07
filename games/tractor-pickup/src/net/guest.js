@@ -40,7 +40,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   }
   function applyTree(id, state) { // M-17, M-56: the host's state wins, except for a tree this guest just broke itself
     const t = game.trees.list[id]; if (!t) return; // M-50: the id must exist
-    if (state === 'broken') { const e = game.trees.breakById(id); if (e) out.push(e); }
+    if (state === 'broken') game.trees.breakById(id); // quietly: the burst and gibs come with the host's tree message, not with a record
     else if (t.state === 'broken' && !(clock() - (myBreaks.get(id) ?? -Infinity) < TREE_GRACE)) game.trees.regrowById(id);
   }
   function repair() { // M-56, at each keyframe from the host

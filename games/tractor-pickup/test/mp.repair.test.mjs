@@ -127,3 +127,12 @@ test('a lost hello: the guest says it again every 2 s until it has its welcome; 
   assert.equal(handled, 1); assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[1], 'a second hello changes nothing');
   assert.equal(hellos.length, 3, 'only the one sent by hand: no more hellos once welcomed'); assert.deepEqual(settle(w, 3), []);
 });
+test('a tree broken through its record (its tree message lost) breaks quietly: no burst, no gibs (M-17, M-56)', async () => {
+  const w = await mpWorld({ seed: 102 }); w.seconds(1);
+  const g = w.guests[0], t = w.host.game.trees.list.find(x => x.kind === 'tree'), bursts = () => g.events.filter(e => e.type === 'treeBreak' && e.tree.id === t.id).length;
+  w.hub.drop = (from, to, d) => d?.t === 'tree';
+  w.host.sync.after([{ type: 'treeBreak', tree: w.host.game.trees.breakById(t.id).tree }], w.now); w.seconds(2.5); w.hub.drop = null;
+  assert.equal(g.game.trees.list[t.id].state, 'broken', 'broken from the records'); assert.equal(bursts(), 0, 'no burst');
+  w.hub.drop = (from, to, d) => d?.t === 'regrow'; g.game.startShow(); g.sync.showStarted(); w.seconds(0.2); w.hub.drop = null; // the guest's own show regrew it; the host did not hear
+  w.seconds(2.5); assert.equal(g.game.trees.list[t.id].state, 'broken', 'broken again from the records'); assert.equal(bursts(), 0, 'still no burst');
+});
