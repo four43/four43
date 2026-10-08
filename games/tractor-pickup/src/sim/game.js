@@ -95,7 +95,7 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
       for (let i = flights.length - 1; i >= 0; i--) {
         const fl = flights[i]; fl.u += DT / fl.dur; fl.prev.x = fl.pos.x; fl.prev.y = fl.pos.y; fl.prev.z = fl.pos.z;
         if (fl.claim === 'pending' && fl.u > SPLIT) { fl.u = SPLIT; if ((fl.hold += DT) > CLAIM_WAIT) { dropFlight(i, events, 'timeout'); continue; } } // M-14: no landing before the host's yes
-        if (fl.u < 0) continue;
+        if (fl.u < 0) { tractorLocal(fl.pos.x, 0, fl.pos.z, fl.start); continue; } // A-8: a chick waiting its turn stands still in the world; its path starts where it stands when its turn comes
         const sw = slotWorld(fl.slot, tmp2), sl = tractorLocal(sw.x, sw.y, sw.z, tmp3);
         const lp = launchLocal(Math.min(1, fl.u), fl.start, sl, tmp4); tractorWorld(lp, fl.pos);
         fl.animal.x = fl.pos.x; fl.animal.z = fl.pos.z; fl.animal.y = fl.pos.y;

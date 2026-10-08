@@ -240,3 +240,18 @@ test('a guest whose only flight is refused in the barn gets no show: the train d
   ev.push(...g.resolveClaim(a.id, false)); for (let i = 0; i < 30; i++) ev.push(...g.step(STILL));
   assert.ok(ev.some(e => e.type === 'unclaim')); assert.ok(!ev.some(e => e.type === 'barnPass'), 'no show for no animals'); assert.equal(g.mode, 'drive');
 });
+test('a chick that waits for its turn to launch starts from where it stands, not from where the tractor was at the boop (A-8)', () => {
+  const g = createGame(RAPIER, { seed: 11, power: 'high' }); quiet(g); unhide(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  const hen = g.herd.animals.find(x => g.herd.animals.some(c => c.leader === x.id)); assert.ok(hen, 'no hen with chicks');
+  const chicks = g.herd.animals.filter(c => c.leader === hen.id);
+  for (let i = 0; i < 30; i++) g.step({ thr: 1, steer: 0, horn: false }); // moving
+  const p = g.tractorWorld({ x: 3, y: 0, z: 0 }, {}); for (const a of [hen, ...chicks]) { a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; }
+  const last = new Map(); let worst = 0;
+  for (let i = 0; i < 180; i++) {
+    g.step({ thr: 1, steer: 0, horn: false });
+    for (const c of chicks) { if (c.state !== 'fly') continue; const prev = last.get(c); if (prev) worst = Math.max(worst, Math.hypot(c.x - prev.x, c.z - prev.z)); last.set(c, { x: c.x, z: c.z }); }
+  }
+  assert.ok(last.size === chicks.length, 'the chicks did not launch');
+  assert.ok(worst < 0.6, `a chick jumped ${worst.toFixed(2)} m in one step`);
+});
