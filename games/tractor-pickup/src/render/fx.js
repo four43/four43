@@ -8,12 +8,12 @@ export function createFx(scene, groundY = () => 0) {
   const col = new THREE.Color(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), axis = new THREE.Vector3(0.3, 1, 0.2).normalize(), up = new THREE.Vector3(0, 1, 0);
   m4.makeScale(0, 0, 0); for (let i = 0; i < MAX; i++) { mesh.setMatrixAt(i, m4); mesh.setColorAt(i, col.set('#fff')); }
   scene.add(mesh);
-  let next = 0, colorDirty = false;
+  let next = 0, colorDirty = false, cLo = MAX, cHi = -1; // B-4: the color rows written since the last upload
   // color: any THREE.Color input, or null when `col` was already set by the caller (no string parsing in hot paths)
   const emit = (x, y, z, vx, vy, vz, size, life, color, g = 9.8, drag = 0.5) => {
     const i = next; next = (next + 1) % MAX; const p = P[i];
     p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz; p.size = size; p.life = p.max = life; p.g = g; p.drag = drag; p.spin = Math.random() * 6; p.dead = false; p.gy = groundY(x, z);
-    mesh.setColorAt(i, color === null ? col : col.set(color)); colorDirty = true;
+    mesh.setColorAt(i, color === null ? col : col.set(color)); colorDirty = true; if (i < cLo) cLo = i; if (i > cHi) cHi = i;
   };
   const R = a => (Math.random() - 0.5) * a;
   const hsl = (h, l = 0.6) => col.setHSL(h, 0.85, l);
@@ -39,17 +39,18 @@ export function createFx(scene, groundY = () => 0) {
       marks.setMatrixAt(tmNext, m4); tmNext = (tmNext + 1) % TM; marks.count = Math.min(TM, marks.count + 1); marks.instanceMatrix.needsUpdate = true;
     },
     update(dt) {
-      let any = false;
+      let any = false, lo = MAX, hi = -1; // B-4: upload only the rows written this frame (live particles are a short run of the ring)
       for (let i = 0; i < MAX; i++) {
         const p = P[i]; if (p.dead) continue;
+        if (i < lo) lo = i; hi = i;
         if (p.life <= 0) { p.dead = true; any = true; m4.makeScale(0, 0, 0); mesh.setMatrixAt(i, m4); continue; }
         any = true; p.life -= dt; p.vy -= p.g * dt; const k = Math.max(0, 1 - p.drag * dt); p.vx *= k; p.vz *= k;
         p.x += p.vx * dt; p.y = Math.max(p.gy + 0.03, p.y + p.vy * dt); p.z += p.vz * dt; p.spin += dt * 4;
         const sc = p.size * Math.min(1, p.life / p.max * 2);
         m4.compose(v.set(p.x, p.y, p.z), q.setFromAxisAngle(axis, p.spin), s.set(sc, sc, sc)); mesh.setMatrixAt(i, m4);
       }
-      if (any) mesh.instanceMatrix.needsUpdate = true;
-      if (colorDirty && mesh.instanceColor) { mesh.instanceColor.needsUpdate = true; colorDirty = false; }
+      if (any) { const a = mesh.instanceMatrix; a.clearUpdateRanges(); a.addUpdateRange(lo * 16, (hi - lo + 1) * 16); a.needsUpdate = true; }
+      if (colorDirty && mesh.instanceColor) { const c = mesh.instanceColor; c.clearUpdateRanges(); c.addUpdateRange(cLo * 3, (cHi - cLo + 1) * 3); c.needsUpdate = true; colorDirty = false; cLo = MAX; cHi = -1; }
     },
   };
 }

@@ -4,7 +4,7 @@ export function createHud(root, { icons, onWordTap }) {
   const bar = document.createElement('div'); bar.id = 'slots'; root.appendChild(bar);
   const word = document.createElement('div'); word.id = 'word'; root.appendChild(word);
   const arrow = document.createElement('div'); arrow.id = 'arrow'; arrow.textContent = '➜'; arrow.hidden = true; root.appendChild(arrow);
-  let slots = [], wordTimer = 0, flyTimer = 0, lastIds = [];
+  let slots = [], wordTimer = 0, flyTimer = 0, lastIds = [], lastArrow = '';
   const clearFly = () => { word.style.transition = word.style.transform = word.style.opacity = ''; };
   const reset = () => { clearTimeout(wordTimer); clearTimeout(flyTimer); clearFly(); word.classList.remove('on'); word.innerHTML = ''; lastIds = []; bar.innerHTML = ''; // a word still on its way must not fly into the next bar
     slots = Array.from({ length: 12 }, (_, i) => { const s = document.createElement('div'); s.className = i === 6 ? 'slot wagon' : 'slot'; bar.appendChild(s); return s; }); };
@@ -33,6 +33,8 @@ export function createHud(root, { icons, onWordTap }) {
       s.classList.add('full');
     },
     markOut(n) { slots[n - 1]?.classList.add('out'); }, // F-15: its animal hopped out in the show
-    arrowTo(p) { if (!p) { arrow.hidden = true; return; } arrow.hidden = false; arrow.style.left = p.x + 'px'; arrow.style.top = p.y + 'px'; arrow.style.transform = `translate(-50%,-50%) rotate(${p.angle}rad)`; },
+    // B-7: only the transform moves it (no layout), and only when it changed by a pixel or a degree
+    arrowTo(p) { if (!p) { if (!arrow.hidden) arrow.hidden = true; return; } if (arrow.hidden) arrow.hidden = false;
+      const t = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,-50%) rotate(${Math.round(p.angle * 57.3)}deg)`; if (t !== lastArrow) { arrow.style.transform = t; lastArrow = t; } },
   };
 }

@@ -57,6 +57,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
   if (rng.chance(0.5)) rng.pick(animals.filter(a => a.type !== 'chick' && !a.hidden)).golden = true; // A-8
 
   const free = () => animals.filter(a => !NOT_FREE.has(a.state));
+  const live = []; // separation list, refilled each step
   const pickTarget = a => {
     if (a.type === 'duck' && a.home === 'yard' && rng.chance(0.7)) { const ang = rng.range(0, 6.28); a.tx = env.pond.x + Math.cos(ang) * (env.pond.r + 1); a.tz = env.pond.z + Math.sin(ang) * (env.pond.r + 1); a.state = 'walk'; return; }
     if (a.home === 'yard') { const p = env.yard.randomPoint(rng); a.tx = p.x; a.tz = p.z; a.state = 'walk'; return; }
@@ -143,10 +144,10 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
         }
         if (['walk', 'flee', 'come', 'follow', 'help'].includes(a.state) || (a.state === 'toBarn' && a.timer <= 0)) a.anim = WALK[a.state] || 'walk';
         if (!NOT_FREE.has(a.state)) clampHome(a);
-        const last = a.trail[0]; if (!last || Math.hypot(last.x - a.x, last.z - a.z) > 0.25) { a.trail.unshift({ x: a.x, z: a.z }); if (a.trail.length > 12) a.trail.pop(); }
+        const last = a.trail[0]; if (!last || Math.hypot(last.x - a.x, last.z - a.z) > 0.25) { const p = a.trail.length >= 12 ? a.trail.pop() : {}; p.x = a.x; p.z = a.z; a.trail.unshift(p); } // B-6: the oldest point is reused
       }
       // separation (free animals only; not the ones in flight, riding, walking into the barn or gone)
-      const live = animals.filter(a => !NOT_FREE.has(a.state) && !a.hidden && a.state !== 'dodge');
+      live.length = 0; for (const a of animals) if (!NOT_FREE.has(a.state) && !a.hidden && a.state !== 'dodge') live.push(a); // B-6: one array, reused
       for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
         const p = live[i], q = live[j], dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz), m = TYPES[p.type].r + TYPES[q.type].r;
         if (d > 0 && d < m) { const k = (m - d) / d / 2; p.x -= dx * k; p.z -= dz * k; q.x += dx * k; q.z += dz * k; }

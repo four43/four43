@@ -56,7 +56,8 @@ async function main() {
   // iOS: audio and speech only start inside a gesture, and the context can be interrupted later. Try on every kind of gesture and on coming back to the page,
   // and stop listening only once the context is really running. The start screen's tap is the real gesture (menus onPlay); this stays as the fallback.
   const GEST = ['pointerup', 'touchend', 'click', 'keydown'];
-  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); for (const n of GEST) removeEventListener(n, unlock, true); } }); };
+  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); voice.preload(); // B-8
+ for (const n of GEST) removeEventListener(n, unlock, true); } }); };
   for (const n of GEST) addEventListener(n, unlock, true);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sound.ctx && sound.ctx.state !== 'running') { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); } });
   const input = createInput(ui);
@@ -184,7 +185,7 @@ async function main() {
       const g0 = gen, nowMs = performance.now(), netEv = session ? netEvents(nowMs) : []; // before game.step: a welcome may rebuild the farm here (M-1)
       if (gen !== g0) { acc -= DT; continue; } // a new farm: fresh bodies and snapshots, its first step comes next
       const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
-      const ev = [...netEv, ...(game.step(stepIn) || [])]; hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
+      const ev = game.step(stepIn) || []; if (netEv.length) ev.unshift(...netEv); hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT; // B-6: no new array per step (net events first, as before)
       if (session) try { session.after(ev, nowMs); } catch (e) { warnOnce('net after', e); } // M-44
       if (perf) { perf.step(); for (const e of ev) perf.event(e.type); }
       for (const e of ev) try {
@@ -257,7 +258,7 @@ function stepSounds(game, sound, s) {
   const t = game.tractor;
   if (t.surface === 'mud' && s.surface !== 'mud' && !game.dirt) sound.squelch(); // the farm game sends a mud-enter event instead
   s.surface = t.surface;
-  const air = [0, 1, 2, 3].every(i => !t.vc.wheelIsInContact(i));
+  let air = true; for (let i = 0; i < 4; i++) if (t.vc.wheelIsInContact(i)) { air = false; break; } // B-6: no closure per step
   s.air = air ? s.air + DT : 0;
   if (!air) s.whee = false;
   else if (s.air > 0.15 && !s.whee) { s.whee = true; sound.whee(); if (game.load?.landed() > 0) sound.cheer(); }

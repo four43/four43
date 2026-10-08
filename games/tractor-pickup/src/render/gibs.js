@@ -27,7 +27,7 @@ export function stepGib(g, dt) {
 
 export function createGibs(scene) {
   const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), GIB.cap);
-  mesh.frustumCulled = false; mesh.count = 0; scene.add(mesh);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false; mesh.count = 0; scene.add(mesh);
   const pool = Array.from({ length: GIB.cap }, () => ({ alive: false })), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), P = new THREE.Vector3(), S = new THREE.Vector3(), C = new THREE.Color(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
   let next = 0, high = 0; // the ring index reuses the oldest gib once all 400 are live
   const rnd = (a, b) => a + Math.random() * (b - a), pick = l => l[(Math.random() * l.length) | 0];
@@ -44,14 +44,16 @@ export function createGibs(scene) {
       mesh.instanceColor.needsUpdate = true; mesh.count = high;
     },
     update(dt) {
+      let wrote = false, any = false;
       for (let i = 0; i < high; i++) {
         const g = pool[i];
         if (g.alive) stepGib(g, dt);
-        if (g.alive) mesh.setMatrixAt(i, M.compose(P.set(g.x, g.y, g.z), Q.setFromEuler(E.set(g.ax, g.ay, g.az)), S.setScalar(g.size * g.scale)));
-        else if (g.drawn) mesh.setMatrixAt(i, ZERO);
+        if (g.alive) { mesh.setMatrixAt(i, M.compose(P.set(g.x, g.y, g.z), Q.setFromEuler(E.set(g.ax, g.ay, g.az)), S.setScalar(g.size * g.scale))); wrote = any = true; }
+        else if (g.drawn) { mesh.setMatrixAt(i, ZERO); wrote = true; }
         g.drawn = g.alive;
       }
-      mesh.instanceMatrix.needsUpdate = true;
+      if (wrote) mesh.instanceMatrix.needsUpdate = true; // B-4: no upload while no gib lives
+      if (!any && high) { high = 0; next = 0; mesh.count = 0; } // all settled and gone: draw nothing
     },
     get live() { return pool.reduce((n, g) => n + (g.alive ? 1 : 0), 0); },
   };

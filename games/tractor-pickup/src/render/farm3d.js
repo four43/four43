@@ -184,10 +184,14 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
   // trees and bushes (T-34, T-35), one InstancedMesh per look: the oak while a tree stands (wobbling when bumped), the bush, and
   // the cut stump a broken tree leaves; each scales up from 0 while it grows back
   const tList = trees?.list || [], hidden = new THREE.Matrix4().makeScale(0, 0, 0);
-  const inst = (model, n) => { const m = new THREE.InstancedMesh(geoFrom(Object.values(ASSETS[model])), matV, Math.max(1, n)); m.castShadow = true; m.count = n; for (let i = 0; i < n; i++) m.setMatrixAt(i, hidden); scene.add(m); return m; };
+  const inst = (model, n) => { const m = new THREE.InstancedMesh(geoFrom(Object.values(ASSETS[model])), matV, Math.max(1, n)); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.castShadow = true; m.count = n; for (let i = 0; i < n; i++) m.setMatrixAt(i, hidden); scene.add(m); return m; };
   const treeOnes = tList.filter(t => t.kind === 'tree'), bushOnes = tList.filter(t => t.kind === 'bush');
   const oaks = inst('oak', treeOnes.length), stumps = inst('stump-cut', treeOnes.length), bushes = inst('shrub', bushOnes.length);
   const TREE_K = 2.6, BUSH_K = 1, BUSH_SY = 1; // model scale: the oak at 2.6 (young trees 1.6, from their scale); shrub.glb is already bush size
+  // B-4 (X-4): a tree's matrices are written only while it moves (wobble, regrowth) or when its state changes, and uploaded only then
+  const seenState = [], wasLive = [];
+  const moving = t => t.state === 'growing' || t.wobble > 0;
+  const needs = (t, key) => { const live = moving(t), go = live || wasLive[key] || seenState[key] !== t.state; wasLive[key] = live; seenState[key] = t.state; return go; };
   const easeOutBack = u => { const c = 1.70158; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
   splitShared(scene, matV); // X-4: no program look-ups between instanced and plain users (render/matSplit.js)
   return {
@@ -195,14 +199,16 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
     update(focus) {
       const now = performance.now() / 1000;
       const sway = Math.sin(now * 20) * 6 * Math.PI / 180;
+      let dirtyTrees = false, dirtyBushes = false;
       treeOnes.forEach((t, i) => {
+        if (!needs(t, t.id)) return; dirtyTrees = true;
         const g = t.state === 'growing' ? Math.max(0.001, easeOutBack(t.grow)) : 1, k = TREE_K * t.scale * g;
         oaks.setMatrixAt(i, t.state === 'broken' ? hidden : mtx.compose(p3.set(t.x, 0, t.z), q.setFromEuler(eul.set(0, t.yaw, t.wobble * sway)), s3.setScalar(k)));
         stumps.setMatrixAt(i, t.state === 'broken' ? mtx.compose(p3.set(t.x, 0, t.z), q.setFromAxisAngle(UP, t.yaw), s3.setScalar(t.young ? 0.8 : 1.3)) : hidden);
       });
-      bushOnes.forEach((t, i) => { const g = t.state === 'growing' ? Math.max(0.001, easeOutBack(t.grow)) : 1, k = BUSH_K * t.scale * g;
+      bushOnes.forEach((t, i) => { if (!needs(t, t.id)) return; dirtyBushes = true; const g = t.state === 'growing' ? Math.max(0.001, easeOutBack(t.grow)) : 1, k = BUSH_K * t.scale * g;
         bushes.setMatrixAt(i, t.state === 'broken' ? hidden : mtx.compose(p3.set(t.x, 0, t.z), q.setFromAxisAngle(UP, t.yaw), s3.set(k, k * BUSH_SY, k))); });
-      for (const m of [oaks, stumps, bushes]) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
+      for (const [m, d] of [[oaks, dirtyTrees], [stumps, dirtyTrees], [bushes, dirtyBushes]]) if (d) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
       if (focus && w) { // the brushes whirl while the tractor is near; the canopy fades while it is close (the chase camera looks down through it)
         const d = Math.hypot(focus.x - w.x, focus.z - w.z); brushes.forEach((m, i) => { m.rotation.y += (i ? -1 : 1) * (d < 15 ? 0.35 : 0.04); });
         const m = washTop.material; m.opacity += ((d < WASH.half + 8 ? 0.15 : 1) - m.opacity) * 0.15; m.depthWrite = m.opacity > 0.9; washTop.castShadow = m.opacity > 0.5;

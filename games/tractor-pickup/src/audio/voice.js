@@ -15,6 +15,8 @@ export function planUtterances(ids, available) {
 export function createVoice(sound) {
   const src = (typeof window !== 'undefined' && window.__VOICE__) || {}, buffers = new Map(), pending = new Set(), live = new Set();
   let gen = 0, current = null; // gen bumps on stop(); a line from an older gen quietly ends
+  // B-8: decode every clip once, right after audio unlocks, so the first `say` of a word never decodes on the main thread mid-drive
+  const preload = () => Promise.all(Object.keys(src).map(id => decode(id).catch(e => console.warn('voice decode', id, e))));
   const decode = async id => {
     if (!buffers.has(id)) {
       const bin = Uint8Array.from(atob(src[id].split(',')[1]), c => c.charCodeAt(0));
@@ -49,6 +51,7 @@ export function createVoice(sound) {
   const MAX_LOW = 2;
   const v = {
     enabled: true,
+    preload,
     // opts.low marks a name line (a landing): when 2 low lines are already waiting it is dropped so trip and show lines are never delayed
     say(ids, opts = {}) {
       if (!v.enabled || (opts.low && lowPending >= MAX_LOW)) return Promise.resolve();
