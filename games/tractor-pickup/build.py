@@ -16,6 +16,7 @@ for mp3 in sorted(vdir.glob('*.mp3')):
             'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-16:TP=-1.5',
             '-ac', '1', '-b:a', '64k', str(out)], check=True)
     else:
+        print('WARNING: ffmpeg not found: voice clip', mp3.name, 'is not trimmed or levelled (D-8)')
         shutil.copy(mp3, out)
     voice[mp3.stem] = 'data:audio/mpeg;base64,' + base64.b64encode(out.read_bytes()).decode()
 html = html.replace('<!--VOICE-->', 'window.__VOICE__=' + json.dumps(voice) + ';')

@@ -15,10 +15,12 @@ export class Sound {
         this.master.connect(lim); lim.connect(this.ctx.destination);
         this.musicBus = this.ctx.createGain(); this.musicBus.gain.value = 0; this.musicBus.connect(this.master);
         this.buildLoops();
-      } catch (e) { this.ctx = null; return Promise.resolve(); }
+      } catch (e) { console.warn('sound: no audio', e); this.ctx = null; return Promise.resolve(); }
     }
-    return this.ctx.state !== 'running' ? Promise.resolve(this.ctx.resume?.()).catch(() => {}) : Promise.resolve();
+    return this.ctx.state !== 'running' ? Promise.resolve(this.ctx.resume?.()).catch(e => console.warn('sound: resume', e)) : Promise.resolve(); // D-3: iOS refuses outside a gesture; the next gesture tries again
   }
+  // D-1: the page is hidden: stop every sound (the loops keep their gains, so they would drone on in a background tab); unlock() resumes
+  suspend() { if (this.ctx?.state === 'running') Promise.resolve(this.ctx.suspend()).catch(e => console.warn('sound: suspend', e)); }
   get ok() { return !!this.ctx && !this.muted && this.ctx.state === 'running'; }
   noiseBuffer() {
     if (!this._noise) { const c = this.ctx, n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; this._noise = b; }

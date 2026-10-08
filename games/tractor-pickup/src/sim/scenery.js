@@ -69,6 +69,8 @@ export function scatterScenery(farm, road, rng, terrain) {
 
 // T-35: breakable trees and bushes on the route shoulders, outside the road surface. About 1 tree and 2 bushes per route tile.
 // Trees only on straight and gate tiles, or on the outer side of a curve (4.6); none on feature tiles or near a hiding bush.
+// T-34, T-35 (D-7): how big a burst of gibs is (bush, young tree, tree) and how high above the ground it starts (m)
+export const BURST = { bush: { k: 0.7, y: 0.8 }, young: { k: 0.8, y: 1.6 }, tree: { k: 1.3, y: 1.6 } };
 export const ROADSIDE = { tree: ROAD_HALF + 0.9, bush: ROAD_HALF + 0.75, gap: 4, hide: 6 }; // m from the centerline; spacing; m from a hide bush
 export function roadside(farm, road, rng) {
   const inner = curveCenters(farm), out = [];

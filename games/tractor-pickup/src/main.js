@@ -35,6 +35,7 @@ import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
+import { BURST } from './sim/scenery.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const MAX_STEPS = 3; // B-5
@@ -56,10 +57,17 @@ async function main() {
   // iOS: audio and speech only start inside a gesture, and the context can be interrupted later. Try on every kind of gesture and on coming back to the page,
   // and stop listening only once the context is really running. The start screen's tap is the real gesture (menus onPlay); this stays as the fallback.
   const GEST = ['pointerup', 'touchend', 'click', 'keydown'];
-  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); voice.preload(); // B-8
+  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); voice.preload(); watchCtx(); // B-8, D-1
  for (const n of GEST) removeEventListener(n, unlock, true); } }); };
   for (const n of GEST) addEventListener(n, unlock, true);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && sound.ctx && sound.ctx.state !== 'running') { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); } });
+  const relisten = () => { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); };
+  document.addEventListener('visibilitychange', () => { // D-1: silent while hidden; back on the page, the next gesture (or this call) resumes
+    if (document.visibilityState === 'hidden') { sound.suspend(); voice.stop?.(); } else if (sound.ctx && sound.ctx.state !== 'running') relisten(); });
+  addEventListener('pageshow', () => { if (sound.ctx && sound.ctx.state !== 'running') relisten(); });
+  // D-1: Siri, a call or an alarm can interrupt the context with no page hide: listen for the next gesture again
+  const watchCtx = () => { if (sound.ctx && !sound.ctx.onstatechange) sound.ctx.onstatechange = () => { if (sound.ctx.state !== 'running' && document.visibilityState === 'visible') relisten(); }; };
+  // D-2: a swipe from the left edge (Safari, not installed) or a stray back press must not leave the game: back stays on this page
+  if (!sandbox) { history.pushState({ tp: 1 }, '', location.href); addEventListener('popstate', () => history.pushState({ tp: 1 }, '', location.href)); }
   const input = createInput(ui);
   const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons, onWordTap: ids => voice.say(ids) });
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
@@ -76,9 +84,9 @@ async function main() {
     seed = newSeed; gen++;
     world = new THREE.Group(); scene.add(world);
     const t0 = performance.now(); game = sandbox ? createSandbox(RAPIER, { power }) : createGame(RAPIER, { seed, power, player });
-    console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0));
+    if (perf || params.has('tune')) console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0)); // D-6: quiet unless debugging
     const t1 = performance.now(); farm3d = game.farm ? buildFarm3D(world, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso, trees: game.trees }) : (buildSandbox3D(world, game, aniso), null);
-    console.log('farm 3d build ms', Math.round(performance.now() - t1));
+    if (perf || params.has('tune')) console.log('farm 3d build ms', Math.round(performance.now() - t1));
     vehicles = createVehicles3D(world, game.tractor, game.train); vehicles.setPaint(progress.paint);
     gibs = createGibs(world); chase = createChaseCam(camera);
     animals3d = game.herd ? createAnimals3D(world, game.herd) : null; applyHats(); others3d = createOthers3D(world);
@@ -105,7 +113,7 @@ async function main() {
     renderer.setAnimationLoop(null);
     try {
       dispose();
-      try { build(s ?? randomSeed(), power ?? powerNow, player); } catch (e) { console.error('new farm failed, retrying with a fresh seed', e); try { world && (scene.remove(world), disposeTree(world)); } catch { /* half built */ } build(randomSeed(), power ?? powerNow, player); }
+      try { build(s ?? randomSeed(), power ?? powerNow, player); } catch (e) { console.error('new farm failed, retrying with a fresh seed', e); try { world && (scene.remove(world), disposeTree(world)); } catch (e2) { console.warn('half-built farm cleanup', e2); } build(randomSeed(), power ?? powerNow, player); } // D-3: the cleanup error is reported
       hud?.reset();
       const t = game.tractor, p = t.body.translation(); chase.update(1, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); // the camera starts behind the new tractor
     } catch (e) { console.error('new farm', e); } finally { acc = 0; last = performance.now(); renderer.setAnimationLoop(frame); }
@@ -189,7 +197,7 @@ async function main() {
       if (session) try { session.after(ev, nowMs); } catch (e) { warnOnce('net after', e); } // M-44
       if (perf) { perf.step(); for (const e of ev) perf.event(e.type); }
       for (const e of ev) try {
-        if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', k = bush ? 0.7 : t.young ? 0.8 : 1.3; gibs.burst(t.x, (bush ? 0.8 : 1.6) * k, t.z, e.dir, k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
+        if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', b = BURST[bush ? 'bush' : t.young ? 'young' : 'tree']; gibs.burst(t.x, b.y * b.k, t.z, e.dir, b.k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
         if (e.type === 'horn') sound.horn();
         if (e.type === 'dodge') sound.boing(0.2); // B-14
         if (e.type === 'treeBump') sound.clunk(); // T-34: a soft bump when a tree holds
