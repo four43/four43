@@ -172,7 +172,7 @@ async function main() {
     const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now; acc += dt;
     const inp = input.read(), t0 = perf ? performance.now() : 0;
     while (acc >= DT) {
-      { const t = game.tractor; if (game.mode !== 'drive' && game.mode) pilot.reset(); const o = pilot.update(inp, chase.yaw ?? t.yaw, t.yaw, t.speed); // C-1, C-2: point to go
+      { const t = game.tractor, o = pilot.update(inp, chase.yaw ?? t.yaw, t.yaw, t.speed); // C-1, C-2: point to go
         stepIn.thr = o.thr; stepIn.steer = o.steer; stepIn.turn = o.turn; stepIn.onTarget = o.onTarget; stepIn.horn = hornQueued; }
       const g0 = gen, nowMs = performance.now(), netEv = session ? netEvents(nowMs) : []; // before game.step: a welcome may rebuild the farm here (M-1)
       if (gen !== g0) { acc -= DT; continue; } // a new farm: fresh bodies and snapshots, its first step comes next
@@ -354,7 +354,7 @@ function buildTunePanel(game) {
     ['rearSide', () => t.P.rearSide, v => t.P.rearSide = v, 0.2, 1.2, 0.01], ['slideMax', () => t.P.slideMax, v => t.P.slideMax = v, 0.2, 1.2, 0.01],
     ['loose', () => t.P.loose, v => t.P.loose = v, 0, 0.3, 0.005],
     ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5], ['cam ahead', () => CAM.AHEAD, v => CAM.AHEAD = v, 2, 24, 0.5],
-    ['relock deg', () => PILOT.relock * 180 / Math.PI, v => PILOT.relock = v * Math.PI / 180, 5, 90, 1], ['reverse cone deg', () => PILOT.revCone * 180 / Math.PI, v => PILOT.revCone = v * Math.PI / 180, 0, 80, 1],
+    ['reverse cone deg', () => PILOT.revCone * 180 / Math.PI, v => PILOT.revCone = v * Math.PI / 180, 0, 80, 1],
     ['full speed err deg', () => PILOT.fullErr * 180 / Math.PI, v => PILOT.fullErr = v * Math.PI / 180, 5, 80, 1], ['crawl err deg', () => PILOT.crawlErr * 180 / Math.PI, v => PILOT.crawlErr = v * Math.PI / 180, 30, 180, 1],
     ['crawl', () => PILOT.crawl, v => PILOT.crawl = v, 0, 1, 0.05], ['pilot gain', () => PILOT.gain, v => PILOT.gain = v, 0.5, 6, 0.1], ['turn help', () => TP.turnHelp, v => TP.turnHelp = v, 0, 12, 0.5], ['help below m/s', () => PILOT.helpSpeed, v => PILOT.helpSpeed = v, 0, 8, 0.5],
     ['slip', () => TP.slip, v => TP.slip = v, 0.5, 6, 0.1], ['steerMax', () => TP.steerMax, v => TP.steerMax = v, 0.3, 0.9, 0.01],

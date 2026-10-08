@@ -85,7 +85,7 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 
 ### 1.2.10 Change in version 1.10 (after review 3)
 
-- Point to go (7.2): the stick points where the tractor must go on the screen, and the tractor turns and drives there by itself. Holding the stick to the right turns the tractor to the right and then drives straight on; the tractor does not turn in a circle (C-2). The tractor slows while it turns (C-9) and can turn near a fence or a bush (C-10). The stick straight down still reverses (C-8).
+- Point to go (7.2): the stick points where the tractor must go on the screen, and the tractor turns and drives there by itself. The stick is read against the camera, so a stick held to one side drives the tractor round in a circle (C-2). The tractor slows while it turns (C-9) and can turn near a fence or a bush (C-10). The stick straight down still reverses (C-8).
 - Show: each animal that hops out gets a check mark in the slot bar (F-15). The show is approximately 35% faster (F-6, F-8, F-14). Numbers and group labels do not overlap on an iPad in landscape (F-12). A term of the sum is hidden until the voice says it (F-7).
 - The gravel sound is 1/4 as loud (S-2). The horn is a loud bulb-horn "HONK-honk" (S-7).
 - The game fills the whole screen when it is installed on a home screen (X-11), and it can be played on a phone in portrait (X-3, X-12).
@@ -384,7 +384,7 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 | ID | Item | Description |
 |---|---|---|
 | C-1 | Throttle | The stick distance sets the speed. |
-| C-2 | Direction lock | When the stick direction becomes steady, the game locks it to the ground: the wanted heading is the camera heading at that time plus the stick angle. The lock stays while the stick direction stays within 25° of the locked stick angle, so the camera turning behind the tractor does not change the wanted heading. Thus, with the stick held to the right, the tractor turns approximately 90° to the right and then drives straight on. A change of the stick angle of more than 25°, or a released stick, makes a new lock from the camera heading at that time. |
+| C-2 | Camera direction | The wanted heading is the camera heading plus the stick angle, read again at each step. The camera turns behind the tractor, so a stick held to one side keeps the tractor turning: held to the left, the tractor drives round in a circle, and the player learns to bring the stick back up. (A direction lock was tried and removed after review 3.) |
 | C-9 | Turn speed | The tractor turns its nose to the wanted heading at its maximum steer. The speed is full when the heading error is less than 30°. Between 30° and 90°, the speed falls to a crawl (20% of the stick speed). The front wheels steer with a gain on the heading error, so the tractor does not swing past the wanted heading. |
 | C-10 | Turn help | At low speed with a heading error of more than 30°, a yaw force helps the tractor turn almost in place, so that it can turn near a fence, a tree or a bush. |
 | C-8 | Reverse | When the stick is within 35° of straight down, the tractor drives backward (maximum 3 m/s). The stick distance sets the speed. Down-left moves the rear of the tractor to the left of the screen, and down-right to the right. A stick that points behind but out of this cone (for example, down-left at 45° or more from straight down) turns the tractor around and drives forward. |

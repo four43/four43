@@ -14,26 +14,16 @@ test('stick right steers right and slows to a crawl (C-9)', () => {
   assert.ok(o.steer < -0.9, `steer ${o.steer}`); assert.ok(Math.abs(o.thr - PILOT.crawl) < 1e-9, `thr ${o.thr}`); assert.equal(o.onTarget, false);
 });
 test('the speed falls from full at 30 degrees to a crawl at 90 degrees', () => {
-  const p = createPilot(), thr = deg => { p.reset(); return p.update(at(deg), 0, 0, 0).thr; };
+  const p = createPilot(), thr = deg => p.update(at(deg), 0, 0, 0).thr;
   assert.equal(thr(20), 1); assert.ok(thr(60) < 1 && thr(60) > PILOT.crawl); assert.ok(Math.abs(thr(120) - PILOT.crawl) < 1e-9);
 });
-test('held right: the direction lock holds while the camera swings behind the tractor (C-2)', () => {
+test('the stick is always read against the camera now: held right with the camera behind the tractor, it still turns right (C-2)', () => {
   const p = createPilot(); p.update(at(90), 0, 0, 0);
   const o = p.update(at(90), -90 * R, -90 * R, 3); // the tractor turned right; the camera followed it
-  assert.ok(Math.abs(o.steer) < 1e-6, `steer ${o.steer}`); assert.equal(o.thr, 1);
+  assert.ok(o.steer < -0.9, `steer ${o.steer}`);
 });
-test('a small stick change keeps the lock; a big one locks again to the camera (C-2)', () => {
-  const p = createPilot(); p.update(at(90), 0, 0, 0);
-  let o = p.update(at(100), -90 * R, -90 * R, 3); // 10 degrees more: the same frame, so 10 degrees right of the tractor
-  assert.ok(o.steer < 0 && o.onTarget, `steer ${o.steer}`);
-  o = p.update(at(0), -90 * R, -90 * R, 3); // up: a new lock from the camera now: straight on
-  assert.ok(Math.abs(o.steer) < 1e-6, `steer ${o.steer}`);
-});
-test('release unlocks', () => {
-  const p = createPilot(); p.update(at(90), 0, 0, 0);
-  assert.deepEqual({ ...p.update({ x: 0, y: 0 }, 0, 0, 0) }, { thr: 0, steer: 0, turn: 0, onTarget: true });
-  const o = p.update(at(90), -90 * R, -90 * R, 0); // a new press: right of the camera now
-  assert.ok(o.steer < -0.9);
+test('release gives no drive', () => {
+  assert.deepEqual({ ...createPilot().update({ x: 0, y: 0 }, 0, 0, 0) }, { thr: 0, steer: 0, turn: 0, onTarget: true });
 });
 test('stick straight down reverses at the stick speed (C-8)', () => {
   const p = createPilot(), o = p.update(at(180, 0.5), 0, 0, 0);
@@ -54,8 +44,8 @@ test('behind but out of the cone turns around and drives forward (C-8)', () => {
 test('turn help only when slow and well off target (C-10)', () => {
   const p = createPilot();
   assert.equal(p.update(at(90), 0, 0, 0.5).turn, -1);
-  p.reset(); assert.equal(p.update(at(90), 0, 0, PILOT.helpSpeed + 1).turn, 0);
-  p.reset(); assert.equal(p.update(at(10), 0, 0, 0).turn, 0);
+  assert.equal(p.update(at(90), 0, 0, PILOT.helpSpeed + 1).turn, 0);
+  assert.equal(p.update(at(10), 0, 0, 0).turn, 0);
 });
 
 // Closed loop: a real tractor, the pilot and a camera that swings behind the tractor as the chase camera does (V-2)
@@ -71,10 +61,13 @@ const drive = () => {
     const o = p.update(stick, cam, t.yaw, t.speed); t.setInput(o.thr, o.steer, o.turn); t.step(DT); phys.world.step(); each?.(o); } };
   return { t, run };
 };
-test('closed loop: held right, the tractor turns about 90 degrees right and then drives straight on (C-2)', () => {
-  const { t, run } = drive(); run(1, { x: 0, y: 0 }); run(4, at(90));
-  const y1 = t.yaw; assert.ok(Math.abs(wrap(y1 + Math.PI / 2)) < 15 * R, `yaw ${y1 / R}`);
-  run(3, at(90)); assert.ok(Math.abs(wrap(t.yaw - y1)) < 10 * R, `kept turning: ${(t.yaw - y1) / R}`); assert.ok(t.speed > 5, `speed ${t.speed}`);
+test('closed loop: held right, the tractor drives round in a circle (C-2, review 3)', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); let turned = 0, prev = t.yaw;
+  run(10, at(90), () => { turned += wrap(t.yaw - prev); prev = t.yaw; });
+  assert.ok(turned < -2 * Math.PI, `turned ${(turned / R).toFixed(0)} deg: at least one full circle to the right`);
+});
+test('closed loop: held up, the tractor drives straight on', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); run(4, at(0)); assert.ok(Math.abs(wrap(t.yaw)) < 5 * R, `yaw ${t.yaw / R}`); assert.ok(t.speed > 6);
 });
 test('closed loop: held down, the tractor backs up straight (C-8)', () => {
   const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); run(2, at(180));
@@ -84,12 +77,13 @@ test('closed loop: down-left backs the rear toward the screen left (C-8)', () =>
   const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); run(2.5, at(-155));
   const p1 = t.body.translation(); assert.ok(p1.x > p0.x + 0.3, `rear went ${p1.x - p0.x} (screen left is +x)`);
 });
-test('closed loop: from a standstill, stick behind-left turns the tractor around in a small space (C-10)', () => {
-  const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); run(4, at(-120));
-  const p1 = t.body.translation(); assert.ok(Math.abs(wrap(t.yaw - 120 * R)) < 25 * R, `yaw ${t.yaw / R}`);
-  assert.ok(Math.hypot(p1.x - p0.x, p1.z - p0.z) < 14, `used ${Math.hypot(p1.x - p0.x, p1.z - p0.z)} m`);
+test('closed loop: from a standstill, stick behind-left turns the tractor left in a small space (C-10)', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); let turned = 0, prev = t.yaw;
+  run(3, at(-120), () => { turned += wrap(t.yaw - prev); prev = t.yaw; });
+  const p1 = t.body.translation(); assert.ok(turned > 90 * R, `turned ${(turned / R).toFixed(0)} deg`);
+  assert.ok(Math.hypot(p1.x - p0.x, p1.z - p0.z) < 10, `used ${Math.hypot(p1.x - p0.x, p1.z - p0.z)} m`);
 });
-test('turn help: with no help the same turn needs more room', () => {
-  const room = help => { const k = TP.turnHelp; TP.turnHelp = help; try { const { t, run } = drive(); run(1, { x: 0, y: 0 }); let n = 0; run(6, at(-135), () => { if (Math.abs(wrap(t.yaw - 135 * R)) > 20 * R) n++; }); return n; } finally { TP.turnHelp = k; } };
-  const a = room(TP.turnHelp), b = room(0); assert.ok(a < b, `with help ${a} steps off target, without ${b}`);
+test('turn help: with no help the tractor turns less in the same time', () => {
+  const turn = help => { const k = TP.turnHelp; TP.turnHelp = help; try { const { t, run } = drive(); run(1, { x: 0, y: 0 }); let n = 0, prev = t.yaw; run(2, at(-135), () => { n += wrap(t.yaw - prev); prev = t.yaw; }); return n; } finally { TP.turnHelp = k; } };
+  const a = turn(TP.turnHelp), b = turn(0); assert.ok(a > b * 1.3, `with help ${(a / R).toFixed(0)} deg, without ${(b / R).toFixed(0)} deg`);
 });
