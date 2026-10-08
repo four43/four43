@@ -73,5 +73,5 @@
 ## F. Recording and docs
 
 - [x] **F-1 Recording kit** (script.md here; the slicer `tools/slice-voice.py` and the clips are from another session, not yet committed) — `audio/voice/script.md`: one reading script for all voice words (grouped so joined words are read together) plus the 8 animal sounds and the new `sleepy`/`goodnight` words. A slicer script cuts one take on silence and labels clips by transcription (faster-whisper in a scratch venv — needs the parent's OK to install), writes a report of missing or doubtful clips, and stitches preview sentences.
-- [ ] **F-2 Spec 1.11** — change section 1.2.11; items for A-3, A-4, D-1, D-2, E-1..E-6; section 12 adds `audio/animals/` and the new words; fix section 13 (`slowmo.test.mjs`, B-7 row), order of sections 1.2.6-1.2.9, duplicate W-2, U-6 before U-7.
+- [x] **F-2 Spec 1.11** — change section 1.2.11; items for A-3, A-4, D-1, D-2, E-1..E-6; section 12 adds `audio/animals/` and the new words; fix section 13 (`slowmo.test.mjs`, B-7 row), order of sections 1.2.6-1.2.9, duplicate W-2, U-6 before U-7.
 - [ ] **F-3 Version 1.7.0**, build, full test run, Playwright pass (desktop, iPad and phone sizes), commit; deploy only with the parent's OK.
