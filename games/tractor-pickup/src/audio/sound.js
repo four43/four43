@@ -118,7 +118,9 @@ export class Sound {
     lp.connect(g); bp.connect(mix); mix.connect(g); g.connect(this.master);
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.025); g.gain.setValueAtTime(vol, t + dur - 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   }
-  bells() { if (this.ok) [1319, 1568, 1976, 2637].forEach((f, i) => this.tone(f, f, 0.8, 0.25, 'sine', i * 0.12)); }
+  // E-6: a golden animal landed: a bright rising fanfare, then bells
+  fanfare() { if (!this.ok) return; [523, 659, 784, 1047].forEach((f, i) => { this.tone(f, f, i === 3 ? 0.6 : 0.16, 0.22, 'square', i * 0.14); this.tone(f * 2, f * 2, 0.3, 0.06, 'sine', i * 0.14); }); this.bells(0.7); }
+  bells(w = 0) { if (this.ok) [1319, 1568, 1976, 2637].forEach((f, i) => this.tone(f, f, 0.8, 0.25, 'sine', w + i * 0.12)); }
   squelch() { if (this.ok) { this.noise(0.2, 0.35, 300, 0, 2); this.tone(220, 90, 0.2, 0.25, 'sine', 0.05); } }
   // quick rising chime arpeggio with a little shimmer on top
   sparkle(vol = 0.5) {

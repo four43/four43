@@ -34,6 +34,7 @@ export function createHud(root, { icons, onWordTap, onSlotTap }) {
       s.innerHTML = `<img alt="" src="${golden ? icons.golden[type] : icons[type]}"><span>${TYPES[type].word}</span>`;
       s.dataset.type = type; s.dataset.golden = golden ? '1' : ''; s.classList.add('full');
     },
+    goldFlash() { bar.classList.remove('gold'); void bar.offsetWidth; bar.classList.add('gold'); }, // E-6: the slot bar flashes gold
     markOut(n) { slots[n - 1]?.classList.add('out'); }, // F-15: its animal hopped out in the show
     // B-7: only the transform moves it (no layout), and only when it changed by a pixel or a degree
     arrowTo(p) { if (!p) { if (!arrow.hidden) arrow.hidden = true; return; } if (arrow.hidden) arrow.hidden = false;

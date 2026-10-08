@@ -16,6 +16,8 @@ const SUM_PAUSE = 450, STAGE_PAUSE = 1200; // F-7: ms after each spoken term of 
 // the tally circle (ms) and their hop (s)
 export const SHOW = { hop: 0.5, step: 350, tallyGap: 150, tallyHop: 0.45 };
 // A-3: a child's tap makes the animal being counted hop and call (s, m); holding `fastMs` finishes the step (F-8); the skip button needs `skipMs` (F-13)
+// E-6: once counted, a golden animal flies one big loop across the screen trailing a rainbow, then lands back on its spot (s, m)
+export const GOLD = { loop: 3.2, r: 4, spin: 2 };
 export const CHEER = { hop: 0.35, h: 0.7, fastMs: 1000, skipMs: 1000 };
 // F-12: the show text scales with the scene, so a label never grows past the room its block has (LINEUP.letter metres a letter).
 // pxPerLetter: the width of one letter of a 36 px label (Andika bold, with the number and the space); never below `min`.
@@ -51,6 +53,12 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
   const speak = ids => Promise.resolve().then(() => voice.say(ids)).catch(e => console.warn('voice', e));
   const say = ids => fast ? Promise.resolve() : Promise.race([speak(ids), cut.p]);
   const tween = (a, to, dur, h, yaw) => new Promise(res => (dropCheer(a), tweens).push({ a, from: { x: a.x, y: a.y || 0, z: a.z, yaw: a.yaw }, to, t: fast ? dur : 0, dur, h, yaw, res }));
+  // E-6: the loop is in the plane facing the camera: right along the camera's horizontal right, up along world up; it starts and ends at its spot
+  const goldenLoop = (a, yaw) => { const p0 = { x: a.x, y: 0, z: a.z }, R = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize(); sound?.bells?.(); sound?.whee?.();
+    return new Promise(res => tweens.push({ a, from: { ...p0, yaw }, to: { ...p0 }, yaw, t: 0, dur: GOLD.loop, h: 0, res: () => { fx?.confetti?.(p0.x, 1.5, p0.z); sound?.cheer?.(); res(); },
+      path: (u, an) => { const th = Math.PI * 2 * (u * u * (3 - 2 * u)), sx = Math.sin(th) * GOLD.r, sy = (1 - Math.cos(th)) * GOLD.r;
+        an.x = p0.x + R.x * sx; an.z = p0.z + R.z * sx; an.y = sy; an.yaw = yaw + Math.PI * 2 * GOLD.spin * u;
+        for (let k = 0; k < 3; k++) fx?.rainbowTrail?.(an.x, an.y + 0.8, an.z, k); } })); };
   const dropCheer = a => { tweens = tweens.filter(tw => { if (!tw.cheer || tw.a !== a) return true; finish(tw); return false; }); }; // a show hop takes over from a cheer hop
   const finish = tw => { const a = tw.a; a.x = tw.to.x; a.y = tw.to.y; a.z = tw.to.z; if (tw.yaw !== undefined) a.yaw = tw.yaw; tw.res(); };
   const letters = w => [...w].map((c, i) => `<b style="animation-delay:${i * 0.12}s">${c === ' ' ? '&nbsp;' : c}</b>`).join('');
@@ -77,6 +85,7 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
       tweens = tweens.filter(tw => {
         tw.t += dt; const u = Math.min(1, tw.t / tw.dur), a = tw.a;
         if (u >= 1) { finish(tw); return false; }
+        if (tw.path) { tw.path(u, a); return true; } // E-6: a free path (the golden loop)
         a.x = tw.from.x + (tw.to.x - tw.from.x) * u; a.z = tw.from.z + (tw.to.z - tw.from.z) * u;
         a.y = tw.from.y + (tw.to.y - tw.from.y) * u + tw.h * 4 * u * (1 - u);
         if (tw.yaw !== undefined) a.yaw = tw.from.yaw + wrap(tw.yaw - tw.from.yaw) * u;
@@ -114,6 +123,7 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
             onHop?.(r); // F-15: its slot in the slot bar is marked off
             await tween(a, spot(p.x, p.d), SHOW.hop, 3, faceCam); sound?.plop?.();
             (nums[s.group] ||= []).push(label(a, 'num', s.golden ? `<small>Golden</small>${s.n}` : s.n, headY(a.type), s.say));
+            if (s.golden && !fast) await goldenLoop(a, faceCam);
           }
           if (s.kind === 'group') { // the numbers go; the group label shows in front of the block
             drop(labels.filter(L => nums[s.group]?.includes(L.d)));

@@ -132,3 +132,14 @@ test('a short tap on the skip button does nothing; only a hold skips (A-3, F-13)
     skip.tap(); await within(p, 1000); assert.ok(done);
   } finally { CHEER.skipMs = 0; clearInterval(tick); }
 });
+test('a counted golden animal flies one big loop with a rainbow, high above, then lands back on its spot (E-6)', { timeout: 20000 }, async () => {
+  const trail = [];
+  const root = new El(), show = createShow({ root, camera: new THREE.PerspectiveCamera(), game, voice: { say: () => Promise.resolve() }, sound: null, fx: { rainbowTrail: (x, y) => trail.push(y) } });
+  const tick = setInterval(() => show.update(0.05), 5), r = riders(['pig']); r[0].animal.golden = true;
+  const st = buildShowSteps([{ type: 'pig', golden: true }]);
+  let top = 0; const spy = setInterval(() => { top = Math.max(top, r[0].animal.y); }, 2);
+  try { await within(show.play(r, st), 15000); } finally { clearInterval(tick); clearInterval(spy); }
+  assert.ok(top > 6, `the loop only went ${top.toFixed(1)} m up`);
+  assert.ok(trail.length > 30, 'no rainbow trail');
+  assert.equal(r[0].animal.y, 0); assert.equal(r[0].animal.state, 'show');
+});

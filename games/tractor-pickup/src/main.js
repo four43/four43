@@ -98,7 +98,7 @@ async function main() {
     gibs = createGibs(world); chase = createChaseCam(camera);
     animals3d = game.herd ? createAnimals3D(world, game.herd) : null; applyHats(); others3d = createOthers3D(world);
     fx = createFx(world, game.terrain ? (x, z) => game.terrain.height(x, z) : undefined);
-    fxs = { dust: 0, mud: 0, mark: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
+    fxs = { dust: 0, mud: 0, mark: 0, halo: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
     trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world, onHop: r => hud.markOut(slotIndex(r.slot) + 1) }) : null;
     showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
     instancedShadows(world); // X-4: no shadow-pass program churn (render/shadows.js)
@@ -237,6 +237,7 @@ async function main() {
         if (e.type === 'help') { helpTarget = { a: e.animal, t: 10 }; sound.animal(e.animal.type); } // M-9
         if (e.type === 'playerJoined') { for (let k = 0; k < 3; k++) fx.sparkles(e.x, 1.6, e.z); sound.horn(0.6); } // M-10
         if (e.type === 'playerGone') { fx.stars(e.x, 1.2, e.z); sound.plop(); } // M-39
+        if (e.type === 'land' && e.animal.golden) { sound.fanfare(); hud.goldFlash(); fx.confetti(e.animal.x, 2, e.animal.z); } // E-6, A-8: a large celebration
         if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n, e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); }
       } catch (err) { warnOnce('event ' + e.type, err); } // M-44: a bad event (a remote animal, a poof) never stops the frame loop
       stepSounds(game, sound, sfx);
@@ -345,9 +346,10 @@ function stepFx(game, fx, sound, s, w, sprinklers, dt) {
   let near = false;
   for (const sp2 of sprinklers) if (Math.hypot(sp2.x - t.x, sp2.z - t.z) < 15) { near = true; fx.water(sp2.x, sp2.z, sp2.yaw, sp2.h ?? 4.1, 8, sp2.spread ?? 14, sp2.depth ?? 18); } // route sprinklers and the farmyard wash (T-36)
   if (near !== s.spray) { s.spray = near; sound.spray(near); }
+  if (game.herd && (s.halo -= dt) <= 0) { s.halo = 0.05; for (const a of game.herd.animals) if (a.golden && !a.hidden && a.state !== 'gone' && a.state !== 'fly' && a.state !== 'ride' && a.state !== 'elsewhere') fx.rainbowHalo(a.x, (a.y || 0) + 0.3, a.z); } // E-6
   for (const f of game.flights) {
     if (f.u < 0) continue;
-    if (f.animal.golden) fx.rainbowTrail(f.pos.x, f.pos.y, f.pos.z);
+    if (f.animal.golden) for (let k = 0; k < 3; k++) fx.rainbowTrail(f.pos.x, f.pos.y, f.pos.z, k); // E-6: a wider ribbon
     if (s.drip.has(f.animal)) { if (f.u > 0.6) s.drip.delete(f.animal); else fx.water(f.pos.x, f.pos.z, 0, f.pos.y - game.terrain.height(f.pos.x, f.pos.z), 1, 0.6); }
   }
 }

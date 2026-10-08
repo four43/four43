@@ -29,7 +29,10 @@ export function createFx(scene, groundY = () => 0) {
     water(x, z, yaw, y = 4.1, n = 5, spread = 14, depth = 0) { const gy = groundY(x, z) + y; for (let i = 0; i < n; i++) { const o = R(spread), d = R(depth); emit(x + o * Math.cos(yaw) + d * Math.sin(yaw), gy, z - o * Math.sin(yaw) + d * Math.cos(yaw), R(1), -1, R(1), 0.15, 0.9, '#a8e2ff', 9, 0.2); } },
     sparkles(x, y, z) { for (let i = 0; i < 12; i++) emit(x + R(2), y + R(1.5), z + R(2), R(1), 1.5, R(1), 0.2, 1, i % 2 ? '#ffffff' : '#fff1a0', -0.5); },
     confetti(x, y, z) { for (let i = 0; i < 120; i++) { hsl(Math.random()); emit(x + R(2), y, z + R(2), R(8), 6 + Math.random() * 6, R(8), 0.14, 2.5, null, 6, 1.2); } },
-    rainbowTrail(x, y, z) { hsl((performance.now() / 600) % 1, 0.6); emit(x, y, z, 0, 0, 0, 0.25, 0.6, null, 0, 0); },
+    // A-8, E-6: a rainbow trail: the hue runs with time; k > 0 spreads extra drops a little (a wider ribbon)
+    rainbowTrail(x, y, z, k = 0) { hsl((performance.now() / 600 + k * 0.08) % 1, 0.6); emit(x + R(0.4) * k, y + R(0.4) * k, z + R(0.4) * k, 0, 0, 0, 0.3, 0.9, null, 0, 0); },
+    // E-6: a slow ring of rainbow sparkles around a golden animal on the farm, so it is easy to spot from far away
+    rainbowHalo(x, y, z, r = 1.3) { const a = Math.random() * Math.PI * 2; hsl(a / (Math.PI * 2)); emit(x + Math.cos(a) * r, y + Math.random() * 0.8, z + Math.sin(a) * r, 0, 0.8, 0, 0.22, 1.1, null, -0.2, 0.3); },
     // F-2: the sparkle frame around the barn door opening: bigger, brighter and tight on the outline, so it reads as a doorway
     sparkleFrame(points) { for (const [i, p] of points.entries()) if (Math.random() < 0.7) emit(p.x + R(0.2), p.y + R(0.2), p.z + R(0.2), 0, 0.2, 0, 0.3, 0.7, i % 3 ? '#ffe066' : '#ffffff', 0); },
     sparkleTrail(points) { for (const p of points) if (Math.random() < 0.5) emit(p.x + R(1), p.y + Math.random() * 0.6, p.z + R(1), 0, 0.5, 0, 0.18, 1, '#ffe066', -0.3); },

@@ -59,6 +59,8 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #tune select{font:inherit;min-height:44px;margin-top:6px}
 #slots{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5;pointer-events:none}
 .slot.full{pointer-events:auto;cursor:pointer}.slot.full.wiggle{animation:wiggle .5s ease-in-out}
+#slots.gold .slot{animation:goldflash 1.2s ease-out}
+@keyframes goldflash{0%,60%{box-shadow:0 0 0 5px #f5c84c,0 0 24px 8px #ffe066;background:#fff3b0}100%{box-shadow:none}}
 @keyframes wiggle{0%,100%{transform:rotate(0)}20%{transform:rotate(-12deg) scale(1.1)}40%{transform:rotate(10deg) scale(1.1)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
 .slot{width:62px;height:72px;border-radius:14px;background:rgba(255,255,255,.45);border:3px dashed rgba(107,68,40,.55);display:flex;flex-direction:column;align-items:center;justify-content:center}
 .slot.full{background:rgba(255,252,248,.92);border:3px solid #6b4428;animation:pop .35s ease-out}
