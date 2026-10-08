@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTrip, stepTrip } from '../src/sim/trip.js';
+import { createTrip, stepTrip, modeAfterDrive } from '../src/sim/trip.js';
 const tick = (r, o = {}) => stepTrip(r, { dt: 1 / 60, landed: 0, booped: false, barnPass: false, showDone: false, rewardDone: false, ...o });
 const toDrive = r => { for (let i = 0; i < 180; i++) tick(r); };
 
@@ -25,4 +25,8 @@ test('help fires after 20 s without a boop, then every 20 s; a boop resets it; n
   for (let i = 0; i < 60 * 15; i++) tick(r); tick(r, { booped: true }); helps = 0;
   for (let i = 0; i < 60 * 19; i++) helps += tick(r).filter(c => c === 'help').length; assert.equal(helps, 0);
   helps = 0; for (let i = 0; i < 60 * 30; i++) helps += tick(r, { landed: 12 }).filter(c => c === 'help').length; assert.equal(helps, 0);
+});
+test('the drive cue never frees the tractor under an open paint screen or sticker book (U-6)', () => {
+  assert.equal(modeAfterDrive('menu'), 'menu');
+  for (const m of ['drive', 'reward', 'start', 'arrive']) assert.equal(modeAfterDrive(m), 'drive');
 });

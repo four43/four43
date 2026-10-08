@@ -16,3 +16,5 @@ export function stepTrip(r, { dt, landed, booped, barnPass, showDone, rewardDone
   }
   return cues;
 }
+// U-6: the paint screen and the sticker book hold the tractor ('menu') until they close; a 'drive' cue (end of the intro) must not free it
+export const modeAfterDrive = mode => mode === 'menu' ? 'menu' : 'drive';

@@ -23,7 +23,7 @@ import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
 import { createPilot, PILOT } from './sim/pilot.js';
 import { makeGravelTexture, worldUV } from './render/textures.js';
-import { createTrip, stepTrip } from './sim/trip.js';
+import { createTrip, stepTrip, modeAfterDrive } from './sim/trip.js';
 import { buildShowSteps } from './sim/showSteps.js';
 import { createShow } from './ui/show.js';
 import { Sound } from './audio/sound.js';
@@ -202,7 +202,7 @@ async function main() {
         const cues = stepTrip(trip, { dt: DT, landed: game.load.landed(), booped: ev.some(e => e.type === 'boop'), barnPass: ev.some(e => e.type === 'barnPass'), showDone, rewardDone });
         showDone = rewardDone = false;
         for (const c of cues) {
-          if (c === 'drive') game.mode = 'drive'; // the card is gone: driving and boops work again
+          if (c === 'drive') game.mode = modeAfterDrive(game.mode); // the card is gone: driving and boops work again (U-6: not under paint or book)
           if (c === 'say-intro') voice.say(['lets-find', 'animals']);
           if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
           if (c === 'help') { if (!session?.requestHelp()) { const h = game.herd.callHelp(game.tractor); if (h) { helpTarget = { a: h, t: 10 }; sound.animal(h.type); } } } // F-4: the helper calls out; M-9: a guest asks the host (its answer is a help event, or none)
