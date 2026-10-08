@@ -21,7 +21,7 @@ export function createSandbox(RAPIER, { power = 'medium' } = {}) {
   return {
     phys, tractor, train, surfaceAt, ramps, mud,
     step(input) {
-      tractor.setInput(input.thr, input.steer); tractor.step(DT);
+      tractor.setInput(input.thr, input.steer, input.turn || 0); tractor.step(DT);
       train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 });
       phys.world.step();
     },

@@ -1,17 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { circleToSquare } from '../src/ui/input.js';
+import { radial } from '../src/ui/input.js';
 const near = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-3, `${a} vs ${b}`));
 
-test('circle to square: center stays at rest', () => { assert.deepEqual(circleToSquare(0, 0), [0, 0]); });
-test('circle to square: points on an axis stay on it', () => {
-  near(circleToSquare(1, 0), [1, 0]); near(circleToSquare(0, -1), [0, -1]); near(circleToSquare(0.5, 0), [0.5, 0]); near(circleToSquare(0, 0.3), [0, 0.3]);
+test('radial: inside the dead zone the stick is at rest', () => { assert.deepEqual(radial(0, 0), [0, 0]); assert.deepEqual(radial(0.05, -0.05), [0, 0]); });
+test('radial: the direction stays the same', () => {
+  for (const [x, y] of [[1, 0], [0, -0.5], [0.3, 0.4], [-0.6, 0.6]]) { const [rx, ry] = radial(x, y); near([Math.atan2(rx, ry)], [Math.atan2(x, y)]); }
 });
-test('circle to square: a full diagonal gives full throttle and full steer', () => {
-  near(circleToSquare(Math.SQRT1_2, Math.SQRT1_2), [1, 1]); near(circleToSquare(-Math.SQRT1_2, Math.SQRT1_2), [-1, 1]); near(circleToSquare(0.3535, -0.3535), [0.5, -0.5]);
-});
-test('circle to square: never beyond 1 on either axis', () => {
-  for (let a = 0; a < Math.PI * 2; a += 0.01) for (const r of [0.2, 0.7, 1, 1.05]) {
-    const [x, y] = circleToSquare(Math.cos(a) * r, Math.sin(a) * r); assert.ok(Math.abs(x) <= 1 && Math.abs(y) <= 1);
-  }
+test('radial: full travel is length 1, never more, and the length grows from 0 past the dead zone', () => {
+  near([Math.hypot(...radial(Math.SQRT1_2, Math.SQRT1_2))], [1]); near([Math.hypot(...radial(0, 1.3))], [1]);
+  near([Math.hypot(...radial(0.55, 0))], [0.5]);
 });

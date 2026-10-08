@@ -74,8 +74,8 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
       let assist = 0, best = AIM.range;
       if (game.mode === 'drive') for (const a of herd.free()) { const l = tractorLocal(a.x, 0, a.z, tmp), d = Math.hypot(l.x, l.z);
         if (l.x > 0 && d < best && Math.abs(Math.atan2(l.z, l.x)) < AIM.cone) { best = d; assist = Math.max(-AIM.max, Math.min(AIM.max, -Math.atan2(l.z, l.x) * AIM.gain)); } }
-      tractor.setAssist(tractor.fwd > 0.5 ? assist : 0);
-      tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer); tractor.step(DT);
+      tractor.setAssist(tractor.fwd > 0.5 && drive.onTarget !== false ? assist : 0); // C-11: only when nearly on the wanted heading
+      tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer, drive.turn || 0); tractor.step(DT);
       train.step(DT, { parked: tractor.hold || (Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3) });
       events.push(...trees.step(DT, bodies, game.mode === 'drive')); phys.world.step(); // trees first: a broken trunk's collider is gone before contact resolves
       axes = quatAxes(tractor.body.rotation());

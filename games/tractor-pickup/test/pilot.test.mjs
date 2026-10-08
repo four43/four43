@@ -57,3 +57,39 @@ test('turn help only when slow and well off target (C-10)', () => {
   p.reset(); assert.equal(p.update(at(90), 0, 0, PILOT.helpSpeed + 1).turn, 0);
   p.reset(); assert.equal(p.update(at(10), 0, 0, 0).turn, 0);
 });
+
+// Closed loop: a real tractor, the pilot and a camera that swings behind the tractor as the chase camera does (V-2)
+import RAPIER from '@dimforge/rapier3d-compat';
+import { createPhysics, DT } from '../src/sim/physics.js';
+import { createTractor, TP } from '../src/sim/tractor.js';
+await RAPIER.init();
+const drive = () => {
+  const phys = createPhysics(RAPIER), t = createTractor(phys, { x: 0, z: 0, yaw: 0, surfaceAt: () => 'gravel' }), p = createPilot();
+  let cam = null;
+  const run = (sec, stick, each) => { for (let i = 0; i < sec * 60; i++) {
+    const lv = t.body.linvel(), want = t.fwd > 2 ? Math.atan2(lv.x, lv.z) : t.yaw; if (cam === null) cam = want; cam += wrap(want - cam) * Math.min(1, DT * 3);
+    const o = p.update(stick, cam, t.yaw, t.speed); t.setInput(o.thr, o.steer, o.turn); t.step(DT); phys.world.step(); each?.(o); } };
+  return { t, run };
+};
+test('closed loop: held right, the tractor turns about 90 degrees right and then drives straight on (C-2)', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); run(4, at(90));
+  const y1 = t.yaw; assert.ok(Math.abs(wrap(y1 + Math.PI / 2)) < 15 * R, `yaw ${y1 / R}`);
+  run(3, at(90)); assert.ok(Math.abs(wrap(t.yaw - y1)) < 10 * R, `kept turning: ${(t.yaw - y1) / R}`); assert.ok(t.speed > 5, `speed ${t.speed}`);
+});
+test('closed loop: held down, the tractor backs up straight (C-8)', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); run(2, at(180));
+  const p1 = t.body.translation(); assert.ok(p1.z < p0.z - 1, `moved ${p1.z - p0.z}`); assert.ok(Math.abs(wrap(t.yaw)) < 10 * R, `yaw ${t.yaw / R}`);
+});
+test('closed loop: down-left backs the rear toward the screen left (C-8)', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); run(2.5, at(-155));
+  const p1 = t.body.translation(); assert.ok(p1.x > p0.x + 0.3, `rear went ${p1.x - p0.x} (screen left is +x)`);
+});
+test('closed loop: from a standstill, stick behind-left turns the tractor around in a small space (C-10)', () => {
+  const { t, run } = drive(); run(1, { x: 0, y: 0 }); const p0 = t.body.translation(); run(4, at(-120));
+  const p1 = t.body.translation(); assert.ok(Math.abs(wrap(t.yaw - 120 * R)) < 25 * R, `yaw ${t.yaw / R}`);
+  assert.ok(Math.hypot(p1.x - p0.x, p1.z - p0.z) < 14, `used ${Math.hypot(p1.x - p0.x, p1.z - p0.z)} m`);
+});
+test('turn help: with no help the same turn needs more room', () => {
+  const room = help => { const k = TP.turnHelp; TP.turnHelp = help; try { const { t, run } = drive(); run(1, { x: 0, y: 0 }); let n = 0; run(6, at(-135), () => { if (Math.abs(wrap(t.yaw - 135 * R)) > 20 * R) n++; }); return n; } finally { TP.turnHelp = k; } };
+  const a = room(TP.turnHelp), b = room(0); assert.ok(a < b, `with help ${a} steps off target, without ${b}`);
+});

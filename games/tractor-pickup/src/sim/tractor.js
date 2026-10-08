@@ -12,7 +12,8 @@ export const TP = {
   scale: 1.6, mass: 1400, revForce: 3200, vrev: 3, brake: 30, handbrake: 60, roll: 1.5,
   steerMax: 0.62, steerRate: 2.8, inputRate: 4, suspRest: 0.32, stiffness: 18, compression: 2.0, relaxation: 2.6,
   slip: 2.4, travel: 0.45, yawRateMax: 2.6, slideK: 6, yawInertia: 2200, slideTorque: 30, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 9000,
-  steep: Math.cos(30 * Math.PI / 180), steepGrip: 0.2, // T-17: a wheel on ground steeper than 30 degrees (an edge bank) loses most of its grip
+  steep: Math.cos(30 * Math.PI / 180), steepGrip: 0.2,
+  turnHelp: 4, // C-10: rad/s^2 of extra yaw while the pilot asks for it (slow and well off target), so the tractor turns near a fence or a bush // T-17: a wheel on ground steeper than 30 degrees (an edge bank) loses most of its grip
 };
 export const TRACTOR_WHEELS = [
   { name: 'wheel-front-left', mx: 0.415, my: 0.325, mz: 0.735, r: 0.325, front: true },
@@ -51,10 +52,10 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
   const rayGroups = groups(0xffff, G.GROUND | G.STATIC), own = new Set(cols.map(c => c.handle));
 
   const t = {
-    body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, assist: 0,
+    body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, inTurn: 0, assist: 0,
     x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, surface: 'gravel',
     setPower(name) { this.power = name; this.P = POWER[name]; },
-    setInput(thr, steer) { this.inThr = Math.max(-1, Math.min(1, thr)); this.inSteer = Math.max(-1, Math.min(1, steer)); },
+    setInput(thr, steer, turn = 0) { this.inThr = Math.max(-1, Math.min(1, thr)); this.inSteer = Math.max(-1, Math.min(1, steer)); this.inTurn = Math.max(-1, Math.min(1, turn)); },
     setAssist(bias) { this.assist = bias; },
     step(dt) {
       const P = this.P, q = body.rotation(), { f, u, r } = quatAxes(q), lv = body.linvel(), p = body.translation();
@@ -94,6 +95,7 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
         const tq = -Math.sign(this.slip) * excess * TP.slideTorque * TP.yawInertia * dt; // swing the nose back toward travel
         body.applyTorqueImpulse({ x: u.x * tq, y: u.y * tq, z: u.z * tq }, true);
       }
+      if (this.inTurn && !this.hold) { const tq = this.inTurn * TP.turnHelp * TP.yawInertia * dt; body.applyTorqueImpulse({ x: u.x * tq, y: u.y * tq, z: u.z * tq }, true); } // C-10
       const av = body.angvel();
       if (Math.abs(av.y) > TP.yawRateMax) body.setAngvel({ x: av.x, y: Math.sign(av.y) * TP.yawRateMax, z: av.z }, true);
       // D-2 soft self-righting past 35 degrees of tilt

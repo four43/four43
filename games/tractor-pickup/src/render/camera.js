@@ -7,6 +7,7 @@ const LAG = 3;
 export function createChaseCam(camera) {
   let yaw = null, shakeT = 0, shakeA = 0; const tgt = new THREE.Vector3(), pos = new THREE.Vector3();
   return {
+    get yaw() { return yaw; }, // the view heading the stick is read against (C-2); null before the first update
     shake(a) { shakeA = Math.max(shakeA, a); shakeT = 0.25; },
     update(dt, s) {
       const want = s.fwd > 2 ? s.velYaw : s.yaw;
