@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { createPhysics, DT, G, groups } from '../src/sim/physics.js';
-import { createTractor, quatAxes } from '../src/sim/tractor.js';
+import { createTractor, quatAxes, TP } from '../src/sim/tractor.js';
 import { createTrain } from '../src/sim/hitch.js';
 await RAPIER.init();
 
@@ -61,4 +61,12 @@ test('a rolled car rights itself past 45 degrees', () => {
   assert.ok(quatAxes(c.body.rotation()).u.y < Math.cos(Math.PI / 4), 'setup should be rolled past 45 degrees');
   run(4, 0, 0);
   assert.ok(quatAxes(c.body.rotation()).u.y > 0.95, `up ${quatAxes(c.body.rotation()).u.y}`);
+});
+test('reverse has the power to push jackknifed wagons back (review 3)', () => {
+  const { t, train, run } = make(), k = TP.revForce; TP.revForce = 3200; // the fold is made with the version 1.9 reverse, so it is the same every time
+  try { run(1, 0, 0); run(2, 0.5, 0); run(2.5, -1, 0.6); run(2, 0, 0); } finally { TP.revForce = k; } // back up while turning: folded, then stopped
+  assert.ok(Math.abs(train.angle(1)) > 30 * Math.PI / 180, 'the wagon is folded');
+  let path = 0, prev = { ...t.body.translation() };
+  for (let i = 0; i < 3; i++) { run(1, -1, 0); const p = t.body.translation(); path += Math.hypot(p.x - prev.x, p.z - prev.z); prev = { x: p.x, z: p.z }; }
+  assert.ok(path > 4, `pushed ${path.toFixed(2)} m in 3 s`);
 });

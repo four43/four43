@@ -9,7 +9,8 @@ export const POWER = {
 };
 export const SURFACE = { gravel: { grip: 1, vmul: 1 }, grass: { grip: 0.8, vmul: 0.7 }, mud: { grip: 0.55, vmul: 0.5 } };
 export const TP = {
-  scale: 1.6, mass: 1400, revForce: 3200, vrev: 3, brake: 30, handbrake: 60, roll: 1.5,
+  scale: 1.6, mass: 1400, revForce: 7600, vrev: 3, // revForce: as strong as Medium forward, so reverse can push jackknifed wagons back (review 3)
+  brake: 30, handbrake: 60, roll: 1.5,
   steerMax: 0.62, steerRate: 2.8, inputRate: 4, suspRest: 0.32, stiffness: 18, compression: 2.0, relaxation: 2.6,
   slip: 2.4, travel: 0.45, yawRateMax: 2.6, slideK: 6, yawInertia: 2200, slideTorque: 30, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 9000,
   steep: Math.cos(30 * Math.PI / 180), steepGrip: 0.2,
