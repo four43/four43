@@ -1,4 +1,4 @@
-// Vendored from https://github.com/four43/handshake, client/handshake.js at 7b9d758. Do not edit here: change it there and copy again.
+// Vendored from https://github.com/four43/handshake, client/handshake.js at v1.0.2 (7761e96). Do not edit here: change it there and copy again.
 // SPDX-License-Identifier: MIT
 // MIT License
 //

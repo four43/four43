@@ -10,7 +10,7 @@ test('handshake.js exports Handshake and HandshakeError with the methods the gam
 test('the vendored handshake.js names the handshake commit it came from', async () => {
   const { readFile } = await import('node:fs/promises');
   const text = await readFile(new URL('../src/net/handshake.js', import.meta.url), 'utf8');
-  assert.match(text.split('\n')[0], /^\/\/ Vendored from https:\/\/github\.com\/four43\/handshake, client\/handshake\.js at [0-9a-f]{7}\./);
+  assert.match(text.split('\n')[0], /^\/\/ Vendored from https:\/\/github\.com\/four43\/handshake, client\/handshake\.js at (v\d+\.\d+\.\d+ \()?[0-9a-f]{7}\)?\./);
 });
 test('host controls return promises (session.js catches them) and a missing TURN relay is no_turn (C-2)', async () => {
   const { readFile } = await import('node:fs/promises'); // the Room class is not exported: check the module's text
