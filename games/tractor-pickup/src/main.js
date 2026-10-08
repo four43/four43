@@ -175,6 +175,7 @@ async function main() {
   const frame = now => {
     const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now; acc += dt;
     const inp = input.read(), t0 = perf ? performance.now() : 0;
+    if (!started && menus && game.mode === 'drive' && (inp.x || inp.y)) play(); // A-7: a gamepad drives with no touch or key: its first move starts the trip, or a barn pass would give no show
     while (acc >= DT) {
       { const t = game.tractor, o = pilot.update(inp, chase.yaw ?? t.yaw, t.yaw, t.speed); // C-1, C-2: point to go
         stepIn.thr = o.thr; stepIn.steer = o.steer; stepIn.turn = o.turn; stepIn.onTarget = o.onTarget; stepIn.horn = hornQueued; }
