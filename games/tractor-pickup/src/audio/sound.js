@@ -1,11 +1,21 @@
-// Tiny WebAudio synth for the tractor, the animals and the music (spec section 8.2). Everything is generated; no audio files.
+// Tiny WebAudio synth for the tractor, the animals and the music (spec section 8.2). Everything is generated, except the animal calls
+// a parent recorded (E-2: audio/animals/<type>.mp3, embedded by build.py as window.__ANIMALS__); a type with no recording uses the synth.
 // R-8: every sound is soft and friendly. The loops (engine, gravel, skid, spray) are built once and only have their gains changed.
 const PENTA = [261.63, 293.66, 329.63, 392, 440, 523.25, 587.33, 659.25]; // C major pentatonic, two octaves
 const TUNE = [0, 2, 4, 2, 5, 4, 2, 1, 0, 2, 4, 5, 7, 5, 4, 2]; // 16 steps, indexes into PENTA
 const BPM = 110, STEP = 60 / BPM / 2, AHEAD = 0.4;
 
 export class Sound {
-  constructor() { this.ctx = null; this.master = null; this.muted = false; this.loops = null; this.musicTimer = 0; this.nextNote = 0; this.step = 0; }
+  constructor() { this.ctx = null; this.master = null; this.muted = false; this.loops = null; this.musicTimer = 0; this.nextNote = 0; this.step = 0; this.clips = {}; }
+  // E-2: decode the recorded animal calls once, after unlock (never mid-drive); { type: [dataUrl, ...] }
+  loadClips(src = (typeof window !== 'undefined' && window.__ANIMALS__) || {}) {
+    if (!this.ctx) return Promise.resolve();
+    return Promise.all(Object.entries(src).map(async ([type, urls]) => {
+      if (this.clips[type]) return;
+      this.clips[type] = (await Promise.all(urls.map(async u => { try { const bin = Uint8Array.from(atob(u.split(',')[1]), c => c.charCodeAt(0)); return await this.ctx.decodeAudioData(bin.buffer); } catch (e) { console.warn('sound: animal clip', type, e); return null; } }))).filter(Boolean);
+    }));
+  }
+  clip(buf, when, vol = 1) { const c = this.ctx, s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; g.gain.value = vol; s.connect(g); g.connect(this.master); s.start(c.currentTime + when); s.onended = () => { s.disconnect(); g.disconnect(); }; }
   unlock() {
     if (!this.ctx) {
       try {
@@ -77,21 +87,23 @@ export class Sound {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.05);
   }
-  oink(vol = 0.5) { if (!this.ok) return; const p = 0.9 + Math.random() * 0.25; this.voice(190 * p, 120 * p, 0.16, vol, [520, 1150]); this.voice(170 * p, 110 * p, 0.13, vol * 0.8, [480, 1050], 0.2); }
-  bark() { if (!this.ok) return; this.voice(420, 260, 0.1, 0.5, [900, 1800]); this.noise(0.08, 0.2, 1500); this.voice(440, 270, 0.1, 0.45, [900, 1800], 0.16); }
-  animal(type) {
+  oink(vol = 0.5, w = 0) { if (!this.ok) return; const p = 0.9 + Math.random() * 0.25; this.voice(190 * p, 120 * p, 0.16, vol, [520, 1150], w); this.voice(170 * p, 110 * p, 0.13, vol * 0.8, [480, 1050], w + 0.2); }
+  bark(w = 0) { if (!this.ok) return; this.voice(420, 260, 0.1, 0.5, [900, 1800], w); this.noise(0.08, 0.2, 1500, w); this.voice(440, 270, 0.1, 0.45, [900, 1800], w + 0.16); }
+  // one call of this animal, `w` s from now (E-1: the riders sing one after another): a recorded call when there is one (E-2), else the synth
+  animal(type, w = 0) {
     if (!this.ok) return;
+    const rec = this.clips[type]; if (rec?.length) { this.clip(rec[Math.floor(Math.random() * rec.length)], w); return; }
     ({
-      pig: () => this.oink(0.6),
-      cow: () => this.voice(150, 110, 0.9, 0.5, [400, 900]),
-      sheep: () => { for (let i = 0; i < 4; i++) this.voice(420, 400, 0.12, 0.35, [700, 1500], i * 0.1); },
-      chicken: () => { this.voice(600, 900, 0.08, 0.35, [1200, 2400]); this.voice(900, 500, 0.25, 0.35, [1200, 2400], 0.1); },
-      chick: () => this.voice(2200, 2600, 0.08, 0.25, [2500, 3500]),
-      duck: () => { this.voice(500, 380, 0.15, 0.45, [900, 1800]); this.voice(480, 360, 0.15, 0.4, [900, 1800], 0.2); },
-      bunny: () => this.boing(0.3), dog: () => this.bark(),
+      pig: () => this.oink(0.6, w),
+      cow: () => this.voice(150, 110, 0.9, 0.5, [400, 900], w),
+      sheep: () => { for (let i = 0; i < 4; i++) this.voice(420, 400, 0.12, 0.35, [700, 1500], w + i * 0.1); },
+      chicken: () => { this.voice(600, 900, 0.08, 0.35, [1200, 2400], w); this.voice(900, 500, 0.25, 0.35, [1200, 2400], w + 0.1); },
+      chick: () => this.voice(2200, 2600, 0.08, 0.25, [2500, 3500], w),
+      duck: () => { this.voice(500, 380, 0.15, 0.45, [900, 1800], w); this.voice(480, 360, 0.15, 0.4, [900, 1800], w + 0.2); },
+      bunny: () => this.boing(0.3, w), dog: () => this.bark(w),
     }[type] || (() => {}))();
   }
-  boing(v = 0.5) { if (this.ok) this.tone(180, 720, 0.35, v, 'triangle'); }
+  boing(v = 0.5, w = 0) { if (this.ok) this.tone(180, 720, 0.35, v, 'triangle', w); }
   plop() { if (this.ok) { this.tone(500, 160, 0.12, 0.5); this.noise(0.05, 0.2, 400); } }
   whee() { if (this.ok) this.tone(400, 1400, 0.6, 0.3, 'triangle'); }
   // S-7: a bulb horn, "HONK-honk": two reedy notes (a sawtooth and a square a little apart, through a horn-like formant), each with a small pitch drop. M-8: v 0.4 for an other tractor's horn

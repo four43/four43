@@ -5,6 +5,7 @@ import { FLIGHT, flourishAngle } from '../sim/launch.js';
 import { slotPoint } from '../sim/slots.js';
 import { TR } from '../sim/hitch.js';
 import { dirtify } from './dirtMat.js';
+import { SING } from '../sim/sing.js';
 import { SCALE, HAT_SCALE } from './petScale.js';
 export const MODEL = { pig: 'pig', cow: 'cow', chicken: 'chicken', sheep: 'sheep', duck: 'duck', bunny: 'bunny', dog: 'dog', chick: 'chick' }; // model files (spec 5.1, X-8)
 const STRETCH = { duck: [1.15, 0.85, 1.15] };
@@ -38,8 +39,10 @@ export function createAnimals3D(scene, herd) {
   // last golden animal is dropped and its material clone disposed, so the next golden animal draws without a compile
   for (const m of [base, gold]) { const k = new THREE.Mesh(geos.pig[0], m.clone()); dirtify(k.material); k.castShadow = true; k.position.y = -500; scene.add(k); }
   const drop = i => { const v = views[i]; if (!v) return; scene.remove(v.g); v.parts[0]?.material.dispose(); views[i] = null; }; // its own material clone; geometries are shared
+  const sings = new Map(); // E-1: rider -> time since its hop began (negative while it waits its turn)
   return {
     views,
+    sing(a, delay) { sings.set(a, -delay); },
     hat: hatOf,
     // make(animal) -> a hat from hat(id), or null. New animals (respawns) get the same rule. Hats show only on riders (W-4).
     setHats(make) { hatMake = make; for (const v of views) if (v) applyHat(v); },
@@ -61,6 +64,7 @@ export function createAnimals3D(scene, herd) {
         else if (a.state === 'ride') { // in its slot on the drawn car, facing forward with it
           const c = view.cars[a.ride.slot.car]; slotPoint(a.ride.slot.k, a.ride.rider, TR.half.y, tmpL);
           v.g.position.set(tmpL.x, tmpL.y, tmpL.z).applyQuaternion(c.q).add(c.p); v.g.quaternion.copy(c.q).multiply(FACE_CAR);
+          const st = sings.get(a); if (st !== undefined) { const t = st + dt; if (t >= SING.hop) sings.delete(a); else { sings.set(a, t); if (t > 0) { const u = t / SING.hop; v.g.position.y += SING.h * 4 * u * (1 - u); } } } // E-1: a hop as it sings
         } else if (a.hidden && a.state === 'hide') { // A-13: faces the bank inside the bush, its tail toward the road
           const n = game.road.nearest(a.x, a.z), dx = n.pt.x - a.x, dz = n.pt.z - a.z, d = Math.hypot(dx, dz) || 1;
           v.g.position.set(a.x + dx / d * HIDE.out, HIDE.sink, a.z + dz / d * HIDE.out); v.g.rotation.set(0, Math.atan2(-dx, -dz), 0);

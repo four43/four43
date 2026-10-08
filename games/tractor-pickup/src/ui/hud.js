@@ -1,6 +1,6 @@
 // Slot bar (U-1), the big animal name (W-5, W-6), the edge arrow (F-1, F-4).
 import { TYPES } from '../sim/herd.js';
-export function createHud(root, { icons, onWordTap }) {
+export function createHud(root, { icons, onWordTap, onSlotTap }) {
   const bar = document.createElement('div'); bar.id = 'slots'; root.appendChild(bar);
   const word = document.createElement('div'); word.id = 'word'; root.appendChild(word);
   const arrow = document.createElement('div'); arrow.id = 'arrow'; arrow.textContent = '➜'; arrow.hidden = true; root.appendChild(arrow);
@@ -9,6 +9,8 @@ export function createHud(root, { icons, onWordTap }) {
   const reset = () => { clearTimeout(wordTimer); clearTimeout(flyTimer); clearFly(); word.classList.remove('on'); word.innerHTML = ''; lastIds = []; bar.innerHTML = ''; // a word still on its way must not fly into the next bar
     slots = Array.from({ length: 12 }, (_, i) => { const s = document.createElement('div'); s.className = i === 6 ? 'slot wagon' : 'slot'; bar.appendChild(s); return s; }); };
   reset();
+  // E-3: tap a filled slot to hear its animal: it wiggles, calls and says its name. The slot never starts the stick.
+  bar.addEventListener('pointerdown', e => { const s = e.target.closest?.('.slot.full'); if (!s) return; e.stopPropagation(); s.classList.remove('wiggle'); void s.offsetWidth; s.classList.add('wiggle'); onSlotTap?.(s.dataset.type, s.dataset.golden === '1'); });
   // W-5: the name pops in letter by letter, stays 2.5 s, then shrinks and flies into its slot (n: 1-12) in 0.5 s
   const showWord = (text, n, ids = []) => {
     lastIds = ids;
@@ -30,7 +32,7 @@ export function createHud(root, { icons, onWordTap }) {
     fill(n, type, golden) {
       const s = slots[n - 1]; if (!s) return;
       s.innerHTML = `<img alt="" src="${golden ? icons.golden[type] : icons[type]}"><span>${TYPES[type].word}</span>`;
-      s.classList.add('full');
+      s.dataset.type = type; s.dataset.golden = golden ? '1' : ''; s.classList.add('full');
     },
     markOut(n) { slots[n - 1]?.classList.add('out'); }, // F-15: its animal hopped out in the show
     // B-7: only the transform moves it (no layout), and only when it changed by a pixel or a degree

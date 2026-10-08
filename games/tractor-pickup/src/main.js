@@ -36,6 +36,7 @@ import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { BURST } from './sim/scenery.js';
+import { singOrder } from './sim/sing.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const MAX_STEPS = 3; // B-5
@@ -57,7 +58,7 @@ async function main() {
   // iOS: audio and speech only start inside a gesture, and the context can be interrupted later. Try on every kind of gesture and on coming back to the page,
   // and stop listening only once the context is really running. The start screen's tap is the real gesture (menus onPlay); this stays as the fallback.
   const GEST = ['pointerup', 'touchend', 'click', 'keydown'];
-  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); voice.preload(); watchCtx(); // B-8, D-1
+  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); voice.preload(); sound.loadClips(); watchCtx(); // B-8, E-2, D-1
  for (const n of GEST) removeEventListener(n, unlock, true); } }); };
   for (const n of GEST) addEventListener(n, unlock, true);
   const relisten = () => { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); };
@@ -69,7 +70,7 @@ async function main() {
   // D-2: a swipe from the left edge (Safari, not installed) or a stray back press must not leave the game: back stays on this page
   if (!sandbox) { history.pushState({ tp: 1 }, '', location.href); addEventListener('popstate', () => history.pushState({ tp: 1 }, '', location.href)); }
   const input = createInput(ui);
-  const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons, onWordTap: ids => voice.say(ids) });
+  const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons, onWordTap: ids => voice.say(ids), onSlotTap: (type, golden) => { sound.animal(type); voice.say(golden ? ['golden', type] : [type]); } }); // E-3
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
   // Everything below `world` belongs to one farm. startFarm throws it all away and builds the next one; trips on the same farm rebuild nothing.
@@ -198,7 +199,7 @@ async function main() {
       if (perf) { perf.step(); for (const e of ev) perf.event(e.type); }
       for (const e of ev) try {
         if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', b = BURST[bush ? 'bush' : t.young ? 'young' : 'tree']; gibs.burst(t.x, b.y * b.k, t.z, e.dir, b.k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
-        if (e.type === 'horn') sound.horn();
+        if (e.type === 'horn') { sound.horn(); for (const s of singOrder(game.load.slots)) { sound.animal(s.animal.type, s.delay); animals3d?.sing(s.animal, s.delay); } } // E-1: the riders sing along
         if (e.type === 'dodge') sound.boing(0.2); // B-14
         if (e.type === 'treeBump') sound.clunk(); // T-34: a soft bump when a tree holds
         if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx.stars(e.animal.x, 1, e.animal.z); }

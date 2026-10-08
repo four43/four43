@@ -19,7 +19,22 @@ for mp3 in sorted(vdir.glob('*.mp3')):
         print('WARNING: ffmpeg not found: voice clip', mp3.name, 'is not trimmed or levelled (D-8)')
         shutil.copy(mp3, out)
     voice[mp3.stem] = 'data:audio/mpeg;base64,' + base64.b64encode(out.read_bytes()).decode()
-html = html.replace('<!--VOICE-->', 'window.__VOICE__=' + json.dumps(voice) + ';')
+# E-2: recorded animal calls, audio/animals/<type>.mp3 and optional <type>-2.mp3 ...: trimmed and levelled like the voice, several takes per type
+animals = {}
+adir, aproc = here / 'audio/animals', here / 'build/animals'
+aproc.mkdir(parents=True, exist_ok=True)
+for mp3 in sorted(adir.glob('*.mp3')) if adir.is_dir() else []:
+    out = aproc / mp3.name
+    if shutil.which('ffmpeg'):
+        subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(mp3), '-af',
+            'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-16:TP=-1.5',
+            '-ac', '1', '-b:a', '64k', str(out)], check=True)
+    else:
+        print('WARNING: ffmpeg not found: animal clip', mp3.name, 'is not trimmed or levelled (D-8)')
+        shutil.copy(mp3, out)
+    animals.setdefault(mp3.stem.split('-')[0], []).append('data:audio/mpeg;base64,' + base64.b64encode(out.read_bytes()).decode())
+html = html.replace('<!--VOICE-->', 'window.__VOICE__=' + json.dumps(voice) + ';window.__ANIMALS__=' + json.dumps(animals) + ';')
+print('animal clips', {k: len(v) for k, v in sorted(animals.items())})
 print('voice clips', len(voice), sorted(voice))
 out_dir.mkdir(parents=True, exist_ok=True)
 (out_dir / 'index.html').write_text(html)
