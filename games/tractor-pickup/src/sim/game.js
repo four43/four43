@@ -109,8 +109,8 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
       });
       // F-1: a pass through the barn with at least one rider starts the show (after any flight has landed)
       // F-1, F-5: 3/4 of the way through the barn with a rider (or one still flying in), the tractor and the wagons stop where they are
-      if (game.mode === 'drive' && barnPass(tractor.x, tractor.z) && (load.landed() > 0 || flights.length > 0)) { pendingPass = true; game.mode = 'arrive'; }
-      if (pendingPass && flights.length === 0) { pendingPass = false; if (load.landed() > 0) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
+      if (game.mode === 'drive' && barnPass(tractor.x, tractor.z) && (load.landed() > 0 || flights.length > 0 || game.lastDrive)) { pendingPass = true; game.mode = 'arrive'; } // E-5: the last drive before bedtime ends in the barn even when empty
+      if (pendingPass && flights.length === 0) { pendingPass = false; if (load.landed() > 0 || game.lastDrive) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
       if (game.mode === 'arrive' || game.mode === 'show') for (const b of bodies) { const v = b.linvel(); if (Math.hypot(v.x, v.z) > 0.05) b.setLinvel({ x: v.x * STOP, y: v.y, z: v.z * STOP }, true); }
       // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler and the farmyard wash (T-36) clean
       const sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;

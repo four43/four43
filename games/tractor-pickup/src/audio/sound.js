@@ -6,7 +6,7 @@ const TUNE = [0, 2, 4, 2, 5, 4, 2, 1, 0, 2, 4, 5, 7, 5, 4, 2]; // 16 steps, inde
 const BPM = 110, STEP = 60 / BPM / 2, AHEAD = 0.4;
 
 export class Sound {
-  constructor() { this.ctx = null; this.master = null; this.muted = false; this.loops = null; this.musicTimer = 0; this.nextNote = 0; this.step = 0; this.clips = {}; }
+  constructor() { this.ctx = null; this.master = null; this.muted = false; this.loops = null; this.musicTimer = 0; this.nextNote = 0; this.step = 0; this.clips = {}; this.tempo = 1; }
   // E-2: decode the recorded animal calls once, after unlock (never mid-drive); { type: [dataUrl, ...] }
   loadClips(src = (typeof window !== 'undefined' && window.__ANIMALS__) || {}) {
     if (!this.ctx) return Promise.resolve();
@@ -140,6 +140,8 @@ export class Sound {
   bushPop() { if (this.ok) { this.tone(600, 1200, 0.08, 0.2, 'sine'); for (let i = 0; i < 3; i++) this.noise(0.05, 0.12, 4000 + Math.random() * 2000, i * 0.05, 3); } }
   cheer() { if (this.ok) for (let i = 0; i < 10; i++) this.voice(500 + Math.random() * 500, 700 + Math.random() * 600, 0.4, 0.12, [900, 2400], Math.random() * 0.5); }
   // S-5: a light 16-step loop, scheduled a little ahead of the clock
+  // E-5: a slower, softer tune at bedtime (tempo 0.5); 1 is the normal tune
+  lullaby(on) { this.tempo = on ? 0.5 : 1; }
   music(on) {
     if (!this.ctx) return;
     this.ramp(this.musicBus.gain, on ? 1 : 0, 0.3);
@@ -149,8 +151,8 @@ export class Sound {
   schedule() {
     if (this.ctx.state !== 'running') { this.nextNote = this.ctx.currentTime + 0.1; return; }
     while (this.nextNote < this.ctx.currentTime + AHEAD) {
-      const f = PENTA[TUNE[this.step % 16]]; this.tone(f, f, STEP * 1.6, 0.06, 'triangle', this.nextNote - this.ctx.currentTime, this.musicBus);
-      this.nextNote += STEP; this.step++;
+      const f = PENTA[TUNE[this.step % 16]] / (this.tempo < 1 ? 2 : 1), st = STEP / this.tempo; this.tone(f, f, st * 1.6, this.tempo < 1 ? 0.045 : 0.06, 'triangle', this.nextNote - this.ctx.currentTime, this.musicBus);
+      this.nextNote += st; this.step++;
     }
   }
 }

@@ -37,9 +37,13 @@ import { createOthers3D } from './render/others3d.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { BURST } from './sim/scenery.js';
 import { singOrder } from './sim/sing.js';
+import { BED, clampBedtime, setBedtime, stepBedtime, sleepNow, wakeUp, minutesLeft } from './sim/bedtime.js';
+import { holdToFire } from './ui/hold.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const MAX_STEPS = 3; // B-5
+// E-5: the wake button's sun
+const SUN_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><g stroke="#f08a1c" stroke-width="7" stroke-linecap="round">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<line x1="${50 + Math.cos(a) * 33}" y1="${50 + Math.sin(a) * 33}" x2="${50 + Math.cos(a) * 45}" y2="${50 + Math.sin(a) * 45}"/>`; }).join('')}</g><circle cx="50" cy="50" r="24" fill="#ffd24a" stroke="#f08a1c" stroke-width="5"/><circle cx="42" cy="46" r="3" fill="#6b4428"/><circle cx="58" cy="46" r="3" fill="#6b4428"/><path d="M41 56 Q50 64 59 56" stroke="#6b4428" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`;
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -51,7 +55,9 @@ async function main() {
   const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } }; // no storage content may stop the game starting
   let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
   let powerNow = powerParam(params.get('power'), settings.power);
-  const { renderer, scene, camera, follow } = createScene(document.getElementById('c'));
+  const { renderer, scene, camera, follow, setNight } = createScene(document.getElementById('c'));
+  const bed = safe(() => clampBedtime(load('tp-bedtime', null)), () => clampBedtime(null)), saveBed = () => save('tp-bedtime', bed); // E-5
+  let nightK = 0, nightTo = bed.phase === 'asleep' ? 1 : 0, sleepAfter = false, sleepEl = null;
   const aniso = renderer.capabilities.getMaxAnisotropy(), perf = params.has('fps') ? createFpsMeter(renderer) : null;
   const sound = new Sound(), voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
   voice.enabled = settings.voice;
@@ -98,6 +104,8 @@ async function main() {
     instancedShadows(world); // X-4: no shadow-pass program churn (render/shadows.js)
     try { Promise.resolve(warmShaders(renderer, scene, camera)).catch(e => console.warn('shader warm-up', e)); } catch (e) { console.warn('shader warm-up', e); } // B-2
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
+    if (game.herd) game.lastDrive = bed.phase === 'last'; // E-5: a new farm (or a reload) keeps the bedtime phase
+    if (started && bed.phase === 'asleep') game.mode = 'sleep';
     if (perf) { const w = game.phys.world, step = w.step; w.step = (...a) => { const t = performance.now(); step.apply(w, a); perf.worldMs(performance.now() - t); }; } // B-1: Rapier's share of the sim
     bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
     prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
@@ -120,6 +128,22 @@ async function main() {
     } catch (e) { console.error('new farm', e); } finally { acc = 0; last = performance.now(); renderer.setAnimationLoop(frame); }
     return game;
   }
+  // E-5: bedtime. The last drive: the barn path shows (even with an empty trailer) and the voice says go to the barn.
+  function lastDrive() { if (!game.herd) return; game.lastDrive = true; if (game.mode === 'drive') { voice.say(['go-to-barn']); guideToBarn = true; pathT = 0; } else sleepAfter = game.mode === 'show' || game.mode === 'reward' || sleepAfter; }
+  // Asleep: the tractor is held, night falls, the lullaby plays; a big "Wake Up!" button (held 5 s, for a grown-up) ends it.
+  function goSleep({ quiet = false } = {}) {
+    sleepNow(bed); saveBed(); sleepAfter = false; game.lastDrive = false; guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud?.arrowTo(null);
+    game.mode = 'sleep'; nightTo = 1; sound.lullaby(true); if (!quiet) voice.say(['sleepy', 'goodnight']);
+    sleepEl?.remove(); sleepEl = document.createElement('div'); sleepEl.id = 'sleep'; sleepEl.hidden = !quiet; ui.appendChild(sleepEl);
+    sleepEl.innerHTML = `<button class="pic wake" aria-label="Wake up">${SUN_SVG}<span>Wake Up!</span><i></i></button>`;
+    holdToFire(sleepEl.querySelector('button'), BED.wakeHold, wake);
+    sleepEl.addEventListener('pointerdown', e => e.stopPropagation());
+    if (!quiet) setTimeout(() => { if (sleepEl) sleepEl.hidden = false; }, BED.dusk * 1000);
+  }
+  function wake() {
+    wakeUp(bed); saveBed(); sleepEl?.remove(); sleepEl = null; nightTo = 0; sound.lullaby(false); voice.say(['wake-up']);
+    if (game.mode === 'sleep') game.mode = 'drive';
+  }
   const showReward = rs => { // W-1, W-3, W-4: the sticker, a new color or hat, then the card. R-1: a failure here never leaves the game held
     try {
       const r = completeShow(progress, rs.map(x => x.animal)); progress = r.progress;
@@ -132,7 +156,7 @@ async function main() {
   };
   // The trip starts on a real gesture: it unlocks audio and speech (iOS). F-11: the start screen shows only when there is a
   // paint to choose; otherwise the tractor can drive at once and the first touch or key press starts the trip.
-  function play() { if (started) return; voice.prime(); started = true; game.mode = 'drive'; Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }
+  function play() { if (started) return; voice.prime(); started = true; game.mode = 'drive'; if (bed.phase === 'asleep') goSleep({ quiet: true }); else if (bed.phase === 'last') lastDrive(); Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }
   function enterStart() {
     if (!menus) return;
     if (hasPaintChoice(progress)) { menus.showStart(progress); return; }
@@ -159,7 +183,8 @@ async function main() {
       if (!menus.open) return; menus.hide(); // a book left open would show stickers that are gone; close it the way its own X would
       if (!started) enterStart(); else if (game.mode === 'menu') game.mode = 'drive'; else if (game.mode === 'reward') rewardDone = true;
     },
-    onParent() { menus.openParent(settings, seed, { guest: !!session?.isGuest }); }, // M-19: no new farm for a guest
+    onParent() { menus.openParent(settings, seed, { guest: !!session?.isGuest, bed: { choice: bed.choice, left: minutesLeft(bed, Date.now()), phase: bed.phase } }); },
+    onBedtime(min) { setBedtime(bed, min, Date.now()); saveBed(); }, // E-5 // M-19: no new farm for a guest
     onMultiplayer() { menus.openMultiplayer(session); },
   });
   const session = sandbox ? null : createSession({ Handshake, server: signal, lag, getGame: () => game, getPaint: () => progress.paint,
@@ -215,10 +240,12 @@ async function main() {
         if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n, e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); }
       } catch (err) { warnOnce('event ' + e.type, err); } // M-44: a bad event (a remote animal, a poof) never stops the frame loop
       stepSounds(game, sound, sfx);
-      if (trip && started) { // spec 3.1: intro, drive, show, reward
+      if (trip && started && bed.phase !== 'asleep' && stepBedtime(bed, Date.now()) === 'last') { saveBed(); lastDrive(); } // E-5: time is up
+      if (trip && started && bed.phase !== 'asleep') { // spec 3.1: intro, drive, show, reward
         const cues = stepTrip(trip, { dt: DT, landed: game.load.landed(), booped: ev.some(e => e.type === 'boop'), barnPass: ev.some(e => e.type === 'barnPass'), showDone, rewardDone });
         showDone = rewardDone = false;
         for (const c of cues) {
+          if (c === 'drive' && sleepAfter) { goSleep(); continue; } // E-5: the card of the last show is closed: goodnight
           if (c === 'drive') game.mode = modeAfterDrive(game.mode); // the card is gone: driving and boops work again (U-6: not under paint or book)
           if (c === 'say-intro') voice.say(['lets-find', 'animals']);
           if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
@@ -226,9 +253,12 @@ async function main() {
           if (c === 'show') {
             const myGen = gen;
             guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow(); session?.showStarted(); // M-17
+            if (bed.phase === 'last') sleepAfter = true; // E-5: this was the last drive
+            if (!riders.length) { showDone = true; continue; } // E-5: an empty last drive has no show
             show.play(riders, buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden }))))
               .catch(e => console.error('show', e)).finally(() => { if (gen === myGen) showDone = true; }); // R-1: an error in the show never locks the game
           }
+          if (c === 'reward' && !riders.length) { show.end(); game.finishShow(riders); hud.reset(); rewardDone = true; game.mode = 'reward'; continue; } // E-5: no animals, no sticker: straight on to sleep
           if (c === 'reward') { showQuat.copy(camera.quaternion); camBlend = 0; show.end(); game.finishShow(riders); session?.delivered(riders); game.mode = 'reward'; hud.reset(); showReward(riders); } // F-3: held (no driving, no boops) until a card button is tapped
         }
       }
@@ -252,6 +282,7 @@ async function main() {
     }
     { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
     follow(view[0].p.x, view[0].p.z);
+    if (nightK !== nightTo) { nightK = nightTo > nightK ? Math.min(nightTo, nightK + dt / BED.dusk) : Math.max(nightTo, nightK - dt / BED.wakeFade); setNight(nightK); } // E-5
     const t1 = perf ? performance.now() : 0, progs = perf ? perf.programs() : 0; renderer.render(scene, camera);
     if (perf) { const y = game.farm?.yard.barn; perf.tick(dt, gap, t1 - t0, performance.now() - t1, y ? Math.hypot(game.tractor.x - y.x, game.tractor.z - y.z) : 0, progs); }
   };

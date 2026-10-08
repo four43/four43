@@ -48,7 +48,7 @@ const pageSvg = k => { const [s0, s1, h0, h1, extra] = PAGE_ART[k % PAGE_ART.len
 const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${RB}</defs><path d="M14 26 H66 L62 70 Q40 76 18 70 Z" fill="#c9ccd4" stroke="#4a3a2c" stroke-width="4" stroke-linejoin="round"/>
 <ellipse cx="40" cy="26" rx="26" ry="8" fill="url(#rb)" stroke="#4a3a2c" stroke-width="4"/><path d="M18 22 Q40 2 62 22" fill="none" stroke="#4a3a2c" stroke-width="4"/></svg>`;
 
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onBookSeen, onParent, onMultiplayer }) {
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onBookSeen, onParent, onMultiplayer, onBedtime }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
@@ -156,29 +156,32 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
   const gear = el('gear', 'button', root); gear.innerHTML = gearSvg() + '<i></i>'; gear.setAttribute('aria-label', 'Parent menu');
   holdToFire(gear, 2000, () => onParent?.());
 
-  function openParent(settings, seed, { guest = false } = {}) { // M-19: only the host makes a new farm in a room
+  // U-3, E-7: the parent menu in the game's own button style. Every choice applies at once (no Apply button); the seed applies with the
+  // next new farm. E-5: the bedtime row: Now, 3, 5 or 10 minutes; tap the lit one again to turn bedtime off.
+  function openParent(settings, seed, { guest = false, bed = { choice: null, left: null, phase: 'awake' } } = {}) { // M-19: only the host makes a new farm in a room
     root.querySelector('.parent')?.remove();
     const p = el('parent', 'div', root), box = el('box', 'div', p);
-    box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Parent menu</h2>
-<div class="row"><button data-a="mp" class="primary">Multiplayer</button></div>
-<fieldset><legend>Power</legend>${['low', 'medium', 'high'].map(v => `<label><input type="radio" name="power" value="${v}"> ${v[0].toUpperCase() + v.slice(1)}</label>`).join('')}</fieldset>
-<fieldset><legend>Voice</legend><label><input type="radio" name="voice" value="1"> On</label><label><input type="radio" name="voice" value="0"> Off</label></fieldset>
-<fieldset><legend>Music</legend><label><input type="radio" name="music" value="1"> On</label><label><input type="radio" name="music" value="0"> Off</label></fieldset>
-<fieldset><legend>Farm seed (this farm: ${seed})</legend><label>Seed <input type="number" name="seed" min="0" step="1"></label><label><input type="checkbox" name="useSeed"> Use this seed</label></fieldset>
-<div class="row"><button data-a="new"${guest ? ' disabled title="Leave the room first"' : ''}>New farm</button><button data-a="clear">Clear stickers</button></div>
-<div class="row"><button data-a="apply" class="primary">Apply</button></div>`;
-    const q = n => box.querySelector(`[name=${n}]`), pick = (n, v) => { box.querySelector(`[name=${n}][value="${v}"]`).checked = true; };
-    pick('power', settings.power); pick('voice', settings.voice ? 1 : 0); pick('music', settings.music ? 1 : 0);
-    q('seed').value = settings.seed ?? seed; q('useSeed').checked = settings.seed !== null;
-    const values = () => {
-      const val = n => box.querySelector(`[name=${n}]:checked`).value, raw = q('seed').value.trim();
-      return clampSettings({ power: val('power'), voice: val('voice') === '1', music: val('music') === '1', seed: q('useSeed').checked && raw !== '' ? Number(raw) : null });
-    };
+    const seg = (name, opts, cur) => `<div class="seg" data-g="${name}">${opts.map(([v, label]) => `<button data-v="${v}" class="${String(v) === String(cur) ? 'on' : ''}">${label}</button>`).join('')}</div>`;
+    const bedNote = bed.phase === 'last' ? 'Last drive to the barn' : bed.phase === 'asleep' ? 'Asleep' : bed.left === null ? 'Off' : bed.left === 0 ? 'Less than a minute' : `In ${bed.left} min`;
+    box.innerHTML = `<button data-a="close" class="pic x" aria-label="Close">${xSvg()}</button><h2>Parent menu</h2>
+<section><h3>Bedtime <small>${bedNote}</small></h3>${seg('bed', [[0, 'Now'], [3, '3 min'], [5, '5 min'], [10, '10 min']], bed.choice)}</section>
+<section><h3>Power</h3>${seg('power', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], settings.power)}</section>
+<section class="pair"><div><h3>Voice</h3>${seg('voice', [[1, 'On'], [0, 'Off']], settings.voice ? 1 : 0)}</div><div><h3>Music</h3>${seg('music', [[1, 'On'], [0, 'Off']], settings.music ? 1 : 0)}</div></section>
+<section><h3>Farm <small>this farm: ${seed}</small></h3><div class="seedrow"><input type="number" name="seed" min="0" step="1" aria-label="Seed">${seg('useSeed', [[1, 'Use this seed']], settings.seed !== null ? 1 : '')}</div>
+<div class="acts"><button data-a="new" class="act"${guest ? ' disabled title="Leave the room first"' : ''}>New farm</button><button data-a="mp" class="act">Multiplayer</button><button data-a="clear" class="act warn">Clear stickers</button></div></section>`;
+    if (bed.phase !== 'awake') box.querySelector('[data-g=bed]').classList.add('locked');
+    const q = n => box.querySelector(`[name=${n}]`); q('seed').value = settings.seed ?? seed;
+    const cur = g => box.querySelector(`[data-g=${g}] .on`)?.dataset.v;
+    const values = () => { const raw = q('seed').value.trim(); return clampSettings({ power: cur('power'), voice: cur('voice') === '1', music: cur('music') === '1', seed: cur('useSeed') === '1' && raw !== '' ? Number(raw) : null }); };
     const done = () => p.remove();
+    q('seed').addEventListener('change', () => onSettings(values()));
     box.addEventListener('click', e => {
-      const a = e.target.closest?.('[data-a]')?.dataset.a; if (!a) return; // (the close X holds an svg: the tap can land on it)
-      if (a === 'apply') { onSettings(values()); done(); }
-      else if (a === 'close') done();
+      const b = e.target.closest?.('button'); if (!b || b.disabled) return; // (a button can hold an svg: the tap can land on it)
+      const g = b.parentElement?.dataset.g;
+      if (g === 'bed') { if (bed.phase !== 'awake') return; const v = Number(b.dataset.v), off = b.classList.contains('on'); onBedtime?.(off ? null : v); done(); return; }
+      if (g) { const one = g !== 'useSeed', was = b.classList.contains('on'); if (one) b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); else b.classList.toggle('on', !was); onSettings(values()); return; }
+      const a = b.dataset.a;
+      if (a === 'close') done();
       else if (a === 'mp') { done(); onMultiplayer(); }
       else if (a === 'new') { onSettings(values()); done(); close(); onNewFarm(); } // a screen left open would hide the new farm; onNewFarm itself brings back the start screen when play has not begun
       else if (a === 'clear' && confirm('Clear all stickers? This cannot be undone.')) { onClearStickers(); done(); }

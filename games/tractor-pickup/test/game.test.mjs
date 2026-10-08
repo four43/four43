@@ -255,3 +255,10 @@ test('a chick that waits for its turn to launch starts from where it stands, not
   assert.ok(last.size === chicks.length, 'the chicks did not launch');
   assert.ok(worst < 0.6, `a chick jumped ${worst.toFixed(2)} m in one step`);
 });
+test('on the last drive before bedtime, an empty train also stops in the barn (E-5)', () => {
+  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g); g.lastDrive = true;
+  const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
+  moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
+  const ev = []; for (let i = 0; i < 60 * 8; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
+  assert.ok(ev.some(e => e.type === 'barnPass'));
+});

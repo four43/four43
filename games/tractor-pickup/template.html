@@ -157,6 +157,22 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .parent{position:absolute;inset:0;z-index:30;background:rgba(40,25,15,.55);display:grid;place-items:center;pointer-events:auto;touch-action:pan-y}
 .parent .box{position:relative;background:#fffcf8;color:#3a2412;border-radius:18px;padding:18px 22px;width:min(520px,92vw);max-height:92vh;overflow:auto;font:16px/1.4 Andika,system-ui,sans-serif;user-select:auto;-webkit-user-select:auto}
 .parent h2{margin:0 0 8px;font-size:22px}
+/* E-5: asleep: the night stays on screen; one big sun button, held 5 s (a gold ring fills) wakes the farm. Below the gear (z 25). */
+#sleep{position:absolute;inset:0;z-index:24;display:grid;place-items:center;background:radial-gradient(circle at 50% 45%,rgba(20,30,70,.15),rgba(10,15,40,.55));pointer-events:auto;touch-action:none}
+#sleep[hidden]{display:none}
+.pic.wake{position:relative;width:min(46vmin,300px);height:min(46vmin,300px);border-radius:50%;background:#fff6d6;border-color:#f0a020;box-shadow:0 10px 0 #b8741a;display:flex;flex-direction:column;gap:2%;animation:pulse 2.4s ease-in-out infinite}
+.pic.wake svg{width:62%;height:62%}.pic.wake span{font:700 min(6vmin,36px)/1 Andika,system-ui;color:#6b4428}
+.pic.wake i{position:absolute;inset:-12px;border-radius:50%;--p:0deg;background:conic-gradient(#f5c84c var(--p),transparent 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 11px),#000 calc(100% - 10px));mask:radial-gradient(farthest-side,transparent calc(100% - 11px),#000 calc(100% - 10px));pointer-events:none}
+/* E-7: the parent menu in the game's button style: thick brown edges that press down, the lit choice in gold */
+.parent .box{padding:20px 22px 24px}.parent section{margin:14px 0 0}.parent section.pair{display:flex;gap:18px;flex-wrap:wrap}
+.parent h3{margin:0 0 8px;font-size:17px}.parent h3 small{font-weight:400;color:#7a5a3a;margin-left:8px}
+.parent .seg{display:flex;gap:10px;flex-wrap:wrap}.parent .seg.locked{opacity:.45;pointer-events:none}
+.parent .seg button,.parent button.act{all:unset;box-sizing:border-box;cursor:pointer;min-width:84px;min-height:54px;padding:8px 16px;text-align:center;font:700 17px/1.2 Andika,system-ui,sans-serif;color:#3a2412;background:#fffcf8;border:4px solid #6b4428;border-radius:18px;box-shadow:0 5px 0 #6b4428;-webkit-tap-highlight-color:transparent}
+.parent .seg button:active,.parent button.act:active{transform:translateY(3px);box-shadow:0 2px 0 #6b4428}
+.parent .seg button.on{background:#fff3b0;border-color:#e6b422;box-shadow:0 0 0 4px #f5c84c,0 5px 0 #6b4428}
+.parent button.act.warn{color:#8f1f1a}.parent button.act[disabled]{opacity:.45;cursor:default}
+.parent .seedrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.parent .acts{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+.parent .pic.x{position:absolute;top:12px;right:12px;width:56px;height:56px;border-width:4px;box-shadow:0 4px 0 #8f1f1a;border-color:#8f1f1a}
 .parent fieldset{border:2px solid #d9c3a4;border-radius:10px;margin:8px 0;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center}
 .parent label{min-height:44px;display:inline-flex;align-items:center;gap:8px}
 .parent input[type=number]{font:inherit;width:8em;padding:6px;border:2px solid #a98a63;border-radius:8px}
