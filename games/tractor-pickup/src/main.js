@@ -3,7 +3,6 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { DT } from './sim/physics.js';
 import { createGame } from './sim/game.js';
 import { TYPES } from './sim/herd.js';
-import { TREE } from './sim/trees.js';
 import { createGibs } from './render/gibs.js';
 import { createFx } from './render/fx.js';
 import { randomSeed } from './sim/rng.js';
@@ -13,15 +12,13 @@ import { createStickerArt } from './ui/stickerArt.js';
 import { createHud } from './ui/hud.js';
 import { slotIndex } from './sim/slots.js';
 import { buildFarm3D } from './render/farm3d.js';
-import { POWER, TP } from './sim/tractor.js';
-import { TR } from './sim/hitch.js';
 import { createSandbox } from './sim/sandbox.js';
 import { createScene, VIEW } from './render/scene.js';
 import { instancedShadows } from './render/shadows.js';
-import { createChaseCam, CAM } from './render/camera.js';
+import { createChaseCam } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
-import { createPilot, PILOT } from './sim/pilot.js';
+import { createPilot } from './sim/pilot.js';
 import { makeGravelTexture, worldUV } from './render/textures.js';
 import { createTrip, stepTrip, modeAfterDrive } from './sim/trip.js';
 import { buildShowSteps } from './sim/showSteps.js';
@@ -36,6 +33,7 @@ import { createSession, parseRoomInput, signalServer } from './net/session.js';
 import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
+import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
@@ -349,52 +347,4 @@ function addMarkers(scene, game) {
 }
 
 // ?tune: sliders for live feel tuning during the playtest. Values print to the console to copy into tractor.js.
-function buildTunePanel(game) {
-  const el = document.createElement('div'); el.id = 'tune'; document.body.appendChild(el);
-  const head = document.createElement('button'); head.textContent = 'tune'; head.id = 'tuneToggle'; el.appendChild(head);
-  const body = document.createElement('div'); body.hidden = true; el.appendChild(body);
-  head.onclick = () => { body.hidden = !body.hidden; };
-  const t = game.tractor, rows = [
-    ['vmax', () => t.P.vmax, v => t.P.vmax = v, 3, 15, 0.5], ['force', () => t.P.force, v => t.P.force = v, 2000, 15000, 100],
-    ['rearSide', () => t.P.rearSide, v => t.P.rearSide = v, 0.2, 1.2, 0.01], ['slideMax', () => t.P.slideMax, v => t.P.slideMax = v, 0.2, 1.2, 0.01],
-    ['loose', () => t.P.loose, v => t.P.loose = v, 0, 0.3, 0.005],
-    ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5], ['cam ahead', () => CAM.AHEAD, v => CAM.AHEAD = v, 2, 24, 0.5],
-    ['reverse cone deg', () => PILOT.revCone * 180 / Math.PI, v => PILOT.revCone = v * Math.PI / 180, 0, 80, 1],
-    ['full speed err deg', () => PILOT.fullErr * 180 / Math.PI, v => PILOT.fullErr = v * Math.PI / 180, 5, 80, 1], ['crawl err deg', () => PILOT.crawlErr * 180 / Math.PI, v => PILOT.crawlErr = v * Math.PI / 180, 30, 180, 1],
-    ['crawl', () => PILOT.crawl, v => PILOT.crawl = v, 0, 1, 0.05], ['pilot gain', () => PILOT.gain, v => PILOT.gain = v, 0.5, 6, 0.1], ['reverse force', () => TP.revForce, v => TP.revForce = v, 2000, 15000, 100], ['turn help', () => TP.turnHelp, v => TP.turnHelp = v, 0, 12, 0.5], ['help below m/s', () => PILOT.helpSpeed, v => PILOT.helpSpeed = v, 0, 8, 0.5],
-    ['slip', () => TP.slip, v => TP.slip = v, 0.5, 6, 0.1], ['steerMax', () => TP.steerMax, v => TP.steerMax = v, 0.3, 0.9, 0.01],
-    ['tree break speed', () => TREE.breakSpeed, v => TREE.breakSpeed = v, 1, 10, 0.5],
-    ['stiffness (reload)', () => TP.stiffness, v => TP.stiffness = v, 8, 40, 1], ['trailer limitBeta', () => TR.limitBeta, v => TR.limitBeta = v, 0.1, 2, 0.05],
-  ];
-  for (const [name, get, set, min, max, step] of rows) {
-    const l = document.createElement('label'); l.innerHTML = `<span>${name}</span><input type=range min=${min} max=${max} step=${step} value=${get()}><output>${get()}</output>`;
-    const i = l.querySelector('input'), o = l.querySelector('output');
-    i.oninput = () => { set(+i.value); o.textContent = i.value; console.log('tune', JSON.stringify({ P: t.P, TP: { slip: TP.slip, steerMax: TP.steerMax, stiffness: TP.stiffness }, limitBeta: TR.limitBeta })); };
-    body.appendChild(l);
-  }
-  const sel = document.createElement('select'); sel.innerHTML = Object.keys(POWER).map(k => `<option ${k === t.power ? 'selected' : ''}>${k}</option>`).join('');
-  sel.onchange = () => t.setPower(sel.value); body.appendChild(sel);
-  if (game.trees) { const r = document.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = () => { game.yardProps.reset(); game.trees.reset(); }; body.appendChild(r); }
-}
 main();
-
-// ?fps: a small corner readout of frames per second (now, and the lowest over the last 5 s), draw calls and triangles
-function createFpsMeter(renderer) {
-  const el = Object.assign(document.createElement('div'), { id: 'fps' });
-  el.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99;font:12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;white-space:pre';
-  document.body.appendChild(el);
-  // X-4: every frame longer than 50 ms is logged with what took the time: the sim steps and their events, the render call, the distance
-  // from the barn. Both small on a long frame: the time went outside the game (GC, the GPU, the browser).
-  const win = [], hitches = [], evs = new Set(); let shown = 0, clock = 0;
-  return {
-    event(type) { evs.add(type); },
-    tick(dt, gap, simMs, renderMs, dist) {
-      clock += dt; win.push(dt); if (win.length > 300) win.shift();
-      if (gap > 50) { hitches.push(`${clock.toFixed(1)}s ${gap.toFixed(0)}ms sim ${simMs.toFixed(1)} draw ${renderMs.toFixed(1)} ${dist.toFixed(0)}m ${[...evs].join(',')}`); if (hitches.length > 6) hitches.shift(); console.log('hitch', hitches.at(-1)); }
-      evs.clear();
-      if ((shown += dt) < 0.5) return; shown = 0;
-      const avg = win.reduce((a, b) => a + b, 0) / win.length, worst = Math.max(...win), i = renderer.info.render;
-      el.textContent = `${(1 / dt).toFixed(0)} fps (avg ${(1 / avg).toFixed(0)}, min ${(1 / worst).toFixed(0)})\n${i.calls} draws, ${(i.triangles / 1000).toFixed(0)}k tris` + (hitches.length ? '\nlong frames:\n' + hitches.join('\n') : '');
-    },
-  };
-}
