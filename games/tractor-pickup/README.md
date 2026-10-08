@@ -18,7 +18,7 @@ npm run bake       # after editing a model in assets/models/
 
 ## Run multiplayer locally
 
-Multiplayer needs a Handshake signaling server (a separate repo; production is `https://handshake.four43.com`). To run one
+Multiplayer needs a Handshake signaling server (a separate repo; production is `https://handshake.home.four43.com`). To run one
 locally, check out Handshake's `phase-1` branch, for example next to this repo:
 
 ```bash
@@ -60,4 +60,4 @@ Stop with `docker stop hs-local` and Ctrl+C on the `http.server`.
 
 `?signal=` accepts only `localhost`/`127.0.0.1` or the page's own origin, so a link cannot send players to another server. A
 device on the LAN (an iPad) cannot use the local server this way: on that device `localhost` is the device itself. Serve the game
-and Handshake (`/session`, `/turn`, `/ws`) from one origin behind a reverse proxy, or test against `https://handshake.four43.com`.
+and Handshake (`/session`, `/turn`, `/ws`) from one origin behind a reverse proxy, or test against `https://handshake.home.four43.com`.

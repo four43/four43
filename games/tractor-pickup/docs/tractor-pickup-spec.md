@@ -74,7 +74,7 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 
 - Multiplayer (section 14): two to four players drive on one farm, each on a different device, each with a tractor, a trailer and a wagon. Animals are shared: the first tractor that boops an animal gets it. Each player has a show and stickers on that device.
 - The parent menu has a "Multiplayer" button at the top (P-10). Its panel has "Host" and "Join". A guest joins with the 5-character room code, a link or a QR code.
-- The signaling server is a different project: Handshake (`https://handshake.four43.com`).
+- The signaling server is a different project: Handshake (`https://handshake.home.four43.com`).
 
 #### 1.2.9 Change in version 1.9 (multiplayer phase 1.5)
 
@@ -684,7 +684,7 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 | Authority | TN | The one device that can change a replicated object. The host is the authority for animals, trees and players. Each player is the authority for its own train. |
 | Keyframe | TN | A message with the full state of all replicated objects of one authority. |
 | Diff | TN | A message with only the replicated objects that changed since the last diff. Each object in a diff has all of its fields, not only the changed fields. |
-| Handshake | TN | The signaling server (`https://handshake.four43.com`) and its client library `handshake.js`. It finds the room and connects the devices. It does not carry game data. |
+| Handshake | TN | The signaling server (`https://handshake.home.four43.com`) and its client library `handshake.js`. It finds the room and connects the devices. It does not carry game data. |
 
 ### 14.2 Play
 

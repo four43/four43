@@ -6,7 +6,7 @@ import { createHostSync } from './host.js';
 import { createGuestSync } from './guest.js';
 import { NET_VERSION, MAX_PLAYERS, createWarnOnce } from './protocol.js';
 
-export const SERVER = 'https://handshake.four43.com', APP = 'tractor-pickup';
+export const SERVER = 'https://handshake.home.four43.com', APP = 'tractor-pickup';
 export const roomName = code => 'tractor-pickup-' + code;
 export const joinUrl = (code, loc = location) => loc.origin + loc.pathname + '?r=' + code;
 // M-28, M-48: ?signal= may name only a local Handshake (tests) or this page's own origin. A link to any other server is ignored (undefined: the default

@@ -47,7 +47,7 @@ const setup = (fh, extra = {}) => { let game = createGame(RAPIER, { seed: 5, pow
 test('host: makes a public room for 4 with the game version and relay for far players; shows name, link and players (M-31, M-27, M-48)', async () => {
   const fh = fakeHandshake(), t = setup(fh);
   await t.s.host();
-  const o = fh.made[0].opts; assert.equal(o.app, 'tractor-pickup'); assert.equal(o.version, NET_VERSION); assert.equal(o.relayUnlessNearby, true); assert.equal(o.server, 'https://handshake.four43.com');
+  const o = fh.made[0].opts; assert.equal(o.app, 'tractor-pickup'); assert.equal(o.version, NET_VERSION); assert.equal(o.relayUnlessNearby, true); assert.equal(o.server, 'https://handshake.home.four43.com');
   assert.deepEqual(fh.made[0].created, { public: true, maxPlayers: 4, meta: {} });
   const v = t.s.view(); assert.equal(v.state, 'hosting'); assert.equal(v.name, 'tractor-pickup-K7MX2'); assert.match(v.url, /\?r=K7MX2$/);
   assert.equal(v.players[0].n, 1); assert.equal(v.players[0].you, true);
