@@ -7,7 +7,9 @@ export const NET_VERSION = 2, MAX_PLAYERS = 4;
 export const MAX_ID = 0xfffe; // the highest animal or tree id on the wire (0xffff means none)
 export const MAX_IDS = 16; // ids in one claim, release or delivered message (a full train has 12)
 export const MAX_JSON = 2048; // M-50: a longer reliable message is dropped (the biggest real one is a few hundred bytes)
-export const RATE = { perSec: 60, guestFast: 120 }; // M-50: messages a second per peer and channel; a guest's fast channel takes more because the host passes on the other guests' trains
+// M-50: messages a second per peer and channel. A guest's fast channel takes more because the host passes on the other guests' trains (at most 20 a
+// second each, C-3); guestKeys: a guest's reliable frames (it sends a keyframe every 2 s), apart from its requests, so frames cannot crowd them out (C-3)
+export const RATE = { perSec: 60, guestFast: 120, guestKeys: 4 };
 export const SILENT_MS = 3000; // M-39, M-40: no frame from a device for this long: it is away, whatever the server says (a stopped page, a dead channel)
 export const PAINT_NAMES = [...START_PAINTS, ...NEW_PAINTS];
 const obj = m => m && typeof m === 'object' && !Array.isArray(m);

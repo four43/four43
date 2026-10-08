@@ -1,20 +1,27 @@
 // src/net/host.js
 // Host sync (M-11..M-19, M-22..M-24, M-39, M-50, M-57). The host is the authority for the animals, the trees and the players; each guest for its
-// own train (M-22). The host sends keyframes and diffs (M-23) and passes each guest's train on. Requests from guests come as JSON events;
+// own train (M-22). The host sends keyframes and diffs (M-23) and passes each guest's train on: only the newest record, on the host's own send
+// timer (C-3), so a guest that floods the host cannot crowd out the host's messages to the others. Requests from guests come as JSON events;
 // their results go back as replicated state (M-24). Bad or too many messages are dropped (M-50); a handler error never reaches the game (M-44).
 import { encodeFrame, decodeFrame, createTracker, isFrame } from './replica.js';
 import { BINDINGS, ofAuthority, registryOf, readAll } from './bindings.js';
-import { checkFromGuest, createRate, fitsJson, createWarnOnce, NET_VERSION, MAX_PLAYERS, SILENT_MS } from './protocol.js';
+import { checkFromGuest, createRate, fitsJson, createWarnOnce, NET_VERSION, MAX_PLAYERS, SILENT_MS, RATE } from './protocol.js';
 import { createPlayers, placeCarried, SEND } from './players.js';
+import { spawnPoint } from '../sim/spawn.js';
 import { createBumper } from '../sim/bump.js';
 import { NOT_FREE } from '../sim/herd.js';
 import { fullDodge } from '../sim/game.js';
+import { POWER } from '../sim/tractor.js';
 
-export const CLAIM_RANGE = 8; // m: a claim is granted only near the guest's last real tractor position (M-50)
-export const TREE_RANGE = 12; // m: a guest tree break counts only near its last real tractor position (M-17, M-50)
+// A guest reports its own tractor position, so the host does not take it as it is: it follows it at no more than a tractor's top speed (C-4).
+export const CLAIM_RANGE = 8; // m: a claim is granted only this near the guest's tractor as the host follows it (M-50, C-4)
+export const TREE_RANGE = 12; // m: a guest tree break counts only this near the guest's tractor as the host follows it (M-17, M-50, C-4)
+export const GUEST_SPEED = Math.max(...Object.values(POWER).map(p => p.vmax)) * 1.5; // m/s: the host follows a guest's reported tractor no faster than this (C-4, M-50)
 export const REPAIR_MS = 3000; // M-57: a guest's animal missing from that guest's train records for this long is free again
 const TALK_MS = 500; // M-57 counts only while the guest's frames come in (they come every 50 ms): an away guest loses nothing
 const REGROW_MS = 5000; // M-17, M-50: a guest regrow counts at most once in 5 s, so one guest cannot flood the others
+const BANK_S = 1; // C-4: seconds of top speed a guest can save up (frames that stall, then come at once)
+const NEAR_SPAWN = 10; // m, C-4: after a welcome the host follows a guest only from its spawn place on the new farm
 const HORN_MS = 300; // M-8, M-50, R-8: a guest horn counts at most once in 300 ms, so the others never hear a blare
 // Two clocks: clock() is wall time, for every rate limit and the silence watchdog (the frame clock stops while the page sleeps); nowMs is the
 // frame clock, for sending and for the interpolation buffers (sample(now) reads them in the same clock).
@@ -33,12 +40,20 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   const owned = n => game.herd.animals.filter(a => a.state === 'carried' && a.owner === n); // only when a player leaves
   const helloed = () => { for (const p of players.map.values()) if (p.helloed) return true; return false; };
   const freeUp = a => { a.state = 'idle'; a.timer = 1; a.owner = null; a.epoch++; a.y = 0; missing.delete(a.id); };
-  const guestAt = p => p.latest?.bodies[0].p; // the guest's last real tractor position (M-50)
+  const guestAt = p => p.trust; // C-4: the guest's tractor as far as the host believes it, or null before its first frame on this farm
+  const startTrust = p => { const s = spawnPoint(game.farm, p.n); p.trust = { x: s.x, z: s.z }; p.trustAt = clock(); p.bank = 0; p.frozen = true; }; // at each welcome: the guest starts again at its spawn place
+  function follow(p, at) { // C-4: move toward the reported position, at most GUEST_SPEED (with up to BANK_S saved up), in wall time
+    if (!p.trust) return;
+    const t = clock(), dx = at.x - p.trust.x, dz = at.z - p.trust.z, d = Math.hypot(dx, dz);
+    if (p.frozen) { if (d <= NEAR_SPAWN) { p.frozen = false; p.trustAt = t; p.trust = { x: at.x, z: at.z }; } return; } // frames from the old farm do not count
+    p.bank = Math.min(GUEST_SPEED * BANK_S, p.bank + GUEST_SPEED * (t - p.trustAt) / 1000); p.trustAt = t;
+    const m = Math.min(d, p.bank); if (d > 0) { p.trust.x += dx * m / d; p.trust.z += dz * m / d; } p.bank -= m;
+  }
   const tractorOf = p => ({ x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed });
   const handlers = {
-    hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; send(p.n, welcome(p)); lastKey = -Infinity; }, // M-23: a keyframe at once, after the welcome
+    hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; startTrust(p); send(p.n, welcome(p)); lastKey = -Infinity; }, // M-23: a keyframe at once, after the welcome
     paint(p, m) { p.paint = m.paint; }, // M-2: the player object changes; the next diff has it
-    // M-13: first claim wins; the guest's last real tractor position must be within 8 m of the animal (M-50). The answer is the animal's owner (M-22).
+    // M-13: first claim wins; the guest's tractor (as the host follows it, C-4) must be within 8 m of the animal (M-50). The answer is the animal's owner (M-22).
     claim(p, m) {
       const t = guestAt(p);
       for (const id of new Set(m.ids)) { const a = game.herd.animals[id]; // M-50: a repeated id counts once
@@ -59,21 +74,28 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) p.serverAway = false; });
   const silent = p => p.heardAt !== undefined && clock() - p.heardAt > SILENT_MS; // M-39: a stopped page whose socket the server still sees
   net.on('peerLeft', id => gone(id));
-  net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; p.join = joins = (joins + 1) % 256; byPeer.set(id, n); rates.set(id, { fast: createRate(), rel: createRate() }); });
-  function onTrain(p, f, data, reliable) {
+  net.on('peer', id => { if (closed) return; const n = freeNumber(); if (!n) return; const p = players.ensure(n); p.peer = id; p.join = joins = (joins + 1) % 256; byPeer.set(id, n);
+    rates.set(id, { fast: createRate(), rel: createRate(), key: createRate(RATE.guestKeys) }); }); // C-3: a guest's reliable frames (a keyframe every 2 s) have their own small budget
+  function onTrain(p, f) { // decodeFrame let through only this guest's own objects (M-50); a frame may hold no train group
     p.heardAt = clock();
-    const rec = f.groups.get('train')?.records.get(p.n); // a frame may hold no train group (decodeFrame let through only this guest's own objects, M-50)
-    if (rec) players.push(p.n, f.time, rec, nowMs, out);
-    all(data, reliable, p.n); // M-23: the host sends each guest's train to the other guests
+    const rec = f.groups.get('train')?.records.get(p.n);
+    if (rec && players.push(p.n, f.time, rec, nowMs, out)) follow(p, rec.bodies[0].p);
+    for (const b of ownRows) { const g = f.groups.get(b.kind.name); if (!g) continue; // C-3: keep the newest record of each of its kinds, to pass on (after)
+      const r = g.records.get(p.n) ?? (g.removed.includes(p.n) ? null : undefined); if (r === undefined) continue;
+      const old = p.fwd?.get(b.kind); if (old && f.time <= old.time) continue;
+      (p.fwd ||= new Map()).set(b.kind, { time: f.time, rec: r }); p.fwdNew = true; }
   }
+  const passOn = (p, key) => { let time = 0; const groups = []; // M-23, C-3: a guest's newest objects as one frame from that guest, to the other guests
+    for (const [kind, e] of p.fwd) { time = Math.max(time, e.time); groups.push({ kind, records: e.rec ? [[p.n, e.rec]] : [], removed: e.rec || key ? [] : [p.n] }); }
+    all(encodeFrame({ key, sender: p.n, time, groups }), key, p.n); };
   net.on('message', (from, data, reliable) => {
     try {
       const n = byPeer.get(from), p = n && players.map.get(n); if (!p || closed) return;
-      const r = rates.get(from); if (!(reliable ? r.rel : r.fast).allow(clock())) return; // M-50: in wall time, so a frozen frame loop never closes the window for good
-      if (data instanceof ArrayBuffer) {
+      const r = rates.get(from), binary = data instanceof ArrayBuffer; if (!(binary ? reliable ? r.key : r.fast : r.rel).allow(clock())) return; // M-50: in wall time, so a frozen frame loop never closes the window for good
+      if (binary) {
         if (!p.helloed || !isFrame(data)) return;
         new DataView(data).setUint8(1, n); // M-50: a guest speaks only for itself
-        const f = decodeFrame(data, reg); if (f) onTrain(p, f, data, reliable);
+        const f = decodeFrame(data, reg); if (f) onTrain(p, f);
         return;
       }
       if (!fitsJson(data)) return; // M-50
@@ -105,11 +127,14 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
         if (e.type === 'treeBreak' && !e.remote) all({ t: 'tree', id: e.tree.id }); if (e.type === 'horn') all({ t: 'horn', n: 1 }); } // M-17, M-8
       if (!helloed()) return; // nobody to send to yet: a joiner's first keyframe has everything
       if (now - lastKey >= SEND.key) { lastKey = now; for (const p of players.map.values()) if (p.helloed) send(p.n, welcome(p)); // M-19: again with each keyframe, so a lost one heals (a guest ignores one it has)
-        all(encodeFrame({ key: true, sender: 1, time: now, groups: [...world.key(worldNow()), ...mine.key(mineNow())] }), true); } // M-23
+        all(encodeFrame({ key: true, sender: 1, time: now, groups: [...world.key(worldNow()), ...mine.key(mineNow())] }), true); // M-23
+        for (const p of players.map.values()) if (p.fwd) passOn(p, true); } // C-3: each guest's keyframe, from the host's timer
       if (now - lastWorld >= SEND.world) { lastWorld = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: world.diff(worldNow()) }), false); }
-      if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(mineNow()) }), false); }
+      if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(mineNow()) }), false);
+        for (const p of players.map.values()) if (p.fwdNew) { p.fwdNew = false; passOn(p, false); } } // C-3: at most one train frame for each guest in each send tick
     },
-    setGame(g) { game = g; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity; for (const p of players.map.values()) { p.interp.reset(); p.latest = null; p.pose = null; if (p.helloed) send(p.n, welcome(p)); } }, // M-19
+    setGame(g) { game = g; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity;
+      for (const p of players.map.values()) { p.interp.reset(); p.latest = null; p.pose = null; p.fwd = null; p.fwdNew = false; if (p.helloed) { startTrust(p); send(p.n, welcome(p)); } } }, // M-19, C-4
     setPaint(pt) { myPaint = { ...pt }; },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
     delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host
