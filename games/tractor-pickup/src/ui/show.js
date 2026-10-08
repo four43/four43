@@ -4,14 +4,21 @@
 // animals move into the tally circle at the left, whose count goes up as each one lands (F-14). All animals jump for the total. A
 // skip button ends the show at once.
 import * as THREE from 'three';
-import { showLayout, tallyLayout, TALLY } from '../sim/showSteps.js';
+import { showLayout, tallyLayout, TALLY, LINEUP } from '../sim/showSteps.js';
 import { TYPES } from '../sim/herd.js';
 import { SCALE } from '../render/petScale.js';
 const headY = type => 1.4 * (SCALE[type] ?? 1) + 0.6; // a Cube Pet is about 1.4 model units tall: a number floats just above its head
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
-const SUM_PAUSE = 450, STAGE_PAUSE = 1200, HOP_GAP = 250; // F-7, F-14: ms after each spoken term of the running sum, before its next stage, and between animals moving into the tally circle
+const SUM_PAUSE = 450, STAGE_PAUSE = 1200; // F-7: ms after each spoken term of the running sum, and before its next stage
+// F-6, F-8, F-14 (made faster in version 1.10): a hop out of the trailer (s), the wait after each step (ms), between animals moving into
+// the tally circle (ms) and their hop (s)
+export const SHOW = { hop: 0.5, step: 350, tallyGap: 150, tallyHop: 0.45 };
+// F-12: the show text scales with the scene, so a label never grows past the room its block has (LINEUP.letter metres a letter).
+// pxPerLetter: the width of one letter of a 36 px label (Andika bold, with the number and the space); never below `min`.
+export const LABEL = { pxPerLetter: 21, min: 0.5 };
+export const labelScale = pxPerM => Math.max(LABEL.min, Math.min(1, pxPerM * LINEUP.letter / LABEL.pxPerLetter));
 const RING = { line: 0.15, y: 0.03 }; // F-14: the tally circle on the ground: a light rim and a pale fill
-export function createShow({ root, camera, game, voice, sound, fx, scene }) {
+export function createShow({ root, camera, game, voice, sound, fx, scene, onHop }) {
   const el = document.createElement('div'); el.id = 'show'; el.hidden = true; root.appendChild(el);
   const big = document.createElement('div'); big.className = 'big'; el.appendChild(big);
   // F-13: a skip button ends the whole show at once (the reward card comes next)
@@ -77,13 +84,16 @@ export function createShow({ root, camera, game, voice, sound, fx, scene }) {
         const D = Math.max(12, ((x1 - x0) / 2 + 3) / Math.tan(hfov / 2) + depth / 2);
         camFrom.copy(camera.position); camTo.set(C.x + F.side[0] * D, D * 0.55, C.z + F.side[1] * D);
         lookFrom.copy(camera.getWorldDirection(v)).multiplyScalar(15).add(camera.position); lookTo.set(C.x, 0.8, C.z); look.copy(lookFrom); camT = 0;
+        const h = root.clientHeight || innerHeight, pxPerM = h / (2 * Math.tan(camera.fov * Math.PI / 360) * camTo.distanceTo(v.set(C.x, 0.8, C.z)));
+        el.style.setProperty?.('--k', labelScale(pxPerM).toFixed(3)); // F-12
         const faceCam = Math.atan2(F.side[0], F.side[1]), nums = [], tags = [];
         for (const s of steps) {
           if (ended || skipped) break; // end() was called (a new farm) or the skip button: stop before the next step
           newStep();
           if (s.kind === 'hop') { // F-6: into its group's block, counted within the group
             const r = riders[s.index], a = r.animal, p = lay.spots[s.group][s.n - 1]; a.yaw = ridingYaw(r); a.state = 'show'; a.anim = 'idle'; sound?.boing?.(0.3);
-            await tween(a, spot(p.x, p.d), 0.7, 3, faceCam); sound?.plop?.();
+            onHop?.(r); // F-15: its slot in the slot bar is marked off
+            await tween(a, spot(p.x, p.d), SHOW.hop, 3, faceCam); sound?.plop?.();
             (nums[s.group] ||= []).push(label(a, 'num', s.golden ? `<small>Golden</small>${s.n}` : s.n, headY(a.type), s.say));
           }
           if (s.kind === 'group') { // the numbers go; the group label shows in front of the block
@@ -116,8 +126,8 @@ export function createShow({ root, camera, game, voice, sound, fx, scene }) {
               tally.classList.remove('glow');
               const members = order.filter(i => hops.find(h => h.index === i).group === st.group);
               await Promise.all(members.map(async (i, k) => {
-                await wait(k * HOP_GAP); const a = riders[i].animal, p = tl.spots[order.indexOf(i)];
-                await tween(a, spot(tx + p.x, td + p.d), 0.6, 2, faceCam); tally.innerHTML = ++count; sound?.plop?.();
+                await wait(k * SHOW.tallyGap); const a = riders[i].animal, p = tl.spots[order.indexOf(i)];
+                await tween(a, spot(tx + p.x, td + p.d), SHOW.tallyHop, 2, faceCam); tally.innerHTML = ++count; sound?.plop?.();
               }));
               tags[st.group]?.classList.add('done');
               if (si < s.stages.length - 1) await wait(STAGE_PAUSE);
@@ -128,7 +138,7 @@ export function createShow({ root, camera, game, voice, sound, fx, scene }) {
             const P = tl ? spot(tx, td) : C; fx?.confetti?.(P.x, 2, P.z); sound?.cheer?.();
             await say(s.say);
           } else if (s.kind !== 'sum') await say(s.say);
-          if (!skipped) await wait(800);
+          if (!skipped) await wait(SHOW.step);
         }
       } finally { // R-1: whatever happens, nobody is left mid-hop
         for (const tw of tweens) finish(tw); tweens = []; cut = null; fast = false;

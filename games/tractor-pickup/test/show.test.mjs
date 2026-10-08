@@ -2,8 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createShow } from '../src/ui/show.js';
-import { buildShowSteps, TALLY } from '../src/sim/showSteps.js';
+import { createShow, SHOW, labelScale, LABEL } from '../src/ui/show.js';
+import { buildShowSteps, TALLY, LINEUP } from '../src/sim/showSteps.js';
 
 class El {
   constructor() { this.children = []; this.style = {}; this.on = {}; this.hidden = false; this.className = ''; this.innerHTML = ''; this.textContent = ''; this.classList = { add() {}, remove() {} }; }
@@ -88,4 +88,19 @@ test('the running sum starts at zero; after each stage the group moves into the 
   const zs = r.map(x => x.animal.z), cz = zs.reduce((a, b) => a + b) / zs.length;
   assert.ok(r.every(x => x.animal.z > -8), `animals not past the line-up end: ${zs.map(z => z.toFixed(1))}`);
   for (const { animal: a } of r) assert.ok(Math.hypot(a.x - r[0].animal.x, a.z - cz) < 6, 'not together in one circle');
+});
+test('each animal that hops out is reported once, in hop order, so its slot is marked off (F-15)', async () => {
+  const root = new El(), seen = [];
+  const show = createShow({ root, camera: new THREE.PerspectiveCamera(), game, voice: { say: () => Promise.resolve() }, sound: null, fx: null, onHop: r => seen.push(r) });
+  const tick = setInterval(() => show.update(0.05), 2), taps = setInterval(() => root.children[0].tap(), 20), r = riders(['pig', 'cow', 'pig']);
+  try { await within(show.play(r, steps(r)), 3000); } finally { clearInterval(tick); clearInterval(taps); }
+  assert.deepEqual(seen, [r[0], r[2], r[1]]); // grouped by type: both pigs, then the cow
+});
+test('the show is faster in version 1.10 (F-6, F-8, F-14)', () => {
+  assert.deepEqual(SHOW, { hop: 0.5, step: 350, tallyGap: 150, tallyHop: 0.45 });
+});
+test('labels scale down with the scene so they fit their blocks, never below the minimum, never above full size (F-12)', () => {
+  assert.equal(labelScale(1000), 1);
+  assert.equal(labelScale(0.1), LABEL.min);
+  const k = labelScale(30); assert.ok(k < 1 && k > LABEL.min); assert.ok(Math.abs(LABEL.pxPerLetter * k - 30 * LINEUP.letter) < 1e-9, 'one letter is as wide as the room a letter has');
 });

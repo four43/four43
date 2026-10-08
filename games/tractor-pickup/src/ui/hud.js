@@ -32,6 +32,7 @@ export function createHud(root, { icons, onWordTap }) {
       s.innerHTML = `<img alt="" src="${golden ? icons.golden[type] : icons[type]}"><span>${TYPES[type].word}</span>`;
       s.classList.add('full');
     },
+    markOut(n) { slots[n - 1]?.classList.add('out'); }, // F-15: its animal hopped out in the show
     arrowTo(p) { if (!p) { arrow.hidden = true; return; } arrow.hidden = false; arrow.style.left = p.x + 'px'; arrow.style.top = p.y + 'px'; arrow.style.transform = `translate(-50%,-50%) rotate(${p.angle}rad)`; },
   };
 }

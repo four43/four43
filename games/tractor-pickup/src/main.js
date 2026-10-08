@@ -82,7 +82,7 @@ async function main() {
     animals3d = game.herd ? createAnimals3D(world, game.herd) : null; applyHats(); others3d = createOthers3D(world);
     fx = createFx(world, game.terrain ? (x, z) => game.terrain.height(x, z) : undefined);
     fxs = { dust: 0, mud: 0, mark: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
-    trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world }) : null;
+    trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world, onHop: r => hud.markOut(slotIndex(r.slot) + 1) }) : null;
     showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
     bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
