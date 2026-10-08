@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createShow, SHOW, labelScale, LABEL } from '../src/ui/show.js';
+import { createShow, SHOW, CHEER, labelScale, LABEL } from '../src/ui/show.js';
 import { buildShowSteps, TALLY, LINEUP } from '../src/sim/showSteps.js';
 
 class El {
@@ -10,10 +10,15 @@ class El {
   appendChild(c) { this.children.push(c); return c; }
   addEventListener(t, f) { (this.on[t] ||= []).push(f); }
   setAttribute() {}
+  querySelector() { return null; }
+  setPointerCapture() {}
   remove() {}
   tap() { for (const f of this.on.pointerdown || []) f({ stopPropagation() {} }); }
+  up() { for (const f of this.on.pointerup || []) f({}); }
 }
-globalThis.document = { createElement: () => new El() }; globalThis.innerWidth = 1180; globalThis.innerHeight = 820;
+globalThis.document = { createElement: () => new El() }; globalThis.requestAnimationFrame = f => setTimeout(() => f(), 1); globalThis.cancelAnimationFrame = clearTimeout;
+// most tests stand in for the parent: a held press (CHEER.fastMs, CHEER.skipMs = 0 here) hurries or skips. The A-3 tests put the real times back.
+const HOLD = { ...CHEER }; CHEER.fastMs = 0; CHEER.skipMs = 0; globalThis.innerWidth = 1180; globalThis.innerHeight = 820;
 const game = { farm: { yard: { barn: { x: 0, z: 0, yaw: 0 }, side: 1, lineup: { x0: 8.5, x1: 15.5, z0: -24, z1: -8 } } }, train: { cars: [{ body: { rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }) } }] } };
 const riders = types => types.map((type, k) => ({ animal: { type, golden: false, x: 0, y: 1, z: k, yaw: 0, state: 'ride' }, slot: { car: 0, k } }));
 function setup(voice) {
@@ -103,4 +108,27 @@ test('labels scale down with the scene so they fit their blocks, never below the
   assert.equal(labelScale(1000), 1);
   assert.equal(labelScale(0.1), LABEL.min);
   const k = labelScale(30); assert.ok(k < 1 && k > LABEL.min); assert.ok(Math.abs(LABEL.pxPerLetter * k - 30 * LINEUP.letter) < 1e-9, 'one letter is as wide as the room a letter has');
+});
+
+test('a child\'s short tap does not hurry the show: the counted animal hops and calls (A-3)', async () => {
+  CHEER.fastMs = HOLD.fastMs; const calls = [];
+  const root = new El(), show = createShow({ root, camera: new THREE.PerspectiveCamera(), game, voice: { say: () => new Promise(() => {}) }, sound: { animal: t => calls.push(t) }, fx: null });
+  const tick = setInterval(() => show.update(0.05), 2), el = root.children[0], r = riders(['pig', 'cow']);
+  let done = false; show.play(r, steps(r)).then(() => { done = true; });
+  try {
+    for (let i = 0; i < 10; i++) { await new Promise(res => setTimeout(res, 30)); el.tap(); el.up(); }
+    assert.equal(done, false, 'short taps finished the show');
+    assert.ok(calls.length >= 5, `the animals did not call: ${calls}`);
+  } finally { CHEER.fastMs = 0; show.end(); clearInterval(tick); }
+});
+test('a short tap on the skip button does nothing; only a hold skips (A-3, F-13)', async () => {
+  CHEER.skipMs = 300;
+  const root = new El(), show = createShow({ root, camera: new THREE.PerspectiveCamera(), game, voice: { say: () => new Promise(() => {}) }, sound: null, fx: null });
+  const tick = setInterval(() => show.update(0.05), 2), el = root.children[0], skip = el.children.find(c => c.className === 'skip'), r = riders(['pig']);
+  let done = false; const p = show.play(r, steps(r)).then(() => { done = true; });
+  try {
+    skip.tap(); await new Promise(res => setTimeout(res, 50)); skip.up(); await new Promise(res => setTimeout(res, 400));
+    assert.equal(done, false, 'a short press skipped');
+    skip.tap(); await within(p, 1000); assert.ok(done);
+  } finally { CHEER.skipMs = 0; clearInterval(tick); }
 });

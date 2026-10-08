@@ -4,6 +4,7 @@ import { clampSettings, unlockedPaints, unlockedHats, wornHats, toggleHat, place
 import { PAINTS } from '../render/vehicles3d.js';
 import { SCALE } from '../render/petScale.js';
 import { qrSvg } from './qr.js';
+import { holdToFire } from './hold.js';
 
 const el = (cls, tag = 'div', parent) => { const e = document.createElement(tag); if (cls) e.className = cls; parent?.appendChild(e); return e; };
 const RB = '<linearGradient id="rb" x1="0" x2="1"><stop offset="0" stop-color="#e53935"/><stop offset=".25" stop-color="#fdd835"/><stop offset=".5" stop-color="#43a047"/><stop offset=".75" stop-color="#1e88e5"/><stop offset="1" stop-color="#8e24aa"/></linearGradient>';
@@ -153,17 +154,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
 
   // U-3: a small gear, top right. Hold for 2 s (a ring fills); a shorter press does nothing.
   const gear = el('gear', 'button', root); gear.innerHTML = gearSvg() + '<i></i>'; gear.setAttribute('aria-label', 'Parent menu');
-  let holdStart = 0, raf = 0;
-  const ring = gear.querySelector('i'), HOLD = 2000;
-  const stop = () => { cancelAnimationFrame(raf); raf = 0; holdStart = 0; ring.style.setProperty('--p', '0deg'); };
-  const tick = () => {
-    if (!holdStart) return;
-    const f = (performance.now() - holdStart) / HOLD; ring.style.setProperty('--p', Math.min(1, f) * 360 + 'deg');
-    if (f >= 1) { stop(); onParent?.(); } else raf = requestAnimationFrame(tick);
-  };
-  gear.addEventListener('pointerdown', e => { e.stopPropagation(); gear.setPointerCapture?.(e.pointerId); holdStart = performance.now(); raf = requestAnimationFrame(tick); });
-  for (const n of ['pointerup', 'pointercancel', 'lostpointercapture']) gear.addEventListener(n, stop);
-  gear.addEventListener('contextmenu', e => e.preventDefault());
+  holdToFire(gear, 2000, () => onParent?.());
 
   function openParent(settings, seed, { guest = false } = {}) { // M-19: only the host makes a new farm in a room
     root.querySelector('.parent')?.remove();
