@@ -45,14 +45,14 @@ export class Sound {
     set('f', eng.o.frequency, f, 0.1, 0.3); set('f2', eng.o2.frequency, f / 2, 0.1, 0.15); set('lp', eng.lp.frequency, 300 + level * 500, 0.1, 10);
     set('eg', eng.g.gain, this.muted ? 0 : 0.07 + 0.07 * level, 0.15, 0.003);
     set('cf', crunch.f.frequency, grass ? 900 : 2200, 0.1, 1);
-    set('cg', crunch.g.gain, this.muted ? 0 : surface === 'mud' ? 0 : s * (grass ? 0.1 : 0.25), 0.1, 0.003);
+    set('cg', crunch.g.gain, this.muted ? 0 : surface === 'mud' ? 0 : s * (grass ? 0.025 : 0.0625), 0.1, 0.001); // S-2: 1/4 of version 1.9 (review 3: the drive woosh was too loud)
   }
   skid(amount) { // same dedupe as engine(): no write when nothing audible changes
     if (!this.loops || this.ctx.state !== 'running') return;
     const v = this.muted ? 0 : amount * 0.3, last = this.last || (this.last = {});
     if (Math.abs(v - (last.sk ?? -1e9)) < 0.003) return; last.sk = v; this.loops.skid.g.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
   }
-  spray(on) { if (this.loops && this.ctx.state === 'running') this.ramp(this.loops.spray.g.gain, on ? 0.2 : 0, on ? 0.05 : 0.15); }
+  spray(on) { if (this.loops && this.ctx.state === 'running') this.ramp(this.loops.spray.g.gain, on ? 0.05 : 0, on ? 0.05 : 0.15); }
   // voiced grunt: sawtooth through formant filters with a pitch glide
   voice(f0, f1, dur, vol, formants = [600, 1300], when = 0) {
     const c = this.ctx, t = c.currentTime + when, o = c.createOscillator(); o.type = 'sawtooth';
@@ -92,7 +92,18 @@ export class Sound {
   boing(v = 0.5) { if (this.ok) this.tone(180, 720, 0.35, v, 'triangle'); }
   plop() { if (this.ok) { this.tone(500, 160, 0.12, 0.5); this.noise(0.05, 0.2, 400); } }
   whee() { if (this.ok) this.tone(400, 1400, 0.6, 0.3, 'triangle'); }
-  horn(v = 1) { if (!this.ok) return; for (const w of [0, 0.32]) { this.tone(392, 392, 0.24, 0.15 * v, 'triangle', w); this.tone(494, 494, 0.24, 0.1 * v, 'triangle', w); } } // M-8: v 0.4 for an other tractor's horn
+  // S-7: a bulb horn, "HONK-honk": two reedy notes (a sawtooth and a square a little apart, through a horn-like formant), each with a small pitch drop. M-8: v 0.4 for an other tractor's horn
+  horn(v = 1) { if (!this.ok) return; this.honk(370, 335, 0.3, 0.5 * v, 0); this.honk(330, 300, 0.25, 0.42 * v, 0.36); }
+  honk(f0, f1, dur, vol, when) {
+    const c = this.ctx, t = c.currentTime + when, g = c.createGain(), lp = c.createBiquadFilter(), bp = c.createBiquadFilter(), mix = c.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 1.2; bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.4; mix.gain.value = 0.6;
+    for (const [type, k] of [['sawtooth', 1], ['square', 1.006]]) {
+      const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0 * k * 0.94, t); o.frequency.linearRampToValueAtTime(f0 * k, t + 0.04); // the squeeze: a quick rise
+      o.frequency.exponentialRampToValueAtTime(f1 * k, t + dur); o.connect(lp); o.connect(bp); o.start(t); o.stop(t + dur + 0.05);
+    }
+    lp.connect(g); bp.connect(mix); mix.connect(g); g.connect(this.master);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.025); g.gain.setValueAtTime(vol, t + dur - 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
   bells() { if (this.ok) [1319, 1568, 1976, 2637].forEach((f, i) => this.tone(f, f, 0.8, 0.25, 'sine', i * 0.12)); }
   squelch() { if (this.ok) { this.noise(0.2, 0.35, 300, 0, 2); this.tone(220, 90, 0.2, 0.25, 'sine', 0.05); } }
   // quick rising chime arpeggio with a little shimmer on top
