@@ -16,6 +16,13 @@ Phrases:
 - new-sticker: "You got a sticker!"
 - plus: "plus" (the show adds the groups: "three plus two makes five")
 - makes: "makes"
+- sleepy: "The animals are sleepy." (bedtime)
+- goodnight: "Goodnight!"
+- wake-up: "Wake up!"
+
+Animal sounds go in `audio/animals/<type>.mp3` (pig cow chicken sheep duck bunny dog chick; optional second take `<type>-2.mp3`).
+
+**Easiest:** read `script.md` in one take and ask Claude to slice it.
 
 Tips: a quiet room, phone or headset mic about 15 cm away, a happy voice, a short pause before and after.
 Any format your recorder makes can be converted: `ffmpeg -i pig.m4a pig.mp3`. The build trims silence and evens out the volume.
