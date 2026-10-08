@@ -15,6 +15,7 @@ export const MAIN_TYPES = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'd
 export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3, WALK_HALF = 6.5;
 const FILL = ['pig', 'cow', 'sheep', 'chicken', 'duck', 'bunny', 'pig', 'cow'];
 export const DODGE = { dur: 0.5, h: 0.9 }; // B-14: the hop out of the way of a full train: s, m high
+const TURN = 5, HELP_GIVE_UP = 15, BARN_GIVE_UP = 30; // rad/s; s (A-9)
 const FLEE_R = 7, FLEE_V = 2.2, HORN_R = 25, WALK = { walk: 'walk', flee: 'run', come: 'walk', follow: 'walk', help: 'run', toBarn: 'walk' };
 export const HELD = new Set(['fly', 'ride', 'show']); // in this device's own train or its show
 const SKIP = new Set([...HELD, 'gone', 'carried', 'elsewhere']);
@@ -70,7 +71,8 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
   };
   const moveToward = (a, tx, tz, v, dt) => {
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz); if (d < 0.05) return true;
-    a.yaw = turn(a.yaw, Math.atan2(dx, dz), 5 * dt); const s = Math.min(d, v * dt); a.x += Math.sin(a.yaw) * s; a.z += Math.cos(a.yaw) * s; return d < 0.4;
+    a.yaw = turn(a.yaw, Math.atan2(dx, dz), TURN * dt); const s = Math.min(d, v * dt); a.x += Math.sin(a.yaw) * s; a.z += Math.cos(a.yaw) * s;
+    return d < Math.max(0.4, v / TURN + 0.05); // A-9: never less than the turn radius, or a target close at the side is circled for good
   };
   const clampHome = a => {
     if (a.home === 'yard') { const lim = Y - 2; a.x = Math.max(-lim, Math.min(lim, a.x)); a.z = Math.max(-lim, Math.min(lim, a.z)); return; }
@@ -89,7 +91,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     dodge(a, tx, tz) { if (a.state === 'dodge' || a.hidden) return false; a.state = 'dodge'; a.leader = null; a.dodge = { t: 0, x0: a.x, z0: a.z, x1: tx, z1: tz }; a.yaw = Math.atan2(tx - a.x, tz - a.z); return true; },
     callHelp(t) {
       const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route' && a.state !== 'dodge').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
-      if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; return c;
+      if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.timer = HELP_GIVE_UP; c.tx = p.x; c.tz = p.z; return c;
     },
     toBarn(list) { // after the show: walk into the barn, one after the other, and are gone (A-16, F-10)
       // first to a point on the barn axis just outside the end on the animal's side (clear of the door leaves), then to the center
@@ -130,13 +132,13 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
           case 'come': if (moveToward(a, a.tx, a.tz, def.speed * 1.6, dt) || (a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 3; } break;
           case 'follow': { const L = animals[a.leader]; if (!L || NOT_FREE.has(L.state)) { a.state = 'idle'; a.leader = null; break; }
             const p = L.trail[Math.min(L.trail.length - 1, a.line * 3)] || L; moveToward(a, p.x, p.z, def.speed * 1.8, dt); break; }
-          case 'help': if (moveToward(a, a.tx, a.tz, Math.max(def.speed * 2, 2.5), dt)) { a.state = 'wave'; a.timer = 10; } break;
+          case 'help': if (moveToward(a, a.tx, a.tz, Math.max(def.speed * 2, 2.5), dt)) { a.state = 'wave'; a.timer = 10; } else if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 1; } break;
           case 'wave': a.anim = 'dance'; a.yaw = turn(a.yaw, Math.atan2(tt.x - a.x, tt.z - a.z), 4 * dt); if ((a.timer -= dt) <= 0) { a.state = 'idle'; a.timer = 2; } break;
           case 'hide': a.anim = 'idle'; break;
           case 'dodge': { const d = a.dodge, u = Math.min(1, (d.t += dt) / DODGE.dur); a.anim = 'run';
             a.x = d.x0 + (d.x1 - d.x0) * u; a.z = d.z0 + (d.z1 - d.z0) * u; a.y = DODGE.h * 4 * u * (1 - u);
             if (u >= 1) { a.y = 0; a.state = 'idle'; a.timer = 1.5; a.lookT = 1.5; a.dodge = null; } break; }
-          case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; }
+          case 'toBarn': if ((a.timer -= dt) > 0) { a.anim = 'idle'; break; } if (a.timer < -BARN_GIVE_UP) { a.state = 'gone'; break; } // A-9: never left walking for good
             if (moveToward(a, a.tx, a.tz, 2.2, dt)) { if (a.inside) a.state = 'gone'; else { a.inside = true; a.tx = env.barn.x; a.tz = env.barn.z; } } break;
         }
         if (['walk', 'flee', 'come', 'follow', 'help'].includes(a.state) || (a.state === 'toBarn' && a.timer <= 0)) a.anim = WALK[a.state] || 'walk';

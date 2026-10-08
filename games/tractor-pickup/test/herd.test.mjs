@@ -178,3 +178,21 @@ test('a horn or a help call during a dodge hop lets the hop finish on the ground
   run(h, 1);
   assert.equal(a.y, 0); assert.notEqual(a.state, 'dodge');
 });
+test('a running animal with its target close at the side arrives, it does not circle it for good (A-9)', () => {
+  for (const type of ['dog', 'pig', 'cow', 'sheep']) {
+    const h = createHerd({ rng: makeRng(4), env }), a = h.animals.find(x => x.type === type && !x.hidden && x.home === 'route'); if (!a) continue;
+    for (const side of [0.6, 1, 1.4]) {
+      a.x = 100; a.z = 0; a.yaw = 0; a.state = 'help'; a.timer = 99; a.tx = a.x + side; a.tz = a.z;
+      for (let i = 0; i < 60 * 5 && a.state === 'help'; i++) h.step(1 / 60, { tractor: far });
+      assert.equal(a.state, 'wave', `${type} at ${side} m to the side never arrived`);
+    }
+  }
+});
+test('help gives up and walking into the barn ends after a while, even with the target out of reach (A-9)', () => {
+  const h = createHerd({ rng: makeRng(4), env }), a = h.animals.find(x => !x.hidden && x.home === 'route' && x.type !== 'chick');
+  const t = { x: a.x, z: a.z, yaw: 0, speed: 0 }, c = h.callHelp(t); assert.ok(c);
+  c.tx = 1e6; c.tz = 0; // out of reach
+  run(h, 30); assert.notEqual(c.state, 'help');
+  const b = h.animals.find(x => x !== c && !x.hidden && x.type !== 'chick'); b.state = 'toBarn'; b.timer = 0; b.tx = 1e6; b.tz = 0;
+  run(h, 40); assert.equal(b.state, 'gone');
+});
