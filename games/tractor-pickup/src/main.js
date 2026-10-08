@@ -129,7 +129,7 @@ async function main() {
     return game;
   }
   // E-5: bedtime. The last drive: the barn path shows (even with an empty trailer) and the voice says go to the barn.
-  function lastDrive() { if (!game.herd) return; game.lastDrive = true; if (game.mode === 'drive') { voice.say(['go-to-barn']); guideToBarn = true; pathT = 0; } else sleepAfter = game.mode === 'show' || game.mode === 'reward' || sleepAfter; }
+  function lastDrive() { if (!game.herd) return; game.lastDrive = true; if (game.mode === 'drive' || game.mode === 'menu') { voice.say(['go-to-barn']); guideToBarn = true; pathT = 0; } else sleepAfter = game.mode === 'show' || game.mode === 'reward' || sleepAfter; }
   // Asleep: the tractor is held, night falls, the lullaby plays; a big "Wake Up!" button (held 5 s, for a grown-up) ends it.
   function goSleep({ quiet = false } = {}) {
     sleepNow(bed); saveBed(); sleepAfter = false; game.lastDrive = false; guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud?.arrowTo(null);

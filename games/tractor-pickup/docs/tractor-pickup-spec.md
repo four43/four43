@@ -1,7 +1,8 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.10 (after review 3)
+Version: 1.11 (after review 4)
 Date: 7 October 2026
+Game version: 1.7.0
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
 Status of items: Each design item has an ID (for example, **[C-1]**). All items in this document are accepted for the first version. Items marked **Phase 2** in section 14 are accepted but come after version 1.8.
@@ -23,23 +24,23 @@ This document gives the design for Tractor Pickup. Tractor Pickup is a 3D browse
 - The tractor tows the trailer and the animals.
 - When the trailer has enough animals, the round ends.
 
-### 1.2.1 Change in version 1.1
+#### 1.2.1 Change in version 1.1
 
 The farm has a large open farmyard at the center, with the barn. Two roads (routes) go out from the farmyard, turn through the fields and come back to the farmyard. The player drives a route, boops animals and comes back. When the tractor drives into the barn, it stops, the animals hop out and the game shows them, counts them and says their names. The farmyard is also an open area to drive, slide and push obstacles, with a drive-through wash.
 
-### 1.2.2 Change in version 1.2 (after playtest 2)
+#### 1.2.2 Change in version 1.2 (after playtest 2)
 
 Everything is larger. Routes are 14 m wide and have rock edges, so the tractor cannot leave them. The farmyard is larger. The paddock is removed: after the show, the animals walk into the barn and do not come back. The barn has a better model.
 
-### 1.2.3 Change in version 1.3 (after playtest 2b)
+#### 1.2.3 Change in version 1.3 (after playtest 2b)
 
 The ground is in large high and low areas. Where the ground next to a route is high, the route goes through a cutting with a rock bank. Where the ground is low, a fence keeps the tractor on the route. The farmyard and the area around it are low. The stage is removed: the animals stand on the ground for the show.
 
-### 1.2.4 Change in version 1.4 (release 1.0.0)
+#### 1.2.4 Change in version 1.4 (release 1.0.0)
 
 Section 13 now holds the test results, not open questions. The game has PWA icons, a share image and a `?fps` meter. No design item changed.
 
-### 1.2.5 Change in version 1.5 (after review 1)
+#### 1.2.5 Change in version 1.5 (after review 1)
 
 - The game does not slow down when an animal flies (B-7 is removed).
 - The start screen shows only when the player has a paint to choose (F-11). The sticker card has one "go" button. "New farm" is only in the parent menu.
@@ -51,30 +52,7 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - The farmyard has no fixed posts (T-31). It has more trees and bushes, and the trees are larger. Trees and bushes also stand along the routes. All of them burst (T-34, T-35).
 - All 3D models are GLB files in one folder, so a person can edit them by hand (X-8).
 
-### 1.2.7 Change in version 1.7
-
-- While driving, two buttons stacked at the bottom left open the paint screen and the sticker book (U-6).
-- Stickers are die-cut: a 3D picture of the animal in one of 6 poses, seen from one of 5 camera angles, with a clear background and a white sticker border (W-1).
-- The sticker book has pages with a farm picture. The player drags stickers from a tray onto a page, and can move them again later (W-2).
-- The paint screen has a row of the unlocked hats: each hat can be turned off or on (W-4).
-- The parent gear is at the top left. Every close button is a red X at the top right (U-3, U-7).
-- The horn button shows a classic bulb horn (U-2). Every hat sits on the top of the head, with no head poking through it (W-4).
-
-### 1.2.9 Change in version 1.9 (multiplayer phase 1.5)
-
-- All shared game state is replicated objects (14.4): animals, trees, players and trains. Each kind of object has a list of fields and one authority. The authority sends a keyframe (the full state) every 2 s and diffs (only the changed objects) between keyframes. A lost message does not cause an error, because the next diff or keyframe has the correct state.
-- A claim (M-13) is a request to own an animal. The answer is the animal's replicated owner, not a different message. Thus no answer can be lost.
-- Each device repairs its state from each keyframe (M-56 to M-58).
-- The welcome no longer carries the animals and the trees: the first keyframe after the welcome carries them.
-- A new animal takes the place (the id) of an animal that has been gone for 10 s or more (G-3), so a long game does not slow down. Each player and the solo game do this.
-
-### 1.2.8 Change in version 1.8
-
-- Multiplayer (section 14): two to four players drive on one farm, each on a different device, each with a tractor, a trailer and a wagon. Animals are shared: the first tractor that boops an animal gets it. Each player has a show and stickers on that device.
-- The parent menu has a "Multiplayer" button at the top (P-10). Its panel has "Host" and "Join". A guest joins with the 5-character room code, a link or a QR code.
-- The signaling server is a different project: Handshake (`https://handshake.four43.com`).
-
-### 1.2.6 Change in version 1.6 (after review 2)
+#### 1.2.6 Change in version 1.6 (after review 2)
 
 - The show starts when the tractor is 3/4 of the way through the barn, at any speed. The tractor and the wagons stop in the barn by themselves (F-1, F-5).
 - The sum is a running sum from zero, one group at a time and slowly: "0 + 3 = 3", then "3 + 2 = 5" (F-7). After each stage, that group's animals move into a tally circle at the left, and the count above the circle goes up (F-14). A skip button ends the show (F-13).
@@ -83,7 +61,30 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - Each animal model has a hat node; the hat moves with the head (W-4). The sheep has a short dark muzzle. The cow has spots on both sides, the back and the top (5.1).
 - The open barn door leaves no longer flicker (T-28). The farmyard has a drive-through wash (T-36).
 
-### 1.2.10 Change in version 1.10 (after review 3)
+#### 1.2.7 Change in version 1.7 (drive buttons and sticker book)
+
+- While driving, two buttons stacked at the bottom left open the paint screen and the sticker book (U-6).
+- Stickers are die-cut: a 3D picture of the animal in one of 6 poses, seen from one of 5 camera angles, with a clear background and a white sticker border (W-1).
+- The sticker book has pages with a farm picture. The player drags stickers from a tray onto a page, and can move them again later (W-2).
+- The paint screen has a row of the unlocked hats: each hat can be turned off or on (W-4).
+- The parent gear is at the top left. Every close button is a red X at the top right (U-3, U-7).
+- The horn button shows a classic bulb horn (U-2). Every hat sits on the top of the head, with no head poking through it (W-4).
+
+#### 1.2.8 Change in version 1.8 (multiplayer phase 1)
+
+- Multiplayer (section 14): two to four players drive on one farm, each on a different device, each with a tractor, a trailer and a wagon. Animals are shared: the first tractor that boops an animal gets it. Each player has a show and stickers on that device.
+- The parent menu has a "Multiplayer" button at the top (P-10). Its panel has "Host" and "Join". A guest joins with the 5-character room code, a link or a QR code.
+- The signaling server is a different project: Handshake (`https://handshake.four43.com`).
+
+#### 1.2.9 Change in version 1.9 (multiplayer phase 1.5)
+
+- All shared game state is replicated objects (14.4): animals, trees, players and trains. Each kind of object has a list of fields and one authority. The authority sends a keyframe (the full state) every 2 s and diffs (only the changed objects) between keyframes. A lost message does not cause an error, because the next diff or keyframe has the correct state.
+- A claim (M-13) is a request to own an animal. The answer is the animal's replicated owner, not a different message. Thus no answer can be lost.
+- Each device repairs its state from each keyframe (M-56 to M-58).
+- The welcome no longer carries the animals and the trees: the first keyframe after the welcome carries them.
+- A new animal takes the place (the id) of an animal that has been gone for 10 s or more (G-3), so a long game does not slow down. Each player and the solo game do this.
+
+#### 1.2.10 Change in version 1.10 (after review 3)
 
 - Point to go (7.2): the stick points where the tractor must go on the screen, and the tractor turns and drives there by itself. The stick is read against the camera, so a stick held to one side drives the tractor round in a circle (C-2). The tractor slows while it turns (C-9) and can turn near a fence or a bush (C-10). The stick straight down still reverses (C-8), with more force, so it pushes jackknifed wagons back.
 - Show: each animal that hops out gets a check mark in the slot bar (F-15). The show is approximately 35% faster (F-6, F-8, F-14). Numbers and group labels do not overlap on an iPad in landscape (F-12). A term of the sum is hidden until the voice says it (F-7).
@@ -92,6 +93,24 @@ Section 13 now holds the test results, not open questions. The game has PWA icon
 - No stutters far from the farmyard (X-4): no shader program look-ups between draws, and `?fps` lists each long frame with what took the time.
 - The sticker book button shows only the stickers earned since the book was last opened (F-3, W-2).
 
+#### 1.2.11 Change in version 1.11 (after review 4)
+
+Game version 1.7.0.
+
+- Bedtime (3.5): the parent sets a time in the parent menu. When the time is up, the player drives one last time to the barn. After that show, night falls, the music becomes a lullaby and the voice says "The animals are sleepy. Goodnight!". A grown-up holds the "Wake Up!" button for 5 s to play again (N-1 to N-7).
+- The riders sing: after the horn, each animal in the trailer and the wagon calls once, in slot order, with a small hop (S-8).
+- Recorded animal calls: a parent can record the animal sounds (12.3). A type with no recording uses the synthesized sound (S-3).
+- A tap on a full slot in the slot bar makes it wiggle; the animal calls and the voice says its name (W-8).
+- Golden animal (A-8): rainbow sparkles around it on the farm, a wider rainbow trail in flight, and a fanfare, a gold flash of the slot bar and confetti when it lands. In the show, after it is counted, it flies one big loop across the screen with a rainbow trail (F-16).
+- Show: a short tap of the child makes the animal that is counted hop and call. It does not hurry the show. To hurry a step, hold the screen for 1 s (F-8). The skip button must be held for 1 s (F-13).
+- Parent menu (section 10): the game's button style, every choice applies at once (no Apply button), and the new Bedtime row (P-11). "Clear stickers" also closes an open paint screen, sticker book or sticker card (P-6).
+- Controls: the thumb stick starts anywhere on the screen, but not within 24 px of the left edge (C-3). The back gesture stays in the game (X-14). The stick lets go when the page hides (C-3). The first gamepad move starts the trip (C-5). Each gamepad has its own horn button state (C-5).
+- Fixes: a horn or a help call does not stop a dodge hop (B-14). The end of the intro does not free the tractor under the paint screen or the sticker book (U-6). Animals arrive at a target near their side, help gives up after 15 s and a walk into the barn ends after 30 s (A-9, F-4, A-16). A chick that waits for its launch flies from where it stands (A-12).
+- No stutters (X-4): every shader program compiles while the farm loads, there are at most 3 catch-up physics steps in a frame (X-1), and each frame does less work. The `?fps` readout shows what the frame before each long gap did.
+- All sound stops while the page is hidden, and comes back with the next touch (X-13).
+- The game has no volume setting: use the volume buttons of the device (R-9).
+- The recording script `audio/voice/script.md` gives all words and animal sounds for one recording (12.4).
+
 ### 1.3 Design rules for a 4-year-old player
 
 These rules apply to all items in this document. If an item does not obey a rule, change the item.
@@ -99,13 +118,14 @@ These rules apply to all items in this document. If an item does not obey a rule
 | ID | Rule |
 |---|---|
 | R-1 | The player cannot fail. No item can stop a trip. |
-| R-2 | The player does not need to read to play. Use pictures, sounds and a voice. The only text in the game is animal names and the show's numbers, as a reading aid, and "New sticker!" on the sticker card. The voice always says each word that shows (W-5). |
+| R-2 | The player does not need to read to play. Use pictures, sounds and a voice. The only text in the game is animal names and the show's numbers, as a reading aid, and "New sticker!" on the sticker card, and "Wake Up!" on the wake button (N-5). The voice always says each word that shows (W-5). |
 | R-3 | Each action must give a large and fast response: a sound, a movement and a visual effect. |
 | R-4 | The game must not remove a thing that the player got. An animal in the trailer stays in the trailer. |
 | R-5 | A trip must be short: approximately 1 to 4 minutes. The player decides when to go back to the barn. |
 | R-6 | The player must not need a precise movement. The game helps the player aim. |
 | R-7 | Use only one control: the stick. Other buttons are optional. |
 | R-8 | No sound or image must frighten the child. No crash damage, no injured animals, no loud alarm. |
+| R-9 | The game has no volume setting. The parent sets the volume with the volume buttons of the device. |
 
 ### 1.4 Reuse from Pig Pens
 
@@ -151,6 +171,10 @@ These rules apply to all items in this document. If an item does not obey a rule
 | Sticker | TN | A reward picture that the player gets after each show. |
 | Sticker book | TN | The screen that shows all stickers. |
 | Parent menu | TN | The settings screen. A long press opens it. |
+| Bedtime | TN | The time that the parent sets in the parent menu. After it, the farm goes to sleep (section 3.5). |
+| Last drive | TN | The trip after the bedtime is up. It ends in the barn. |
+| Wake button | TN | The large sun button that shows while the farm sleeps. A grown-up holds it for 5 s to wake the farm. |
+| Hold | TV | Touch and keep the finger on a button or the screen for a given time. A ring around the button fills during the hold. |
 | Room, host, guest, room code | TN | See section 14.1 for the multiplayer terms. |
 
 ---
@@ -160,16 +184,16 @@ These rules apply to all items in this document. If an item does not obey a rule
 ### 3.1 Sequence
 
 1. The game makes a new farm. See section 4.
-2. The tractor starts in the farmyard, at the barn exit, with an empty trailer and wagon. If the player has a paint to choose, the start screen shows first (F-11). The voice says "Let's find animals!" after the first touch or key press.
+2. The tractor starts in the farmyard, at the barn exit, with an empty trailer and wagon. If the player has a paint to choose, the start screen shows first (F-11). The voice says "Let's find animals!" after the first touch, key press or gamepad stick move.
 3. The player drives out on a route and boops animals. Each boop fills one slot.
-4. The player comes back to the farmyard and drives into the barn, from either end. When the tractor is 3/4 of the way through the barn (at any speed) and at least one animal rides in the trailer or the wagon, the show starts (3.4). If no animal rides, nothing occurs and the tractor drives on. **[F-1]**
+4. The player comes back to the farmyard and drives into the barn, from either end. When the tractor is 3/4 of the way through the barn (at any speed) and at least one animal rides in the trailer or the wagon, the show starts (3.4). If no animal rides, nothing occurs and the tractor drives on (on the last drive before bedtime, the tractor stops, N-3). **[F-1]**
 5. When all 12 slots are full, the voice says "Great job! Go to the barn!". An arrow and a path of sparkles show the way to the barn. The path goes to a point on the barn axis outside the nearer opening, then straight along the axis into the barn. At the opening, a sparkle frame shows the full width and height of the door opening. The arrow points to the center of that opening. **[F-2]**
 6. After the show, the delivered animals walk into the barn and do not come back. The player gets a sticker (W-1). The sticker card shows "New sticker!" above the new die-cut sticker (W-1), which stamps on with a small bounce; the voice says "You did it! You got a sticker!". The sticker book button shows the number of new stickers: the stickers earned since the sticker book was last opened. With no new sticker, it shows no number. **[F-3]**
-7. The player drives again with an empty trailer and wagon, on the same farm. **[F-9]** The sticker card has one large green "go" button (a play triangle). Only the parent menu makes a new farm (P-8).
+7. The player drives again with an empty trailer and wagon, on the same farm. **[F-9]** The sticker card has one large green "go" button (a play triangle). Only the parent menu makes a new farm (P-8). If the bedtime is up, the farm goes to sleep after the sticker card (section 3.5).
 
 | ID | Item | Description |
 |---|---|---|
-| F-11 | Start screen | The start screen is the paint screen (W-3) with a "go" button. It shows only when the player has more paints than the two start paints. If not, the game starts to drive at once. The first touch or key press unlocks the sound and starts the trip (the voice says "Let's find animals!"). |
+| F-11 | Start screen | The start screen is the paint screen (W-3) with a "go" button. It shows only when the player has more paints than the two start paints. If not, the game starts to drive at once. The first touch, key press or gamepad stick move unlocks the sound and starts the trip (the voice says "Let's find animals!"). |
 
 ### 3.2 Animals and slots
 
@@ -181,7 +205,7 @@ These rules apply to all items in this document. If an item does not obey a rule
 
 ### 3.3 Help to find animals
 
-**[F-4]** If the player does not boop an animal for 20 s, the nearest free animal walks to the road ahead of the tractor. It waves and makes its sound. An arrow at the edge of the screen points to it.
+**[F-4]** If the player does not boop an animal for 20 s, the nearest free animal walks to the road ahead of the tractor. It waves and makes its sound. An arrow at the edge of the screen points to it. An animal in a dodge hop (B-14) is not selected. If the animal does not get to the road in 15 s, it stops and then moseys again (A-9).
 
 ### 3.4 Show
 
@@ -192,12 +216,27 @@ The show starts when the tractor is 3/4 of the way through the barn with at leas
 | F-5 | Stop | The tractor and the wagons stop in the barn by themselves, in about half a second, at any speed. The controls do nothing until the show ends. If an animal is still in flight, it lands first. The camera moves to a position at the side of the line-up area. |
 | F-6 | Count each group | The show counts one animal type at a time, in the order of the first landing of each type. The animals of that type hop out of the trailer and the wagon one at a time (each hop 0.5 s) and stand in their group's place in the line-up area (F-12). When an animal lands, a large number shows above it: the count in its group (1, 2, 3 ...). The voice says the number. After the last animal of the group, the numbers go away and the group label shows below the group: the number and the name ("3 Pigs"). The voice says it ("Three pigs!"). Plural names: Pigs, Cows, Chickens, Sheep, Ducks, Bunnies, Dogs, Chicks. One animal uses the singular name ("1 Cow"). A golden animal counts in the group of its type. Its label shows "Golden" above the number while it is counted. |
 | F-7 | Add together | After the last group, a running sum shows at the top of the screen, one stage per group, from zero: "0 + 3 = 3", then "3 + 2 = 5", then "5 + 1 = 6", and so on. Each term is hidden (not only pale) until the voice says it; then it lights up. The terms show one at a time from left to right while the voice says them, so the player cannot read the answer early ("Zero plus three makes three! Three plus two makes five!"), with a 0.45 s pause after each term and 1.2 s between stages. The tally count (F-14) glows with the first term and the group label with the second. After each stage, that group moves into the tally circle (F-14) and its label fades. Then all animals jump together. The voice says "Six animals! Hooray!". Confetti. If there is only one group, there is no sum: the total shows alone. |
-| F-8 | Speed | Each step waits 0.35 s (0.8 s before version 1.10). A tap on the screen goes to the next step immediately, so a parent can make it faster. |
+| F-8 | Speed | Each step waits 0.35 s (0.8 s before version 1.10). Hold the screen for 1 s to go to the next step immediately: hops in flight land at once, and the voice and the wait end together. Thus a parent can make the show faster. A short tap does not change the speed. It is the child's tap: the animal that is counted now (the last animal that hopped out, or the last animal that moved into the tally circle) does a small hop (0.35 s, 0.7 m high) and makes its sound (S-3). If that animal is already in a hop, the tap does nothing. Before the first animal hops out, a tap plays the sound of one rider at random and nothing hops. |
 | F-14 | Tally circle | With two or more groups, a circle on the ground at the left of the blocks (screen left; on a phone in portrait, in front of the blocks at the bottom of the screen, F-12): a pale disc with a yellow rim, sized so that every animal of the show fits with no overlap. Above it, a large number: the animals in the circle, starting at 0. After each stage of the sum (F-7), the animals of that group move into the circle one after another (0.15 s apart, a short hop of 0.45 s each), and the number goes up by one as each lands. The circle fills from the middle out, so the groups stand together. The camera moves back so that the circle and all blocks are in view. The farmyard keeps the ground for the circle clear of obstacles (T-29). |
-| F-13 | Skip | A skip button (a fast-forward picture) at the top right ends the whole show at once. The sticker card comes next. |
-| F-10 | Into the barn | After the show, the animals walk, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. |
+| F-13 | Skip | A skip button (a fast-forward picture) at the top right ends the whole show. Hold it for 1 s: a gold ring around it fills, then the show ends at once. A shorter press does nothing, so a child's poke does not skip. The sticker card comes next. |
+| F-16 | Golden loop | After a golden animal is counted (its number shows), it flies one big loop across the screen in 3.2 s. The loop is a vertical circle with a radius of 4 m that starts and ends at the animal's spot. The circle is across the view: its horizontal axis is the camera's right, so the loop goes up and to the side on the screen, never to or from the camera. The movement starts and stops gently (smoothstep), and the animal spins 2 turns about its vertical axis. A rainbow trail follows it (3 drops each frame, as A-8). Bells and a "whee" sound play at the start. When it lands back on its spot: confetti and a cheer. A hold to hurry (F-8) or a skip (F-13) ends the loop at once, with the animal on its spot. When the step is already hurried, there is no loop. |
+| F-10 | Into the barn | After the show, the animals walk, one after the other, into the barn. They do not come back. The camera goes back to the chase camera. An animal that walks for more than 30 s is gone at that time, also when it is not in the barn (A-16). |
 | F-12 | Line-up layout | Each group has its own block in the line-up area. A block has rows of up to 4 animals. Animals in a row stand side by side with a gap of 0.4 m. Rows in a block are 0.6 m apart (from body edge to body edge). The first row is nearest to the barn axis, and later rows are nearer to the camera. The blocks stand side by side with a 1.5 m gap. If the blocks are wider than the line-up area, a block has fewer animals in a row, then the blocks go on a second line of blocks. No two animals overlap. The camera moves back so that all blocks are in view. No two numbers or labels overlap on the screen, on an iPad in landscape or on a phone in portrait: the show text scales with the scene (the size of a letter is never more than the room each letter has in its block, LINEUP.letter, at the show camera's distance; never less than half size), and lines of blocks are 4.8 m apart, so the counts above the animals of one line stay clear of the labels of the line in front. On a phone in portrait the line-up is 8 m long (more lines, so the camera is nearer) and the tally circle (F-14) stands in front of the blocks (at the bottom of the screen), 4.5 m from the last line. |
 | F-15 | Mark off | When an animal hops out of the trailer or the wagon, its slot in the slot bar (U-1) gets a large green check mark and goes pale. |
+
+### 3.5 Bedtime
+
+Bedtime (added in version 1.11) lets a parent end play gently. The child is not stopped in a trip (R-1): the child drives to the barn one last time, then the farm goes to sleep.
+
+| ID | Item | Description |
+|---|---|---|
+| N-1 | Set | The parent menu has a Bedtime row (P-11) with four buttons: "Now", "3 min", "5 min" and "10 min". A tap on a button sets the bedtime to that number of minutes from now ("Now": at once), lights that button and closes the menu. A tap on the lit button turns bedtime off. The row shows the state in small text: "Off", "In 4 min" (the minutes left, rounded up), "Less than a minute", "Last drive to the barn" or "Asleep". During the last drive and while the farm sleeps, the row cannot be changed (it is pale). |
+| N-2 | Time up | When the bedtime comes, the current trip continues. If the player is driving, the voice says "Go to the barn!", and the arrow and the sparkle path to the barn show (F-2), also when the trailer is empty. This is the last drive. If the bedtime comes during a show or its sticker card, that show is the last show, and there is no last drive. |
+| N-3 | Last drive | On the last drive, the tractor and the wagons stop in the barn (F-1, F-5) also when no animal rides. With animals, the show and the sticker card come as usual. With no animal, there is no show and no sticker. |
+| N-4 | Goodnight | When the sticker card of the last show closes (or at once after an empty last drive), the farm goes to sleep. The tractor is held and nothing is booped. The barn path and the arrow go away. Night falls in 4 s: the sky and the fog go from the day color to sunset orange (`#f4a76b`) and then to night blue (`#1b2440`); the sun light goes from warm white to orange and then to pale blue; the sky light intensity goes from 1.3 to 0.3 and the sun intensity from 2.1 to 0.15. Only colors and intensities change, so no new shader program is compiled (X-4). The music becomes a lullaby: half the tempo, one octave lower and quieter. The voice says "The animals are sleepy. Goodnight!" (`sleepy` + `goodnight`). |
+| N-5 | Wake button | After the night has fallen, a dark layer covers the game and a large round wake button shows at the center: a smiling sun and the words "Wake Up!". A grown-up holds it for 5 s: a gold ring around it fills. A shorter press does nothing. The parent gear (U-3) stays above the dark layer. |
+| N-6 | Wake up | At the end of the hold, the day comes back in 2 s, the music becomes normal, the voice says "Wake up!" and the player drives again on the same farm. Bedtime is then off: the parent sets it again. |
+| N-7 | Kept | The bedtime state is kept in the browser storage (`tp-bedtime`): the phase (awake, last drive or asleep), the bedtime as a wall-clock time, and the choice. Thus the time continues to count while the page is closed, and a reload does not end bedtime. After a reload during the last drive, the last drive continues. After a reload while the farm sleeps, the game starts asleep: no voice, and the wake button shows at once. A new farm (P-8) keeps the phase. Damaged data gives "awake, off". |
 
 ---
 
@@ -306,20 +345,20 @@ Use Kenney Cube Pets models for the pig, cow, bunny and dog. The cow gets more s
 | A-5 | Duck | "Quack" | Water drops fall from it if it comes from the pond. Ducks live at the pond in the farmyard. | Accepted |
 | A-6 | Bunny | Small "boing" | Its ears spin like a propeller on the path. | Accepted |
 | A-7 | Dog | "Woof" | It jumps on the path by itself when the tractor comes near. It does not need a boop. | Accepted |
-| A-8 | Golden animal | Bells | One of the types above, but gold. A rainbow trail on the path. A large celebration. The name shows as "Golden Pig" (for example). One or zero on the farm at a time. | Accepted |
+| A-8 | Golden animal | Bells | One of the types above, but gold. One or zero on the farm at a time. On the farm, a ring of rainbow sparkles (radius 1.3 m) rises slowly around it, one sparkle every 0.05 s, so the player can see it from far away. On the path, a wide rainbow trail (3 drops each frame, spread up to 0.4 m). When it lands, a large celebration: a fanfare (four rising notes, then bells), the slot bar flashes gold for 1.2 s, and confetti. The name shows as "Golden Pig" (for example). In the show it flies a loop (F-16). | Accepted |
 
 ### 5.2 Behavior on the farm
 
 | ID | Item | Description | Status |
 |---|---|---|---|
-| A-9 | Mosey | Animals walk slowly along the road and across it, between the edges. They stop, eat grass, look around and walk again. Each animal type has a different walk speed. | Accepted |
+| A-9 | Mosey | Animals walk slowly along the road and across it, between the edges. They stop, eat grass, look around and walk again. Each animal type has a different walk speed. An animal turns at a maximum of 5 rad/s. It arrives at a target when the distance is less than its speed divided by its turn rate, plus 0.05 m (minimum 0.4 m). Thus an animal never circles a target that is near its side. | Accepted |
 | A-10 | Gentle run | Some animals run away slowly when the tractor comes near. The tractor is always faster. | Accepted |
-| A-11 | Come here | Some animals walk to the tractor when the player uses the horn. | Accepted |
-| A-12 | Groups | Chicks walk in a line behind a hen. The name of a chick is "Chick". One boop launches all of them, one after the other. | Accepted |
+| A-11 | Come here | Some animals walk to the tractor when the player uses the horn. An animal in a dodge hop (B-14) completes the hop first and does not come. | Accepted |
+| A-12 | Groups | Chicks walk in a line behind a hen. The name of a chick is "Chick". One boop launches all of them, one after the other. A chick that waits for its turn stands still. Its path (B-5) starts where it stands when its turn comes. | Accepted |
 | A-13 | Hide | An animal hides in a bush on the shoulder, against the edge. Its tail shows. A boop on the bush finds it. | Accepted |
 | A-14 | Mud bath | Pigs walk to a mud tile and roll in the mud. They get very dirty (T-16). | Accepted |
 | A-15 | Farmyard animals | 3 animals walk in the farmyard between the obstacles. They stay out of the barn. They walk across the lanes, so the player meets them. | Accepted |
-| A-16 | Into the barn | Delivered animals walk into the barn and are gone. | Accepted |
+| A-16 | Into the barn | Delivered animals walk into the barn and are gone. An animal that walks for more than 30 s is gone at that time. | Accepted |
 
 ---
 
@@ -352,7 +391,7 @@ Use Kenney Cube Pets models for the pig, cow, bunny and dog. The cow gets more s
 | B-11 | Bounce | On a bump or a jump, the animals bounce up and come back to their slot. They never fall out (R-4). | Accepted |
 | B-12 | Cheer | When the tractor goes fast, the animals put their front legs up and cheer. | Accepted |
 | B-13 | Wagon | The tractor tows a trailer and a wagon from the start. Both are empty at the start. Each holds 6 animals in 2 rows of 3 slots. A spherical joint connects the trailer to the tractor, and a second spherical joint connects the wagon to the trailer. | Accepted |
-| B-14 | Full: out of the way | When all 12 slots are full, there is no boop. An animal that comes near the front of the tractor, or the side of the trailer or the wagon, hops out of the way: a quick 0.5 s hop of approximately 3 m to the side away from the vehicle, with a small "boing". Then it looks at the tractor. The tractor does not slow down. | Accepted |
+| B-14 | Full: out of the way | When all 12 slots are full, there is no boop. An animal that comes near the front of the tractor, or the side of the trailer or the wagon, hops out of the way: a quick 0.5 s hop of approximately 3 m to the side away from the vehicle, with a small "boing". Then it looks at the tractor. The tractor does not slow down. A horn (A-11) or a help call (F-4) does not stop a hop: the animal always completes it and lands on the ground. | Accepted |
 
 ---
 
@@ -395,10 +434,10 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 
 | ID | Input | Function |
 |---|---|---|
-| C-3 | Touch | A floating thumb stick. It appears where the thumb touches the left two-thirds of the screen. A large outer ring. |
+| C-3 | Touch | A floating thumb stick. It appears where the thumb touches the screen, anywhere except within 24 px of the left edge (there, Safari swipes back, X-14). A large outer ring. The buttons (horn, drive buttons, gear) and a full slot in the slot bar (W-8) do not start the stick. When the page hides or loses focus, the stick and the keys let go (iOS can hide the page during a touch with no end of the touch). |
 | C-4 | Keyboard | W/A/S/D and the arrow keys are stick directions: W is up, D is right, W and D together are up-right. S alone reverses (C-8). |
-| C-5 | Gamepad | The left stick. Button A is the horn. |
-| C-6 | Horn | A large horn button at the bottom right. The gamepad A button and the H key also work. A loud bulb-horn "HONK-honk" sound (S-7). All animals look at the tractor. Some animals come (A-11). |
+| C-5 | Gamepad | The left stick. Button A is the horn: each press fires the horn once, and each gamepad has its own button state. When the game drives with no start screen, the first stick move starts the trip (F-11), as a touch does. |
+| C-6 | Horn | A large horn button at the bottom right. The gamepad A button and the H key also work. A loud bulb-horn "HONK-honk" sound (S-7). All animals look at the tractor. Some animals come (A-11). The riders sing (S-8). |
 
 ### 7.4 Camera
 
@@ -416,13 +455,13 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 
 | ID | Item | Position |
 |---|---|---|
-| U-1 | Slot bar | Top center. 12 slots: 6 for the trailer, a small gap, then 6 for the wagon. Each slot fills with the animal picture and name. In the show, each slot gets a check mark when its animal hops out (F-15). The bar empties after the show. On a phone in portrait the bar is two rows of 6 (trailer, then wagon) below the gear (X-12). |
+| U-1 | Slot bar | Top center. 12 slots: 6 for the trailer, a small gap, then 6 for the wagon. Each slot fills with the animal picture and name. A tap on a full slot plays its animal (W-8). In the show, each slot gets a check mark when its animal hops out (F-15). The bar empties after the show. On a phone in portrait the bar is two rows of 6 (trailer, then wagon) below the gear (X-12). |
 | U-2 | Horn | Bottom right. A round button with a classic bulb horn: a red rubber squeeze bulb on a brass horn with a flared bell. |
 | U-3 | Parent menu | Top left. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
-| U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4) and "New sticker!" on the sticker card (F-3). The voice says each of them (R-2). The parent menu can use text. |
-| U-5 | Skip | During the show only: top right. A fast-forward picture (F-13). |
+| U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4), "New sticker!" on the sticker card (F-3) and "Wake Up!" on the wake button (N-5). The voice says each of them (R-2). The parent menu can use text. |
+| U-5 | Skip | During the show only: top right. A fast-forward picture. It must be held for 1 s (F-13). |
+| U-6 | Drive buttons | While driving only (not during the start screen, the show or the sticker card): two round buttons stacked at the bottom left, clear of the slot bar (on a phone in portrait: smaller, at the top right, X-12). The sticker book button shows the number of new stickers (F-3). The upper button (a paint pot) opens the paint screen (W-3); the lower button (a book) opens the sticker book (W-2). A tap on a button never moves the stick. While either screen is open, the tractor is held (like the sticker card) and nothing is booped; a close button (a red X, top right) goes back to driving. The end of the intro (the voice "Let's find animals!") does not free the tractor while either screen is open. |
 | U-7 | Close buttons | Every close button is a red X in the top right corner of what it closes: the paint screen and the sticker book (top right of the screen) the parent menu (top right of its panel) and the Multiplayer panel (top right of its panel, M-29). |
-| U-6 | Drive buttons | While driving only (not during the start screen, the show or the sticker card): two round buttons stacked at the bottom left, clear of the slot bar (on a phone in portrait: smaller, at the top right, X-12). The sticker book button shows the number of new stickers (F-3). The upper button (a paint pot) opens the paint screen (W-3); the lower button (a book) opens the sticker book (W-2). A tap on a button never moves the stick. While either screen is open, the tractor is held (like the sticker card) and nothing is booped; a close button (a red X, top right) goes back to driving. |
 
 ### 8.2 Sounds
 
@@ -430,11 +469,12 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 |---|---|---|
 | S-1 | Engine | A "putt-putt" sound. The pitch increases with the speed. |
 | S-2 | Gravel | A quiet crunch on the track. A quiet swish on the grass. The crunch and the gravel spray are 1/4 as loud as in version 1.9. |
-| S-3 | Animals | One sound for each type (table 5.1). |
+| S-3 | Animals | One call for each type (table 5.1). If a parent recorded calls for that type (12.3), the game plays one of the recordings, selected at random each time. If not, the game plays a synthesized call. Each type has its own synthesized call: pig (two short grunts), cow (one long low note), sheep (four quick notes), chicken (two notes, up then down), chick (one high peep), duck (two quacks), bunny (a small "boing") and dog (two barks). |
 | S-4 | Voice | Recorded words in a parent's voice. See section 12. |
-| S-5 | Music | A light loop. The parent menu can turn it off. |
+| S-5 | Music | A light loop. The parent menu can turn it off. At bedtime it becomes a lullaby (N-4). |
 | S-6 | Celebration | Music and a cheer at the barn. |
 | S-7 | Horn | A bulb horn: two reedy notes, "HONK" (0.3 s) then "honk" (0.25 s), each with a small pitch drop, approximately 3 times louder than the horn of version 1.9. |
+| S-8 | Riders sing | After the horn, each animal in the trailer and the wagon makes its call (S-3) once, in slot order (trailer front first, wagon back last). The first call starts 0.7 s after the horn, and each next call 0.12 s after the one before. With its call, each animal does a small hop (0.35 s, 0.45 m high) in its slot. An animal in flight does not sing. |
 
 ### 8.3 Reading aid
 
@@ -443,6 +483,7 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 | W-5 | Animal name | When an animal lands in the trailer, its name shows at the center top for 2.5 s. Use a large, clear, rounded font (for example, Andika or Atkinson Hyperlegible), with lowercase letters after a capital ("Pig", "Cow", "Chicken"). Each letter pops in from left to right while the voice says the word. Then the word moves into its slot in the slot bar. |
 | W-6 | Tap to hear | A tap on a word (in the game or in the show) plays the voice again. |
 | W-7 | Highlight | In the show, the letters of each name light up one at a time, from left to right, while the voice says the word. |
+| W-8 | Tap a slot | A tap on a full slot in the slot bar (U-1) makes the slot wiggle (0.5 s). The animal makes its call (S-3) and the voice says its name ("golden" first for a golden animal). The tap does not start the stick. |
 
 ---
 
@@ -454,7 +495,6 @@ All items in this section are accepted for the first version.
 |---|---|---|
 | W-1 | Sticker | One sticker after each show. The sticker shows the golden animal (if found) or the animal type with the most boops. A sticker is die-cut: a 3D picture of the animal (gold for a golden animal) with a clear background, a thick white border that follows the animal's outline, and a soft shadow, not a circle. Each sticker has a pose (standing, walking, running, dancing, eating or shaking its head: a frame of that animation) and a camera angle (one of 5: from the front left or right, three-quarter left or right, or a little from above). The pose and the angle come from the show number and the animal type, so each new sticker usually looks different, and a sticker always looks the same each time it is drawn. Stickers from version 1.6 and before get a pose and an angle the same way. |
 | W-2 | Sticker book | The sticker book has pages. Each page is a farm picture (sky, hills, grass; the pictures take turns: day farm, pond, sunset). Opening the book sets all stickers as seen (F-3). Stickers that are not on a page wait in a tray along the bottom of the screen, newest first; a new sticker bounces once. The player drags a sticker from the tray onto the page, where it stays where it is dropped, slightly tilted. A sticker on the page can be dragged again to move it; it comes to the front. Dragging a sticker back onto the tray takes it off the page. Arrows at the left and right edges turn the pages; there is always one empty page after the last page that has a sticker. The page, the position (as a part of the page width and height, so it fits any screen) and the tilt of each sticker are kept in the browser storage. A close button (a red X, top right) closes the book. Dragging works with a finger or a mouse. |
-| W-2 | Sticker book | A screen with all stickers. Data stays in the browser storage. |
 | W-3 | Paint | The tractor has two paint areas: the body (the cab, the hood and the frame) and the trim (the fenders and the roof). The windows, the wheels, the exhaust and the lamps are never painted. The start paints are red (on the body) and yellow (on the trim). After each 3 shows, the player gets a new paint, in this order: green, blue, pink, orange, purple, white, rainbow. Each paint can go on either area. Paint screen: at the left, a large 3D picture of the tractor in its current paints. At the right, two rows of paint pots, one row for each area. At the start of each row, a small tractor outline shows which area the row paints (that area is filled in). A tap on a pot paints that area at once (the picture and the tractor in the game change), with a "splat" sound. The pot in use has a gold ring. On the sticker card (F-3), the paint screen shows only after a new paint was unlocked: the new pot bounces and sparkles in both rows. The player's choice is kept in the browser storage. |
 | W-4 | Hats | After 4, 8 and 12 shows, the player gets a new hat (straw, cowboy, party). The animals in the trailer wear hats. Each animal model has an empty node named `hat` on its head; the hat hangs on it, so it bobs with the head in every animation. The node sits on the top of the head cube, so no head pokes through a hat and no hat floats above the head (within 5 cm), with every hat, in every frame of every animation. Ears, tufts, combs and wool can poke through a hat. `tools/hats.html` shows every hat on every animal, playing any animation, with see-through hats. Below the paint rows, the paint screen (W-3) has a row of the unlocked hats, starting with a small pig in a hat. A tap turns a hat off (pale and grey) or on (in color, with a gold ring), with a "plop"; the animals change their hats at once. The animals wear only the hats that are on, taking turns among them; with all hats off, no animal wears a hat. A newly unlocked hat starts on. The choice is kept in the browser storage. |
 
@@ -462,16 +502,19 @@ All items in this section are accepted for the first version.
 
 ## 10. Parent menu
 
+The parent menu uses the game's button style: large rounded buttons with thick brown edges that move down when pressed. In each row, the selected choice is lit in gold. Every choice applies at once: there is no Apply button. The red X at the top right of the panel (U-7) closes it. The menu has four parts, in this order: Bedtime, Power, Voice and Music, Farm.
+
 | ID | Setting | Values | Default |
 |---|---|---|---|
+| P-11 | Bedtime | Now, 3 min, 5 min, 10 min. A tap on the lit choice turns it off. See N-1. | Off |
+| P-7 | Power | Low (6 m/s, small slides), Medium (9 m/s), High (12 m/s, large slides) | Medium |
 | P-3 | Voice | On, Off | On |
 | P-4 | Music | On, Off | On |
-| P-5 | Farm seed | A number | Random |
-| P-8 | New farm | Button | — |
-| P-10 | Multiplayer | A button at the top of the parent menu. It opens the Multiplayer panel (M-29). | — |
-| P-9 | Apply and close | An Apply button saves the settings and closes the menu. The red X at the top right of the panel (U-7) closes it without saving. | — |
-| P-6 | Clear stickers | Button with a confirmation | — |
-| P-7 | Power | Low (6 m/s, small slides), Medium (9 m/s), High (12 m/s, large slides) | Medium |
+| P-5 | Farm seed | A number box and a "Use this seed" button (on or off). The heading shows the seed of this farm. The seed applies with the next new farm. | Random (off) |
+| P-8 | New farm | Button. A guest in a room cannot use it (M-19). | — |
+| P-10 | Multiplayer | Button. It opens the Multiplayer panel (M-29). | — |
+| P-6 | Clear stickers | Button with a confirmation. It removes all stickers at once. If the paint screen, the sticker book or the sticker card is open, it closes, as with its own close button. | — |
+| P-9 | Apply | Removed in version 1.11. Each choice applies at once. | — |
 
 ---
 
@@ -479,10 +522,10 @@ All items in this section are accepted for the first version.
 
 | ID | Item | Value |
 |---|---|---|
-| X-1 | Libraries | three.js and `@dimforge/rapier3d-compat`. Fixed physics step at 60 Hz with render interpolation. |
+| X-1 | Libraries | three.js and `@dimforge/rapier3d-compat`. Fixed physics step at 60 Hz with render interpolation. After a long frame, a frame does a maximum of 3 catch-up steps; the game drops the remaining lost time. |
 | X-2 | Assets | Kenney Cube Pets, Nature Kit and the Pig Pens tractor. Bake them into the single HTML file. |
 | X-3 | Devices | The main device is an iPad in landscape. A phone in portrait is also supported (X-12). A desktop with a keyboard or a gamepad is for tests. One player on each device; multiplayer connects 2 to 4 devices (section 14). |
-| X-4 | Frame rate | 60 frames per second on an iPad of 2020 or newer, everywhere on the farm. No repeated stutters (frames longer than 50 ms) far from the farmyard. A material is never shared by instanced and plain meshes (or by meshes that do and do not receive shadows), and instanced shadow casters have their own depth material, so the renderer never looks a shader program up again between draws. With `?fps`, the corner readout lists the last long frames: the time, the frame length, the sim and render milliseconds, the distance from the barn and the events in that frame. |
+| X-4 | Frame rate | 60 frames per second on an iPad of 2020 or newer, everywhere on the farm. No repeated stutters (frames longer than 50 ms) far from the farmyard. Rules: (1) A material is never shared by instanced and plain meshes (or by meshes that do and do not receive shadows), and instanced shadow casters have their own depth material, so the renderer never looks a shader program up again between draws. (2) Every shader program compiles while the farm loads (`renderer.compileAsync`), not when a mesh first comes into view: hidden objects (hats, sparkle frames, a far golden animal) are made visible for the compile call and hidden again before the first frame. (3) A plain animal and a golden animal "keeper" mesh stay 500 m under the ground for the life of the farm, so their programs are never released when the last golden animal goes. All ramps use one material. (4) Instance buffers upload only what changed: trees and bushes only while they move or change state, gibs only while a gib lives, particles only the rows written in that frame. (5) The step and frame loops make no new arrays or closures in each step. (6) The HUD arrow moves by its CSS transform only, and only when it moved by 1 px or 1°. (7) Voice clips and animal clips are decoded once, when the sound unlocks, not at their first use. (8) A maximum of 3 catch-up physics steps in a frame (X-1). With `?fps`, the corner readout shows the frame rate (now, average, minimum), the draw calls, the triangles and the number of shader programs. For each gap of more than 50 ms between two frames, it logs (on the screen, the last 6, and in the console) the work of the frame BEFORE the gap, because that frame or the time after it caused the gap: its sim and draw milliseconds, the Rapier `World.step` milliseconds, the number of steps, its events, the new shader programs that it compiled, whether the browser speech was talking, and the idle time from the end of that frame to the start of the next frame. It also logs the steps of the new frame, the distance from the barn and the long tasks of the browser (where the browser reports them). |
 | X-5 | Offline | The game operates offline after the first load (PWA). |
 | X-6 | Source | `games/tractor-pickup/` |
 | X-7 | Output | `site/exp/tractor-pickup/` |
@@ -490,10 +533,13 @@ All items in this section are accepted for the first version.
 | X-11 | Screen fit | As in Pig Pens: the canvas and the screen items fill the whole screen in the browser and when installed on a home screen (iOS reports a viewport one status bar short in an installed app with a translucent status bar; the game then uses the full screen height). The renderer takes its size from the canvas. The manifest has no orientation lock. |
 | X-12 | Portrait | On a phone in portrait: a wider camera view (64°, as Pig Pens), the chase camera 1.25 times farther back and higher, the slot bar in two rows of 6 (trailer, then wagon) below the gear and the skip button, the drive buttons (U-6) smaller at the top right below the slot bar (the driving thumb is at the bottom), a smaller horn, the paint screen in one column, and the show as in F-12. |
 | X-9 | Ground and roads | The ground, the roads, the edges, the ramps, the fences along the routes and the pond are made in code from the farm layout. They are not model files. |
+| X-13 | Page hidden | When the page hides, all sound stops (the audio context is suspended) and the voice stops. When the page shows again, the game tries to resume the sound, and the next touch, click or key press resumes it (iOS allows audio only in a gesture). If the audio is interrupted with no page hide (for example Siri, a call or an alarm), the next gesture also resumes it. |
+| X-14 | Back gesture | The game adds one history entry when it starts, and adds it again after each back step. Thus a swipe from the left edge (Safari) or a back button does not leave the game. The thumb stick does not start within 24 px of the left edge (C-3). |
+| X-15 | Debug tools | `?tune` shows a panel of sliders for the feel values. `?fps` shows the readout of X-4. The browser console stays quiet unless `?fps` or `?tune` is in the URL. An error that the game recovers from is never silent: it shows as a console warning. |
 
 ---
 
-## 12. Voice recordings
+## 12. Voice and animal recordings
 
 ### 12.1 Word list
 
@@ -504,9 +550,9 @@ A parent records these words. Each word is one file.
 | Numbers | `zero` to `twelve` (`zero` starts the running sum, F-7) |
 | Animals | `pig`, `cow`, `chicken`, `sheep`, `duck`, `bunny`, `dog`, `chick`, `golden` |
 | Animal plurals | `pigs`, `cows`, `chickens`, `ducks`, `bunnies`, `dogs`, `chicks` (the plural of `sheep` is `sheep`) |
-| Phrases | `lets-find` ("Let's find..."), `animals` ("...animals!"), `great-job` ("Great job!"), `go-to-barn` ("Go to the barn!"), `lets-count` ("Let's count!"), `hooray` ("Hooray!"), `you-did-it` ("You did it!"), `new-sticker` ("You got a sticker!"), `plus` ("plus"), `makes` ("makes") |
+| Phrases | `lets-find` ("Let's find..."), `animals` ("...animals!"), `great-job` ("Great job!"), `go-to-barn` ("Go to the barn!"), `lets-count` ("Let's count!"), `hooray` ("Hooray!"), `you-did-it` ("You did it!"), `new-sticker` ("You got a sticker!"), `plus` ("plus"), `makes` ("makes"), `sleepy` ("The animals are sleepy."), `goodnight` ("Goodnight!"), `wake-up` ("Wake up!") (the last three for bedtime, N-4 and N-6) |
 
-The game joins files to make sentences. For example: `lets-find` + `animals`, `three` + `pigs`, or `three` + `plus` + `two` + `makes` + `five`.
+The game joins files to make sentences. For example: `lets-find` + `animals`, `three` + `pigs`, `sleepy` + `goodnight`, or `three` + `plus` + `two` + `makes` + `five`.
 
 ### 12.2 File format
 
@@ -515,14 +561,31 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 | Folder | `games/tractor-pickup/audio/voice/` |
 | Name | The file name in 12.1, plus `.mp3` (for example, `chicken.mp3`) |
 | Format | MP3, mono, 64 kbit/s. Approximately 10 KB for each word. |
-| Trim | The build removes silence at the start and the end, and sets the same loudness for all files. |
+| Trim | The build (`build.py`, with ffmpeg) removes silence (below -45 dB) at the start and the end, and sets the same loudness for all files (-16 LUFS, peak -1.5 dB). If ffmpeg is not installed, the build copies each file as it is and shows a warning for each file. |
+| Embed | The build puts each clip into the HTML file as a data URL (`window.__VOICE__`). The game decodes all clips once, when the sound unlocks (X-4). |
 | Missing file | The game uses the browser speech function for that word. Thus, the game operates before all recordings are complete. |
+
+### 12.3 Animal sounds
+
+| Item | Value |
+|---|---|
+| Folder | `games/tractor-pickup/audio/animals/` |
+| Name | The animal type, plus `.mp3`: `pig`, `cow`, `chicken`, `sheep`, `duck`, `bunny`, `dog`, `chick`. More takes of the same type are optional: `pig-2.mp3`, `pig-3.mp3` and so on. |
+| Length | Short: one or two calls, less than approximately 1 s, because the riders sing one after another (S-8). |
+| Trim | As the voice clips (12.2), with the same warning when ffmpeg is not installed. |
+| Embed | The build puts the clips into the HTML file as `window.__ANIMALS__`: for each type, a list of data URLs (all takes). The build shows the number of clips for each type. The game decodes them once, when the sound unlocks. |
+| Use | Each call (S-3) plays one take of that type, selected at random. |
+| Missing file | A type with no file uses the synthesized call (S-3). |
+
+### 12.4 Recording script
+
+`audio/voice/script.md` is a script that a parent reads in one take: the numbers, the animals, the plurals, the phrases (including the bedtime words) and then, for each animal, its name followed by its sound. Words that the game joins are read level and even, with one second of silence between items. A line with "…" is cut there into two clips. The recording goes into `audio/voice/`. The take is then cut into the clips of 12.1 and 12.3. A second reading of the animal part gives a second take of each call.
 
 ---
 
 ## 13. Test results
 
-State at version 1.10 (`npm test`: 662 tests, all pass). Version 1.9 had 640, version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.11, game 1.7.0 (`npm test`: 688 tests, all pass). Version 1.10 had 662, version 1.9 had 640, version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|
@@ -533,7 +596,7 @@ State at version 1.10 (`npm test`: 662 tests, all pass). Version 1.9 had 640, ve
 | 4.6 Scenery, 4.7 Farmyard | `yard.test.mjs`, `trees.test.mjs`, `terrain.test.mjs` (T-29 line-up) | Yard, barn, props, tree bursts | None known |
 | 5.1 Animal types | `assets.test.mjs`, `herd.test.mjs` | Every type seen | None known |
 | 5.2 Behavior (A-7 to A-16) | `herd.test.mjs`, `game.test.mjs` | Flee, horn, chick line, pig mud seen | Horn response feels right |
-| 6.1 Boop, 6.2 Launch, 6.3 In the trailer | `launch.test.mjs`, `slowmo.test.mjs`, `game.test.mjs`, `slots.test.mjs` | Flights over the cab (`pwa/og-image.jpg`) | Slow motion (B-7) is pleasant, not confusing |
+| 6.1 Boop, 6.2 Launch, 6.3 In the trailer | `launch.test.mjs`, `game.test.mjs`, `slots.test.mjs` | Flights over the cab (`pwa/og-image.jpg`) | Flights are easy to follow for a 4-year-old |
 | 7.1 Drive model | `tractor.test.mjs`, `hitch.test.mjs`, `terrain.test.mjs`, `dirt.test.mjs`, `sandbox.test.mjs` | Keyboard driving on gravel, mud, banks and ramps | Slides and grip (D-6, D-7) on the touch stick |
 | 7.2 Control, 7.3 Inputs | `input.test.mjs` (circle to square stick) | Keyboard and mouse. Gamepad not tested. | Touch stick, horn button, multi-touch, no page zoom |
 | 7.4 Camera | None (visual) | Chase camera and the turn back after the show | Camera height and comfort |
@@ -576,6 +639,13 @@ State at version 1.10 (`npm test`: 662 tests, all pass). Version 1.9 had 640, ve
 | 1.10 X-11, X-12, U-1, U-6 Screen fit and portrait | None (layout) | Start screen, driving and show at 390×844; drive buttons top right in portrait | Installed on the home screen: full height; a phone in portrait |
 | 1.10 F-3, W-2 New-sticker badge | `progress.test.mjs` (new since last opened, seen on open, old saves have none) | Badge 1 on the card and the drive button after a show, gone after the book opens | None known |
 | 1.10 X-4 Stutters | `matSplit.test.mjs`, `shadows.test.mjs` | Desktop: no long frames (also with the CPU 4 times slower); program look-ups between draws measured at zero in the yard and on the routes | A drive on the routes with `?fps`: the list of long frames |
+| 1.11 N-1..N-7 Bedtime | `bedtime.test.mjs` (set, time up gives one last-drive cue, sleep and wake, "Now" is due at once, cancel, damaged save, asleep survives a reload), `game.test.mjs` (an empty train stops in the barn on the last drive) | Headless Chromium: Now starts the last drive; asleep after a reload; a 1.5 s press does nothing; a 5 s hold wakes the farm | The night, the lullaby and the 5 s wake hold on the iPad |
+| 1.11 S-8, W-8, 12.3 Riders sing, tap a slot, recorded calls | `sing.test.mjs` (slot order, one every 0.12 s, empty and flying slots stay quiet) | Headless Chromium: a rider hops after the horn; a tap on a filled slot wiggles it and calls the animal | The calls with the recorded clips; the slot wiggle |
+| 1.11 F-8, F-13, F-16 Child's tap, hold to hurry and skip, golden loop | `show.test.mjs` (a short tap does not hurry: the counted animal hops and calls; a short tap on skip does nothing, only a hold skips; the golden animal flies one high loop and lands back on its spot) | Headless Chromium: the golden pig flies its loop above the barn with a rainbow trail, then lands | A child's taps during the show; the loop is fun, not too long |
+| 1.11 C-3, C-5, X-14 Whole-screen stick, gamepad, back gesture | `input.test.mjs` (the stick starts on the right third, not within 24 px of the left edge; a page hide lets go of the stick; two gamepads fire the horn once) | Not recorded in this document | Safari swipe-back at the left edge; a stick near the horn button |
+| 1.11 A-9, A-11, A-12, B-14, F-4, A-16 Animal fixes | `herd.test.mjs` (a horn or a help call lets a dodge hop finish; a target near the side is reached; help gives up and the barn walk ends), `game.test.mjs` (a waiting chick launches from where it stands) | Not recorded in this document | None known |
+| 1.11 U-6 Intro under a screen | `trip.test.mjs` (the drive cue does not free the tractor under the paint screen or the sticker book) | Not recorded in this document | None known |
+| 1.11 X-4 Shader warm-up, X-13 Page hidden | `warm.test.mjs` (hidden objects compile and stay hidden, also after a compile error), `voice.test.mjs` | Headless Chromium: 19 shader programs after load and still 19 after six boops with a golden animal (1.6.0: 16, then 17 at the golden animal) | A drive on the routes with `?fps`: no new shader programs and the list of long frames; sound after a screen lock and after Siri |
 
 Performance (X-4), desktop proxy: an RTX 5070 Ti is too fast to show an iPad limit, so the numbers are mainly the draw calls and triangles. Seed 1, start position, 1280 by 800:
 
@@ -663,7 +733,7 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 
 | ID | Item | Description |
 |---|---|---|
-| M-29 | Multiplayer button | At the top of the parent menu (section 10), a "Multiplayer" button opens the Multiplayer panel. A red X at the top right closes the panel (U-7). The panel has text, like the parent menu. A child cannot open it, because the parent menu needs a long press (U-3). |
+| M-29 | Multiplayer button | In the Farm part of the parent menu (section 10, P-10), a "Multiplayer" button opens the Multiplayer panel. A red X at the top right closes the panel (U-7). The panel has text, like the parent menu. A child cannot open it, because the parent menu needs a long press (U-3). |
 | M-30 | Start | When the device is not in a room, the panel shows two buttons: "Host" and "Join". |
 | M-31 | Host | "Host" makes a room. The panel shows: the room name in large letters; a QR code of the full game URL with the room code (for example `https://four43.com/exp/tractor-pickup/?r=K7MX2`); and the player list. Each row of the player list shows a small tractor picture in that player's paints, the player number and the state (connecting, direct, relayed or away). Each guest row has a "Remove" button. A "Lock" switch stops new players. A "Stop hosting" button closes the room. When Handshake cannot be reached, the panel says so and tries again every 10 s. When the game cannot get access to the TURN relay (M-48), the panel shows "Can't reach the relay server. Try again." and does not make a room. If the host cannot lock the room or remove a guest, the panel shows "Can't change the farm now. Try again." |
 | M-32 | Join | "Join" shows `tractor-pickup-` as fixed text, then a text box for the room code (for example `K7MX2`), and a "Join" button. The text box takes the code in upper or lower case; a pasted full room name keeps only its code. The game asks Handshake whether the room exists (peek). Then a prompt shows the room name and the number of players, with "Join" and "Cancel". If the room does not exist, is full, is locked or has a different game version, the panel says so. When the game cannot get access to the TURN relay (M-48), the panel shows "Can't reach the relay server. Try again." and the device does not join. |
