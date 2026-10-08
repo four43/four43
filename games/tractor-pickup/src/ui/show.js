@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { showLayout, tallyLayout, TALLY, LINEUP } from '../sim/showSteps.js';
 import { TYPES } from '../sim/herd.js';
 import { SCALE } from '../render/petScale.js';
+import { VIEW } from '../render/scene.js';
 const headY = type => 1.4 * (SCALE[type] ?? 1) + 0.6; // a Cube Pet is about 1.4 model units tall: a number floats just above its head
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 const SUM_PAUSE = 450, STAGE_PAUSE = 1200; // F-7: ms after each spoken term of the running sum, and before its next stage
@@ -66,25 +67,28 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
         if (tw.yaw !== undefined) a.yaw = tw.from.yaw + wrap(tw.yaw - tw.from.yaw) * u;
         return true;
       });
-      for (const L of labels) { v.set(L.anchor.x, (L.anchor.y || 0) + L.dy, L.anchor.z).project(camera); L.d.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; L.d.style.top = ((1 - v.y) / 2 * innerHeight) + 'px'; }
+      for (const L of labels) { v.set(L.anchor.x, (L.anchor.y || 0) + L.dy, L.anchor.z).project(camera); L.d.style.left = ((v.x + 1) / 2 * VIEW.w) + 'px'; L.d.style.top = ((1 - v.y) / 2 * VIEW.h) + 'px'; }
     },
     async play(riders, steps) {
       dropRing(); active = true; ended = skipped = false; el.hidden = false; big.innerHTML = ''; big.classList.remove('on');
       try {
-        const F = frame(), all = steps.find(s => s.kind === 'all'), lay = showLayout(all.groups), off = Math.max(0, (F.depth - lay.depth) / 2);
+        const F = frame(), all = steps.find(s => s.kind === 'all'), lay = showLayout(all.groups, { len: camera.aspect < 0.9 ? LINEUP.portraitLen : LINEUP.len }), off = Math.max(0, (F.depth - lay.depth) / 2);
         const mx = F.f[0] * F.side[1] - F.f[1] * F.side[0] >= 0 ? 1 : -1; // layout x runs to screen-right (the camera looks back along -side), so groups read in the sum's order
         const spot = (x, d) => ({ x: F.inner.x + F.f[0] * x * mx + F.side[0] * (d + off), y: 0, z: F.inner.z + F.f[1] * x * mx + F.side[1] * (d + off) });
         // F-5: ease from the chase view to the side of the line-up, far enough back to see every block; the look point eases too
         // F-14: with a sum, the tally circle stands left of the blocks (screen left), sized for every animal, filled in the order of the sum
         const sum = steps.find(s => s.kind === 'sum'), hops = steps.filter(s => s.kind === 'hop');
         const order = sum ? sum.stages.flatMap(st => hops.filter(h => h.group === st.group).map(h => h.index)) : [];
-        const tl = order.length ? tallyLayout(order.map(i => TYPES[riders[i].animal.type]?.r ?? 0.5)) : null, tx = tl ? -(lay.width / 2 + TALLY.gap + tl.r) : 0, td = lay.depth / 2;
-        const x0 = tl ? tx - tl.r : -lay.width / 2, x1 = lay.width / 2, depth = Math.max(lay.depth, tl ? tl.r * 2 : 0);
-        const hfov = 2 * Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), C = spot((x0 + x1) / 2, lay.depth / 2);
-        const D = Math.max(12, ((x1 - x0) / 2 + 3) / Math.tan(hfov / 2) + depth / 2);
+        // X-12: on a tall screen (a phone in portrait) the tally circle stands in front of the blocks (screen bottom), so the view is narrow and close
+        const tall = camera.aspect < 0.9, tl = order.length ? tallyLayout(order.map(i => TYPES[riders[i].animal.type]?.r ?? 0.5)) : null;
+        const tx = !tl || tall ? 0 : -(lay.width / 2 + TALLY.gap + tl.r), td = tl && tall ? lay.depth + TALLY.tallGap + tl.r : lay.depth / 2;
+        const x0 = tl ? Math.min(tx - tl.r, -lay.width / 2) : -lay.width / 2, x1 = Math.max(lay.width / 2, tl ? tx + tl.r : 0);
+        const depth = tl && tall ? td + tl.r : Math.max(lay.depth, tl ? tl.r * 2 : 0), d0 = tall ? 0 : lay.depth / 2 - depth / 2;
+        const hfov = 2 * Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), C = spot((x0 + x1) / 2, d0 + depth / 2);
+        const D = Math.max(12, ((x1 - x0) / 2 + (tall ? 1 : 3)) / Math.tan(hfov / 2) + depth / 2);
         camFrom.copy(camera.position); camTo.set(C.x + F.side[0] * D, D * 0.55, C.z + F.side[1] * D);
         lookFrom.copy(camera.getWorldDirection(v)).multiplyScalar(15).add(camera.position); lookTo.set(C.x, 0.8, C.z); look.copy(lookFrom); camT = 0;
-        const h = root.clientHeight || innerHeight, pxPerM = h / (2 * Math.tan(camera.fov * Math.PI / 360) * camTo.distanceTo(v.set(C.x, 0.8, C.z)));
+        const pxPerM = VIEW.h / (2 * Math.tan(camera.fov * Math.PI / 360) * camTo.distanceTo(v.set(C.x, 0.8, C.z)));
         el.style.setProperty?.('--k', labelScale(pxPerM).toFixed(3)); // F-12
         const faceCam = Math.atan2(F.side[0], F.side[1]), nums = [], tags = [];
         for (const s of steps) {
@@ -115,7 +119,7 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
             for (const [si, st] of s.stages.entries()) {
               if (skipped) break;
               const terms = [st.from, '+', st.add, '=', st.to];
-              big.style.fontSize = Math.min(150, innerWidth * 0.9 / (terms.join(' ').length * 0.62)) + 'px';
+              big.style.fontSize = Math.min(150, VIEW.w * 0.9 / (terms.join(' ').length * 0.62)) + 'px';
               big.innerHTML = terms.map(t => `<span class="t">${t}</span>`).join(' '); big.classList.remove('on'); void big.offsetWidth; big.classList.add('on');
               const spans = big.querySelectorAll ? [...big.querySelectorAll('.t')] : [];
               for (let k = 0; k < terms.length && !skipped; k++) {

@@ -25,7 +25,7 @@ export function createInput(root) {
   horn.addEventListener('pointerdown', e => { e.stopPropagation(); fireHorn(); });
   const surface = document.getElementById('c');
   surface.addEventListener('pointerdown', e => {
-    if (stick.id !== null || e.clientX > innerWidth * 2 / 3) return;
+    if (stick.id !== null || e.clientX > surface.clientWidth * 2 / 3) return;
     stick.id = e.pointerId; stick.ox = e.clientX; stick.oy = e.clientY; surface.setPointerCapture(e.pointerId);
     base.hidden = false; base.style.left = (e.clientX - R) + 'px'; base.style.top = (e.clientY - R) + 'px'; knob.style.transform = '';
   });

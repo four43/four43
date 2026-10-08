@@ -16,7 +16,7 @@ import { buildFarm3D } from './render/farm3d.js';
 import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
 import { createSandbox } from './sim/sandbox.js';
-import { createScene } from './render/scene.js';
+import { createScene, VIEW } from './render/scene.js';
 import { createChaseCam, CAM } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
@@ -301,10 +301,10 @@ function edgeArrow(camera, p) {
   const behind = _v.set(p.x, p.y, p.z).applyMatrix4(camera.matrixWorldInverse).z > 0;
   _v.set(p.x, p.y, p.z).project(camera);
   if (!behind && Math.abs(_v.x) <= 1 && Math.abs(_v.y) <= 1) return null;
-  let dx = _v.x * innerWidth / 2, dy = -_v.y * innerHeight / 2; if (behind) { dx = -dx; dy = -dy; }
+  const W = VIEW.w, H = VIEW.h; let dx = _v.x * W / 2, dy = -_v.y * H / 2; if (behind) { dx = -dx; dy = -dy; }
   if (Math.hypot(dx, dy) < 1) dy = 1; // straight behind: point down
-  const e = Math.hypot(dx / (innerWidth / 2 - 70), dy / (innerHeight / 2 - 70));
-  return { x: innerWidth / 2 + dx / e, y: innerHeight / 2 + dy / e, angle: Math.atan2(dy, dx) };
+  const e = Math.hypot(dx / (W / 2 - 70), dy / (H / 2 - 70));
+  return { x: W / 2 + dx / e, y: H / 2 + dy / e, angle: Math.atan2(dy, dx) };
 }
 
 function buildSandbox3D(scene, game, anisotropy) {

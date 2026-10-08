@@ -29,7 +29,7 @@ export function buildShowSteps(animals) {
 // than the line-up, the rows get shorter, then the blocks go on more lines, far enough apart that a line's animals do not hide the
 // labels of the line behind it.
 // x: along the line-up, centred on 0. d: depth from the line-up's barn-side edge toward the camera (the first row is deepest in).
-export const LINEUP = { len: 16, depth: 7, pad: 0.4, rowGap: 0.6, blockGap: 1.5, lineGap: 4.8, edge: 0.3, letter: 0.5 }; // letter: label width per letter ("3 Chickens" on one line), m
+export const LINEUP = { portraitLen: 8, len: 16, depth: 7, pad: 0.4, rowGap: 0.6, blockGap: 1.5, lineGap: 4.8, edge: 0.3, letter: 0.5 }; // letter: label width per letter ("3 Chickens" on one line), m
 export function showLayout(groups, { len = LINEUP.len } = {}) { // groups: [{ type, n }]
   const block = (g, cols) => { const r = TYPES[g.type].r, c = Math.min(cols, g.n), rows = Math.ceil(g.n / c), word = g.n === 1 ? TYPES[g.type].word : TYPES[g.type].plural, aw = c * 2 * r + (c - 1) * LINEUP.pad;
     return { g, r, c, rows, aw, w: Math.max(aw, (word.length + 2) * LINEUP.letter), h: rows * 2 * r + (rows - 1) * LINEUP.rowGap }; };
@@ -61,7 +61,7 @@ export function showLayout(groups, { len = LINEUP.len } = {}) { // groups: [{ ty
 // F-14: the tally circle, left of the blocks: the animals of each group move into it after their stage of the running sum. Spots are
 // relative to the circle's center (x along the line-up, d toward the camera), in arrival order, each at the free point nearest the
 // middle; r is the circle's radius. rMax: the room the farmyard keeps clear for it (12 cows), gap: from the blocks.
-export const TALLY = { pad: 0.3, edge: 0.45, gap: 1.5, rMax: 4.8 };
+export const TALLY = { pad: 0.3, edge: 0.45, gap: 1.5, tallGap: 4.5, rMax: 4.8 }; // tallGap: in front of the blocks on a tall screen, room for the count above the circle (X-12)
 export function tallyLayout(radii) {
   const spots = [], cand = Array.from({ length: 3000 }, (_, k) => { const rho = 0.09 * Math.sqrt(k), th = k * 2.399963; return { x: k ? rho * Math.cos(th) : 0, d: k ? rho * Math.sin(th) : 0 }; });
   radii.forEach((r, i) => spots.push(cand.find(c => spots.every((p, j) => Math.hypot(c.x - p.x, c.d - p.d) >= r + radii[j] + TALLY.pad))));

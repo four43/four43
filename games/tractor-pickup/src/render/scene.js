@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+// X-11: the size of the game view (the canvas: the full screen height when installed, see template.html). Screen items use it, not the window.
+export const VIEW = { w: globalThis.innerWidth || 1, h: globalThis.innerHeight || 1 };
 export function createScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -10,8 +12,9 @@ export function createScene(canvas) {
   Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 5, far: 120 });
   sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03; scene.add(sun, sun.target);
   const resize = () => { // iPad (touch): pixel ratio capped at 1.5 to hold 60 fps (X-4)
-    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, navigator.maxTouchPoints > 1 ? 1.5 : 2)); renderer.setSize(innerWidth, innerHeight, false);
-    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    VIEW.w = canvas.clientWidth || innerWidth; VIEW.h = canvas.clientHeight || innerHeight;
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, navigator.maxTouchPoints > 1 ? 1.5 : 2)); renderer.setSize(VIEW.w, VIEW.h, false);
+    camera.aspect = VIEW.w / VIEW.h; camera.fov = camera.aspect < 0.9 ? 64 : 60; camera.updateProjectionMatrix(); // X-12: a wider view in portrait, as Pig Pens
   };
   addEventListener('resize', resize); resize();
   // the sun's shadow box follows the tractor
