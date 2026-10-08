@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planUtterances } from '../src/audio/voice.js';
 import { WORDS } from '../src/sim/words.js';
+// D-4: let queued promises and immediate callbacks run, with no wall-clock wait (no flakes on a busy machine)
+const flush = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
+// with mocked setTimeout (the 80 ms gap between lines, the safety timeouts): move the clock on, then flush
+const later = async (t, ms = 100) => { t.mock.timers.tick(ms); await flush(); };
 
 test('word list matches spec section 12.1', () => {
   for (const w of ['zero', 'one', 'twelve', 'pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog', 'chick', 'golden', 'lets-find', 'animals', 'great-job', 'go-to-barn', 'lets-count', 'hooray', 'you-did-it', 'new-sticker', 'pigs', 'cows', 'chickens', 'ducks', 'bunnies', 'dogs', 'chicks', 'plus', 'makes']) assert.ok(WORDS.includes(w), w);
@@ -20,14 +24,15 @@ test('stop() ends the line that is playing at once and say never rejects', async
   const { createVoice } = await import('../src/audio/voice.js');
   const v = createVoice({ ctx: null });
   let done = false; const p = v.say(['lets-find', 'animals']).then(() => { done = true; });
-  await new Promise(r => setTimeout(r, 20));
+  await flush();
   assert.deepEqual(spoken, ["Let's find animals!"]); assert.equal(done, false);
   v.stop(); await p;
   assert.equal(done, true); assert.equal(cancelled, 1);
   delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
 });
 
-test('name-line backlog: with 2 land lines waiting a third is dropped, trip lines never are', async () => {
+test('name-line backlog: with 2 land lines waiting a third is dropped, trip lines never are', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const spoken = [], ends = [];
   globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
   globalThis.speechSynthesis = { speak: u => { spoken.push(u.text); ends.push(u.onend); }, cancel: () => {} };
@@ -36,24 +41,25 @@ test('name-line backlog: with 2 land lines waiting a third is dropped, trip line
   v.say(['pig'], { low: true }); v.say(['cow'], { low: true }); v.say(['duck'], { low: true }); // pig plays, cow waits, duck waits: all 3 counted until each starts
   v.say(['sheep'], { low: true });
   v.say(['great-job', 'go-to-barn']);
-  for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 120)); ends.shift()?.(); }
+  for (let i = 0; i < 6; i++) { await later(t); ends.shift()?.(); }
   assert.ok(!spoken.includes('Sheep'), 'fourth name line is dropped'); assert.ok(spoken.includes('Great job! Go to the barn!'));
   v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
 });
 
-test('stop() with low lines queued never raises the cap above 2 afterwards', async () => {
+test('stop() with low lines queued never raises the cap above 2 afterwards', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const spoken = [], ends = [];
   globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
   globalThis.speechSynthesis = { speak: u => { spoken.push(u.text); ends.push(u.onend); }, cancel: () => {} };
   const { createVoice } = await import('../src/audio/voice.js');
   const v = createVoice({ ctx: null });
   v.say(['pig'], { low: true }); v.say(['cow'], { low: true }); v.say(['duck'], { low: true });
-  await new Promise(r => setTimeout(r, 20));
-  v.stop(); await new Promise(r => setTimeout(r, 50)); // the older queued lines end quietly
+  await flush();
+  v.stop(); await flush(); // the older queued lines end quietly
   const before = spoken.length;
   for (const n of ['sheep', 'dog', 'chick', 'bunny']) v.say([n], { low: true });
-  await new Promise(r => setTimeout(r, 60));
-  for (let i = 0; i < 8; i++) { await new Promise(r => setTimeout(r, 120)); ends.shift()?.(); }
+  await flush();
+  for (let i = 0; i < 8; i++) { await later(t); ends.shift()?.(); }
   assert.ok(!spoken.slice(before).includes('Bunny'), 'the cap is still 2 waiting lines');
   v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
 });
@@ -64,7 +70,7 @@ test('speech: an utterance is held until it ends, and a paused engine is resumed
   globalThis.speechSynthesis = { paused: true, resume() { resumed++; }, speak: u => { u0 = u; }, cancel: () => {} };
   const { createVoice } = await import('../src/audio/voice.js');
   const v = createVoice({ ctx: null });
-  const p = v.say(['pig']); await new Promise(r => setTimeout(r, 20));
+  const p = v.say(['pig']); await flush();
   assert.equal(resumed, 1); u0.onend(); await p;
   v.stop(); delete globalThis.speechSynthesis; delete globalThis.SpeechSynthesisUtterance;
 });

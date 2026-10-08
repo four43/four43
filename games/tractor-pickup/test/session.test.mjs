@@ -7,6 +7,8 @@ import { qrSvg } from '../src/ui/qr.js';
 import { emitter } from '../src/net/link.js';
 import { createGame } from '../src/sim/game.js';
 import { NET_VERSION } from '../src/net/protocol.js';
+// D-4: let queued promises and immediate callbacks run, with no wall-clock wait
+const flush = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
 await RAPIER.init();
 
 test('room names and codes (M-31, M-32)', () => {
@@ -52,10 +54,11 @@ test('host: makes a public room for 4 with the game version and relay for far pl
   t.s.lock(true); assert.equal(t.s.view().locked, true);
   t.s.stopHosting(); assert.equal(t.s.view().state, 'idle'); assert.ok(t.changes > 0);
 });
-test('host: when the server cannot be reached, the panel says so and it tries again (M-31)', async () => {
+test('host: when the server cannot be reached, the panel says so and it tries again (M-31)', async ctx => {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] }); // D-4: the retry and the welcome wait run on a mocked clock
   const fh = fakeHandshake({ failCreate: 1 }), t = setup(fh);
   await t.s.host(); assert.equal(t.s.view().state, 'starting'); assert.equal(t.s.view().error, ERRORS.network);
-  await new Promise(r => setTimeout(r, 30)); assert.equal(t.s.view().state, 'hosting');
+  ctx.mock.timers.tick(100); await flush(); assert.equal(t.s.view().state, 'hosting');
 });
 test('join: a code is checked first, then a prompt, then the room (M-32, M-33)', async () => {
   const fh = fakeHandshake({ peekResult: { players: 1 } }), t = setup(fh);
@@ -141,17 +144,18 @@ test('?signal= takes only a local server or this page\'s own origin; anything el
   for (const ok of ['http://localhost:8787', 'https://localhost', 'http://127.0.0.1:9000', 'https://127.0.0.1', 'https://four43.com', 'https://four43.com/handshake']) assert.equal(signalServer(ok, origin), ok, ok);
   for (const bad of [null, '', 'evil.com', 'https://evil.com', 'http://localhost.evil.com', 'http://localhost@evil.com', 'wss://localhost', 'javascript:alert(1)', 'https://four43.com.evil.com', 'http://four43.com', 'ftp://127.0.0.1']) assert.equal(signalServer(bad, origin), undefined, String(bad));
 });
-test('join: no welcome 10 s after joining says the farm cannot be reached; still joined, Leave works; a late welcome clears it (M-33, M-44)', async () => {
+test('join: no welcome 10 s after joining says the farm cannot be reached; still joined, Leave works; a late welcome clears it (M-33, M-44)', async ctx => {
+  ctx.mock.timers.enable({ apis: ['setTimeout'] }); // D-4: the retry and the welcome wait run on a mocked clock
   const fh = fakeHandshake({ peekResult: { players: 1 } }), t = setup(fh, { welcomeMs: 20 });
   t.s.openJoin(); await t.s.submitCode('K7MX2'); await t.s.confirmJoin(); assert.equal(t.s.view().error, null);
-  await new Promise(r => setTimeout(r, 40));
+  ctx.mock.timers.tick(100); await flush();
   assert.equal(t.s.view().state, 'joined'); assert.equal(t.s.view().error, ERRORS.noFarm); assert.equal(ERRORS.noFarm, "Can't connect to the farm.");
   const r = fh.made.at(-1).room, peer = Object.assign(emitter(), { id: 'h', open: true, send: () => true }); r.peers.set('h', peer); r.emit('peer', peer);
   peer.emit('message', { t: 'welcome', v: NET_VERSION, seed: 9, farm: 0, you: 2, players: [{ n: 1, paint: { body: 'red', trim: 'yellow' }, away: false }], herd: [], trees: [], next: 0 }, { reliable: true });
   const c = t.changes; t.s.before(1); assert.equal(t.s.view().error, null, 'connected after all'); assert.ok(t.changes > c, 'the panel redraws');
   t.s.leave(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, null);
   const fh2 = fakeHandshake({ peekResult: { players: 1 } }), t2 = setup(fh2, { welcomeMs: 20 });
-  t2.s.openJoin(); await t2.s.submitCode('K7MX2'); await t2.s.confirmJoin(); await new Promise(r => setTimeout(r, 40)); assert.equal(t2.s.view().error, ERRORS.noFarm);
+  t2.s.openJoin(); await t2.s.submitCode('K7MX2'); await t2.s.confirmJoin(); ctx.mock.timers.tick(100); await flush(); assert.equal(t2.s.view().error, ERRORS.noFarm);
   t2.s.leave(); assert.equal(t2.s.view().state, 'idle'); assert.equal(t2.s.view().error, null, 'Leave ends it');
 });
 test('a room that ends by itself says why: lost and kicked get panel text; leaving yourself does not (M-41)', async () => {
