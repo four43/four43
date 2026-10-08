@@ -169,8 +169,8 @@ test('a room that ends by itself says why: lost and kicked get panel text; leavi
   await j.t.s.host(); assert.equal(j.t.s.view().error, null, 'a new room clears it');
 });
 
-test('no TURN relay: Host and Join say so in the panel and do not try again by themselves (C-2)', async () => {
-  assert.equal(ERRORS.no_turn, "Can't reach the relay server. Try again.");
+test('no TURN relay: Join says so (a guest on another network) in the panel and do not try again by themselves (C-2)', async () => {
+  assert.match(ERRORS.no_turn, /not on the host's network/);
   const fh = fakeHandshake({ failCreate: 1, failCode: 'no_turn' }), t = setup(fh);
   await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.no_turn); assert.ok(fh.made[0].closed, 'client closed');
   const fh2 = fakeHandshake({ failJoin: 'no_turn' }), t2 = setup(fh2);

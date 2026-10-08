@@ -48,7 +48,7 @@ const pageSvg = k => { const [s0, s1, h0, h1, extra] = PAGE_ART[k % PAGE_ART.len
 const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${RB}</defs><path d="M14 26 H66 L62 70 Q40 76 18 70 Z" fill="#c9ccd4" stroke="#4a3a2c" stroke-width="4" stroke-linejoin="round"/>
 <ellipse cx="40" cy="26" rx="26" ry="8" fill="url(#rb)" stroke="#4a3a2c" stroke-width="4"/><path d="M18 22 Q40 2 62 22" fill="none" stroke="#4a3a2c" stroke-width="4"/></svg>`;
 
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onBookSeen, onParent, onMultiplayer, onBedtime }) {
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onBookSeen, onParent, onMultiplayer, onBedtime, netlog = null }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
@@ -190,7 +190,8 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     p.addEventListener('pointerdown', e => e.stopPropagation());
   }
   // M-29..M-34: the Multiplayer panel (text, like the parent menu). It redraws on every session change while it is open.
-  let mpSession = null;
+  let mpSession = null, waitJoin = false, showLog = false; // waitJoin: Join was tapped; the panel stays until the host's farm arrives (M-33)
+  netlog?.onChange(() => { const pre = root.querySelector('.parent.mp pre.netlog'); if (pre) { pre.textContent = netlog.text(); pre.scrollTop = pre.scrollHeight; } });
   function openMultiplayer(session) { mpSession = session; root.querySelector('.parent.mp')?.remove(); const p = el('parent mp', 'div', root), box = el('box', 'div', p); p.addEventListener('pointerdown', e => e.stopPropagation()); drawMp(box); }
   function refreshMultiplayer() { const box = root.querySelector('.parent.mp .box'); if (box && mpSession) drawMp(box); }
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -209,15 +210,22 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
 <div class="row"><button data-a="submit" class="primary"${v.state === 'checking' ? ' disabled' : ''}>Join</button><button data-a="cancel">Back</button></div>${err}`;
     else if (v.state === 'prompt' || v.state === 'joining') { const n = Number(v.info.players) | 0; body = `<p>Join <b>${esc(v.name)}</b>? ${n} ${n === 1 ? 'player' : 'players'}.</p>
 <div class="row"><button data-a="confirm" class="primary"${v.state === 'joining' ? ' disabled' : ''}>Join</button><button data-a="cancel">Cancel</button></div>${err}`; }
-    else if (v.state === 'joined') body = `<p class="room">${esc(v.name)}</p>${playerRows(v, false)}<div class="row"><button data-a="leave">Leave</button></div>${err}`;
+    else if (v.state === 'joined' && !v.connected) body = `<p>Joining <b>${esc(v.name)}</b>…</p><p class="wait"><span class="spin"></span> Connecting to the farm</p><div class="row"><button data-a="leave">Cancel</button></div>${err}`;
+    else if (v.state === 'joined') body = `<p class="room">${esc(v.name)}</p>${waitJoin ? '<p class="ok">Connected!</p>' : ''}${playerRows(v, false)}<div class="row"><button data-a="leave">Leave</button></div>${err}`;
+    if (waitJoin && v.state === 'joined' && v.connected) { waitJoin = false; setTimeout(() => { if (mpSession?.view().connected) box.parentElement?.remove(); }, 900); } // M-33: success: a short "Connected!", then the panel goes
+    if (waitJoin && v.state !== 'joined' && v.state !== 'joining') waitJoin = false;
+    const logView = showLog && netlog ? `<div class="logbox"><div class="row"><button data-a="copylog">Copy</button><button data-a="log">Hide log</button></div><pre class="netlog"></pre></div>` : '';
     const keep = box.querySelector('[name=room]')?.value ?? '';
-    box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button><h2>Multiplayer</h2>${body}`;
+    box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button>${netlog ? '<button data-a="log" class="help" aria-label="Debug log">?</button>' : ''}<h2>Multiplayer</h2>${body}${logView}`;
+    const pre = box.querySelector('pre.netlog'); if (pre) { pre.textContent = netlog.text(); pre.scrollTop = pre.scrollHeight; }
     const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); input.addEventListener('input', () => { input.value = input.value.replace(/^\s*tractor-pickup-/i, ''); }); } // the prefix is fixed text: a pasted full name keeps only its code
     box.onclick = e => {
       const t = e.target.closest?.('[data-a]'), a = t?.dataset.a; if (!a) return;
       if (a === 'close') { mpSession.cancel(); box.parentElement.remove(); return; } // a check or a prompt ends with the panel (its client closes); a room goes on
       ({ host: () => mpSession.host(), join: () => mpSession.openJoin(), stop: () => mpSession.stopHosting(), submit: () => mpSession.submitCode(input.value), cancel: () => mpSession.cancel(),
-        confirm: () => { mpSession.confirmJoin().then(() => { if (mpSession.view().state === 'joined') box.parentElement?.remove(); }); }, leave: () => mpSession.leave(),
+        confirm: () => { waitJoin = true; mpSession.confirmJoin(); }, leave: () => { waitJoin = false; mpSession.leave(); },
+        log: () => { showLog = !showLog; drawMp(box); },
+        copylog: () => { const txt = netlog.text(); (navigator.clipboard?.writeText(txt) ?? Promise.reject(new Error('no clipboard'))).then(() => { t.textContent = 'Copied'; }, e => { console.warn('copy log', e); const pre = box.querySelector('pre.netlog'); const r = document.createRange(); r.selectNodeContents(pre); getSelection().removeAllRanges(); getSelection().addRange(r); t.textContent = 'Selected: copy it'; }); },
         remove: () => mpSession.remove(Number(t.dataset.n)), lock: () => mpSession.lock(t.checked) })[a]?.();
     };
   }

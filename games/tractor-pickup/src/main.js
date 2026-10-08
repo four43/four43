@@ -30,6 +30,7 @@ import { createMenus, paintBtnSvg, bookSvg } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
 import { Handshake } from './net/handshake.js';
+import { createNetLog, loggedTransports } from './net/netlog.js';
 import { createSession, parseRoomInput, signalServer } from './net/session.js';
 import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
@@ -164,7 +165,11 @@ async function main() {
     const first = () => { removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); play(); };
     addEventListener('pointerdown', first, true); addEventListener('keydown', first, true);
   }
+  // M-53: the multiplayer debug log (the "?" in the Multiplayer panel); Handshake's own warnings go into it too
+  const netlog = sandbox ? null : createNetLog();
+  if (netlog) { netlog.log('device', navigator.userAgent); for (const k of ['warn', 'error']) { const orig = console[k].bind(console); console[k] = (...a) => { if (typeof a[0] === 'string' && /^(handshake|multiplayer|net )/.test(a[0])) netlog.log(k, ...a.map(x => x instanceof Error ? x.message : typeof x === 'string' ? x : String(x))); orig(...a); }; } }
   const menus = sandbox ? null : createMenus(ui, {
+    netlog,
     icons, art: createStickerArt(renderer), tractorPic: sandbox ? null : tractorPicture(renderer),
     onStickers(p) { save('tp-progress', p); }, // W-2: a sticker was placed, moved or taken off a page
     onBookSeen() { driveBadge(); }, // F-3
@@ -187,7 +192,7 @@ async function main() {
     onBedtime(min) { setBedtime(bed, min, Date.now()); saveBed(); }, // E-5 // M-19: no new farm for a guest
     onMultiplayer() { menus.openMultiplayer(session); },
   });
-  const session = sandbox ? null : createSession({ Handshake, server: signal, lag, getGame: () => game, getPaint: () => progress.paint,
+  const session = sandbox ? null : createSession({ Handshake, server: signal, lag, log: netlog ? netlog.log : undefined, transports: netlog ? loggedTransports(netlog.log) : {}, getGame: () => game, getPaint: () => progress.paint,
     onFarm: (s, n) => { startFarm({ seed: s, power: powerNow, player: n }); if (!started) play(); return game; }, // M-1: the guest makes the host's farm
     onChange: () => menus.refreshMultiplayer() });
   const warnOnce = createWarnOnce(); // M-44: once per kind, never a flood each frame

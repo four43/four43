@@ -23,17 +23,20 @@ export const ERRORS = {
   version_mismatch: 'Update the game on both devices.', rate_limited: 'Too many tries. Wait a minute.', network: "Can't reach the server. Trying again…",
   timeout: "Can't reach the server.", closed: "Can't reach the server.", other: 'Something went wrong. Try again.', joinNetwork: "Can't reach the server. Try again.",
   noFarm: "Can't connect to the farm.", // joined, but no welcome from the host in 10 s (no peer connection)
-  no_turn: "Can't reach the relay server. Try again.", // C-2: no TURN credentials, so a player on another network could never connect (M-48)
+  no_turn: "This device is not on the host's network, and the server has no relay (TURN). Join from the same Wi-Fi.", // C-2: a guest that is not nearby could never connect (M-48)
   control: "Can't change the farm now. Try again.", // Lock or Remove refused (the socket is down, or no answer)
   lost: 'The room closed.', kicked: 'You were removed from the farm.', // closed reasons: the room ended without a tap here
 };
 ERRORS.bad_key = ERRORS.not_found; // a private room without its key looks like no room (tractor rooms are public; peek(code) sends no key)
 const errText = e => ERRORS[e?.code] || ERRORS.other, joinText = e => e?.code === 'network' ? ERRORS.joinNetwork : errText(e); // only Host retries by itself
-export function createSession({ Handshake, server = SERVER, lag = null, getGame, onFarm, getPaint, onChange = () => {}, retryMs = 10000, welcomeMs = 10000 }) {
-  let hs = null, room = null, sync = null, state = 'idle', error = null, code = null, info = null, retry = 0, stuck = false, waitT = 0; // stuck: joined, no welcome after welcomeMs
+// log (M-53): the debug log's log(...), or nothing; transports: the logged WebSocket, RTCPeerConnection and fetch for Handshake
+export function createSession({ Handshake, server = SERVER, lag = null, getGame, onFarm, getPaint, onChange = () => {}, retryMs = 10000, welcomeMs = 10000, log = () => {}, transports = {} }) {
+  let welcomed = false, hs = null, room = null, sync = null, state = 'idle', error = null, code = null, info = null, retry = 0, stuck = false, waitT = 0; // stuck: joined, no welcome after welcomeMs
   const unstick = () => { clearTimeout(waitT); stuck = false; };
-  const changed = () => { try { onChange(); } catch (e) { console.warn(e); } };
-  const client = () => (hs ||= new Handshake({ server, app: APP, version: NET_VERSION, relayUnlessNearby: true }));
+  let said = '';
+  const changed = () => { const k = `${state}${error ? ' error: ' + error : ''}`; if (k !== said) { said = k; log('panel', k); } try { onChange(); } catch (e) { console.warn(e); } };
+  const fail = (what, e) => log(what, 'failed:', e?.code || 'no code', e?.message || String(e ?? ''));
+  const client = () => { if (!hs) log('client', server, 'app', APP, 'version', NET_VERSION); return (hs ||= new Handshake({ server, app: APP, version: NET_VERSION, relayUnlessNearby: true, ...transports })); };
   const link = r => { const n = roomLink(r); return lag ? withLag(n, lag) : n; };
   const drop = () => { sync?.close(); sync = null; room = null; code = null; info = null; };
   const idleClient = () => { if (!room) { hs?.close(); hs = null; } }; // a Handshake that has peeked keeps its socket open until close()
@@ -49,7 +52,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
         players.push({ n: me, paint: getPaint(), you: true, host: me === 1, status: '' });
         for (const p of sync.players.list()) players.push({ n: p.n, paint: p.paint, you: false, host: p.n === 1, status: state === 'joined' && p.n !== 1 ? (p.away ? 'away' : '') : statusOf(p) });
         players.sort((a, b) => a.n - b.n); }
-      return { state, code, name: code && roomName(code), url: code && (typeof location === 'undefined' ? '?r=' + code : joinUrl(code)), locked: !!room?.locked, players, info, error: state === 'joined' && stuck && !sync?.you ? ERRORS.noFarm : error };
+      return { state, code, name: code && roomName(code), url: code && (typeof location === 'undefined' ? '?r=' + code : joinUrl(code)), locked: !!room?.locked, players, info, connected: state === 'hosting' || (state === 'joined' && !!sync?.you), error: state === 'joined' && stuck && !sync?.you ? ERRORS.noFarm : error };
     },
     // after every await: a result for a client that was closed (Cancel, Back, Stop) or a state that moved on is stale and changes nothing
     async host() {
@@ -63,7 +66,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
         room = r; code = r.code; sync = y; watch(r); state = 'hosting';
         r.on('members', changed); r.on('meta', changed); r.on('peerAway', changed); r.on('peerBack', changed); r.on('peerLeft', changed); r.on('peer', p => { p.on?.('type', changed); changed(); });
       } catch (e) {
-        if (r && room !== r && !r.closed) r.leave(); if (stale()) return;
+        fail('host', e); if (r && room !== r && !r.closed) r.leave(); if (stale()) return;
         error = errText(e); if (e?.code === 'network' || e?.code === 'timeout') { clearTimeout(retry); retry = setTimeout(() => { if (state === 'starting') { state = 'idle'; s.host(); } }, retryMs); } else { state = 'idle'; idleClient(); } // M-31
       }
       changed();
@@ -75,24 +78,24 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
       state = 'checking'; error = null; changed();
       const h = client(), stale = () => hs !== h || state !== 'checking';
       try { const i = await h.peek(c); if (stale()) return; if (i.locked) throw { code: 'locked' }; if (i.full) throw { code: 'full' }; code = c; info = { players: i.players }; state = 'prompt'; }
-      catch (e) { if (stale()) return; state = 'join'; error = joinText(e); }
+      catch (e) { fail('check code', e); if (stale()) return; state = 'join'; error = joinText(e); }
       changed();
     },
     async confirmJoin() {
-      if (state !== 'prompt') return; state = 'joining'; changed();
+      if (state !== 'prompt') return; state = 'joining'; welcomed = false; changed();
       const h = client(), stale = () => hs !== h || state !== 'joining'; let r = null;
       try { r = await h.joinRoom(code); if (stale()) { if (!r.closed) r.leave(); return; }
         const y = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm }); room = r; sync = y; watch(r); state = 'joined';
-        unstick(); waitT = setTimeout(() => { if (sync === y && !y.you) { stuck = true; changed(); } }, welcomeMs); waitT?.unref?.(); // the panel says so; Leave still works
+        unstick(); waitT = setTimeout(() => { if (sync === y && !y.you) { stuck = true; log('no welcome from the host after', welcomeMs / 1000, 's: no peer connection?'); changed(); } }, welcomeMs); waitT?.unref?.(); // the panel says so; Leave still works
         r.on('members', changed); r.on('hostAway', changed); r.on('hostBack', changed); r.on('peer', p => { p.on?.('type', changed); changed(); }); } // the host row follows the real connection
-      catch (e) { if (r && room !== r && !r.closed) r.leave(); if (stale()) return; state = 'join'; error = joinText(e); code = null; info = null; idleClient(); }
+      catch (e) { fail('join', e); if (r && room !== r && !r.closed) r.leave(); if (stale()) return; state = 'join'; error = joinText(e); code = null; info = null; idleClient(); }
       changed();
     },
     cancel() { if (state === 'prompt' || state === 'join' || state === 'checking') { state = 'idle'; code = null; info = null; error = null; idleClient(); changed(); } },
     leave() { unstick(); const r = room; room = null; state = 'idle'; sync?.close(); sync = null; code = null; if (!r?.closed) r?.leave(); idleClient(); changed(); }, // M-41: the guest goes on alone
     lock(on) { const r = room; if (!r) return; error = null; r.lock(on).catch(e => refused(r, e)).finally(changed); changed(); }, // the switch follows room.locked (the meta event)
     remove(n) { const p = sync?.players.map.get(n), r = room; if (!p?.peer || !r) return; error = null; r.kick(p.peer).catch(e => refused(r, e)).finally(changed); },
-    before(now) { const e = sync ? sync.before(now) : []; if (stuck && sync?.you) { stuck = false; changed(); } return e; }, // a late welcome clears the panel text
+    before(now) { const e = sync ? sync.before(now) : []; if (state === 'joined' && sync?.you && !welcomed) { welcomed = true; log('welcome: this device is player', sync.you); changed(); } if (stuck && sync?.you) { stuck = false; changed(); } return e; }, // a late welcome clears the panel text
     after(events, now) { sync?.after(events, now); },
     showStarted() { sync?.showStarted(); }, delivered(r) { sync?.delivered(r); }, requestHelp: () => !!(sync && state === 'joined' && sync.requestHelp()),
     setGame(g) { sync?.setGame(g); }, setPaint(p) { sync?.setPaint(p); },

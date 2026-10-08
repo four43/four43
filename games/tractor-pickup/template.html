@@ -185,6 +185,10 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .parent button{font:inherit;min-height:48px;padding:6px 18px;border-radius:12px;border:2px solid #6b4428;background:#fff;color:#3a2412;cursor:pointer}
 .parent button.primary{background:#f5c84c;font-weight:700}
 .parent button.x{position:absolute;top:10px;right:10px;width:48px;height:48px;min-height:0;padding:0;border-radius:50%;background:#d8342c;border-color:#8f1f1a;display:grid;place-items:center}.parent button.x svg{width:55%;height:55%}
+.parent.mp .help{position:absolute;top:10px;right:68px;width:48px;height:48px;min-height:0;padding:0;border-radius:50%;font:700 24px/1 Andika,system-ui;background:#fff;border:2px solid #6b4428;color:#6b4428}
+.parent.mp .wait{display:flex;align-items:center;gap:10px;font-weight:700}.parent.mp .ok{color:#1f6b28;font-weight:700}
+.parent.mp .spin{width:22px;height:22px;border-radius:50%;border:4px solid #e9d9bf;border-top-color:#3fae4a;animation:spin 0.9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.parent.mp .logbox{margin-top:12px}.parent.mp pre.netlog{margin:8px 0 0;max-height:40vh;overflow:auto;background:#2b2118;color:#f3e7d3;font:11px/1.35 ui-monospace,Menlo,monospace;padding:8px;border-radius:8px;white-space:pre-wrap;word-break:break-word;user-select:text;-webkit-user-select:text}
 .parent.mp .room{font:700 26px/1.2 Andika,system-ui,sans-serif;letter-spacing:.02em;margin:6px 0 10px;word-break:break-all}
 .parent.mp .qr{width:min(260px,70vw);margin:0 auto 10px;background:#fff;padding:6px;border-radius:10px}.parent.mp .qr svg{width:100%;height:auto;display:block}
 .parent.mp .players{list-style:none;padding:0;margin:8px 0}.parent.mp .players li{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid #eadcc6}
