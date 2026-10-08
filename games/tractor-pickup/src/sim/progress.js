@@ -2,7 +2,11 @@
 // W-3: two start paints, then one new paint every 3 shows. Each paint can go on the body or the trim.
 export const START_PAINTS = ['red', 'yellow'], NEW_PAINTS = ['green', 'blue', 'pink', 'orange', 'purple', 'white', 'rainbow'];
 export const HATS = [{ id: 'straw', shows: 4 }, { id: 'cowboy', shows: 8 }, { id: 'party', shows: 12 }];
-export const emptyProgress = () => ({ shows: 0, stickers: [], paint: { body: 'red', trim: 'yellow' }, hatsOff: [] });
+export const emptyProgress = () => ({ shows: 0, stickers: [], paint: { body: 'red', trim: 'yellow' }, hatsOff: [], bookSeen: 0 });
+// F-3: bookSeen is the show number of the newest sticker when the sticker book was last opened; the badge counts the stickers after it
+const lastShow = p => Math.max(0, ...p.stickers.map(s => s.show));
+export const newStickers = p => p.stickers.filter(s => s.show > (p.bookSeen ?? 0)).length;
+export const seeBook = p => ({ ...p, bookSeen: lastShow(p) });
 export const unlockedPaints = p => [...START_PAINTS, ...NEW_PAINTS.slice(0, Math.floor(p.shows / 3))];
 export const hasPaintChoice = p => unlockedPaints(p).length > START_PAINTS.length; // F-11: the start screen shows only then
 export const unlockedHats = p => HATS.filter(h => p.shows >= h.shows).map(h => h.id);
@@ -49,7 +53,8 @@ export function clampProgress(p, types) {
   const have = unlockedPaints({ shows }), saved = p.paint && typeof p.paint === 'object' ? p.paint : { body: p.color }, start = emptyProgress().paint;
   const pick = area => have.includes(saved[area]) ? saved[area] : start[area];
   const hatsOff = (Array.isArray(p.hatsOff) ? p.hatsOff : []).filter((h, i, a) => HATS.some(x => x.id === h) && a.indexOf(h) === i);
-  return { shows, stickers, paint: { body: pick('body'), trim: pick('trim') }, hatsOff };
+  const bookSeen = Number.isInteger(p.bookSeen) && p.bookSeen >= 0 ? p.bookSeen : lastShow({ stickers }); // a save from 1.9 or before: nothing is new
+  return { shows, stickers, paint: { body: pick('body'), trim: pick('trim') }, hatsOff, bookSeen };
 }
 export const DEFAULT_SETTINGS = { power: 'medium', voice: true, music: true, seed: null };
 export function clampSettings(s) {

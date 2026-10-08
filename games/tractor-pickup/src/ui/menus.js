@@ -1,6 +1,6 @@
 // Start screen (F-11), sticker card (F-3, F-9), paint screen (W-3), sticker book (W-2) and the parent menu (U-3, P-3..P-8).
 // Everything a child sees is a picture (R-2, U-4); only the parent panel has text. Buttons use `click` so iOS counts the tap as a gesture for audio.
-import { clampSettings, unlockedPaints, unlockedHats, wornHats, toggleHat, placeSticker, unplaceSticker, bookPages } from '../sim/progress.js';
+import { clampSettings, unlockedPaints, unlockedHats, wornHats, toggleHat, placeSticker, unplaceSticker, bookPages, newStickers, seeBook } from '../sim/progress.js';
 import { PAINTS } from '../render/vehicles3d.js';
 import { SCALE } from '../render/petScale.js';
 import { qrSvg } from './qr.js';
@@ -47,7 +47,7 @@ const pageSvg = k => { const [s0, s1, h0, h1, extra] = PAGE_ART[k % PAGE_ART.len
 const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${RB}</defs><path d="M14 26 H66 L62 70 Q40 76 18 70 Z" fill="#c9ccd4" stroke="#4a3a2c" stroke-width="4" stroke-linejoin="round"/>
 <ellipse cx="40" cy="26" rx="26" ry="8" fill="url(#rb)" stroke="#4a3a2c" stroke-width="4"/><path d="M18 22 Q40 2 62 22" fill="none" stroke="#4a3a2c" stroke-width="4"/></svg>`;
 
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onParent, onMultiplayer }) {
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onBookSeen, onParent, onMultiplayer }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
@@ -86,8 +86,10 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     const s = open('start');
     paintPanel(s, progress);
     go(s, onPlay);
-    pic(s, 'bookbtn', bookSvg(), () => showBook(progress, () => showStart(progress)), 'Sticker book');
+    badge(pic(s, 'bookbtn', bookSvg(), () => showBook(progress, () => showStart(progress)), 'Sticker book'), progress);
   }
+  // F-3: the number of new stickers (earned since the book was last opened), or nothing
+  const badge = (btn, progress) => { const n = newStickers(progress); if (n) el('count', 'span', btn).textContent = n; return btn; };
 
   // F-3: "New sticker!" and the sticker, stamped on (and a new hat), the paint screen when a paint was just won, one go button, and the
   // sticker book button with the number of stickers in it
@@ -98,8 +100,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     if (newHat) { const h = el('extra hatted', 'div', top); h.innerHTML = `<img alt="" src="${icons.pig}"><span>${hatSvg(newHat)}</span>`; }
     if (newPaint) paintPanel(s, progress, newPaint);
     go(s, onKeepDriving);
-    const book = pic(s, 'bookbtn small', bookSvg(), () => showBook(progress, () => showReward({ sticker, newPaint, newHat, progress })), 'Sticker book');
-    el('count', 'span', book).textContent = progress.stickers.length; // the new sticker went in the book: this many now
+    badge(pic(s, 'bookbtn small', bookSvg(), () => showBook(progress, () => showReward({ sticker, newPaint, newHat, progress })), 'Sticker book'), progress);
   }
 
   // W-1: a die-cut sticker picture
@@ -116,7 +117,8 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     const prev = pic(book, 'turn prev', '<svg viewBox="0 0 40 40"><path d="M26 6 L10 20 L26 34" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>', () => { page--; draw(); }, 'Previous page');
     const next = pic(book, 'turn next', '<svg viewBox="0 0 40 40"><path d="M14 6 L30 20 L14 34" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>', () => { page++; draw(); }, 'Next page');
     closeBtn(s, back);
-    const fresh = progress.stickers.length - 1; // the newest sticker bounces once in the tray
+    const seen = progress.bookSeen ?? 0; // the new stickers bounce once in the tray; opening the book makes them seen (F-3)
+    progress.bookSeen = seeBook(progress).bookSeen; onStickers?.(progress); onBookSeen?.();
     const draw = () => {
       page = Math.max(0, Math.min(bookPages(progress) - 1, page)); prev.hidden = page === 0; next.hidden = page >= bookPages(progress) - 1;
       pg.innerHTML = pageSvg(page);
@@ -126,7 +128,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
         grab(im, i); pg.appendChild(im);
       });
       tray.innerHTML = '';
-      progress.stickers.map((st, i) => ({ st, i })).filter(o => !o.st.place).reverse().forEach(({ st, i }) => { const im = cut(st); if (i === fresh) im.classList.add('fresh'); grab(im, i); tray.appendChild(im); });
+      progress.stickers.map((st, i) => ({ st, i })).filter(o => !o.st.place).reverse().forEach(({ st, i }) => { const im = cut(st); if (st.show > seen) im.classList.add('fresh'); grab(im, i); tray.appendChild(im); });
       if (!tray.children.length) tray.classList.add('empty'); else tray.classList.remove('empty');
     };
     const inside = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;

@@ -35,7 +35,7 @@ import { createSession, parseRoomInput, signalServer } from './net/session.js';
 import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
-import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice } from './sim/progress.js';
+import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
@@ -112,7 +112,7 @@ async function main() {
       if (r.newHat) applyHats();
       save('tp-progress', progress);
       if (r.newPaint || r.newHat) sound.bells();
-      menus.showReward({ sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat, progress });
+      menus.showReward({ sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat, progress }); driveBadge();
       voice.say(['you-did-it', 'new-sticker']);
     } catch (e) { console.error('reward', e); menus.hide(); rewardDone = true; }
   };
@@ -129,6 +129,7 @@ async function main() {
   const menus = sandbox ? null : createMenus(ui, {
     icons, art: createStickerArt(renderer), tractorPic: sandbox ? null : tractorPicture(renderer),
     onStickers(p) { save('tp-progress', p); }, // W-2: a sticker was placed, moved or taken off a page
+    onBookSeen() { driveBadge(); }, // F-3
     onHats(p) { save('tp-progress', p); applyHats(); sound.plop(); }, // W-4: a hat was turned off or on
     onPlay: play,
     onKeepDriving() { rewardDone = true; },
@@ -139,7 +140,7 @@ async function main() {
       voice.enabled = s.voice; if (!s.voice) voice.stop?.();
       sound.music(s.music);
     },
-    onClearStickers() { progress = { ...progress, stickers: [] }; save('tp-progress', progress); },
+    onClearStickers() { progress = { ...progress, stickers: [] }; save('tp-progress', progress); driveBadge(); },
     onParent() { menus.openParent(settings, seed, { guest: !!session?.isGuest }); }, // M-19: no new farm for a guest
     onMultiplayer() { menus.openMultiplayer(session); },
   });
@@ -159,6 +160,11 @@ async function main() {
     btn('paintbtn', paintBtnSvg(), 'Paint', back => menus.openPaint(progress, back));
     btn('stickerbtn', bookSvg(), 'Sticker book', back => menus.showBook(progress, back));
   }
+  function driveBadge() { // F-3: the drive button's badge: new stickers only
+    const b = driveBtns?.querySelector('.stickerbtn'); if (!b) return; b.querySelector('.count')?.remove();
+    const n = newStickers(progress); if (n) b.appendChild(Object.assign(document.createElement('span'), { className: 'count', textContent: n }));
+  }
+  driveBadge();
   build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
   const frame = now => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;

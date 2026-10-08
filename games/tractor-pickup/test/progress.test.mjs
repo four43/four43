@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyProgress, completeShow, unlockedPaints, unlockedHats, pickSticker, clampSettings, clampProgress, hasPaintChoice, START_PAINTS, NEW_PAINTS, stickerLook, POSES, VIEWS, placeSticker, unplaceSticker, bookPages, wornHats, toggleHat } from '../src/sim/progress.js';
+import { emptyProgress, completeShow, unlockedPaints, unlockedHats, pickSticker, clampSettings, clampProgress, hasPaintChoice, START_PAINTS, NEW_PAINTS, stickerLook, POSES, VIEWS, placeSticker, unplaceSticker, bookPages, wornHats, toggleHat, newStickers, seeBook } from '../src/sim/progress.js';
 
 test('golden animal wins the sticker; else the most-booped type; ties go to the first landed', () => {
   assert.deepEqual(pickSticker([{ type: 'pig' }, { type: 'cow', golden: true }, { type: 'pig' }]), { type: 'cow', golden: true });
@@ -37,7 +37,7 @@ test('saved progress that is damaged falls back to clean values; a locked paint 
   const types = ['pig', 'cow'];
   assert.deepEqual(clampProgress('junk', types), emptyProgress());
   assert.deepEqual(clampProgress({ shows: 1, paint: { body: 'rainbow', trim: 'red' }, stickers: [{ type: 'pig', show: 1 }, { type: 'dragon', show: 2 }, null] }, types),
-    { shows: 1, hatsOff: [], paint: { body: 'red', trim: 'red' }, stickers: [{ type: 'pig', golden: false, show: 1, ...stickerLook(1, 'pig'), place: null }] });
+    { shows: 1, hatsOff: [], bookSeen: 1, paint: { body: 'red', trim: 'red' }, stickers: [{ type: 'pig', golden: false, show: 1, ...stickerLook(1, 'pig'), place: null }] });
   assert.deepEqual(clampProgress({ shows: 3, paint: { body: 'green', trim: 'green' }, stickers: [] }, types).paint, { body: 'green', trim: 'green' });
   assert.deepEqual(clampProgress({ shows: 3, color: 'green', stickers: [] }, types).paint, { body: 'green', trim: 'yellow' }, 'a 1.0 save: its color becomes the body paint');
 });
@@ -84,4 +84,18 @@ test('hats can be turned off and on: animals wear the unlocked hats that are on;
   assert.deepEqual(clampProgress(JSON.parse(JSON.stringify(p)), ['pig']).hatsOff, ['cowboy'], 'kept in storage');
   assert.deepEqual(clampProgress({ shows: 12, stickers: [], hatsOff: ['crown', 'party', 3] }, ['pig']).hatsOff, ['party'], 'unknown hats dropped');
   assert.deepEqual(clampProgress({ shows: 12, stickers: [] }, ['pig']).hatsOff, [], 'older saves: every hat on');
+});
+
+test('the badge counts only the stickers earned since the book was last opened (F-3, W-2)', () => {
+  let p = emptyProgress(); assert.equal(newStickers(p), 0);
+  p = completeShow(p, [{ type: 'pig' }]).progress; p = completeShow(p, [{ type: 'cow' }]).progress; assert.equal(newStickers(p), 2);
+  p = seeBook(p); assert.equal(newStickers(p), 0);
+  p = completeShow(p, [{ type: 'duck' }]).progress; assert.equal(newStickers(p), 1);
+  p = { ...p, stickers: [] }; assert.equal(newStickers(p), 0, 'cleared stickers: nothing new');
+});
+test('a saved bookSeen is kept; a save without one has nothing new (F-3)', () => {
+  const types = ['pig', 'cow'], stickers = [{ type: 'pig', show: 1 }, { type: 'cow', show: 2 }];
+  assert.equal(clampProgress({ shows: 2, stickers, bookSeen: 1 }, types).bookSeen, 1);
+  assert.equal(newStickers(clampProgress({ shows: 2, stickers }, types)), 0);
+  assert.equal(clampProgress({ shows: 2, stickers, bookSeen: -3 }, types).bookSeen, 2);
 });
