@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ASSETS, geoFrom } from './gfx.js';
+import { splitShared } from './matSplit.js';
 import { ROAD_HALF, CORRIDOR, FARM_HALF, MUD_HALF } from '../sim/road.js';
 import { YARD_HALF, WASH } from '../sim/track.js';
 import { makeGravelTexture, makeGrassTexture, makePlankTexture, makeShingleTexture, makeRockTexture, worldUV } from './textures.js';
@@ -188,6 +189,7 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
   const oaks = inst('oak', treeOnes.length), stumps = inst('stump-cut', treeOnes.length), bushes = inst('shrub', bushOnes.length);
   const TREE_K = 2.6, BUSH_K = 1, BUSH_SY = 1; // model scale: the oak at 2.6 (young trees 1.6, from their scale); shrub.glb is already bush size
   const easeOutBack = u => { const c = 1.70158; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+  splitShared(scene, matV); // X-4: no program look-ups between instanced and plain users (render/matSplit.js)
   return {
     sprinklers,
     update(focus) {

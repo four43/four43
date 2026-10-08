@@ -17,6 +17,7 @@ import { POWER, TP } from './sim/tractor.js';
 import { TR } from './sim/hitch.js';
 import { createSandbox } from './sim/sandbox.js';
 import { createScene, VIEW } from './render/scene.js';
+import { instancedShadows } from './render/shadows.js';
 import { createChaseCam, CAM } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
@@ -84,6 +85,7 @@ async function main() {
     fxs = { dust: 0, mud: 0, mark: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
     trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world, onHop: r => hud.markOut(slotIndex(r.slot) + 1) }) : null;
     showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
+    instancedShadows(world); // X-4: no shadow-pass program churn (render/shadows.js)
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
     bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
     prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
@@ -167,8 +169,8 @@ async function main() {
   driveBadge();
   build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
   const frame = now => {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
-    const inp = input.read();
+    const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now; acc += dt;
+    const inp = input.read(), t0 = perf ? performance.now() : 0;
     while (acc >= DT) {
       { const t = game.tractor; if (game.mode !== 'drive' && game.mode) pilot.reset(); const o = pilot.update(inp, chase.yaw ?? t.yaw, t.yaw, t.speed); // C-1, C-2: point to go
         stepIn.thr = o.thr; stepIn.steer = o.steer; stepIn.turn = o.turn; stepIn.onTarget = o.onTarget; stepIn.horn = hornQueued; }
@@ -177,6 +179,7 @@ async function main() {
       const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
       const ev = [...netEv, ...(game.step(stepIn) || [])]; hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
       if (session) try { session.after(ev, nowMs); } catch (e) { warnOnce('net after', e); } // M-44
+      if (perf) for (const e of ev) perf.event(e.type);
       for (const e of ev) try {
         if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', k = bush ? 0.7 : t.young ? 0.8 : 1.3; gibs.burst(t.x, (bush ? 0.8 : 1.6) * k, t.z, e.dir, k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
         if (e.type === 'horn') sound.horn();
@@ -232,8 +235,8 @@ async function main() {
     }
     { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
     follow(view[0].p.x, view[0].p.z);
-    renderer.render(scene, camera);
-    perf?.tick(dt);
+    const t1 = perf ? performance.now() : 0; renderer.render(scene, camera);
+    if (perf) { const y = game.farm?.yard.barn; perf.tick(dt, gap, t1 - t0, performance.now() - t1, y ? Math.hypot(game.tractor.x - y.x, game.tractor.z - y.z) : 0); }
   };
   enterStart();
   const linkCode = parseRoomInput(params.get('r')); // M-34: a QR link opens the join prompt
@@ -375,11 +378,18 @@ function createFpsMeter(renderer) {
   const el = Object.assign(document.createElement('div'), { id: 'fps' });
   el.style.cssText = 'position:fixed;right:6px;top:6px;z-index:99;font:12px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;white-space:pre';
   document.body.appendChild(el);
-  const win = []; let shown = 0;
-  return { tick(dt) {
-    win.push(dt); if (win.length > 300) win.shift();
-    if ((shown += dt) < 0.5) return; shown = 0;
-    const avg = win.reduce((a, b) => a + b, 0) / win.length, worst = Math.max(...win), i = renderer.info.render;
-    el.textContent = `${(1 / dt).toFixed(0)} fps (avg ${(1 / avg).toFixed(0)}, min ${(1 / worst).toFixed(0)})\n${i.calls} draws, ${(i.triangles / 1000).toFixed(0)}k tris`;
-  } };
+  // X-4: every frame longer than 50 ms is logged with what took the time: the sim steps and their events, the render call, the distance
+  // from the barn. Both small on a long frame: the time went outside the game (GC, the GPU, the browser).
+  const win = [], hitches = [], evs = new Set(); let shown = 0, clock = 0;
+  return {
+    event(type) { evs.add(type); },
+    tick(dt, gap, simMs, renderMs, dist) {
+      clock += dt; win.push(dt); if (win.length > 300) win.shift();
+      if (gap > 50) { hitches.push(`${clock.toFixed(1)}s ${gap.toFixed(0)}ms sim ${simMs.toFixed(1)} draw ${renderMs.toFixed(1)} ${dist.toFixed(0)}m ${[...evs].join(',')}`); if (hitches.length > 6) hitches.shift(); console.log('hitch', hitches.at(-1)); }
+      evs.clear();
+      if ((shown += dt) < 0.5) return; shown = 0;
+      const avg = win.reduce((a, b) => a + b, 0) / win.length, worst = Math.max(...win), i = renderer.info.render;
+      el.textContent = `${(1 / dt).toFixed(0)} fps (avg ${(1 / avg).toFixed(0)}, min ${(1 / worst).toFixed(0)})\n${i.calls} draws, ${(i.triangles / 1000).toFixed(0)}k tris` + (hitches.length ? '\nlong frames:\n' + hitches.join('\n') : '');
+    },
+  };
 }
