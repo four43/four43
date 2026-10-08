@@ -457,7 +457,7 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 |---|---|---|
 | U-1 | Slot bar | Top center. 12 slots: 6 for the trailer, a small gap, then 6 for the wagon. Each slot fills with the animal picture and name. A tap on a full slot plays its animal (W-8). In the show, each slot gets a check mark when its animal hops out (F-15). The bar empties after the show. On a phone in portrait the bar is two rows of 6 (trailer, then wagon) below the gear (X-12). |
 | U-2 | Horn | Bottom right. A round button with a classic bulb horn: a red rubber squeeze bulb on a brass horn with a flared bell. |
-| U-3 | Parent menu | Top left. A small gear. Press and hold for 2 s to open. A child cannot open it by accident. |
+| U-3 | Parent menu | Top left. A small round button with a menu icon (three lines). Press and hold for 2 s to open. A child cannot open it by accident. In the menu, a wide green "Multiplayer" button is at the top, on its own row. |
 | U-4 | Text | Only animal names (W-5), the numbers and names in the show (section 3.4), "New sticker!" on the sticker card (F-3) and "Wake Up!" on the wake button (N-5). The voice says each of them (R-2). The parent menu can use text. |
 | U-5 | Skip | During the show only: top right. A fast-forward picture. It must be held for 1 s (F-13). |
 | U-6 | Drive buttons | While driving only (not during the start screen, the show or the sticker card): two round buttons stacked at the bottom left, clear of the slot bar (on a phone in portrait: smaller, at the top right, X-12). The sticker book button shows the number of new stickers (F-3). The upper button (a paint pot) opens the paint screen (W-3); the lower button (a book) opens the sticker book (W-2). A tap on a button never moves the stick. While either screen is open, the tractor is held (like the sticker card) and nothing is booped; a close button (a red X, top right) goes back to driving. The end of the intro (the voice "Let's find animals!") does not free the tractor while either screen is open. |
@@ -512,7 +512,7 @@ The parent menu uses the game's button style: large rounded buttons with thick b
 | P-4 | Music | On, Off | On |
 | P-5 | Farm seed | A number box and a "Use this seed" button (on or off). The heading shows the seed of this farm. The seed applies with the next new farm. | Random (off) |
 | P-8 | New farm | Button. A guest in a room cannot use it (M-19). | — |
-| P-10 | Multiplayer | Button. It opens the Multiplayer panel (M-29). | — |
+| P-10 | Multiplayer | A wide green button at the top of the menu, on its own row. It opens the Multiplayer panel (M-29). | — |
 | P-6 | Clear stickers | Button with a confirmation. It removes all stickers at once. If the paint screen, the sticker book or the sticker card is open, it closes, as with its own close button. | — |
 | P-9 | Apply | Removed in version 1.11. Each choice applies at once. | — |
 
@@ -733,7 +733,7 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 
 | ID | Item | Description |
 |---|---|---|
-| M-29 | Multiplayer button | In the Farm part of the parent menu (section 10, P-10), a "Multiplayer" button opens the Multiplayer panel. A red X at the top right closes the panel (U-7). The panel has text, like the parent menu. A child cannot open it, because the parent menu needs a long press (U-3). |
+| M-29 | Multiplayer button | At the top of the parent menu (section 10, P-10), on its own row, a wide green "Multiplayer" button opens the Multiplayer panel. A red X at the top right closes the panel (U-7). The panel has text, like the parent menu. A child cannot open it, because the parent menu needs a long press (U-3). |
 | M-30 | Start | When the device is not in a room, the panel shows two buttons: "Host" and "Join". |
 | M-31 | Host | "Host" makes a room. The panel shows: the room name in large letters; a QR code of the full game URL with the room code (for example `https://four43.com/exp/tractor-pickup/?r=K7MX2`); and the player list. Each row of the player list shows a small tractor picture in that player's paints, the player number and the state (connecting, direct, relayed or away). Each guest row has a "Remove" button. A "Lock" switch stops new players. A "Stop hosting" button closes the room. When Handshake cannot be reached, the panel says so and tries again every 10 s. When the game cannot get access to the TURN relay (M-48), the panel shows "Can't reach the relay server. Try again." and does not make a room. If the host cannot lock the room or remove a guest, the panel shows "Can't change the farm now. Try again." |
 | M-32 | Join | "Join" shows `tractor-pickup-` as fixed text, then a text box for the room code (for example `K7MX2`), and a "Join" button. The text box takes the code in upper or lower case; a pasted full room name keeps only its code. The game asks Handshake whether the room exists (peek). Then a prompt shows the room name and the number of players, with "Join" and "Cancel". If the room does not exist, is full, is locked or has a different game version, the panel says so. When the game cannot get access to the TURN relay (M-48), the panel shows "Can't reach the relay server. Try again." and the device does not join. |
