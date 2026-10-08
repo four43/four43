@@ -15,6 +15,7 @@ import { buildFarm3D } from './render/farm3d.js';
 import { createSandbox } from './sim/sandbox.js';
 import { createScene, VIEW } from './render/scene.js';
 import { instancedShadows } from './render/shadows.js';
+import { warmShaders } from './render/warm.js';
 import { createChaseCam } from './render/camera.js';
 import { createVehicles3D } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
@@ -36,6 +37,7 @@ import { createOthers3D } from './render/others3d.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
+const MAX_STEPS = 3; // B-5
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -84,7 +86,9 @@ async function main() {
     trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world, onHop: r => hud.markOut(slotIndex(r.slot) + 1) }) : null;
     showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
     instancedShadows(world); // X-4: no shadow-pass program churn (render/shadows.js)
+    try { Promise.resolve(warmShaders(renderer, scene, camera)).catch(e => console.warn('shader warm-up', e)); } catch (e) { console.warn('shader warm-up', e); } // B-2
     if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
+    if (perf) { const w = game.phys.world, step = w.step; w.step = (...a) => { const t = performance.now(); step.apply(w, a); perf.worldMs(performance.now() - t); }; } // B-1: Rapier's share of the sim
     bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
     prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
     document.getElementById('tune')?.remove();
@@ -171,7 +175,7 @@ async function main() {
   driveBadge();
   build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
   const frame = now => {
-    const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now; acc += dt;
+    const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now; acc = Math.min(acc + dt, MAX_STEPS * DT); perf?.begin(now); // B-5: after a hitch, catch up at most MAX_STEPS steps; the rest of the lost time is dropped
     const inp = input.read(), t0 = perf ? performance.now() : 0;
     if (!started && menus && game.mode === 'drive' && (inp.x || inp.y)) play(); // A-7: a gamepad drives with no touch or key: its first move starts the trip, or a barn pass would give no show
     while (acc >= DT) {
@@ -182,7 +186,7 @@ async function main() {
       const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
       const ev = [...netEv, ...(game.step(stepIn) || [])]; hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT;
       if (session) try { session.after(ev, nowMs); } catch (e) { warnOnce('net after', e); } // M-44
-      if (perf) for (const e of ev) perf.event(e.type);
+      if (perf) { perf.step(); for (const e of ev) perf.event(e.type); }
       for (const e of ev) try {
         if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', k = bush ? 0.7 : t.young ? 0.8 : 1.3; gibs.burst(t.x, (bush ? 0.8 : 1.6) * k, t.z, e.dir, k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
         if (e.type === 'horn') sound.horn();
@@ -238,8 +242,8 @@ async function main() {
     }
     { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
     follow(view[0].p.x, view[0].p.z);
-    const t1 = perf ? performance.now() : 0; renderer.render(scene, camera);
-    if (perf) { const y = game.farm?.yard.barn; perf.tick(dt, gap, t1 - t0, performance.now() - t1, y ? Math.hypot(game.tractor.x - y.x, game.tractor.z - y.z) : 0); }
+    const t1 = perf ? performance.now() : 0, progs = perf ? perf.programs() : 0; renderer.render(scene, camera);
+    if (perf) { const y = game.farm?.yard.barn; perf.tick(dt, gap, t1 - t0, performance.now() - t1, y ? Math.hypot(game.tractor.x - y.x, game.tractor.z - y.z) : 0, progs); }
   };
   enterStart();
   const linkCode = parseRoomInput(params.get('r')); // M-34: a QR link opens the join prompt

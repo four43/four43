@@ -133,13 +133,13 @@ export function buildFarm3D(scene, farm, road, terrain, items, props, { anisotro
     }
   }
   // ramps and sprinkler arches on route tiles
-  const sprinklers = [];
+  const sprinklers = [], rampMat = new THREE.MeshLambertMaterial({ color: '#c9ad7f' }); // B-3: one material (one program) for every ramp
   farm.routes.forEach((R, r) => R.tiles.forEach((t, k) => {
     const c = road.featureCenter(r, k);
     if (t.type === 'ramp') {
       const s = new THREE.Shape([[-5, 0], [0, 0.6], [1, 0.6], [4, 0]].map(([a, y]) => new THREE.Vector2(a, y)));
       const g = new THREE.ExtrudeGeometry(s, { depth: ROAD_HALF * 2, bevelEnabled: false }); g.translate(0, 0, -ROAD_HALF); g.rotateY(-Math.PI / 2);
-      const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#c9ad7f' })); m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = m.receiveShadow = true; scene.add(m);
+      const m = new THREE.Mesh(g, rampMat); m.position.set(c.x, 0, c.z); m.rotation.y = c.yaw; m.castShadow = m.receiveShadow = true; scene.add(m);
     }
     if (t.type === 'sprinkler') {
       const m = new THREE.Mesh(geoFrom(Object.values(ASSETS.sprinkler)), matV); // sprinkler.glb: the arch across the road (x)

@@ -34,6 +34,9 @@ export function createAnimals3D(scene, herd) {
     return { a, type: a.type, golden: a.golden, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
   };
   const views = herd.animals.map(makeView); // by animal id; null while that animal is gone
+  // B-3 (X-4): a plain and a golden keeper far under the ground, never dropped: their programs stay compiled (warm.js) even when the
+  // last golden animal is dropped and its material clone disposed, so the next golden animal draws without a compile
+  for (const m of [base, gold]) { const k = new THREE.Mesh(geos.pig[0], m.clone()); dirtify(k.material); k.castShadow = true; k.position.y = -500; scene.add(k); }
   const drop = i => { const v = views[i]; if (!v) return; scene.remove(v.g); v.parts[0]?.material.dispose(); views[i] = null; }; // its own material clone; geometries are shared
   return {
     views,
