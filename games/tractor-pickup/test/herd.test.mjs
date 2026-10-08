@@ -166,3 +166,15 @@ test('ensure never reuses a slot: the host owns the ids', () => {
   const h = createHerd({ rng: makeRng(38), env }), n = h.animals.length; h.animals[3].state = 'gone'; run(h, GONE_KEEP + 1);
   h.remote = true; h.ensure(n, 'pig', false); assert.equal(h.animals.length, n + 1); assert.equal(h.animals[n].id, n);
 });
+test('a horn or a help call during a dodge hop lets the hop finish on the ground (B-14, A-11)', () => {
+  const h = createHerd({ rng: makeRng(4), env }), t = { x: 40, z: 0, yaw: 0, speed: 0 };
+  const a = h.animals.find(a => !a.hidden && a.home === 'route' && (a.type === 'cow' || a.type === 'pig' || a.type === 'dog'));
+  a.x = t.x + 5; a.z = 0;
+  assert.ok(h.dodge(a, a.x + 3, 3));
+  for (let i = 0; i < 12; i++) h.step(1 / 60, { tractor: far }); // mid-hop
+  assert.ok(a.y > 0);
+  h.horn(t); assert.equal(a.state, 'dodge');
+  const helped = h.callHelp(t); assert.notEqual(helped, a);
+  run(h, 1);
+  assert.equal(a.y, 0); assert.notEqual(a.state, 'dodge');
+});

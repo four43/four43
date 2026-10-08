@@ -83,12 +83,12 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
     animals, free,
     horn(t) {
       for (const a of free()) { if (a.hidden) continue; a.lookT = 1.5;
-        if (TYPES[a.type].come && Math.hypot(a.x - t.x, a.z - t.z) < HORN_R && a.state !== 'help' && a.state !== 'wave') { a.state = 'come'; a.timer = 6; a.tx = t.x + Math.sin(t.yaw) * 6; a.tz = t.z + Math.cos(t.yaw) * 6; } }
+        if (TYPES[a.type].come && Math.hypot(a.x - t.x, a.z - t.z) < HORN_R && a.state !== 'help' && a.state !== 'wave' && a.state !== 'dodge') { a.state = 'come'; a.timer = 6; a.tx = t.x + Math.sin(t.yaw) * 6; a.tz = t.z + Math.cos(t.yaw) * 6; } }
     },
     // B-14: hop to (tx, tz), out of the way of the full tractor and trailers; nothing else moves it meanwhile
     dodge(a, tx, tz) { if (a.state === 'dodge' || a.hidden) return false; a.state = 'dodge'; a.leader = null; a.dodge = { t: 0, x0: a.x, z0: a.z, x1: tx, z1: tz }; a.yaw = Math.atan2(tx - a.x, tz - a.z); return true; },
     callHelp(t) {
-      const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
+      const c = free().filter(a => !a.hidden && a.type !== 'chick' && a.home === 'route' && a.state !== 'dodge').sort((p, q) => Math.hypot(p.x - t.x, p.z - t.z) - Math.hypot(q.x - t.x, q.z - t.z))[0];
       if (!c) return null; const p = env.roadAhead(t.x, t.z, t.yaw, 15); c.state = 'help'; c.tx = p.x; c.tz = p.z; return c;
     },
     toBarn(list) { // after the show: walk into the barn, one after the other, and are gone (A-16, F-10)
