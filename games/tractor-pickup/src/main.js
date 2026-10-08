@@ -142,7 +142,11 @@ async function main() {
       voice.enabled = s.voice; if (!s.voice) voice.stop?.();
       sound.music(s.music);
     },
-    onClearStickers() { progress = { ...progress, stickers: [] }; save('tp-progress', progress); driveBadge(); },
+    onClearStickers() { // in place: an open screen holds this same object, so its next save cannot bring the stickers back
+      progress.stickers.length = 0; save('tp-progress', progress); driveBadge();
+      if (!menus.open) return; menus.hide(); // a book left open would show stickers that are gone; close it the way its own X would
+      if (!started) enterStart(); else if (game.mode === 'menu') game.mode = 'drive'; else if (game.mode === 'reward') rewardDone = true;
+    },
     onParent() { menus.openParent(settings, seed, { guest: !!session?.isGuest }); }, // M-19: no new farm for a guest
     onMultiplayer() { menus.openMultiplayer(session); },
   });
