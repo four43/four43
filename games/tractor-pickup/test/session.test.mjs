@@ -18,7 +18,7 @@ test('room names and codes (M-31, M-32)', () => {
 test('qrSvg makes an svg', () => { const s = qrSvg('https://four43.com/exp/tractor-pickup/?r=K7MX2'); assert.match(s, /^<svg/); assert.match(s, /<\/svg>$/); });
 
 // A fake Handshake with the same contract (the real one is vendored in Task 15)
-function fakeHandshake({ peekResult, failCreate = 0, failCode = 'network', failJoin = null, roomCode = 'K7MX2', gate } = {}) {
+function fakeHandshake({ peekResult, failCreate = 0, failCode = 'network', failJoin = null, roomCode = 'K7MX2', gate, failControl = null } = {}) {
   const made = [];
   class HandshakeError extends Error { constructor(code) { super(code); this.code = code; } }
   class Handshake {
@@ -32,7 +32,9 @@ function fakeHandshake({ peekResult, failCreate = 0, failCode = 'network', failJ
     close() { this.closed = true; for (const w of this.pending) w.rej(new HandshakeError('closed')); this.pending.clear(); }
   }
   const room = isHost => Object.assign(emitter(), { code: roomCode, key: 'k', isHost, you: isHost ? 'h' : 'g', hostId: 'h', locked: false, members: [], peers: new Map(),
-    closed: false, lock(on) { this.locked = on; this.emit('meta', { meta: {}, locked: on }); }, kick(id) { this.kicked = id; }, leave() { if (this.closed) return; this.left = true; this.closed = true; this.emit('closed', 'left'); } });
+    closed: false, // lock and kick return promises that settle on the server's answer (handshake.js host controls)
+    lock(on) { if (failControl) return Promise.reject(new HandshakeError(failControl)); this.locked = on; this.emit('meta', { meta: {}, locked: on }); return Promise.resolve(); },
+    kick(id) { if (failControl) return Promise.reject(new HandshakeError(failControl)); this.kicked = id; return Promise.resolve(); }, leave() { if (this.closed) return; this.left = true; this.closed = true; this.emit('closed', 'left'); } });
   return { Handshake, HandshakeError, made };
 }
 const setup = (fh, extra = {}) => { let game = createGame(RAPIER, { seed: 5, power: 'medium' }), changes = 0;
@@ -161,4 +163,23 @@ test('a room that ends by itself says why: lost and kicked get panel text; leavi
   const fh = fakeHandshake(), t = setup(fh); await t.s.host(); const r = fh.made[0].room; r.closed = true; r.emit('closed', 'lost'); assert.equal(t.s.view().error, ERRORS.lost, 'the host too');
   const j = await joined(); j.t.s.leave(); assert.equal(j.t.s.view().error, null);
   await j.t.s.host(); assert.equal(j.t.s.view().error, null, 'a new room clears it');
+});
+
+test('no TURN relay: Host and Join say so in the panel and do not try again by themselves (C-2)', async () => {
+  assert.equal(ERRORS.no_turn, "Can't reach the relay server. Try again.");
+  const fh = fakeHandshake({ failCreate: 1, failCode: 'no_turn' }), t = setup(fh);
+  await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.no_turn); assert.ok(fh.made[0].closed, 'client closed');
+  const fh2 = fakeHandshake({ failJoin: 'no_turn' }), t2 = setup(fh2);
+  t2.s.openJoin(); await t2.s.submitCode('K7MX2'); await t2.s.confirmJoin();
+  assert.equal(t2.s.view().state, 'join'); assert.equal(t2.s.view().error, ERRORS.no_turn);
+});
+test('lock and Remove: a refused host control is panel text, never an unhandled rejection (C-2, M-44)', async () => {
+  const fh = fakeHandshake({ failControl: 'network' }), t = setup(fh);
+  await t.s.host(); const p = t.s.sync.players.ensure(2); p.peer = 'g';
+  t.s.lock(true); await new Promise(r => setImmediate(r));
+  assert.equal(t.s.view().error, ERRORS.control); assert.equal(t.s.view().locked, false);
+  t.s.remove(2); await new Promise(r => setImmediate(r));
+  assert.equal(t.s.view().error, ERRORS.control);
+  const ok = fakeHandshake(), t2 = setup(ok); await t2.s.host(); t2.s.lock(true); await new Promise(r => setImmediate(r));
+  assert.equal(t2.s.view().locked, true); assert.equal(t2.s.view().error, null);
 });
