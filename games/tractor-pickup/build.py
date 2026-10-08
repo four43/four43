@@ -13,7 +13,7 @@ for mp3 in sorted(vdir.glob('*.mp3')):
     out = proc / mp3.name
     if shutil.which('ffmpeg'):
         subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(mp3), '-af',
-            'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-16:TP=-1.5',
+            'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-60dB,afade=t=in:d=0.05,areverse,loudnorm=I=-16:TP=-1.5',
             '-ac', '1', '-b:a', '64k', str(out)], check=True)
     else:
         print('WARNING: ffmpeg not found: voice clip', mp3.name, 'is not trimmed or levelled (D-8)')
@@ -27,7 +27,7 @@ for mp3 in sorted(adir.glob('*.mp3')) if adir.is_dir() else []:
     out = aproc / mp3.name
     if shutil.which('ffmpeg'):
         subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(mp3), '-af',
-            'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-16:TP=-1.5',
+            'silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-60dB,afade=t=in:d=0.05,areverse,loudnorm=I=-16:TP=-1.5',
             '-ac', '1', '-b:a', '64k', str(out)], check=True)
     else:
         print('WARNING: ffmpeg not found: animal clip', mp3.name, 'is not trimmed or levelled (D-8)')

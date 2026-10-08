@@ -22,7 +22,7 @@ Phrases:
 
 Animal sounds go in `audio/animals/<type>.mp3` (pig cow chicken sheep duck bunny dog chick; optional second take `<type>-2.mp3`).
 
-**Easiest:** read `script.md` in one take and ask Claude to slice it.
+**Easiest:** read `script.md` in one take, then `uv run tools/slice-voice.py <take>` cuts it into these files, prints a report of missing or doubtful clips and writes test sentences to `build/voice-preview/`. Add `--dry-run` to see the report first.
 
 Tips: a quiet room, phone or headset mic about 15 cm away, a happy voice, a short pause before and after.
 Any format your recorder makes can be converted: `ffmpeg -i pig.m4a pig.mp3`. The build trims silence and evens out the volume.

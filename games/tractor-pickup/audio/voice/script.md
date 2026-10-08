@@ -2,7 +2,7 @@
 
 Record everything below in **one take**: phone voice memo, quiet room (a closet full of clothes is perfect), phone about 15 cm from your mouth.
 Leave **one full second of silence between items**. Mess up? Pause, then say it again: the last take of each word wins.
-Drop the recording (any format) into `audio/voice/` and ask Claude to slice it.
+Keep the recording anywhere **outside** `audio/voice/` (any format, e.g. `~/Downloads/take.m4a`) and ask Claude to slice it: `uv run tools/slice-voice.py ~/Downloads/take.m4a`.
 
 **How to say the words:** level and even, like reading items off a list, because the game joins words into sentences ("three … plus … two … makes … five"). Only the cheers in part 4 should be big.
 
