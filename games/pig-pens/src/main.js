@@ -5,6 +5,7 @@ import { buildFarmExtras } from './farm3d.js';
 import { createSim, ST, DT, FOOD_KINDS } from './sim.js';
 import { L } from './layout.js';
 import { Sound } from './sound.js';
+import { createTiltShift } from './tiltshift.js';
 
 const $ = id => document.getElementById(id);
 async function main() {
@@ -23,6 +24,8 @@ async function main() {
   const SKY = new THREE.Color('#bfe6f5');
   scene.background = SKY; scene.fog = new THREE.Fog(SKY, 70, 170);
   const camera = new THREE.PerspectiveCamera(48, 1, 0.3, 400);
+  // tilt-shift miniature look, focused on the camera's look-at point; off for now, ?tilt=1 turns it on
+  const tilt = createTiltShift(renderer, { on: params.get('tilt') === '1' });
   const hemi = new THREE.HemisphereLight('#eef7ff', '#b9a27c', 1.3); scene.add(hemi);
   const sun = new THREE.DirectionalLight('#fff3dc', 2.1);
   sun.position.set(-26, 46, 22); sun.castShadow = true;
@@ -376,6 +379,7 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
     camera.position.set(cam.tx + Math.sin(cam.yaw) * cp * cam.dist, Math.sin(cam.pitch) * cam.dist, cam.tz + Math.cos(cam.yaw) * cp * cam.dist);
     camera.lookAt(cam.tx, 0.5, cam.tz);
   };
+  const draw = () => tilt.render(scene, camera, cam.dist);
   const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.9 ? 64 : 48; camera.updateProjectionMatrix(); };
   addEventListener('resize', resize); resize(); applyCam();
 
@@ -674,7 +678,7 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
     if (selected && frames % 6 === 0) renderCard();
     if ((frames & 7) === 0) updateHud();
     if (ring.visible) { ring.rotation.y += dt; ring.scale.setScalar(1 + 0.08 * Math.sin(now * 0.01)); }
-    applyCam(); renderer.render(scene, camera);
+    applyCam(); draw();
     if (hintTimer > 0) { hintTimer -= dt; if (hintTimer <= 0) hint.classList.remove('on'); }
     frames++; requestAnimationFrame(frame);
   }
@@ -684,10 +688,10 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
 
   // debug hook for scripted checks
   window.piggies = {
-    sim, cam, setTool, THREE, camera,
+    sim, cam, setTool, THREE, camera, tilt: tilt.params,
     stepN(n) { for (let i = 0; i < n; i++) sim.step(); },
     pause(v) { paused = v; },
-    render(dt = 1 / 60) { updatePigs(dt); updateDog(dt); updateFoods(); updateTroughFood(); extras.update(dt); if (selected) renderCard(); updateHud(); applyCam(); renderer.render(scene, camera); },
+    render(dt = 1 / 60) { updatePigs(dt); updateDog(dt); updateFoods(); updateTroughFood(); extras.update(dt); if (selected) renderCard(); updateHud(); applyCam(); draw(); },
     toolDown, toolMove, toolUp, toss, aimHose, updateHose, enterDrive, exitDrive, driveInput, classify, act, select, extras, stick, get driving() { return driving; },
   };
 }
