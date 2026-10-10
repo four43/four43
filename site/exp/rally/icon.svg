@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fc3d6"/><stop offset="1" stop-color="#d9e6ea"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <path d="M0 300 C90 250 170 270 256 240 C340 212 420 236 512 214 V512 H0Z" fill="#7d8f4a"/>
+  <path d="M0 360 C110 320 200 350 290 318 C380 288 440 312 512 296 V512 H0Z" fill="#5f7340"/>
+  <path d="M236 512 C246 440 330 420 318 372 C306 326 214 330 230 286 C242 254 296 252 300 236" fill="none" stroke="#b98f5c" stroke-width="58" stroke-linecap="round"/>
+  <path d="M236 512 C246 440 330 420 318 372 C306 326 214 330 230 286 C242 254 296 252 300 236" fill="none" stroke="#d2ad78" stroke-width="10" stroke-dasharray="2 22" stroke-linecap="round"/>
+  <g transform="translate(256 420) rotate(-12)">
+    <rect x="-46" y="-26" width="92" height="44" rx="12" fill="#2f6fd6"/>
+    <rect x="-30" y="-46" width="60" height="26" rx="9" fill="#2f6fd6"/>
+    <rect x="-24" y="-42" width="48" height="16" rx="5" fill="#cfe2ee"/>
+    <circle cx="-28" cy="20" r="13" fill="#22333a"/><circle cx="28" cy="20" r="13" fill="#22333a"/>
+  </g>
+</svg>

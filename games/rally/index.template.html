@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Rally Sim</title>
+<meta name="description" content="Drive a rally car on generated gravel, dirt, tarmac and snow tracks, with jumps, whoops and hairpins.">
+<link rel="canonical" href="https://four43.com/exp/rally/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="four43">
+<meta property="og:title" content="Rally Sim">
+<meta property="og:description" content="Drive a rally car on generated gravel, dirt, tarmac and snow tracks, with jumps, whoops and hairpins.">
+<meta property="og:url" content="https://four43.com/exp/rally/">
+<meta property="og:image" content="https://four43.com/exp/rally/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A green rally hatchback on a dirt road winding through grassy hills, under the title Rally Sim">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Rally Sim">
+<meta name="twitter:description" content="Drive a rally car on generated gravel, dirt, tarmac and snow tracks, with jumps, whoops and hairpins.">
+<meta name="twitter:image" content="https://four43.com/exp/rally/og-image.jpg">
+<meta name="twitter:image:alt" content="A green rally hatchback on a dirt road winding through grassy hills, under the title Rally Sim">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#22333a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rally">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --panel: rgba(34, 51, 58, 0.74);
+  --panel-solid: #22333a;
+  --bone: #ede6d6;
+  --dim: #a9b4b0;
+  --amber: #f2b43c;
+  --go: #6cc784;
+  --stop: #e5604e;
+  --font: 'Barlow Semi Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: #9fb3bd; }
+body { font-family: var(--font); color: var(--bone); -webkit-user-select: none; user-select: none; touch-action: none; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+button { font: inherit; color: inherit; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 22px; letter-spacing: 0.02em; background: var(--panel-solid); z-index: 50; }
+
+/* top controls */
+.bar { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); display: flex; gap: 8px; z-index: 10; }
+.bar.l { left: calc(env(safe-area-inset-left, 0px) + 10px); }
+.bar.r { right: calc(env(safe-area-inset-right, 0px) + 10px); }
+.chip { background: var(--panel); border: 1px solid rgba(237, 230, 214, 0.18); border-radius: 10px; padding: 8px 14px; font-size: 17px; font-weight: 600; cursor: pointer; backdrop-filter: blur(6px); }
+.chip:focus-visible, .seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* dash cluster: the one bold element */
+#dash { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%);
+  width: 220px; height: 128px; pointer-events: none; z-index: 5; }
+#dash::before { content: ''; position: absolute; left: 34px; right: 34px; top: 22px; height: 98px; background: var(--panel);
+  border-radius: 80px 80px 18px 18px; backdrop-filter: blur(6px); }
+#revs { position: absolute; left: 50%; top: 104px; width: 0; height: 0; }
+#revs i { position: absolute; left: -7px; top: -100px; width: 14px; height: 22px; border-radius: 3px; background: rgba(34, 51, 58, 0.55);
+  transform-origin: 7px 100px; border: 1px solid rgba(237, 230, 214, 0.12); }
+#revs i.g { background: var(--bone); border-color: rgba(34, 51, 58, 0.7); }
+#revs i.a { background: var(--amber); }
+#revs i.r { background: var(--stop); box-shadow: 0 0 12px rgba(229, 96, 78, 0.8); }
+#spd { position: absolute; left: 0; right: 0; top: 30px; text-align: center; font-size: 64px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+#unit { position: absolute; left: 0; right: 0; top: 92px; text-align: center; font-size: 15px; color: var(--bone); opacity: 0.85; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+#gear { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--amber); color: var(--panel-solid); font-weight: 700; font-size: 24px; }
+
+/* touch controls: shown on touch devices */
+.touch { display: none; }
+@media (pointer: coarse) { .touch { display: block; } }
+#steerZone { position: fixed; left: 0; bottom: 0; width: 42vw; height: 46vh; z-index: 4; }
+#steerTrack { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 34px); transform: translateX(-50%);
+  width: min(240px, 34vw); height: 54px; border-radius: 27px; background: var(--panel); border: 1px solid rgba(237,230,214,.18); pointer-events: none; }
+#steerKnob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: var(--bone); transition: transform 0.08s; }
+.pad { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); width: 76px; height: min(200px, 38vh); border-radius: 16px;
+  background: var(--panel); border: 1px solid rgba(237,230,214,.2); z-index: 6; overflow: hidden; --press: 0; }
+.pad::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--press) * 100%); opacity: .85; }
+.pad span { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-size: 16px; font-weight: 600; z-index: 1; pointer-events: none; }
+#gasPad { right: calc(env(safe-area-inset-right, 0px) + 18px); }
+#gasPad::after { background: var(--go); }
+#brakePad { right: calc(env(safe-area-inset-right, 0px) + 104px); }
+#brakePad::after { background: var(--stop); }
+#hbBtn { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 104px); bottom: calc(env(safe-area-inset-bottom, 0px) + min(200px, 38vh) + 34px);
+  width: 162px; height: 52px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(237,230,214,.2); font-size: 17px; font-weight: 600; z-index: 6; }
+#hbBtn.on { background: var(--amber); color: var(--panel-solid); }
+.shiftBtns { display: none; position: fixed; right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + min(200px, 38vh) + 34px); gap: 8px; z-index: 6; }
+body.manual .shiftBtns { display: flex; }
+body.manual #hbBtn { right: calc(env(safe-area-inset-right, 0px) + 190px); width: 120px; }
+.shiftBtns button { width: 56px; height: 52px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(237,230,214,.2); font-size: 22px; font-weight: 700; }
+#gasPad, #brakePad, #hbBtn, #steerZone, .shiftBtns button { touch-action: none; }
+
+/* settings sheet */
+#sheet { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); left: calc(env(safe-area-inset-left, 0px) + 10px); width: min(360px, calc(100vw - 20px));
+  max-height: calc(100% - 80px); overflow: auto; background: var(--panel-solid); border-radius: 14px; padding: 14px 16px 16px; z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+#sheet h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+#sheet h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 600; color: var(--dim); }
+.seg { display: flex; background: rgba(237,230,214,.08); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { flex: 1; border: 0; background: transparent; padding: 9px 4px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; color: var(--dim); }
+.seg button[aria-pressed="true"] { background: var(--bone); color: var(--panel-solid); }
+#sheet p { margin: 12px 0 0; font-size: 15px; color: var(--dim); line-height: 1.4; }
+body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
+.seedRow { display: flex; gap: 6px; margin: 0; }
+.seedRow input { flex: 1; min-width: 0; font: inherit; font-size: 17px; font-weight: 600; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid rgba(237,230,214,.25); background: rgba(237,230,214,.08); color: var(--bone); -webkit-user-select: text; user-select: text; }
+#seedChip { cursor: default; font-variant-numeric: tabular-nums; }
+#toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%); z-index: 30;
+  background: var(--panel-solid); padding: 10px 18px; border-radius: 12px; font-size: 18px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+#closeSheet { border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
+
+/* per-wheel debug panel */
+#debug { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); right: calc(env(safe-area-inset-right, 0px) + 10px); z-index: 8;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 290px; pointer-events: none; }
+#debug[hidden] { display: none; }
+.wh { position: relative; background: var(--panel); border-radius: 10px; padding: 6px 8px 6px 18px; min-height: 58px; }
+.wh b { position: absolute; left: 6px; bottom: 6px; width: 6px; border-radius: 3px; background: var(--go); }
+.wh.slide b { background: var(--amber); }
+.wh span { white-space: pre; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+@media (max-height: 500px) {
+  #dash { top: calc(env(safe-area-inset-top, 0px) + 14px); bottom: auto; transform: translateX(-50%) scale(0.6); transform-origin: top center; }
+}
+@media (prefers-reduced-motion: reduce) { #steerKnob { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="loading">Warming up the engine…</div>
+
+<div class="bar l"><button class="chip" id="menuBtn">Settings</button><span class="chip" id="seedChip" hidden></span></div>
+<div id="toast" hidden></div>
+<div class="bar r">
+  <button class="chip" id="camBtn">Camera</button>
+  <button class="chip" id="dbgBtn">Wheels</button>
+  <button class="chip" id="resetBtn">Reset</button>
+</div>
+
+<div id="sheet" hidden>
+  <h2>Settings <button id="closeSheet" aria-label="Close">×</button></h2>
+  <h3>World</h3>
+  <div class="seg"><button data-set="world:pad">Test pad</button><button data-set="world:loop">Loop</button><button data-set="world:stage">Stage</button></div>
+  <div class="trackOnly">
+    <h3>Seed</h3>
+    <form class="seedRow" id="seedForm"><input id="seedInput" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed"><button type="button" class="chip" id="diceBtn" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form>
+    <h3>Track style</h3>
+    <div class="seg"><button data-set="style:twisty">Twisty</button><button data-set="style:flowing">Flowing</button></div>
+    <h3>Theme</h3>
+    <div class="seg"><button data-set="theme:summer">Summer</button><button data-set="theme:winter">Winter</button></div>
+    <h3>Obstacles</h3>
+    <div class="seg"><button data-set="density:mild">Mild</button><button data-set="density:wild">Wild</button></div>
+  </div>
+  <h3>Car</h3>
+  <div class="seg"><button data-set="car:awd">R5 4WD</button><button data-set="car:rwd">Classic RWD</button></div>
+  <h3 class="padOnly">Surface</h3>
+  <div class="seg padOnly"><button data-set="surface:tarmac">Tarmac</button><button data-set="surface:hardpack">Dirt</button><button data-set="surface:gravel">Gravel</button><button data-set="surface:snow">Snow</button><button data-set="surface:ice">Ice</button></div>
+  <h3>Driving</h3>
+  <div class="seg"><button data-set="assist:true">Assisted</button><button data-set="assist:false">Sim</button></div>
+  <h3>Units</h3>
+  <div class="seg"><button data-set="units:mph">mph</button><button data-set="units:kmh">km/h</button></div>
+  <h3>Gearbox</h3>
+  <div class="seg"><button data-set="gearbox:auto">Auto</button><button data-set="gearbox:manual">Manual</button></div>
+  <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to reset (on a track: back onto the road; Shift+R or hold Reset: restart the track), C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift.</p>
+  <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st. The skidpad circle is 40 m across the pad from the start; the humps, kicker and 10 % slope are to the sides.</p>
+</div>
+
+<div id="debug" hidden>
+  <div class="wh"><b></b><span></span></div><div class="wh"><b></b><span></span></div>
+  <div class="wh"><b></b><span></span></div><div class="wh"><b></b><span></span></div>
+</div>
+
+<div id="dash">
+  <div id="revs"></div>
+  <div id="gear">1</div>
+  <div id="spd">0</div>
+  <div id="unit">mph</div>
+</div>
+
+<div class="touch">
+  <div id="steerZone"><div id="steerTrack"><div id="steerKnob"></div></div></div>
+  <button id="hbBtn">Handbrake</button>
+  <div class="shiftBtns"><button id="dnBtn" aria-label="Shift down">−</button><button id="upBtn" aria-label="Shift up">+</button></div>
+  <div class="pad" id="brakePad"><span>Brake</span></div>
+  <div class="pad" id="gasPad"><span>Gas</span></div>
+</div>
+<script>
+// rev arc segments
+(function () { const r = document.getElementById('revs'); const n = 15;
+  for (let i = 0; i < n; i++) { const el = document.createElement('i'); const a = -72 + 144 * i / (n - 1); el.style.transform = 'rotate(' + a + 'deg)'; r.appendChild(el); } })();
+</script>
+<script>/*BUNDLE*/</script>
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker', e)));</script>
+</body>
+</html>
