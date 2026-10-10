@@ -17,7 +17,7 @@ import { createScene, VIEW } from './render/scene.js';
 import { instancedShadows } from './render/shadows.js';
 import { warmShaders } from './render/warm.js';
 import { createChaseCam } from './render/camera.js';
-import { createVehicles3D } from './render/vehicles3d.js';
+import { createVehicles3D, PAINTS } from './render/vehicles3d.js';
 import { createInput } from './ui/input.js';
 import { createPilot } from './sim/pilot.js';
 import { makeGravelTexture, worldUV } from './render/textures.js';
@@ -40,6 +40,8 @@ import { BURST } from './sim/scenery.js';
 import { singOrder } from './sim/sing.js';
 import { BED, clampBedtime, setBedtime, stepBedtime, sleepNow, wakeUp, minutesLeft } from './sim/bedtime.js';
 import { holdToFire } from './ui/hold.js';
+import { createRoster, createFinder, placeArrow } from './ui/roster.js';
+import { createHornMarks } from './render/hornMarks.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const MAX_STEPS = 3; // B-5
@@ -57,6 +59,8 @@ async function main() {
   let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
   let powerNow = powerParam(params.get('power'), settings.power);
   const { renderer, scene, camera, follow, setNight } = createScene(document.getElementById('c'));
+  // M-75: the horn marks live in the scene, not a farm: made once
+  const hornMarks = createHornMarks(scene);
   const bed = safe(() => clampBedtime(load('tp-bedtime', null)), () => clampBedtime(null)), saveBed = () => save('tp-bedtime', bed); // E-5
   let nightK = 0, nightTo = bed.phase === 'asleep' ? 1 : 0, sleepAfter = false, sleepEl = null;
   const aniso = renderer.capabilities.getMaxAnisotropy(), perf = params.has('fps') ? createFpsMeter(renderer) : null;
@@ -79,6 +83,8 @@ async function main() {
   const input = createInput(ui);
   const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons, onWordTap: ids => voice.say(ids), onSlotTap: (type, golden) => { sound.animal(type); voice.say(golden ? ['golden', type] : [type]); } }); // E-3
   const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
+  // M-75..M-79: the players' circles by the menu button, and after a honk in a room, arrows to the other players
+  const roster = sandbox ? null : createRoster(ui, PAINTS), finder = sandbox ? null : createFinder(ui, PAINTS, (x, y, z) => toNdc(camera, x, y, z), () => VIEW);
   let hornQueued = false; input.onHorn(() => { hornQueued = true; });
   // Everything below `world` belongs to one farm. startFarm throws it all away and builds the next one; trips on the same farm rebuild nothing.
   let world, game, farm3d, vehicles, gibs, animals3d, others3d, fx, chase, trip, show, sprinklers, fxs, wheelPt, prev, curr, view, viewCars, bodyList, seed, gen = 0;
@@ -86,6 +92,8 @@ async function main() {
   let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, pathK = false, barnWay = null, camBlend, acc = 0, last = performance.now();
   const sfx = { surface: 'gravel', air: 0, whee: false };
   const bodies = () => bodyList;
+  // M-75: where a horn mark goes: key 0 is this device's tractor, else the other player's number
+  const hornAt = (key, out) => { if (!key) { out.copy(view[0].p); return true; } const p = session?.sync?.players.map.get(key); if (!p?.pose) return false; const q = p.pose.tractor.p; out.set(q.x, q.y, q.z); return true; };
   const applyHats = () => { const ids = wornHats(progress); animals3d?.setHats(a => ids.length ? animals3d.hat(ids[a.id % ids.length]) : null); }; // W-4
 
   function build(newSeed, power, player = 1) {
@@ -238,6 +246,8 @@ async function main() {
         if (e.type === 'washed') { const t = game.tractor; for (let k = 0; k < 3; k++) fx.sparkles(t.x, 1.8, t.z); sound.squeaky(); } // T-15
         if (e.type === 'bump') { sound.boing(0.6); sound.horn(0.5); chase.shake(0.25); } // M-7
         if (e.type === 'remoteHorn') sound.horn(0.4); // M-8
+        if (e.type === 'remoteHorn') hornMarks.honk(e.n);
+        if (e.type === 'horn' && session?.sync) { hornMarks.honk(0); finder?.show(); }
         if (e.type === 'unclaim') { fx.stars(e.pos.x, e.pos.y, e.pos.z); sound.plop(); hud.reset(); for (const s of game.load.slots) if (s.landed) hud.fill(slotIndex(s) + 1, s.animal.type, s.animal.golden); } // M-14: poof; the slot bar packs up
         if (e.type === 'help') { helpTarget = { a: e.animal, t: 10 }; sound.animal(e.animal.type); } // M-9
         if (e.type === 'playerJoined') { for (let k = 0; k < 3; k++) fx.sparkles(e.x, 1.6, e.z); sound.horn(0.6); } // M-10
@@ -273,6 +283,7 @@ async function main() {
     stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt);
     gibs.update(dt); farm3d?.update(view[0].p); animView.alpha = a; animals3d?.update(dt, game, animView); try { others3d?.update(dt, session?.sync?.players ?? null); } catch (e) { warnOnce('others3d', e); } // M-44
     vehSnap.dirt = game.dirt?.tractor; vehicles.update(vehSnap);
+    hornMarks.update(dt, hornAt); finder?.update(dt, session?.sync, show?.active || game.mode !== 'drive'); roster?.update(session?.sync, progress.paint);
     const t = game.tractor, lv = t.body.linvel();
     if (show?.active) show.update(dt);
     else {
@@ -360,15 +371,15 @@ function stepFx(game, fx, sound, s, w, sprinklers, dt) {
 }
 
 // F-2, F-4: a point off screen (or behind the camera) gives an arrow on a screen ellipse inset by 70 px, pointing toward it; on screen gives null
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _ndc = { nx: 0, ny: 0, behind: false }, _at = { x: 0, y: 0, angle: 0, on: false };
+// M-77: the point on the screen, -1..1 each way, and whether it is behind the camera
+function toNdc(camera, x, y, z) {
+  _ndc.behind = _v.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z > 0;
+  _v.set(x, y, z).project(camera); _ndc.nx = _v.x; _ndc.ny = _v.y; return _ndc;
+}
 function edgeArrow(camera, p) {
-  const behind = _v.set(p.x, p.y, p.z).applyMatrix4(camera.matrixWorldInverse).z > 0;
-  _v.set(p.x, p.y, p.z).project(camera);
-  if (!behind && Math.abs(_v.x) <= 1 && Math.abs(_v.y) <= 1) return null;
-  const W = VIEW.w, H = VIEW.h; let dx = _v.x * W / 2, dy = -_v.y * H / 2; if (behind) { dx = -dx; dy = -dy; }
-  if (Math.hypot(dx, dy) < 1) dy = 1; // straight behind: point down
-  const e = Math.hypot(dx / (W / 2 - 70), dy / (H / 2 - 70));
-  return { x: W / 2 + dx / e, y: H / 2 + dy / e, angle: Math.atan2(dy, dx) };
+  const s = toNdc(camera, p.x, p.y, p.z);
+  placeArrow(s.nx, s.ny, s.behind, VIEW.w, VIEW.h, 70, _at); return _at.on ? null : _at;
 }
 
 function buildSandbox3D(scene, game, anisotropy) {

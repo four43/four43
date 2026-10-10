@@ -700,6 +700,11 @@ Items marked **Phase 2** are part of the design but not part of version 1.8.
 | M-8 | Horn | The horn (U-2) calls animals to that player's tractor on all devices (C-6, A-11). The horn of an other tractor sounds more quietly. |
 | M-9 | Help | The help animal (F-4) comes to the tractor of the player who needs help. |
 | M-10 | Join on screen | When a guest joins, its tractor appears ahead of the farm start with a sparkle and a short horn. Each player number has its own place, 12 m apart along the farm start's heading (8 m to the side when that place is blocked), clear of obstacles. |
+| M-75 | Horn mark | When a player sounds the horn in a room, a small picture of the bulb horn (U-2) with sound lines shows above that player's tractor for 1.5 s, on all devices (also above the player's own tractor). It pops in, bobs a little and fades out. Without a room, the horn shows no mark (as before). |
+| M-76 | Find the others | When this player sounds the horn in a room, a small arrow for each other player shows on this device for 4 s, then fades. The arrow is in that player's paints (W-3): the body paint fills it and the trim paint outlines it. An away player's arrow is faded (M-39). Without other players, no arrows show. The arrows hide while this player's tractor is held (show, card, paint screen, sticker book). |
+| M-77 | Arrow place | An other tractor that is on the screen gets its arrow just above it, pointing down at it. An other tractor that is off the screen (or behind the camera) gets its arrow on an ellipse 44 px in from the screen edge, pointing toward it (as F-2). |
+| M-78 | Player circles | While this device is in a room (hosting, or a guest after the welcome), a row of circles shows right of the menu button (U-3): one for each player in the room, in player-number order, including this device's own player. Each circle is filled with that player's body paint and has a ring of the trim paint (a rainbow gradient for rainbow). This device's own circle is bigger, with a light edge. The circles change when a player joins, leaves or changes paint. Without a room, no circles show. They are pictures only (R-2) and cannot be tapped. |
+| M-79 | Away circle | The circle of an away player (M-39, M-40) is faded. |
 
 ### 14.3 What each device owns
 

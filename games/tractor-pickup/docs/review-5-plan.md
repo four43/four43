@@ -27,8 +27,8 @@
 - [ ] **C-1 Ceremony lock** — only one barn show at a time; a player who arrives while another's show runs waits and gets a (non-text) message.
 
 ### D. Players UI (M-75..M-79)
-- [ ] **D-1 Horn sprite + arrows** — a honk puts a small sprite over the honking tractor and shows every player small arrows (tractor color) pointing to the other players.
-- [ ] **D-2 Player circles** — in a running multiplayer game, a circle per player (body color fill, trim color outline) right of the menu button.
+- [x] **D-1 Horn sprite + arrows** — a honk puts a small sprite over the honking tractor and shows every player small arrows (tractor color) pointing to the other players.
+- [x] **D-2 Player circles** — in a running multiplayer game, a circle per player (body color fill, trim color outline) right of the menu button.
 
 ### Merge
 - [ ] Merge A–D, NET_VERSION 3, game 1.8.0, spec 1.12, full tests, smoke check, build.

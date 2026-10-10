@@ -155,6 +155,16 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .pic.x svg{width:55%;height:55%}
 .gear{all:unset;position:absolute;z-index:25;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);width:46px;height:46px;border-radius:50%;background:rgba(255,252,248,.75);display:grid;place-items:center;touch-action:none;-webkit-touch-callout:none}
 .gear svg{width:30px;height:30px}
+/* M-78, M-79: in a room, one circle per player right of the menu button: the body paint inside, the trim paint around it; this device's own player bigger, an away player faded */
+#roster{position:absolute;z-index:25;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 64px);height:46px;display:flex;align-items:center;gap:7px;pointer-events:none}
+#roster[hidden],#roster .pc[hidden],.finder[hidden]{display:none}
+#roster .pc{display:block;position:relative;width:26px;height:26px;border-radius:50%;box-sizing:border-box;border:2px solid #6b4428;box-shadow:0 2px 0 rgba(107,68,40,.45)}
+#roster .pc i{position:absolute;inset:3px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+#roster .pc.you{width:34px;height:34px;box-shadow:0 0 0 3px rgba(255,252,248,.9),0 3px 0 2px rgba(107,68,40,.45)}#roster .pc.you i{inset:4px}
+#roster .pc.away{opacity:.35}
+/* M-76: after this player's honk, an arrow in each other player's paints points to that player */
+.finder{position:absolute;left:0;top:0;z-index:6;width:46px;height:46px;pointer-events:none;filter:drop-shadow(0 2px 0 rgba(58,36,18,.55))}
+.finder svg{width:100%;height:100%;display:block;overflow:visible}
 .gear i{position:absolute;inset:-3px;border-radius:50%;--p:0deg;background:conic-gradient(#f5c84c var(--p),transparent 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));pointer-events:none}
 .parent{position:absolute;inset:0;z-index:30;background:rgba(40,25,15,.55);display:grid;place-items:center;pointer-events:auto;touch-action:pan-y}
 .parent .box{position:relative;background:#fffcf8;color:#3a2412;border-radius:18px;padding:18px 22px;width:min(520px,92vw);max-height:92vh;overflow:auto;font:16px/1.4 Andika,system-ui,sans-serif;user-select:auto;-webkit-user-select:auto}
