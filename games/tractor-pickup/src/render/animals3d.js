@@ -21,9 +21,9 @@ export function createAnimals3D(scene, herd) {
   const base = new THREE.MeshLambertMaterial({ vertexColors: true });
   const gold = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.7, roughness: 0.3, emissive: '#6a4a00' });
   const geos = {}; for (const [type, m] of Object.entries(MODEL)) geos[type] = ASSETS[m].parts.map(p => geoFrom([p]));
-  const tmpL = {}, protos = {}, flightOf = new Map(); let hatMake = null;
+  const tmpL = {}, protos = {}, flightOf = new Map();
   const hatOf = id => (protos[id] ||= buildHat(id)).clone(); // clones share one set of geometries and materials
-  const applyHat = v => { v.hat.clear(); const h = hatMake(v.a); if (h) { h.scale.setScalar(HAT_SCALE); v.hat.add(h); } };
+  const applyHat = v => { v.hat.clear(); v.hatId = v.a.hat || null; if (v.hatId) { const h = hatOf(v.hatId); h.scale.setScalar(HAT_SCALE); v.hat.add(h); } }; // M-60: the hat its owner chose (a.hat), the same on every device
   const makeView = a => {
     const g = new THREE.Group(), s = SCALE[a.type], st = STRETCH[a.type] || [1, 1, 1];
     const inner = new THREE.Group(); inner.scale.set(s * st[0], s * st[1], s * st[2]); g.add(inner);
@@ -31,8 +31,7 @@ export function createAnimals3D(scene, herd) {
     const wings = ASSETS[MODEL[a.type]].parts.flatMap((p, i) => p.name.startsWith('wing') ? [i] : []);
     const parts = geos[a.type].map(geo => { const m = new THREE.Mesh(geo, mat); m.matrixAutoUpdate = false; m.castShadow = true; inner.add(m); return m; });
     const hat = new THREE.Group(); hat.visible = false; hat.matrixAutoUpdate = false; inner.add(hat); scene.add(g);
-    if (hatMake) applyHat({ a, hat });
-    return { a, type: a.type, golden: a.golden, g, inner, parts, hat, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
+    return { a, type: a.type, golden: a.golden, g, inner, parts, hat, hatId: null, hatRow: geos[a.type].length + ASSETS[MODEL[a.type]].mounts.indexOf('hat'), dirt, wings, t: Math.random() * 3 };
   };
   const views = herd.animals.map(makeView); // by animal id; null while that animal is gone
   // B-3 (X-4): a plain and a golden keeper far under the ground, never dropped: their programs stay compiled (warm.js) even when the
@@ -43,9 +42,6 @@ export function createAnimals3D(scene, herd) {
   return {
     views,
     sing(a, delay) { sings.set(a, -delay); },
-    hat: hatOf,
-    // make(animal) -> a hat from hat(id), or null. New animals (respawns) get the same rule. Hats show only on riders (W-4).
-    setHats(make) { hatMake = make; for (const v of views) if (v) applyHat(v); },
     // view: the interpolated car poses ({ p, q } per car) and the step alpha, so riders and fliers move with the drawn train (X-1)
     update(dt, game, view) {
       flightOf.clear(); for (const f of game.flights) flightOf.set(f.animal, f);
@@ -57,7 +53,8 @@ export function createAnimals3D(scene, herd) {
         v ||= views[i] = makeView(a);
         v.t += dt;
         v.g.visible = a.state !== 'elsewhere'; if (!v.g.visible) continue;
-        v.hat.visible = a.state === 'ride' || (a.state === 'carried' && !!a.riding);
+        v.hat.visible = a.state === 'ride' || (a.state === 'carried' && !!a.riding); // hats show only on riders (W-4)
+        if (v.hat.visible && v.hatId !== (a.hat || null)) applyHat(v);
         const fl = flightOf.get(a);
         v.g.position.set(a.x, a.y || 0, a.z); v.g.rotation.set(0, a.yaw, 0);
         if (fl) v.g.position.set(fl.prev.x + (fl.pos.x - fl.prev.x) * view.alpha, fl.prev.y + (fl.pos.y - fl.prev.y) * view.alpha, fl.prev.z + (fl.pos.z - fl.prev.z) * view.alpha);

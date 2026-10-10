@@ -10,7 +10,7 @@ const near = (a, b, e, msg) => assert.ok(Math.abs(a - b) <= e, `${msg}: ${a} vs 
 const q = (a = 0.3) => ({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) });
 const pig = (o = {}) => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 3, x: 10.5, y: 0.25, z: -7.25, yaw: 1.5, anim: 'walk', leader: null, line: 0, ...o });
 const train = (n = 2) => ({ mode: 'drive', full: true, bodies: [{ p: { x: 10.5, y: 0.8, z: -3 }, q: q() }, { p: { x: 7, y: 0.5, z: -3 }, q: q(0.2) }, { p: { x: 4, y: 0.5, z: -3 }, q: q(0.1) }],
-  riders: Array.from({ length: n }, (_, i) => ({ id: 30 + i, slot: i, flying: i === 1, x: 5 + i, y: 1.2, z: -2, yaw: 1.5 })) });
+  riders: Array.from({ length: n }, (_, i) => ({ id: 30 + i, slot: i, flying: i === 1, x: 5 + i, y: 1.2, z: -2, yaw: 1.5, hat: i === 0 ? 'party' : 'none' })) });
 const frame = (groups, o = {}) => encodeFrame({ key: false, sender: 1, time: 1000, groups, ...o });
 const one = (k, id, rec, o) => decodeFrame(frame([{ kind: k, records: [[id, rec]] }], o), REGISTRY);
 

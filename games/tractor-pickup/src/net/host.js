@@ -39,6 +39,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   const freeNumber = () => { for (let n = 2; n <= MAX_PLAYERS; n++) if (!players.map.has(n)) return n; return 0; };
   const owned = n => game.herd.animals.filter(a => a.state === 'carried' && a.owner === n); // only when a player leaves
   const helloed = () => { for (const p of players.map.values()) if (p.helloed) return true; return false; };
+  const herdSize = () => { let n = 1; for (const p of players.map.values()) if (p.helloed) n++; game.herd.setPlayers(n); game.herd.respawn(); }; // M-62: a joiner brings more animals; one who leaves takes none (the surplus is not replaced)
   const freeUp = a => { a.state = 'idle'; a.timer = 1; a.owner = null; a.epoch++; a.y = 0; missing.delete(a.id); };
   const guestAt = p => p.trust; // C-4: the guest's tractor as far as the host believes it, or null before its first frame on this farm
   const startTrust = p => { const s = spawnPoint(game.farm, p.n); p.trust = { x: s.x, z: s.z }; p.trustAt = clock(); p.bank = 0; p.frozen = true; }; // at each welcome: the guest starts again at its spawn place
@@ -51,7 +52,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   }
   const tractorOf = p => ({ x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed });
   const handlers = {
-    hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; startTrust(p); send(p.n, welcome(p)); lastKey = -Infinity; }, // M-23: a keyframe at once, after the welcome
+    hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; startTrust(p); herdSize(); send(p.n, welcome(p)); lastKey = -Infinity; }, // M-23: a keyframe at once, after the welcome
     paint(p, m) { p.paint = m.paint; }, // M-2: the player object changes; the next diff has it
     // M-13: first claim wins; the guest's tractor (as the host follows it, C-4) must be within 8 m of the animal (M-50). The answer is the animal's owner (M-22).
     claim(p, m) {
@@ -69,7 +70,7 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
     help(p) { const c = p.pose ? game.herd.callHelp(tractorOf(p)) : null; send(p.n, { t: 'help', id: c ? c.id : null }); }, // M-9
   };
   const dropPlayer = n => { for (const a of owned(n)) { a.state = 'gone'; a.epoch++; missing.delete(a.id); } players.drop(n, out); }; // M-39: its animals go with it
-  const gone = id => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; dropPlayer(n); game.herd.respawn(); };
+  const gone = id => { const n = byPeer.get(id); byPeer.delete(id); rates.delete(id); if (!n) return; dropPlayer(n); herdSize(); };
   net.on('peerAway', id => { const p = players.map.get(byPeer.get(id)); if (p) p.serverAway = p.away = true; }); // M-39: the player object says so
   net.on('peerBack', id => { const p = players.map.get(byPeer.get(id)); if (p) p.serverAway = false; });
   const silent = p => p.heardAt !== undefined && clock() - p.heardAt > SILENT_MS; // M-39: a stopped page whose socket the server still sees
@@ -133,12 +134,12 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
       if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(mineNow()) }), false);
         for (const p of players.map.values()) if (p.fwdNew) { p.fwdNew = false; passOn(p, false); } } // C-3: at most one train frame for each guest in each send tick
     },
-    setGame(g) { game = g; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity;
+    setGame(g) { game = g; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity; herdSize();
       for (const p of players.map.values()) { p.interp.reset(); p.latest = null; p.pose = null; p.fwd = null; p.fwdNew = false; if (p.helloed) { startTrust(p); send(p.n, welcome(p)); } } }, // M-19, C-4
     setPaint(pt) { myPaint = { ...pt }; },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
     delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host
-    close() { closed = true; for (const n of [...players.map.keys()]) dropPlayer(n); byPeer.clear(); rates.clear(); game.others = []; game.herd.respawn(); }, // M-39: the host keeps playing alone and its herd refills
+    close() { closed = true; for (const n of [...players.map.keys()]) dropPlayer(n); byPeer.clear(); rates.clear(); game.others = []; herdSize(); }, // M-39: the host keeps playing alone and its herd refills
   };
   return sync;
 }

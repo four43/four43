@@ -5,7 +5,7 @@ import { mpWorld, inFront, free, single, countCalls, quietWarn, STILL, PAINTS, m
 import { CLAIM_RANGE, TREE_RANGE } from '../src/net/host.js';
 import { spawnPoint } from '../src/sim/spawn.js';
 import { makeRng } from '../src/sim/rng.js';
-import { GONE_KEEP } from '../src/sim/herd.js';
+import { GONE_KEEP, ROUTE_ANIMALS, PER_PLAYER } from '../src/sim/herd.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const drive = (d, i) => i === 1 ? { thr: 0.6, steer: 0.2, horn: false } : STILL;
@@ -186,7 +186,7 @@ test('after a guest show, the host removes the delivered animals and makes new o
   w.seconds(3); assert.equal(ha.state, 'carried');
   const before = h.animals.length, riders = g.game.startShow(); g.sync.showStarted(); riders.forEach(r => { r.animal.state = 'show'; }); g.game.finishShow(riders); g.sync.delivered(riders);
   w.seconds(0.5);
-  assert.ok(['toBarn', 'gone'].includes(ha.state), ha.state); assert.equal(ha.epoch, 2); assert.ok(h.animals.length > before, 'new animals'); assert.equal(h.free().filter(a => a.home === 'route').length, 18);
+  assert.ok(['toBarn', 'gone'].includes(ha.state), ha.state); assert.equal(ha.epoch, 2); assert.ok(h.animals.length > before, 'new animals'); assert.equal(h.free().filter(a => a.home === 'route').length, ROUTE_ANIMALS + PER_PLAYER, 'two players: more animals (M-62)');
   w.seconds(1); assert.ok(g.game.herd.animals.length >= h.animals.length, 'the guest knows the new ones');
   w.seconds(12); assert.equal(ha.state, 'gone'); assert.equal(ga.state, 'elsewhere', 'gone from the guest screen too: nothing stays at the barn (A-16)');
 });
@@ -328,14 +328,14 @@ test('a guest that drops is shown away; back in time it carries on (M-39)', asyn
   w.hub.away(w.guests[0].net.id); w.seconds(0.2); assert.equal(w.host.sync.players.map.get(2).away, true);
   w.hub.back(w.guests[0].net.id); w.seconds(0.2); assert.equal(w.host.sync.players.map.get(2).away, false);
 });
-test('a guest that leaves: its tractor poofs and its animals are replaced (M-39)', async () => {
+test('a guest that leaves: its tractor poofs and its animals go with it, and the herd keeps enough for the players left (M-39, M-62)', async () => {
   const w = await mpWorld({ seed: 62 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   w.seconds(3); assert.equal(ha.state, 'carried');
   g.net.leave(); w.seconds(0.3);
   assert.equal(ha.state, 'gone'); assert.equal(w.host.sync.players.list().length, 0);
-  assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.game.herd.free().filter(a => a.home === 'route').length, 18);
+  assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.game.herd.free().filter(a => a.home === 'route').length, ROUTE_ANIMALS + PER_PLAYER - 1, 'one player fewer: the carried one goes and is not replaced, the rest stay (M-62)');
 });
 test('player 3 leaves and a new guest gets number 3: the other guest sees the new train, though its clock starts lower (M-22, M-26, M-39)', async () => {
   const w = await mpWorld({ seed: 63, guests: 2 }); w.seconds(1);
@@ -371,7 +371,7 @@ test('the room closes: the guest goes on alone on the same farm, keeps its rider
   assert.ok(g.events.some(e => e.type === 'alone')); assert.ok(g.events.some(e => e.type === 'playerGone' && e.n === 1));
   const x0 = game.herd.free().map(a => [a.x, a.z]); w.seconds(5);
   assert.ok(game.herd.free().some((a, i) => x0[i] && Math.hypot(a.x - x0[i][0], a.z - x0[i][1]) > 1), 'the guest runs the animals now');
-  assert.equal(game.herd.free().filter(a => a.home === 'route').length, 18);
+  assert.equal(game.herd.free().filter(a => a.home === 'route').length, ROUTE_ANIMALS + PER_PLAYER - 1, 'the host herd it had, the extra animals too, but the one in its train (M-62)');
 });
 test('a kicked guest also goes on alone (M-41)', async () => {
   const w = await mpWorld({ seed: 65 }); w.seconds(1);

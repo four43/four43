@@ -13,6 +13,7 @@ export const TYPES = {
 };
 export const MAIN_TYPES = ['pig', 'cow', 'chicken', 'sheep', 'duck', 'bunny', 'dog'];
 export const ROUTE_ANIMALS = 18, YARD_ANIMALS = 3, WALK_HALF = 6.5;
+export const PER_PLAYER = 9; // M-62: route animals added for each player after the first, so a co-op game has more to go round
 const FILL = ['pig', 'cow', 'sheep', 'chicken', 'duck', 'bunny', 'pig', 'cow'];
 export const DODGE = { dur: 0.5, h: 0.9 }; // B-14: the hop out of the way of a full train: s, m high
 const TURN = 5, HELP_GIVE_UP = 15, BARN_GIVE_UP = 30; // rad/s; s (A-9)
@@ -57,6 +58,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
   if (rng.chance(0.5)) rng.pick(animals.filter(a => a.type !== 'chick' && !a.hidden)).golden = true; // A-8
 
   const free = () => animals.filter(a => !NOT_FREE.has(a.state));
+  let extra = 0; // M-62: more route animals while more players are in the game (the host's herd)
   const live = []; // separation list, refilled each step
   const pickTarget = a => {
     if (a.type === 'duck' && a.home === 'yard' && rng.chance(0.7)) { const ang = rng.range(0, 6.28); a.tx = env.pond.x + Math.cos(ang) * (env.pond.r + 1); a.tz = env.pond.z + Math.sin(ang) * (env.pond.r + 1); a.state = 'walk'; return; }
@@ -101,7 +103,7 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
         Object.assign(a, { state: 'toBarn', leader: null, hidden: false, y: 0, timer: i * 0.4, tx: B.x + fx * out * end, tz: B.z + fz * out * end, inside: false }); });
     },
     respawn() { // G-3: new animals appear on the routes, away from the yard, to replace delivered ones
-      const nRoute = count - free().filter(a => a.home === 'route').length, nYard = yardCount - free().filter(a => a.home === 'yard').length;
+      const nRoute = count + extra - free().filter(a => a.home === 'route').length, nYard = yardCount - free().filter(a => a.home === 'yard').length;
       const goldenFree = () => free().some(a => a.golden);
       for (let i = 0; i < nRoute; i++) { const a = add(rng.pick(FILL), spawnNearRoad()); if (!goldenFree() && rng.chance(0.3)) a.golden = true; }
       for (let i = 0; i < nYard; i++) add(rng.pick(['pig', 'sheep', 'duck', 'cow', 'bunny']), env.yard.randomPoint(rng), 'yard');
@@ -109,6 +111,9 @@ export function createHerd({ rng, env, count = ROUTE_ANIMALS, yardCount = YARD_A
       env.hideSpots.forEach(h => { if (free().some(a => a.hidden && Math.hypot(a.x - h.x, a.z - h.z) < 1)) return;
         const a = animals.filter(b => b.home === 'route' && !NOT_FREE.has(b.state) && !['help', 'wave', 'come'].includes(b.state) && !b.hidden && !b.golden && b.type !== 'cow' && b.type !== 'chick' && !animals.some(c => c.leader === b.id && !NOT_FREE.has(c.state))).reduce((m, b) => !m || b.born > m.born ? b : m, null); if (a) { a.hidden = true; a.state = 'hide'; a.x = h.x; a.z = h.z; } });
     },
+    // M-62: n players in the game: respawn() keeps count + PER_PLAYER * (n - 1) route animals free. Fewer players take nothing away: the surplus is not replaced
+    setPlayers(n) { extra = PER_PLAYER * Math.max(0, n - 1); },
+    get target() { return count + extra; },
     // M-11: hold an animal with this id (the host's ids are its array indexes, so never a reused slot); placeholders fill any gap until the host tells about them
     ensure(id, type, golden) { while (animals.length <= id) grow(type, { x: 0, z: 0 }).state = 'elsewhere'; const a = animals[id]; a.type = type; a.golden = golden; return a; },
     step(dt, { tractor: t, others = [] }) {

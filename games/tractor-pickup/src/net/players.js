@@ -30,7 +30,7 @@ export function createPlayers() {
         p.yaw = yawOfQuat(p.pose.tractor.q); p.mode = s.b.mode; p.full = s.b.full;
         const dt = (s.b.time - s.a.time) / 1000, A = s.a.bodies[0].p, B = s.b.bodies[0].p; if (dt > 0) p.speed = Math.hypot(B.x - A.x, B.z - A.z) / dt;
         const RA = s.a.riders, RB = s.b.riders, out = p.carried; out.length = RB.length; // the rider objects are reused frame to frame
-        for (let i = 0; i < RB.length; i++) { const c = RB[i], r = out[i] ||= {}; r.id = c.id; r.slot = c.slot; r.flying = c.flying; r.riding = !c.flying; r.x = c.x; r.y = c.y; r.z = c.z; r.yaw = c.yaw;
+        for (let i = 0; i < RB.length; i++) { const c = RB[i], r = out[i] ||= {}; r.id = c.id; r.slot = c.slot; r.flying = c.flying; r.riding = !c.flying; r.x = c.x; r.y = c.y; r.z = c.z; r.yaw = c.yaw; r.hat = c.hat;
           if (c.flying) continue; const o = RA.find(x => x.id === c.id); if (o) { r.x = lerp(o.x, c.x, s.k); r.y = lerp(o.y, c.y, s.k); r.z = lerp(o.z, c.z, s.k); r.yaw = lerpAngle(o.yaw, c.yaw, s.k); } }
       }
     },
@@ -41,10 +41,10 @@ export function createPlayers() {
 // the host must see it there, M-57; the others draw an animal in a train only when its replicated owner is that player)
 export function trainRecord(game) {
   const bodies = [game.tractor.body, ...game.train.cars.map(c => c.body)].map(b => ({ p: b.translation(), q: b.rotation() })), riders = [];
-  for (const f of game.flights) riders.push({ id: f.animal.id, slot: slotIndex(f.slot), flying: true, x: f.pos.x, y: f.pos.y, z: f.pos.z, yaw: f.animal.yaw });
-  for (const s of game.load.slots) if (s.landed) { const a = s.animal; riders.push({ id: a.id, slot: slotIndex(s), flying: false, x: a.x, y: a.y, z: a.z, yaw: yawOfQuat(game.train.cars[s.car].body.rotation()) }); }
+  for (const f of game.flights) riders.push({ id: f.animal.id, slot: slotIndex(f.slot), flying: true, x: f.pos.x, y: f.pos.y, z: f.pos.z, yaw: f.animal.yaw, hat: f.animal.hat || 'none' });
+  for (const s of game.load.slots) if (s.landed) { const a = s.animal; riders.push({ id: a.id, slot: slotIndex(s), flying: false, x: a.x, y: a.y, z: a.z, yaw: yawOfQuat(game.train.cars[s.car].body.rotation()), hat: a.hat || 'none' }); }
   const mode = game.mode === 'drive' ? 'drive' : game.mode === 'arrive' || game.mode === 'show' ? 'show' : 'held';
   return { mode, full: game.load.full(), bodies, riders: riders.filter(r => r.id <= MAX_ID).slice(0, LIMIT.riders) };
 }
 // an animal in another player's train, where that player put it (M-11, M-22)
-export function placeCarried(a, c) { a.x = c.x; a.y = c.y; a.z = c.z; a.yaw = c.yaw; a.riding = c.riding; a.anim = c.flying ? 'run' : 'idle'; }
+export function placeCarried(a, c) { a.x = c.x; a.y = c.y; a.z = c.z; a.yaw = c.yaw; a.riding = c.riding; a.anim = c.flying ? 'run' : 'idle'; a.hat = c.hat === 'none' ? null : c.hat; } // M-60: the hat its owner chose

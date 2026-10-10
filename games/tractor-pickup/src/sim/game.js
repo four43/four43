@@ -52,6 +52,8 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
     farm, road, terrain, items, phys, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
     load: createLoad(CAPACITY), mode: 'drive', dirt: { tractor: 0 }, // T-16: dirt levels 0..1 (cars and animals carry their own)
     others: [], claims: false, boopsPaused: false, // multiplayer: other tractors for the herd (M-12), boops wait for the host (M-14), host away (M-40)
+    hats: [], // W-4, M-60: the hats this player wears; a boop puts one on the animal (a.hat), and its train record tells the others
+    wearHats(ids) { game.hats = ids; for (const f of flights) putHat(f.animal); for (const s of game.load.slots) if (s.landed) putHat(s.animal); }, // the riders change hats at once
     // F-5: the show takes over. Riders in slot order (trailer then wagon, the order they were booped in); obstacles go back to their places and broken trees regrow (T-32, T-34).
     startShow() { game.mode = 'show'; yardProps.reset(); trees.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
     // F-10, A-16, G-3: delivered animals walk into the barn and are gone, new ones appear on the routes, the trailer and wagon are empty again.
@@ -129,9 +131,10 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
     },
   };
   function dropFlight(i, events, reason) { const fl = flights.splice(i, 1)[0], a = fl.animal; fl.load.release(fl.slot); a.state = 'elsewhere'; events.push({ type: 'unclaim', animal: a, reason, pos: { ...fl.pos } }); }
+  const putHat = a => { a.hat = game.hats.length ? game.hats[a.id % game.hats.length] : null; }; // M-60: the owner chooses, at the boop
   function launch(a, events, delay = 0) {
     const sl = game.load.reserve(a); if (!sl) return false;
-    a.state = 'fly'; a.hidden = false;
+    a.state = 'fly'; a.hidden = false; putHat(a);
     flights.push({ animal: a, slot: sl, load: game.load, u: -delay, dur: FLIGHT[a.type].dur, claim: game.claims ? 'pending' : null, hold: 0, start: tractorLocal(a.x, 0, a.z, {}), pos: { x: a.x, y: 0, z: a.z }, prev: { x: a.x, y: 0, z: a.z } }); // prev: last step's pos, for render interpolation (X-1)
     events.push({ type: 'launch', animal: a }); return true;
   }

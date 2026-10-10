@@ -16,8 +16,8 @@
 ## Work groups
 
 ### A. Animals (M-60..M-64)
-- [ ] **A-1 Hats match over the network** — an animal is owned by the player who picked it up; the hat is chosen deterministically from replicated data so every device shows the same hat.
-- [ ] **A-2 More animals for more players** — the host's herd grows with the number of players so they don't fight over the same animals.
+- [x] **A-1 Hats match over the network** — an animal is owned by the player who picked it up; the hat is chosen deterministically from replicated data so every device shows the same hat. (M-60, M-61: the owner picks at the boop; `hat` field on each TRAIN rider.)
+- [x] **A-2 More animals for more players** — the host's herd grows with the number of players so they don't fight over the same animals. (M-62, M-63: 18 + 9 route animals per extra player; a leaver's surplus is not replaced.)
 
 ### B. Remote tractors (M-65..M-69)
 - [ ] **B-1 Host tractor stutters on the guest** — show remote tractors through a client-side physics body / prediction (forecast position like other objects), not raw interpolation.

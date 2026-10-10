@@ -86,7 +86,7 @@ async function main() {
   let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, pathK = false, barnWay = null, camBlend, acc = 0, last = performance.now();
   const sfx = { surface: 'gravel', air: 0, whee: false };
   const bodies = () => bodyList;
-  const applyHats = () => { const ids = wornHats(progress); animals3d?.setHats(a => ids.length ? animals3d.hat(ids[a.id % ids.length]) : null); }; // W-4
+  const applyHats = () => game?.wearHats?.(wornHats(progress)); // W-4, M-60: this player's riders wear them; the others see the same hats
 
   function build(newSeed, power, player = 1) {
     seed = newSeed; gen++;
