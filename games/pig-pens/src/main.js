@@ -24,8 +24,8 @@ async function main() {
   const SKY = new THREE.Color('#bfe6f5');
   scene.background = SKY; scene.fog = new THREE.Fog(SKY, 70, 170);
   const camera = new THREE.PerspectiveCamera(48, 1, 0.3, 400);
-  // tilt-shift miniature look, focused on the camera's look-at point; off for now, ?tilt=1 turns it on
-  const tilt = createTiltShift(renderer, { on: params.get('tilt') === '1' });
+  // tilt-shift miniature look, focused on the camera's look-at point, only once zoomed in; ?tilt=0 turns it off
+  const tilt = createTiltShift(renderer, { on: params.get('tilt') !== '0' });
   const hemi = new THREE.HemisphereLight('#eef7ff', '#b9a27c', 1.3); scene.add(hemi);
   const sun = new THREE.DirectionalLight('#fff3dc', 2.1);
   sun.position.set(-26, 46, 22); sun.castShadow = true;

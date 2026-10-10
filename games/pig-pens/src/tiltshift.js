@@ -71,7 +71,7 @@ void main() {
 }`;
 
 export function createTiltShift(renderer, opts = {}) {
-  const P = Object.assign({ on: true, band: 0.06, scale: 3.2, nearScale: 1.6, blur: 0.011, sat: 1.05, vig: 0.2 }, opts);
+  const P = Object.assign({ on: true, band: 0.06, scale: 3.2, nearScale: 1.6, blur: 0.011, sat: 1.05, vig: 0.2, fullAt: 10, offAt: 24 }, opts);
   const mk = (w, h, samples) => new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples, depthBuffer: samples > 0 });
   const full = mk(1, 1, 4); full.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
   const half = mk(1, 1, 0), blurT = mk(1, 1, 0);
@@ -92,13 +92,15 @@ export function createTiltShift(renderer, opts = {}) {
     full.setSize(w, h); half.setSize(hw, hh); blurT.setSize(hw, hh);
   }
 
-  // focus: distance from the camera to the point it is looking at
+  // focus: distance from the camera to the point it is looking at. The look only comes in as the camera zooms in
+  // (full strength at fullAt, gone by offAt), so the zoomed-out overview stays crisp and skips the extra passes.
   function render(scene, camera, focus) {
-    if (!P.on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+    const k = 1 - THREE.MathUtils.smoothstep(focus, P.fullAt, P.offAt);
+    if (!P.on || k <= 0.001) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     setSize();
     U.near.value = camera.near; U.far.value = camera.far; U.focus.value = focus;
-    U.band.value = P.band; U.scale.value = P.scale; U.nearScale.value = P.nearScale; U.maxR.value = P.blur * full.height * 0.5;
-    comp.uniforms.sat.value = P.sat; comp.uniforms.vig.value = P.vig;
+    U.band.value = P.band; U.scale.value = P.scale; U.nearScale.value = P.nearScale; U.maxR.value = P.blur * full.height * 0.5 * k;
+    comp.uniforms.sat.value = 1 + (P.sat - 1) * k; comp.uniforms.vig.value = P.vig * k;
     renderer.setRenderTarget(full); renderer.render(scene, camera);
     run(pre, half); run(blur, blurT); run(comp, null);
   }

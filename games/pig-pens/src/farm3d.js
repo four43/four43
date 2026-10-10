@@ -5,6 +5,7 @@ import { ASSETS, geoFrom, modelGeo, mergeGeos, boxGeo, colorGeo, animM, sampleAn
 import { L } from './layout.js';
 import { CST, FST } from './chickens.js';
 import { TP } from './tractor.js';
+import { furGeo, furMaterial } from './fur.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -116,16 +117,20 @@ export function buildFarmExtras({ scene, sim, matV, sun, hemi, fogColor }) {
   const NB = 26;
   const chickMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   // Grown-ups get white plumage (Kenney's chick is yellow); beak, feet and eyes keep their colours.
+  const plume = (p, i) => p.col[i] >= 250 && p.col[i + 1] >= (p.name.startsWith('wing') ? 140 : 170);
   const whiten = p => {
     const col = p.col.slice(), wing = p.name.startsWith('wing');
     for (let i = 0; i < col.length; i += 3) {
-      const r = col[i], g = col[i + 1];
-      if (r >= 250 && (wing ? g >= 140 : g >= 170)) { const sh = wing ? 0.8 + 0.2 * Math.min(1, (g - 150) / 57) : 0.9 + 0.1 * Math.min(1, (g - 170) / 40); col[i] = 248 * sh; col[i + 1] = 246 * sh; col[i + 2] = 240 * sh; }
+      const g = col[i + 1];
+      if (plume(p, i)) { const sh = wing ? 0.8 + 0.2 * Math.min(1, (g - 150) / 57) : 0.9 + 0.1 * Math.min(1, (g - 170) / 40); col[i] = 248 * sh; col[i + 1] = 246 * sh; col[i + 2] = 240 * sh; }
     }
     return { ...p, col };
   };
-  const mkSet = parts => parts.map(p => { const m = new THREE.InstancedMesh(geoFrom([p]), chickMat, NB); m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); for (let i = 0; i < NB; i++) { m.setColorAt(i, new THREE.Color(1, 1, 1)); m.setMatrixAt(i, ZERO); } scene.add(m); return m; });
-  const adultMeshes = mkSet(ASSETS.chick.parts.map(whiten)), babyMeshes = mkSet(ASSETS.chick.parts);
+  // plumage (body and wings) gets shell fur; the base mesh and the fur shells share one InstancedMesh
+  const furMat = furMaterial({ bare: [[-0.47, 0.4, 0.5], [0.47, 0.96, 1]] });   // bare face, so the eyes and beak show
+  const birdGeo = (p, src) => p.name === 'body' || p.name.startsWith('wing') ? furGeo(geoFrom([p]), i => plume(src, i * 3) ? 1 : 0) : geoFrom([p]);
+  const mkSet = (parts, src) => parts.map((p, k) => { const g = birdGeo(p, src[k]), m = new THREE.InstancedMesh(g, g.groups.length ? [chickMat, furMat] : chickMat, NB); m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); for (let i = 0; i < NB; i++) { m.setColorAt(i, new THREE.Color(1, 1, 1)); m.setMatrixAt(i, ZERO); } scene.add(m); return m; });
+  const adultMeshes = mkSet(ASSETS.chick.parts.map(whiten), ASSETS.chick.parts), babyMeshes = mkSet(ASSETS.chick.parts, ASSETS.chick.parts);
   const allBirdMeshes = [...adultMeshes, ...babyMeshes];
   const birdAnim = [];
   const tint = new THREE.Color();
