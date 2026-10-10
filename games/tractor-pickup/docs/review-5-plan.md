@@ -20,8 +20,8 @@
 - [x] **A-2 More animals for more players** — the host's herd grows with the number of players so they don't fight over the same animals. (M-62, M-63: 18 + 9 route animals per extra player; a leaver's surplus is not replaced.)
 
 ### B. Remote tractors (M-65..M-69)
-- [ ] **B-1 Host tractor stutters on the guest** — show remote tractors through a client-side physics body / prediction (forecast position like other objects), not raw interpolation.
-- [ ] **B-2 Dirtiness replicates** — each train's dirt matches between devices.
+- [x] **B-1 Host tractor stutters on the guest** — show remote tractors through a client-side physics body / prediction (forecast position like other objects), not raw interpolation.
+- [x] **B-2 Dirtiness replicates** — each train's dirt matches between devices.
 
 ### C. Ceremonies (M-70..M-74)
 - [x] **C-1 Ceremony lock** — only one barn show at a time; a player who arrives while another's show runs waits and gets a (non-text) message.

@@ -16,6 +16,7 @@ export function createInterp({ size = 32 } = {}) {
   return {
     get delay() { return Math.min(DELAY.max, Math.max(DELAY.min, 40 + 3 * jitter)); },
     get jitter() { return jitter; },
+    get offset() { return offset ?? 0; }, // receiver clock minus sender clock (the least-delayed message): now - offset is the sender's time now, as best known
     get latest() { return buf.at(-1)?.frame ?? null; },
     push(senderT, arrival, frame) {
       if (!(senderT > lastT)) return false; lastT = senderT;

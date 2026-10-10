@@ -32,6 +32,7 @@ import { load, save } from './ui/store.js';
 import { Handshake } from './net/handshake.js';
 import { createNetLog, loggedTransports } from './net/netlog.js';
 import { createSession, parseRoomInput, signalServer } from './net/session.js';
+import { stepStamp } from './net/players.js';
 import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
@@ -229,7 +230,7 @@ async function main() {
     while (acc >= DT) {
       { const t = game.tractor, o = pilot.update(inp, chase.yaw ?? t.yaw, t.yaw, t.speed); // C-1, C-2: point to go
         stepIn.thr = o.thr; stepIn.steer = o.steer; stepIn.turn = o.turn; stepIn.onTarget = o.onTarget; stepIn.horn = hornQueued; }
-      const g0 = gen, nowMs = performance.now(), netEv = session ? netEvents(nowMs) : []; // before game.step: a welcome may rebuild the farm here (M-1)
+      const g0 = gen, nowMs = stepStamp(now, acc), netEv = session ? netEvents(nowMs) : []; // before game.step: a welcome may rebuild the farm here (M-1)
       if (gen !== g0) { acc -= DT; continue; } // a new farm: fresh bodies and snapshots, its first step comes next
       const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
       const ev = game.step(stepIn) || []; if (netEv.length) ev.unshift(...netEv); hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT; // B-6: no new array per step (net events first, as before)
@@ -279,6 +280,7 @@ async function main() {
     }
     const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
     stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt);
+    if (session?.sync?.players) try { session.sync.players.drawAt(now, game.herd); } catch (e) { warnOnce('net draw', e); } // M-65: other trains (and their riders) where the forecast has them this frame
     gibs.update(dt); farm3d?.update(view[0].p); animView.alpha = a; animals3d?.update(dt, game, animView); try { others3d?.update(dt, session?.sync?.players ?? null); } catch (e) { warnOnce('others3d', e); } // M-44
     vehSnap.dirt = game.dirt?.tractor; vehicles.update(vehSnap);
     const t = game.tractor, lv = t.body.linvel();
