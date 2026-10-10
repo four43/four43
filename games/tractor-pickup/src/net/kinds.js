@@ -5,7 +5,7 @@ import { F, kind } from './replica.js';
 import { TYPES, HELD } from '../sim/herd.js';
 import { PAINT_NAMES, MAX_PLAYERS, MAX_ID } from './protocol.js';
 
-const TYPE_LIST = Object.keys(TYPES), ANIMS = ['idle', 'walk', 'run', 'eat', 'dance'], MODES = ['drive', 'show', 'held'];
+const TYPE_LIST = Object.keys(TYPES), ANIMS = ['idle', 'walk', 'run', 'eat', 'dance'], MODES = ['drive', 'show', 'held', 'wait'];
 export const LIMIT = { coord: 400, height: 50, animals: 256, trees: 1024, riders: 16 };
 const XZ = F.fixed(-LIMIT.coord, LIMIT.coord, 1 / 64), Y = F.fixed(-LIMIT.height, LIMIT.height, 1 / 256); // 1.6 cm and 4 mm steps
 const POSE = F.obj({ p: F.obj({ x: XZ, y: Y, z: XZ }), q: F.quat() });
@@ -14,7 +14,7 @@ export const ANIMAL = kind({ name: 'animal', code: 1, authority: 'host', max: LI
     owner: F.uint(1, MAX_PLAYERS), epoch: F.uint(4), x: XZ, y: Y, z: XZ, yaw: F.angle(), anim: F.oneOf(ANIMS), leader: F.id(), line: F.uint(1) },
   newer: (old, rec) => rec.epoch >= old.epoch }); // M-26: lower ownership number, older data
 export const TREE = kind({ name: 'tree', code: 2, authority: 'host', max: LIMIT.trees, idMax: LIMIT.trees - 1, fields: { state: F.oneOf(['standing', 'broken', 'growing']) } });
-export const PLAYER = kind({ name: 'player', code: 3, authority: 'host', max: MAX_PLAYERS, idMin: 1, idMax: MAX_PLAYERS, fields: { body: F.oneOf(PAINT_NAMES), trim: F.oneOf(PAINT_NAMES), away: F.bool(), join: F.uint(1) } }); // join: which joining of that number (a number given again is a new player)
+export const PLAYER = kind({ name: 'player', code: 3, authority: 'host', max: MAX_PLAYERS, idMin: 1, idMax: MAX_PLAYERS, fields: { body: F.oneOf(PAINT_NAMES), trim: F.oneOf(PAINT_NAMES), away: F.bool(), join: F.uint(1), barn: F.bool() } }); // join: which joining of that number (a number given again is a new player); barn: this player's show has the barn (M-71)
 export const TRAIN = kind({ name: 'train', code: 4, authority: 'owner', max: 1, idMin: 1, idMax: MAX_PLAYERS,
   fields: { mode: F.oneOf(MODES), full: F.bool(), bodies: F.list(POSE, 3, 3), // tractor, trailer, wagon
     riders: F.list(F.obj({ id: F.uint(2, MAX_ID), slot: F.uint(1, 11), flying: F.bool(), x: XZ, y: Y, z: XZ, yaw: F.angle() }), LIMIT.riders) } });
@@ -29,4 +29,4 @@ export function animalRecord(a) {
 }
 export const animalRecords = herd => { const out = []; for (const a of herd.animals) { const r = animalRecord(a); if (r) out.push([a.id, r]); } return out.slice(0, LIMIT.animals); };
 export const treeRecords = trees => trees.list.slice(0, LIMIT.trees).map(t => [t.id, { state: t.state }]);
-export const playerRecords = roster => roster.map(p => [p.n, { body: p.paint.body, trim: p.paint.trim, away: !!p.away, join: p.join ?? 0 }]);
+export const playerRecords = roster => roster.map(p => [p.n, { body: p.paint.body, trim: p.paint.trim, away: !!p.away, join: p.join ?? 0, barn: !!p.barn }]);

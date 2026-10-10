@@ -34,7 +34,7 @@ export function createPlayers() {
           if (c.flying) continue; const o = RA.find(x => x.id === c.id); if (o) { r.x = lerp(o.x, c.x, s.k); r.y = lerp(o.y, c.y, s.k); r.z = lerp(o.z, c.z, s.k); r.yaw = lerpAngle(o.yaw, c.yaw, s.k); } }
       }
     },
-    others() { let k = 0; for (const p of map.values()) if (p.pose) { const o = others[k++] ||= {}; o.n = p.n; o.x = p.pose.tractor.p.x; o.z = p.pose.tractor.p.z; o.yaw = p.yaw; o.speed = p.speed; } others.length = k; return others; },
+    others() { let k = 0; for (const p of map.values()) if (p.pose) { const o = others[k++] ||= {}; o.n = p.n; o.x = p.pose.tractor.p.x; o.z = p.pose.tractor.p.z; o.yaw = p.yaw; o.speed = p.speed; o.held = p.mode !== 'drive'; } others.length = k; return others; },
   };
 }
 // M-22: this device's train record: the three bodies, and every animal in flight to it or in a slot (also a flight that still waits for the host:
@@ -43,7 +43,7 @@ export function trainRecord(game) {
   const bodies = [game.tractor.body, ...game.train.cars.map(c => c.body)].map(b => ({ p: b.translation(), q: b.rotation() })), riders = [];
   for (const f of game.flights) riders.push({ id: f.animal.id, slot: slotIndex(f.slot), flying: true, x: f.pos.x, y: f.pos.y, z: f.pos.z, yaw: f.animal.yaw });
   for (const s of game.load.slots) if (s.landed) { const a = s.animal; riders.push({ id: a.id, slot: slotIndex(s), flying: false, x: a.x, y: a.y, z: a.z, yaw: yawOfQuat(game.train.cars[s.car].body.rotation()) }); }
-  const mode = game.mode === 'drive' ? 'drive' : game.mode === 'arrive' || game.mode === 'show' ? 'show' : 'held';
+  const mode = game.mode === 'drive' ? 'drive' : game.barnWait ? 'wait' : game.mode === 'arrive' || game.mode === 'show' ? 'show' : 'held'; // wait: held at the barn, asking for it (M-71)
   return { mode, full: game.load.full(), bodies, riders: riders.filter(r => r.id <= MAX_ID).slice(0, LIMIT.riders) };
 }
 // an animal in another player's train, where that player put it (M-11, M-22)

@@ -21,3 +21,9 @@ test('a bump pushes only our own tractor away at 2 m/s, with a boing event and a
   assert.deepEqual(ev, [{ type: 'bump', other: 2 }]);
   b.step(DT, t, [{ n: 2, x: 2, z: 0, yaw: 0 }], ev); assert.equal(ev.length, 1, 'cooldown');
 });
+test('a tractor that is not driving (its show, waiting for the barn, its card) does not bump: the next one drives into the barn (M-72)', async () => {
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default; await RAPIER.init();
+  const { createGame } = await import('../src/sim/game.js'), g = createGame(RAPIER, { seed: 3, power: 'medium' }), t = g.tractor, ev = [];
+  createBumper().step(1 / 60, t, [{ n: 2, x: t.x, z: t.z, yaw: t.yaw, speed: 0, held: true }], ev); assert.equal(ev.length, 0);
+  createBumper().step(1 / 60, t, [{ n: 2, x: t.x, z: t.z, yaw: t.yaw, speed: 0, held: false }], ev); assert.equal(ev.length, 1);
+});

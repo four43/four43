@@ -35,6 +35,7 @@ import { createSession, parseRoomInput, signalServer } from './net/session.js';
 import { createWarnOnce } from './net/protocol.js';
 import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
+import { START_PAINT } from './net/players.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { BURST } from './sim/scenery.js';
 import { singOrder } from './sim/sing.js';
@@ -45,6 +46,8 @@ import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, 
 const MAX_STEPS = 3; // B-5
 // E-5: the wake button's sun
 const SUN_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><g stroke="#f08a1c" stroke-width="7" stroke-linecap="round">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<line x1="${50 + Math.cos(a) * 33}" y1="${50 + Math.sin(a) * 33}" x2="${50 + Math.cos(a) * 45}" y2="${50 + Math.sin(a) * 45}"/>`; }).join('')}</g><circle cx="50" cy="50" r="24" fill="#ffd24a" stroke="#f08a1c" stroke-width="5"/><circle cx="42" cy="46" r="3" fill="#6b4428"/><circle cx="58" cy="46" r="3" fill="#6b4428"/><path d="M41 56 Q50 64 59 56" stroke="#6b4428" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`;
+// M-72: the hourglass in the bubble of a train that waits for the barn
+const HOURGLASS_SVG = `<svg viewBox="0 0 60 76" aria-hidden="true"><path d="M12 10h36c0 14-12 20-12 28s12 14 12 28H12c0-14 12-20 12-28S12 24 12 10z" fill="#e8f4ff" stroke="#6b4428" stroke-width="3" stroke-linejoin="round"/><path d="M18 17h24c-3 8-9 11-12 15-3-4-9-7-12-15z" fill="#f5c84c"/><path d="M30 50c-5 3-11 8-12 14h24c-1-6-7-11-12-14z" fill="#f5c84c"/><rect x="6" y="3" width="48" height="8" rx="4" fill="#a0673a"/><rect x="6" y="65" width="48" height="8" rx="4" fill="#a0673a"/></svg>`;
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
 const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
 function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
@@ -168,9 +171,10 @@ async function main() {
   // M-53: the multiplayer debug log (the "?" in the Multiplayer panel); Handshake's own warnings go into it too
   const netlog = sandbox ? null : createNetLog();
   if (netlog) { netlog.log('device', navigator.userAgent); for (const k of ['warn', 'error']) { const orig = console[k].bind(console); console[k] = (...a) => { if (typeof a[0] === 'string' && /^(handshake|multiplayer|net )/.test(a[0])) netlog.log(k, ...a.map(x => x instanceof Error ? x.message : typeof x === 'string' ? x : String(x))); orig(...a); }; } }
+  const tractorPic = sandbox ? null : tractorPicture(renderer);
   const menus = sandbox ? null : createMenus(ui, {
     netlog,
-    icons, art: createStickerArt(renderer), tractorPic: sandbox ? null : tractorPicture(renderer),
+    icons, art: createStickerArt(renderer), tractorPic,
     onStickers(p) { save('tp-progress', p); }, // W-2: a sticker was placed, moved or taken off a page
     onBookSeen() { driveBadge(); }, // F-3
     onHats(p) { save('tp-progress', p); applyHats(); sound.plop(); }, // W-4: a hat was turned off or on
@@ -208,6 +212,10 @@ async function main() {
     btn('paintbtn', paintBtnSvg(), 'Paint', back => menus.openPaint(progress, back));
     btn('stickerbtn', bookSvg(), 'Sticker book', back => menus.showBook(progress, back));
   }
+  // M-72: held at the barn while another player's show has it: a bubble with that player's tractor and a turning hourglass (no text, R-2)
+  const barnWaitEl = sandbox ? null : Object.assign(document.createElement('div'), { id: 'barnwait', hidden: true });
+  if (barnWaitEl) { barnWaitEl.innerHTML = `<img alt="">${HOURGLASS_SVG}`; ui.appendChild(barnWaitEl); }
+  let barnBy = 0;
   function driveBadge() { // F-3: the drive button's badge: new stickers only
     const b = driveBtns?.querySelector('.stickerbtn'); if (!b) return; b.querySelector('.count')?.remove();
     const n = newStickers(progress); if (n) b.appendChild(Object.assign(document.createElement('span'), { className: 'count', textContent: n }));
@@ -255,7 +263,7 @@ async function main() {
           if (c === 'drive') game.mode = modeAfterDrive(game.mode); // the card is gone: driving and boops work again (U-6: not under paint or book)
           if (c === 'say-intro') voice.say(['lets-find', 'animals']);
           if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
-          if (c === 'help') { if (!session?.requestHelp()) { const h = game.herd.callHelp(game.tractor); if (h) { helpTarget = { a: h, t: 10 }; sound.animal(h.type); } } } // F-4: the helper calls out; M-9: a guest asks the host (its answer is a help event, or none)
+          if (c === 'help' && !game.barnWait) { if (!session?.requestHelp()) { const h = game.herd.callHelp(game.tractor); if (h) { helpTarget = { a: h, t: 10 }; sound.animal(h.type); } } } // F-4: the helper calls out; M-9: a guest asks the host (its answer is a help event, or none)
           if (c === 'show') {
             const myGen = gen;
             guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow(); session?.showStarted(); // M-17
@@ -280,6 +288,9 @@ async function main() {
       if (camBlend < 1) { camBlend = Math.min(1, camBlend + dt); const k = camBlend * camBlend * (3 - 2 * camBlend); chaseQuat.copy(camera.quaternion); camera.quaternion.slerpQuaternions(showQuat, chaseQuat, k); } // F-10: turn back smoothly
     }
     if (driveBtns) { const on = started && game.mode === 'drive' && !show?.active; if (driveBtns.hidden === on) driveBtns.hidden = !on; }
+    // M-72: the bubble shows whose show has the barn; that tractor toots once. It goes when this train's own show starts
+    if (barnWaitEl) { const n = game.barnWait > 0 ? game.barnWait : 0;
+      if (n !== barnBy) { barnBy = n; barnWaitEl.hidden = !n; if (n) { barnWaitEl.firstChild.src = tractorPic(session?.sync?.players.map.get(n)?.paint ?? START_PAINT); sound.horn(0.4); } } }
     if (trip && started) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
       if (helpTarget && ((helpTarget.t -= dt) <= 0 || !game.herd.free().includes(helpTarget.a))) helpTarget = null;
       if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.25; barnWay = barnPath(game, t.x, t.z); if ((pathK = !pathK)) fx.sparkleTrail(barnWay.path); fx.sparkleFrame(barnWay.frame); } // the door frame twice as often

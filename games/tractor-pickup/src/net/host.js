@@ -23,6 +23,8 @@ const REGROW_MS = 5000; // M-17, M-50: a guest regrow counts at most once in 5 s
 const BANK_S = 1; // C-4: seconds of top speed a guest can save up (frames that stall, then come at once)
 const NEAR_SPAWN = 10; // m, C-4: after a welcome the host follows a guest only from its spawn place on the new farm
 const HORN_MS = 300; // M-8, M-50, R-8: a guest horn counts at most once in 300 ms, so the others never hear a blare
+const BUSY = new Set(['wait', 'show']); // M-73: a train in these modes still has the barn it was given
+export const BARN_HOLD_MS = 90000; // M-73: the barn goes to the next player after this long, also when the show that has it has not ended (R-1)
 // Two clocks: clock() is wall time, for every rate limit and the silence watchdog (the frame clock stops while the page sleeps); nowMs is the
 // frame clock, for sending and for the interpolation buffers (sample(now) reads them in the same clock).
 export function createHostSync({ game, net, paint, clock = () => performance.now(), bindings = BINDINGS }) { // bindings: the replicated kinds
@@ -32,7 +34,8 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
   let joins = 0, farm = 0, lastWorld = -Infinity, lastTrain = -Infinity, lastKey = -Infinity, closed = false, myPaint = { ...paint }, nowMs = 0, lastBefore = null;
   const send = (n, m, rel = true) => { const p = players.map.get(n); if (p?.peer) net.send(p.peer, m, rel); };
   const all = (m, rel = true, except = 0) => { for (const p of players.map.values()) if (p.n !== except && p.peer && p.helloed) net.send(p.peer, m, rel); };
-  const roster = () => [{ n: 1, paint: myPaint, away: false, join: 0 }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away, join: p.join }))];
+  const barn = { holder: 0, since: 0, holdMs: BARN_HOLD_MS, hostWait: null }; // M-70: the player whose show has the barn (0: nobody); hostWait: when the host's own train began to wait
+  const roster = () => [{ n: 1, paint: myPaint, away: false, join: 0, barn: barn.holder === 1 }, ...players.list().map(p => ({ n: p.n, paint: p.paint, away: p.away, join: p.join, barn: barn.holder === p.n }))];
   const at = { get game() { return game; }, get roster() { return roster(); }, you: 1 };
   const worldNow = () => readAll(hostRows, at), mineNow = () => readAll(ownRows, at);
   const welcome = p => ({ t: 'welcome', v: NET_VERSION, seed: game.farm.seed, farm, you: p.n, next: game.herd.animals.length }); // M-24: the first keyframe follows at once
@@ -50,6 +53,22 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
     const m = Math.min(d, p.bank); if (d > 0) { p.trust.x += dx * m / d; p.trust.z += dz * m / d; } p.bank -= m;
   }
   const tractorOf = p => ({ x: p.pose.tractor.p.x, z: p.pose.tractor.p.z, yaw: p.yaw, speed: p.speed });
+  // M-70..M-73: the barn lock. A train asks by waiting at the barn (its mode 'wait'; the host's own train through its barnGate); the first to ask gets it.
+  // It is free again when that show ends (the train's mode is no longer 'wait' or 'show'), when that player is away or gone, or after holdMs.
+  function grantBarn() {
+    if (barn.holder) return; let n = 0, at = Infinity;
+    if (barn.hostWait !== null) { n = 1; at = barn.hostWait; }
+    for (const p of players.map.values()) if (p.barnAsk !== undefined && p.barnAsk < at) { n = p.n; at = p.barnAsk; }
+    if (n) { barn.holder = n; barn.since = clock(); }
+  }
+  function stepBarn() {
+    const t = clock(); if (game.mode !== 'arrive') barn.hostWait = null;
+    for (const p of players.map.values()) { if (p.away || p.latest?.mode !== 'wait') p.barnAsk = undefined; else p.barnAsk ??= t; }
+    const h = barn.holder, p = players.map.get(h), over = h === 1 ? game.mode !== 'arrive' && game.mode !== 'show' : !p || p.away || !BUSY.has(p.latest?.mode);
+    if (h && (over || t - barn.since > barn.holdMs)) { barn.holder = 0; if (h === 1 && barn.hostWait !== null) barn.hostWait = t; else if (p?.barnAsk !== undefined) p.barnAsk = t; } // one that still waits asks again, behind the others
+    grantBarn();
+  }
+  const hostGate = () => { barn.hostWait ??= clock(); grantBarn(); return barn.holder === 1 ? 0 : barn.holder || -1; }; // M-71: the host asks itself, in its own step
   const handlers = {
     hello(p, m) { if (p.helloed) return; p.helloed = true; p.paint = m.paint; startTrust(p); send(p.n, welcome(p)); lastKey = -Infinity; }, // M-23: a keyframe at once, after the welcome
     paint(p, m) { p.paint = m.paint; }, // M-2: the player object changes; the next diff has it
@@ -110,11 +129,11 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
       if (rides(p.latest.riders, a.id)) { missing.delete(a.id); continue; } const m = (missing.get(a.id) || 0) + dt; if (m >= REPAIR_MS) freeUp(a); else missing.set(a.id, m); }
   }
   const sync = {
-    players, handlers, out,
-    get game() { return game; }, you: 1,
+    players, handlers, out, barn,
+    get game() { return game; }, you: 1, get barnHolder() { return barn.holder; },
     before(now) {
       nowMs = now; for (const p of players.map.values()) p.away = !!p.serverAway || silent(p); // M-39: the roster, the drawing and the dodges use it
-      players.sample(now); game.others = players.others(); repair(lastBefore === null ? 0 : now - lastBefore); lastBefore = now;
+      players.sample(now); game.others = players.others(); repair(lastBefore === null ? 0 : now - lastBefore); lastBefore = now; stepBarn();
       for (const p of players.map.values()) { if (p.away) continue;
         for (const c of p.carried) { const a = game.herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) placeCarried(a, c); }
         if (p.pose && p.full && p.mode === 'drive') fullDodge(game.herd, p.pose.tractor.p, p.pose.tractor.q, p.pose.cars, out); } // M-12, B-14
@@ -133,12 +152,13 @@ export function createHostSync({ game, net, paint, clock = () => performance.now
       if (now - lastTrain >= SEND.train) { lastTrain = now; all(encodeFrame({ key: false, sender: 1, time: now, groups: mine.diff(mineNow()) }), false);
         for (const p of players.map.values()) if (p.fwdNew) { p.fwdNew = false; passOn(p, false); } } // C-3: at most one train frame for each guest in each send tick
     },
-    setGame(g) { game = g; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity;
+    setGame(g) { game = g; game.barnGate = hostGate; farm = (farm + 1) >>> 0; world.reset(); mine.reset(); missing.clear(); lastKey = -Infinity;
       for (const p of players.map.values()) { p.interp.reset(); p.latest = null; p.pose = null; p.fwd = null; p.fwdNew = false; if (p.helloed) { startTrust(p); send(p.n, welcome(p)); } } }, // M-19, C-4
     setPaint(pt) { myPaint = { ...pt }; },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
     delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host
-    close() { closed = true; for (const n of [...players.map.keys()]) dropPlayer(n); byPeer.clear(); rates.clear(); game.others = []; game.herd.respawn(); }, // M-39: the host keeps playing alone and its herd refills
+    close() { closed = true; game.barnGate = null; game.barnWait = 0; barn.holder = 0; for (const n of [...players.map.keys()]) dropPlayer(n); byPeer.clear(); rates.clear(); game.others = []; game.herd.respawn(); }, // M-39: the host keeps playing alone and its herd refills
   };
+  game.barnGate = hostGate;
   return sync;
 }

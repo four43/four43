@@ -52,6 +52,7 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
     farm, road, terrain, items, phys, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
     load: createLoad(CAPACITY), mode: 'drive', dirt: { tractor: 0 }, // T-16: dirt levels 0..1 (cars and animals carry their own)
     others: [], claims: false, boopsPaused: false, // multiplayer: other tractors for the herd (M-12), boops wait for the host (M-14), host away (M-40)
+    barnGate: null, barnWait: 0, // M-70..M-73: multiplayer barn lock: barnGate() -> 0 go, n the player whose show runs, -1 asked (no answer yet); barnWait: its last answer while held at the barn, 0 when not waiting
     // F-5: the show takes over. Riders in slot order (trailer then wagon, the order they were booped in); obstacles go back to their places and broken trees regrow (T-32, T-34).
     startShow() { game.mode = 'show'; yardProps.reset(); trees.reset(); return game.load.slots.filter(sl => sl.landed).map(sl => ({ animal: sl.animal, slot: sl })); },
     // F-10, A-16, G-3: delivered animals walk into the barn and are gone, new ones appear on the routes, the trailer and wagon are empty again.
@@ -110,7 +111,8 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
       // F-1: a pass through the barn with at least one rider starts the show (after any flight has landed)
       // F-1, F-5: 3/4 of the way through the barn with a rider (or one still flying in), the tractor and the wagons stop where they are
       if (game.mode === 'drive' && barnPass(tractor.x, tractor.z) && (load.landed() > 0 || flights.length > 0 || game.lastDrive)) { pendingPass = true; game.mode = 'arrive'; } // E-5: the last drive before bedtime ends in the barn even when empty
-      if (pendingPass && flights.length === 0) { pendingPass = false; if (load.landed() > 0 || game.lastDrive) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
+      if (pendingPass && flights.length === 0) game.barnWait = load.landed() > 0 && game.barnGate ? game.barnGate() : 0; // M-71, M-72: one show at a time: held in the barn until the host gives it
+      if (pendingPass && flights.length === 0 && !game.barnWait) { pendingPass = false; if (load.landed() > 0 || game.lastDrive) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
       if (game.mode === 'arrive' || game.mode === 'show') for (const b of bodies) { const v = b.linvel(); if (Math.hypot(v.x, v.z) > 0.05) b.setLinvel({ x: v.x * STOP, y: v.y, z: v.z * STOP }, true); }
       // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler and the farmyard wash (T-36) clean
       const sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;
