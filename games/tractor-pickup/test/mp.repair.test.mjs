@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mpWorld, free, single, inFrontOf, countCalls, STILL, PAINTS, settle, disagreements, blackout, trainFrame, parked } from './mp.harness.mjs';
 import { REPAIR_MS } from '../src/net/host.js';
+import { NET_VERSION } from '../src/net/protocol.js';
 import { createLoad } from '../src/sim/slots.js';
 import { CAPACITY } from '../src/sim/game.js';
 
@@ -122,7 +123,7 @@ test('a lost hello: the guest says it again every 2 s until it has its welcome; 
   const g = w.addGuest(); w.seconds(1.5); assert.equal(g.sync.you, 0, 'no welcome yet');
   w.seconds(1); assert.equal(g.sync.you, 2); assert.equal(g.game.farm.seed, 101); assert.equal(hellos.length, 2);
   const handled = countCalls(w.host.sync, 'hello');
-  g.net.send(w.host.net.id, { t: 'hello', v: 2, paint: { body: 'pink', trim: 'pink' } }, true); w.seconds(4);
+  g.net.send(w.host.net.id, { t: 'hello', v: NET_VERSION, paint: { body: 'pink', trim: 'pink' } }, true); w.seconds(4);
   assert.equal(handled(), 1); assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[1], 'a second hello changes nothing');
   assert.equal(hellos.length, 3, 'only the one sent by hand: no more hellos once welcomed'); assert.deepEqual(settle(w, 3), []);
 });

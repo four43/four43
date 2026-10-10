@@ -1,8 +1,8 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.11 (after review 4)
+Version: 1.12 (after review 5)
 Date: 7 October 2026
-Game version: 1.7.0
+Game version: 1.8.0
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
 Status of items: Each design item has an ID (for example, **[C-1]**). All items in this document are accepted for the first version. Items marked **Phase 2** in section 14 are accepted but come after version 1.8.
@@ -110,6 +110,18 @@ Game version 1.7.0.
 - All sound stops while the page is hidden, and comes back with the next touch (X-13).
 - The game has no volume setting: use the volume buttons of the device (R-9).
 - The recording script `audio/voice/script.md` gives all words and animal sounds for one recording (12.4).
+
+#### 1.2.12 Change in version 1.12 (after review 5, multiplayer playtest)
+
+Game version 1.8.0. Network version 3 (M-27): devices with game 1.7.0 cannot join a 1.8.0 room.
+
+- Hats match on every device: the player who boops an animal chooses its hat, and the train record carries it (M-60, M-61).
+- More players, more animals: the host keeps 9 more route animals free for each extra player (M-62, M-63).
+- Other tractors move smoothly: each device forecasts the other trains from their sent velocity and spin, every drawn frame, and blends corrections (M-65 to M-67, M-69).
+- Dirt is the same on every device (M-68).
+- One barn show at a time: the host gives the barn to the first train; a train that arrives while another show runs waits at the barn with a bubble that shows the busy tractor and an hourglass (M-70 to M-74).
+- A horn in a room shows a horn mark above the tractor on all devices, and arrows in the other players' paints on the honking player's screen (M-75 to M-77).
+- Player circles right of the menu button show who is in the room (M-78, M-79).
 
 ### 1.3 Design rules for a 4-year-old player
 
@@ -585,7 +597,7 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 
 ## 13. Test results
 
-State at version 1.11, game 1.7.0 (`npm test`: 688 tests, all pass). Version 1.10 had 662, version 1.9 had 640, version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
+State at version 1.12, game 1.8.0 (`npm test`: 722 tests, all pass). Version 1.11 had 688, version 1.10 had 662, version 1.9 had 640, version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
 | Section | Automated tests (`games/tractor-pickup/test/`) | Checked in a desktop browser | Still needs an iPad check |
 |---|---|---|---|

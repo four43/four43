@@ -18,7 +18,7 @@ test('host messages are checked the same way; the herd, trees and players are no
   for (const m of [{ t: 'tree', id: 3 }, { t: 'regrow' }, { t: 'horn', n: 1 }, { t: 'help', id: null }, { t: 'help', id: 7 }]) assert.deepEqual(checkFromHost(m), m, m.t);
   for (const m of [{ ...w, v: NET_VERSION + 1 }, { ...w, you: 5 }, { ...w, you: 1 }, { ...w, seed: -1 }, { ...w, farm: undefined }, { ...w, farm: 1.5 }, { ...w, next: undefined }, { ...w, next: 70000 }, { ...w, next: 1.5 },
     { t: 'horn', n: 9 }, { t: 'hello', v: NET_VERSION, paint }, { t: 'claimed', ok: [1], no: [], epochs: [[1, 4]] }, { t: 'players', list: [] }]) assert.equal(checkFromHost(m), null, JSON.stringify(m).slice(0, 60));
-  assert.equal(NET_VERSION, 2, 'M-27: the messages changed');
+  assert.equal(NET_VERSION, 3, 'M-27: the messages changed');
 });
 test('the rate limiter allows 60 messages in each second (M-50)', () => {
   const r = createRate(60); let ok = 0;

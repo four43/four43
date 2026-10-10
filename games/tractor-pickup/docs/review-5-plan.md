@@ -31,4 +31,4 @@
 - [x] **D-2 Player circles** — in a running multiplayer game, a circle per player (body color fill, trim color outline) right of the menu button.
 
 ### Merge
-- [ ] Merge A–D, NET_VERSION 3, game 1.8.0, spec 1.12, full tests, smoke check, build.
+- [x] Merge A–D, NET_VERSION 3, game 1.8.0, spec 1.12, full tests, smoke check, build.

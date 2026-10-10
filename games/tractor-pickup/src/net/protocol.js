@@ -3,7 +3,7 @@
 // message is dropped. NET_VERSION (M-27) goes to Handshake as the game version, so a different build cannot join at all.
 import { START_PAINTS, NEW_PAINTS } from '../sim/progress.js';
 
-export const NET_VERSION = 2, MAX_PLAYERS = 4;
+export const NET_VERSION = 3, MAX_PLAYERS = 4;
 export const MAX_ID = 0xfffe; // the highest animal or tree id on the wire (0xffff means none)
 export const MAX_IDS = 16; // ids in one claim, release or delivered message (a full train has 12)
 export const MAX_JSON = 2048; // M-50: a longer reliable message is dropped (the biggest real one is a few hundred bytes)
