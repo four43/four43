@@ -24,35 +24,51 @@ export class Controls {
     this.padPrev = [];
   }
 
+  // Touch (spec R4): a floating steering slider and three pedal buttons, multi-touch.
   bindTouch(root) {
-    const steer = root.querySelector('#steerZone'), knob = root.querySelector('#steerKnob');
+    // Steering: wherever the thumb lands in the zone is straight ahead; the slider appears centred
+    // under it and sideways travel of steerRange() px is full lock. Vertical movement is ignored.
+    const zone = root.querySelector('#steerZone'), base = root.querySelector('#steerBase'), knob = root.querySelector('#steerKnob');
+    this.steerRange = () => Math.max(60, Math.min(110, innerWidth * 0.12));
     let sid = null, sx = 0;
-    const range = () => Math.min(110, steer.clientWidth * 0.32);
-    steer.addEventListener('pointerdown', (e) => { sid = e.pointerId; sx = e.clientX; steer.setPointerCapture(sid); this.touch.steer = 0; e.preventDefault(); });
-    steer.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== sid) return;
-      const v = clamp((e.clientX - sx) / range(), -1, 1);
-      this.touch.steer = -v; // drag right = steer right (negative = right in sim)
-      knob.style.transform = `translateX(${v * range()}px)`;
+    zone.addEventListener('pointerdown', (e) => {
+      if (sid !== null) return;
+      sid = e.pointerId; sx = e.clientX; zone.setPointerCapture(sid); this.touch.steer = 0;
+      const w = 2 * this.steerRange() + 56;
+      base.style.width = `${w}px`; base.style.left = `${e.clientX - w / 2}px`; base.style.top = `${e.clientY - 28}px`;
+      knob.style.transform = ''; base.hidden = false; document.body.classList.add('steering');
+      e.preventDefault();
     });
-    const end = (e) => { if (e.pointerId !== sid) return; sid = null; this.touch.steer = null; knob.style.transform = ''; };
-    steer.addEventListener('pointerup', end); steer.addEventListener('pointercancel', end);
+    zone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== sid) return;
+      const r = this.steerRange(), v = clamp((e.clientX - sx) / r, -1, 1);
+      this.touch.steer = -v; // drag right = steer right (negative = right in sim)
+      knob.style.transform = `translateX(${v * r}px)`;
+    });
+    const end = (e) => { if (e.pointerId !== sid) return; sid = null; this.touch.steer = null; base.hidden = true; document.body.classList.remove('steering'); };
+    zone.addEventListener('pointerup', end); zone.addEventListener('pointercancel', end);
 
-    for (const [id, key] of [['#gasPad', 'throttle'], ['#brakePad', 'brake'], ['#hbBtn', 'handbrake']]) {
+    // Pedals: full on while pressed. Pointer capture keeps a pedal pressed if the thumb slides off
+    // it, until that thumb lifts.
+    const pedals = [['#gasBtn', 'throttle'], ['#brakeBtn', 'brake'], ['#hbBtn', 'handbrake']].map(([id, key]) => {
       const el = root.querySelector(id); let pid = null;
-      const set = (e) => {
-        if (key === 'handbrake') { this.touch[key] = 1; return; }
-        const r = el.getBoundingClientRect();
-        const f = clamp(1 - (e.clientY - r.top) / r.height, 0, 1);
-        this.touch[key] = 0.45 + 0.55 * clamp(f * 1.4, 0, 1); // lower 70 % of pad ramps to full
-        el.style.setProperty('--press', this.touch[key].toFixed(2));
-      };
-      el.addEventListener('pointerdown', (e) => { pid = e.pointerId; el.setPointerCapture(pid); el.classList.add('on'); set(e); e.preventDefault(); });
-      el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) set(e); });
-      const up = (e) => { if (e.pointerId !== pid) return; pid = null; this.touch[key] = 0; el.classList.remove('on'); el.style.setProperty('--press', 0); };
+      el.addEventListener('pointerdown', (e) => { pid = e.pointerId; el.setPointerCapture(pid); el.classList.add('on'); this.touch[key] = 1; e.preventDefault(); });
+      const up = (e) => { if (e.pointerId !== pid) return; pid = null; this.touch[key] = 0; el.classList.remove('on'); };
       el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
-    }
+      el.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press menu on iOS/Android
+      return () => { pid = null; this.touch[key] = 0; el.classList.remove('on'); };
+    });
+
+    // iOS can hide the page mid-touch without a pointercancel: let go of everything, or the car
+    // drives itself on return.
+    const letGo = () => {
+      sid = null; this.touch.steer = null; base.hidden = true; document.body.classList.remove('steering');
+      pedals.forEach((release) => release()); this.keys.clear();
+    };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') letGo(); });
+    addEventListener('pagehide', letGo);
   }
+
 
   // Called once per rendered frame with frame time dt.
   update(dt) {

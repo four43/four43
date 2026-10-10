@@ -41,8 +41,11 @@
   --stop: #e5604e;
   --font: 'Barlow Semi Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
   box-sizing: border-box;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Safe areas (notch, home bar) as variables, so tests can stand in for devices (test/mobile.mjs). */
+  --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px);
+  /* Touch buttons scale with the short side of the screen. */
+  --btn: clamp(64px, 21vmin, 104px); --gap: 12px; --edge: 16px;
 }
 html, body { height: 100%; margin: 0; overflow: hidden; background: #9fb3bd; }
 body { font-family: var(--font); color: var(--bone); -webkit-user-select: none; user-select: none; touch-action: none; }
@@ -51,14 +54,14 @@ button { font: inherit; color: inherit; }
 #loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 22px; letter-spacing: 0.02em; background: var(--panel-solid); z-index: 50; }
 
 /* top controls */
-.bar { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); display: flex; gap: 8px; z-index: 10; }
-.bar.l { left: calc(env(safe-area-inset-left, 0px) + 10px); }
-.bar.r { right: calc(env(safe-area-inset-right, 0px) + 10px); }
+.bar { position: fixed; top: calc(var(--sa-t) + 10px); display: flex; gap: 8px; z-index: 10; }
+.bar.l { left: calc(var(--sa-l) + 10px); }
+.bar.r { right: calc(var(--sa-r) + 10px); }
 .chip { background: var(--panel); border: 1px solid rgba(237, 230, 214, 0.18); border-radius: 10px; padding: 8px 14px; font-size: 17px; font-weight: 600; cursor: pointer; backdrop-filter: blur(6px); }
 .chip:focus-visible, .seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 /* dash cluster: the one bold element */
-#dash { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%);
+#dash { position: fixed; left: 50%; bottom: calc(var(--sa-b) + 14px); transform: translateX(-50%);
   width: 220px; height: 128px; pointer-events: none; z-index: 5; }
 #dash::before { content: ''; position: absolute; left: 34px; right: 34px; top: 22px; height: 98px; background: var(--panel);
   border-radius: 80px 80px 18px 18px; backdrop-filter: blur(6px); }
@@ -77,29 +80,37 @@ button { font: inherit; color: inherit; }
 /* touch controls: shown on touch devices */
 .touch { display: none; }
 @media (pointer: coarse) { .touch { display: block; } }
-#steerZone { position: fixed; left: 0; bottom: 0; width: 42vw; height: 46vh; z-index: 4; }
-#steerTrack { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 34px); transform: translateX(-50%);
-  width: min(240px, 34vw); height: 54px; border-radius: 27px; background: var(--panel); border: 1px solid rgba(237,230,214,.18); pointer-events: none; }
-#steerKnob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: var(--bone); transition: transform 0.08s; }
-.pad { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); width: 76px; height: min(200px, 38vh); border-radius: 16px;
-  background: var(--panel); border: 1px solid rgba(237,230,214,.2); z-index: 6; overflow: hidden; --press: 0; }
-.pad::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--press) * 100%); opacity: .85; }
-.pad span { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-size: 16px; font-weight: 600; z-index: 1; pointer-events: none; }
-#gasPad { right: calc(env(safe-area-inset-right, 0px) + 18px); }
-#gasPad::after { background: var(--go); }
-#brakePad { right: calc(env(safe-area-inset-right, 0px) + 104px); }
-#brakePad::after { background: var(--stop); }
-#hbBtn { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 104px); bottom: calc(env(safe-area-inset-bottom, 0px) + min(200px, 38vh) + 34px);
-  width: 162px; height: 52px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(237,230,214,.2); font-size: 17px; font-weight: 600; z-index: 6; }
+/* Steering: a floating slider. Touch anywhere in the left zone: that point is straight ahead and
+   the slider appears under the thumb; drag sideways to steer. Kept clear of the notch and of
+   Safari's back-swipe strip at the left edge. */
+#steerZone { position: fixed; left: max(var(--sa-l), 20px); bottom: 0; top: calc(var(--sa-t) + 58px);
+  width: calc(50% - max(var(--sa-l), 20px) - 6px); z-index: 4; }
+#steerHint { position: absolute; left: 12px; bottom: calc(var(--sa-b) + 18px); font-size: 15px; font-weight: 600; color: var(--bone);
+  opacity: .55; text-shadow: 0 1px 4px rgba(0,0,0,.5); pointer-events: none; }
+body.steering #steerHint { opacity: 0; }
+#steerBase { position: fixed; height: 56px; border-radius: 28px; background: var(--panel); border: 1px solid rgba(237,230,214,.25);
+  pointer-events: none; z-index: 5; backdrop-filter: blur(4px); }
+#steerBase[hidden] { display: none; }
+#steerBase::before { content: ''; position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; margin-left: -1px; background: rgba(237,230,214,.35); }
+#steerKnob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; background: var(--bone); }
+/* Pedals for the right thumb: gas in the corner, brake beside it, handbrake above the brake. Each is
+   a plain button: full on while pressed, and a thumb sliding off keeps it pressed until it lifts. */
+.pedal { position: fixed; border-radius: 18px; background: var(--panel); border: 1px solid rgba(237,230,214,.22); z-index: 6;
+  display: grid; place-items: center; font-size: 17px; font-weight: 700; letter-spacing: .02em; touch-action: none; -webkit-touch-callout: none; }
+#gasBtn { right: calc(var(--sa-r) + var(--edge)); bottom: calc(var(--sa-b) + var(--edge)); width: var(--btn); height: calc(var(--btn) * 1.3); }
+#brakeBtn { right: calc(var(--sa-r) + var(--edge) + var(--btn) + var(--gap)); bottom: calc(var(--sa-b) + var(--edge)); width: var(--btn); height: var(--btn); }
+#hbBtn { right: calc(var(--sa-r) + var(--edge) + var(--btn) + var(--gap)); bottom: calc(var(--sa-b) + var(--edge) + var(--btn) + var(--gap));
+  width: var(--btn); height: max(56px, calc(var(--btn) * 0.72)); font-size: 15px; }
+#gasBtn.on { background: var(--go); color: var(--panel-solid); }
+#brakeBtn.on { background: var(--stop); color: var(--panel-solid); }
 #hbBtn.on { background: var(--amber); color: var(--panel-solid); }
-.shiftBtns { display: none; position: fixed; right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + min(200px, 38vh) + 34px); gap: 8px; z-index: 6; }
+.shiftBtns { display: none; position: fixed; right: calc(var(--sa-r) + var(--edge)); bottom: calc(var(--sa-b) + var(--edge) + var(--btn) * 1.3 + var(--gap));
+  width: var(--btn); flex-direction: column; gap: 8px; z-index: 6; }
 body.manual .shiftBtns { display: flex; }
-body.manual #hbBtn { right: calc(env(safe-area-inset-right, 0px) + 190px); width: 120px; }
-.shiftBtns button { width: 56px; height: 52px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(237,230,214,.2); font-size: 22px; font-weight: 700; }
-#gasPad, #brakePad, #hbBtn, #steerZone, .shiftBtns button { touch-action: none; }
+.shiftBtns button { height: 56px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(237,230,214,.2); font-size: 24px; font-weight: 700; touch-action: none; }
 
 /* settings sheet */
-#sheet { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); left: calc(env(safe-area-inset-left, 0px) + 10px); width: min(360px, calc(100vw - 20px));
+#sheet { position: fixed; top: calc(var(--sa-t) + 58px); left: calc(var(--sa-l) + 10px); width: min(360px, calc(100vw - 20px));
   max-height: calc(100% - 80px); overflow: auto; background: var(--panel-solid); border-radius: 14px; padding: 14px 16px 16px; z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
 #sheet h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
 #sheet h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 600; color: var(--dim); }
@@ -112,12 +123,12 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 .seedRow input { flex: 1; min-width: 0; font: inherit; font-size: 17px; font-weight: 600; padding: 8px 10px; border-radius: 10px;
   border: 1px solid rgba(237,230,214,.25); background: rgba(237,230,214,.08); color: var(--bone); -webkit-user-select: text; user-select: text; }
 #seedChip { cursor: default; font-variant-numeric: tabular-nums; }
-#toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%); z-index: 30;
+#toast { position: fixed; left: 50%; top: calc(var(--sa-t) + 64px); transform: translateX(-50%); z-index: 30;
   background: var(--panel-solid); padding: 10px 18px; border-radius: 12px; font-size: 18px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
 #closeSheet { border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
 
 /* per-wheel debug panel */
-#debug { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); right: calc(env(safe-area-inset-right, 0px) + 10px); z-index: 8;
+#debug { position: fixed; top: calc(var(--sa-t) + 58px); right: calc(var(--sa-r) + 10px); z-index: 8;
   display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 290px; pointer-events: none; }
 #debug[hidden] { display: none; }
 .wh { position: relative; background: var(--panel); border-radius: 10px; padding: 6px 8px 6px 18px; min-height: 58px; }
@@ -125,9 +136,22 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 .wh.slide b { background: var(--amber); }
 .wh span { white-space: pre; font-size: 13px; line-height: 1.3; font-variant-numeric: tabular-nums; }
 @media (max-height: 500px) {
-  #dash { top: calc(env(safe-area-inset-top, 0px) + 14px); bottom: auto; transform: translateX(-50%) scale(0.6); transform-origin: top center; }
+  #dash { top: calc(var(--sa-t) + 14px); bottom: auto; transform: translateX(-50%) scale(0.6); transform-origin: top center; }
 }
-@media (prefers-reduced-motion: reduce) { #steerKnob { transition: none; } }
+/* Touch screens. Landscape: the dash sits small at the bottom centre between the steering zone and
+   the pedals (it takes no touches, so steering still works under it), leaving the top bar to the
+   chips. Portrait: the dash goes under the top bar so the pedals have the bottom. */
+@media (pointer: coarse) and (orientation: landscape) {
+  #dash { top: auto; bottom: calc(var(--sa-b) + 6px); transform: translateX(-50%) scale(0.7); transform-origin: bottom center; }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  #dash { top: calc(var(--sa-t) + 58px); bottom: auto; transform: translateX(-50%) scale(0.75); transform-origin: top center; }
+}
+/* Narrow screens: the seed chip stacks under Settings instead of running into the right-hand chips. */
+@media (max-width: 520px) {
+  .bar.l { flex-direction: column; align-items: flex-start; }
+  body.onTrack #dash { top: calc(var(--sa-t) + 104px); }
+}
 </style>
 </head>
 <body>
@@ -183,11 +207,12 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 </div>
 
 <div class="touch">
-  <div id="steerZone"><div id="steerTrack"><div id="steerKnob"></div></div></div>
-  <button id="hbBtn">Handbrake</button>
-  <div class="shiftBtns"><button id="dnBtn" aria-label="Shift down">−</button><button id="upBtn" aria-label="Shift up">+</button></div>
-  <div class="pad" id="brakePad"><span>Brake</span></div>
-  <div class="pad" id="gasPad"><span>Gas</span></div>
+  <div id="steerZone"><span id="steerHint">◀ Slide to steer ▶</span></div>
+  <div id="steerBase" hidden><div id="steerKnob"></div></div>
+  <div class="shiftBtns"><button id="upBtn" aria-label="Shift up">+</button><button id="dnBtn" aria-label="Shift down">−</button></div>
+  <button class="pedal" id="hbBtn">Handbrake</button>
+  <button class="pedal" id="brakeBtn">Brake</button>
+  <button class="pedal" id="gasBtn">Gas</button>
 </div>
 <script>
 // rev arc segments

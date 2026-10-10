@@ -1,6 +1,7 @@
 # Rally Sim — Generated Tracks, Worlds and Game Loop
 
-Status: **Phase 1 built 2026-10-10** (free drive on generated loops/stages); Phase 2 next. Companion to `rally-spec.md` (car,
+Status: **Phase 1 built and live (0.3.1, 2026-10-10)**: free drive on generated loops/stages, with
+the round-3 additions (Twisty style, verge bumps, surface drag, tall grass); Phase 2 next. Companion to `rally-spec.md` (car,
 physics, test pad, snow). Requirement IDs are `T-n`.
 
 ## Goals
@@ -229,7 +230,9 @@ World = {
     min body up·y 0.93. The requested "half throttle under 35 km/h within 4 s" conflicts with
     an 80–90 km/h top speed: half throttle in 2nd pushes ~0.45 g, about what the cap needs at
     85 km/h, so any drag curve meeting both is nearly flat and bogs the car down from rest.
-- **T-6 Roadside.** Marker posts (≈1.2 m tall, Ø 0.12 m, 5 kg dynamic cylinders) at 25 m spacing
+- **T-6 Roadside.** Marker posts (flat-sided 0.12 × 1.2 × 0.09 m, 5 kg dynamic boxes with angular
+  damping 6, linear damping 1.0, friction 0.9 — round posts rolled down the verge for ever; see
+  `rally-spec.md` R3-3) at 25 m spacing
   both sides, 12 m on corner outsides (|curvature| > 1/80), 1 m beyond the road edge; they slide
   and tip over and stay where they land until Reset. Markers start asleep and `resetProps`
   rebuilds their bodies asleep: an awake 1.2 m post on a sloped shoulder tips over by itself in
@@ -272,13 +275,15 @@ World = {
   leaving the road (|d| < 6 m) or rolling over; reports sim time per real time. The autopilot is
   pure pursuit (look-ahead max(6, 0.6 v), stretched on low grip) plus yaw-rate feedback, capping
   speed at 12 m/s for kickers/whoops and 16 m/s for crests/tabletops.
-- **Phase 1 results:** generation 0.07–0.23 s per track; `test/gen-layout` 305, `gen-terrain`
-  122, `gen-surfaces` 100, `track` 84 checks (9 autopilot drives: 3 seeds × summer/winter loops and
-  summer stages, worst |d| 3.8 m, ×14–28 real time, ~85 s). Rendering: ≤ ~0.6 M triangles drawn
-  incl. the shadow pass; LOD update ~0.04 ms/frame.
+- **Phase 1 results:** generation 0.07–0.23 s per track. At 0.3.1: `test/gen-layout` 657,
+  `gen-terrain` 129, `gen-surfaces` 100, `track` 84 (9 autopilot drives on the default Twisty
+  style: 3 seeds × summer/winter loops and summer stages, worst |d| 2.3 m, ~40 s), `wild` 12
+  (6 seeds' Wild twisty loops and stages), `verge` 27, `markers` 7 — all passing. Rendering:
+  ~0.7 M triangles drawn incl. the shadow pass and tall grass; LOD update ~0.04 ms/frame.
 - **Known gaps:** a stage's road ribbon ends abruptly at both ends; winter loops alternate packed
-  snow and ice so ice can be ~half the loop; loops get fewer obstacles than stages (gentler
-  corners leave fewer clear straights).
+  snow and ice so ice can be ~half the loop (less of a problem now studded ice grips 0.55); Flowing
+  loops get fewer obstacles than stages (gentler corners leave fewer clear straights; Twisty uses
+  shorter run-ups, ~2.3/km).
 
 ## Requirements — Phase 2 (game loop)
 

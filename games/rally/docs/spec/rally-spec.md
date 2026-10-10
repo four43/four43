@@ -1,8 +1,10 @@
 # Rally Sim — Spec
 
-Status: **Milestone 1 (test pad) + round-2 feedback**, reverse-documented from the first-round source
-(`rally-sim-src.zip`, 2026-10-10), then round-2 playtest changes. Version 0.2.0.
-Round-2 changes: see [Round 2](#round-2-2026-10-10).
+Status: **0.3.1, live at https://four43.com/exp/rally/** (2026-10-10). Reverse-documented from the
+first-round source (`rally-sim-src.zip`), then playtest rounds 2–4 (sections at the end, newest
+last). Generated tracks, worlds and the game loop are specified in `tracks-spec.md`; plans live in
+`docs/plans/`. The sections below describe the current game; the round sections record what each
+round changed and why.
 
 ## Goal
 
@@ -11,8 +13,10 @@ model, a real drivetrain, and surfaces that change how the car behaves. Plays on
 (keyboard / gamepad) and on phones and tablets (touch). Ships as a single self-contained HTML file
 at `four43.com/exp/rally/`.
 
-Milestone 1 is a **flat test pad** with features for exercising the car — no stages, timing, or
-progression yet.
+Two kinds of world: the **test pad** (flat, with features for exercising the car; kept for
+debugging) and **generated tracks** (loops and stages from a seed: hills, mixed surfaces, jumps;
+`tracks-spec.md`). Free drive only so far — the game loop (countdown, timing, modes) is the next
+phase.
 
 ## Stack and layout
 
@@ -25,25 +29,36 @@ progression yet.
 | `src/cars.js` | Car configs (`CARS.awd`, `CARS.rwd`) |
 | `src/tire.js` | Surface table + brush/Magic Formula tire step |
 | `src/drivetrain.js` | Engine, clutch, gearbox, diffs |
-| `src/vehicle.js` | Raycast vehicle on one Rapier body; driver aids; auto-shift |
-| `src/sim.js` | World, test pad colliders, cones, fixed-step `Sim` |
-| `src/snow.js` | Deformable fresh snow field (R2-6): height + wear grid, press, plow inputs |
-| `src/snowView.js` | Snow rendering: window texture, displaced near mesh, shaded far plane |
-| `src/render.js` | three.js scene, pad visuals, car meshes, cameras |
+| `src/vehicle.js` | Raycast vehicle on one Rapier body; driver aids; auto-shift; snow contact; surface drag |
+| `src/sim.js` | Fixed-step `Sim` over a World (`setWorld`, `setSurface`, `resetCar`); Rapier world is `sim.phys` |
+| `src/world/padWorld.js` | The test pad as a World (`PAD`, colliders, cones, collision groups) |
+| `src/world/trackWorld.js` | A generated track as a World (heightfield, markers, gates, `recover`) — `tracks-spec.md` |
+| `src/gen/*.js` | Pure track generators (layout, terrain, obstacles, surfaces, roadside, locator) — `tracks-spec.md` |
+| `src/snow.js` | Deformable fresh snow field (R2-6): height + wear grid, press, berms |
+| `src/snowView.js` | Snow rendering: window texture, displaced mesh, self-shadow, fresh-snow detail |
+| `src/render.js` | three.js renderer: lights/looks, car meshes, cameras; `setWorld` picks the world view |
+| `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
+| `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
 | `src/ui.js` | `Controls` (keyboard/gamepad/touch merge) and `Hud` |
-| `src/main.js` | Boot, settings sheet, frame loop, `window.rally` debug hook |
+| `src/main.js` | Boot, settings sheet, world loading, frame loop, `window.rally` debug hook |
 | `src/assets.json` | Baked Kenney car-kit meshes (vertex coloured) |
 | `bake.mjs` | Bakes the GLBs in `assets/models/` → `src/assets.json` |
 | `assets/models/` | Source models: Kenney Car Kit 3.1 (CC0) — the 4 GLBs in use + `Textures/colormap.png` |
-| `index.template.html` | Page shell, CSS, HUD/touch markup; bundle injected at `/*BUNDLE*/` |
-| `build.py` | Bundles and writes `site/exp/rally/index.html` |
+| `index.template.html` | Page shell, CSS, HUD/touch markup, meta/PWA tags; bundle injected at `/*BUNDLE*/` |
+| `pwa/` | Icon (svg + 192/512/apple-touch PNGs), manifest, service worker, 1200×630 `og-image.jpg` |
+| `build.py` | Bundles to `site/exp/rally/index.html`, copies `pwa/`, stamps the service-worker cache version |
 | `dev.mjs` | Dev server (`npm run dev`, port 8740, LAN-visible): rebuilds on save, live-reloads |
-| `test/physics.mjs` | Headless physics validation (`npm test`) |
-| `test/snow.mjs` | Headless fresh-snow validation (`npm test`) |
-| `test/browser.py` | Playwright smoke test (desktop + mobile hit-tests, screenshots) |
-| `test/dbg.mjs` | Ad-hoc launch trace: `node test/dbg.mjs [car] [surface]` |
+| `test/physics.mjs` | Car physics validation |
+| `test/snow.mjs` | Fresh-snow validation |
+| `test/markers.mjs` | Marker posts tip and settle |
+| `test/verge.mjs` | Grass verge drag and bumps |
+| `test/gen-*.mjs`, `test/track.mjs`, `test/wild.mjs`, `test/autopilot.js` | Generators and autopilot drives — `tracks-spec.md` |
+| `test/mobile.mjs` | Touch layout + multi-touch on emulated iPhones/iPads (`npm run test:mobile`, needs the dev server) |
+| `test/browser.py`, `test/dbg.mjs` | Round-1 leftovers: Python Playwright smoke test (superseded by `mobile.mjs`), launch trace |
 
-Commands: `npm run dev`, `npm test`, `npm run build`, `npm run bake`.
+Commands: `npm run dev`, `npm test` (all headless suites, ~4 min), `npm run test:mobile`, `npm run build`,
+`npm run bake`. Release: bump `version` in `package.json`, `python3 build.py`, commit `games/rally` +
+`site/exp/rally`, push `gh-pages` (GitHub Actions deploys).
 
 New Kenney models come from the All-in-1 pack zip (`3D assets/<Kit>/Models/GLB format/`); copy only
 the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and add them to `bake.mjs`.
@@ -119,7 +134,7 @@ Defined in `SURFACES`: tarmac, hardpack, gravel, grass, sand, mud, snow, snowban
 | Layout | AWD, viscous centre, front + rear LSD | RWD, rear LSD |
 | Livery | blue `#2f6fd6` | yellow `#e8b323` |
 
-## Test pad (`PAD` in `sim.js`)
+## Test pad (`PAD` in `world/padWorld.js`)
 
 640 m square, flat. Start at (0, 40) facing +z.
 - Skidpad: painted 40 m-radius circle at (0, −90), coned ring at r ± 5 m.
@@ -146,41 +161,50 @@ Inputs merge into one `{steer, throttle, brake, handbrake}`; physics never sees 
 Steer is +left / −right.
 
 - **Keyboard:** W/S or ↑/↓ throttle/brake (ramped), A/D or ←/→ steer (ease-in, faster
-  return-to-centre, snaps through centre), Space handbrake, Q/E shift, R reset, C camera, F3 or
-  `` ` `` wheel debug.
+  return-to-centre, snaps through centre), Space handbrake, Q/E shift, R reset (on a track: back
+  onto the road), Shift+R full restart, C camera, F3 or `` ` `` wheel debug. Keys typed into the
+  seed field don't drive.
 - **Gamepad:** left stick steer (8 % deadzone, slight expo), RT/LT throttle/brake, A handbrake,
   RB/LB shift, Y reset, X camera.
-- **Touch** (shown on `pointer: coarse`): left-side horizontal steer slider (drag from touch
-  point, ±110 px full lock), right-side Gas and Brake pads (pressure by vertical position: lower
-  70 % ramps 45 % → 100 %), Handbrake button, +/− shift buttons in Manual.
+- **Touch** (shown on `pointer: coarse`): a floating steering slider in the left half that zeroes
+  where the thumb lands, and Gas / Brake / Handbrake press buttons for the right thumb (+ / − in
+  Manual) — see [Round 4](#round-4-touch-controls-2026-10-10).
 - Strongest of the keyboard and gamepad steer wins; active touch steer overrides both. Throttle,
   brake and handbrake take the max across sources.
 
 ## UI
 
-- Top-left **Car & surface** chip opens a settings sheet: Car, Surface, Driving (Assisted / Sim),
-  Gearbox (Auto / Manual), plus control help. Settings persist in `localStorage`
-  (`rally-sim-settings`, versioned with `v`; currently 2).
-- Top-right chips: Camera, Wheels (debug), Reset.
-- Bottom-centre dash: speed (km/h), gear badge, 15-segment rev arc (green/amber/red; all red on
-  limiter). Moves to the top and scales down on short (landscape phone) screens.
+- Top-left **Settings** chip opens the settings sheet: World (Test pad / Loop / Stage); on tracks
+  Seed (text + 🎲 + Go), Track style (Twisty / Flowing), Theme (Summer / Winter), Obstacles (Mild /
+  Wild); Car; Surface (pad only); Driving (Assisted / Sim); Units (mph / km/h); Gearbox (Auto /
+  Manual); control help. Settings persist in `localStorage` (`rally-sim-settings`, `v` 3).
+- Next to it on tracks, a seed chip: "Loop · seed · 1.2 mi". A toast shows while a track builds,
+  and if one fails to build the game says so and falls back to the pad.
+- Top-right chips: Camera, Wheels (debug), Reset (tap: back onto the road; hold: full restart).
+- Dash: speed (mph or km/h), gear badge, 15-segment rev arc (green/amber/red; all red on limiter).
+  Desktop: bottom centre (top, scaled, on short screens); touch: see Round 4.
 - Wheels debug panel: per wheel load (kN + bar), slip %, slip angle, surface or "airborne"; bar
   turns amber when sliding (ρ > 1).
 
 ## Debug hook
 
-`window.rally` exposes `sim`, `view`, `controls`, `CARS`, `pause()`, `resume()`, `stepN(n)`,
-`render()`, `state()` (telemetry) for Playwright.
+`window.rally` exposes `sim`, `view`, `controls`, `CARS`, `settings`, `setWorld(world)`,
+`loadTrack(opts)` (e.g. `{ world: 'stage', seed: 'abc', theme: 'winter', style: 'twisty' }`),
+`pause()`, `resume()`, `stepN(n)`, `render()`, `state()` (telemetry) for Playwright.
 
-## Validation targets (`test/physics.mjs` 50/50, `test/snow.mjs` 21/21 at 0.2.0)
+## Validation targets
+
+At 0.3.1: physics 50, snow 21, markers 7, verge 27 (plus the track suites in `tracks-spec.md`:
+gen-layout 657, gen-terrain 129, gen-surfaces 100, track 84, wild 12) and mobile 441 — all passing.
+The physics targets, with grip as raised in Round 3:
 
 Per car, headless with assists off unless noted:
 - Static settle: ΣFz = mg ± 0.5 %, front share ± 1 %, static sag ± 5 %, CoM height ± 1 cm, no creep.
 - Drop test: damped heave 1.2–1.7 Hz; < 8 % residual after 1.5 cycles.
-- Skidpad steady lateral g (40 m circle): tarmac 0.95–1.05; AWD dirt 0.72–0.82; gravel ~0.6–0.7;
-  AWD packed snow 0.43–0.52, ice 0.12–0.17.
-- 0–100 km/h (assists on): AWD tarmac 4.2–5.0 s, gravel 4.8–6.0 s; RWD gravel 8.0–9.5 s.
-- 100–0 km/h (ABS on): tarmac 35–42 m, gravel 52–65 m; front load share rises under braking.
+- Skidpad steady lateral g (40 m circle): tarmac 0.95–1.05; AWD dirt 0.75–0.90; gravel 0.68–0.80
+  (RWD 0.66–0.80); AWD packed snow 0.64–0.76, ice 0.44–0.56.
+- 0–100 km/h (assists on): AWD tarmac 4.2–5.0 s, gravel 4.3–5.5 s; RWD gravel 6.5–8.5 s.
+- 100–0 km/h (ABS on): tarmac 35–42 m, gravel 44–56 m; front load share rises under braking.
 - Hold on a 10 % grade with brake + handbrake: < 1 cm drift in 10 s.
 - Handbrake turn on gravel from 50 km/h: rear slip angle peak 30–90°, yaw change 90–270°.
 - Reverse (R2-3): holding brake from rest in Auto, or throttle in Manual R, drives backwards.
@@ -188,15 +212,26 @@ Per car, headless with assists off unless noted:
 - Slide control (R2-2), RWD on dirt and gravel, full throttle with 0.8 steer for 1.2 s from
   54 km/h: Sim spins (≥ 90° body slip), Assisted holds it to 10–60°.
 
-## Known issues (observed during extraction)
+## Site and PWA
+
+Published at **https://four43.com/exp/rally/** like the other games: a self-contained page under
+`site/exp/rally/` (not linked from the site's pages), with meta description, canonical, Open Graph /
+Twitter card (`og-image.jpg`, 1200×630, an in-game shot with the title), an installable manifest
+(fullscreen, landscape, theme `#22333a`), icons, and a service worker: the page network-first so a
+new build shows at once, everything else cache-first, cache name stamped per build
+(`<version>-<hash>`) by `build.py`. Dev dependency `playwright-core` (no browser download; the
+mobile test uses the Chromium in `~/.cache/ms-playwright`).
+
+## Known issues
 
 - **Livery not applied:** `repaint()` in `render.js` is defined but never called, so cars show
   Kenney's stock paint (the AWD car is green, not its configured blue).
-- No favicon (404 in console).
-- `test/browser.py` needs Python Playwright, which isn't installed locally.
+- `test/browser.py` needs Python Playwright, which isn't installed; `test/mobile.mjs` covers it.
 - Fresh-snow rendering is unchecked on a phone/iPad: a 148k-vertex displaced mesh (drawn twice
   with the shadow pass, 1 texture read per pixel plus procedural noise) plus a 16 MB texture, and a refill (a 16 MB clear plus every driven tile) each time the car moves 64 m from the window centre.
-- Not yet linked from the site or a PWA (unlike the other games).
+- Touch controls are tested in Chromium emulating iPhones/iPads, not real Safari; iOS-only
+  behaviour (back swipe, page hiding) needs a device check.
+- The site doesn't link to `/exp/rally/` (same as the other games).
 - **RWD spins in a straight line at full throttle on loose surfaces** (round 1 too): ~147 km/h on
   gravel, ~97 km/h on packed snow, assists on or off. Its short gearing puts ~3.9 kN at the rear
   tires in 4th against ~3.5 kN of grip, the spinning rears lose their side grip, and a tiny yaw
@@ -300,3 +335,29 @@ specified in `tracks-spec.md`.
   length in the seed chip. Settings v3 (missing `units` ⇒ mph).
 - **Robustness:** if a track fails to generate, the game says so and falls back to the test pad
   instead of hanging on the loading screen.
+
+## Round 4: touch controls (2026-10-10)
+
+- **R4-1 Floating steering.** Touch anywhere in the steering zone (left half, below the top bar):
+  that point is straight ahead and a slider appears centred under the thumb; sideways travel of
+  `steerRange()` = clamp(12 % of screen width, 60–110 px) is full lock; vertical movement is
+  ignored. A new touch re-zeroes wherever it lands (as the other games' floating stick). The zone
+  starts ≥ 20 px from the left edge (Safari's back swipe) and inside the notch.
+- **R4-2 Pedal buttons.** Gas (bottom-right corner, 1.3× tall), Brake (left of it), Handbrake (above
+  Brake) and, in Manual, + / − above Gas: plain buttons, full on while pressed. Size
+  clamp(64 px, 21 vmin, 104 px). A thumb sliding off a pedal keeps it pressed until it lifts
+  (pointer capture); long-press menus are suppressed.
+- **R4-3 Let go when hidden.** If iOS hides the page mid-touch (no pointercancel), everything is
+  released on `visibilitychange`/`pagehide`, so the car doesn't drive itself on return.
+- **R4-4 Layout.** Safe-area insets go through `--sa-t/r/b/l` CSS variables. Touch landscape: the
+  dash sits small at the bottom centre (it takes no touches); portrait: under the top bar. Narrow
+  screens (≤ 520 px) stack the seed chip under Settings.
+- **Validation (`npm run test:mobile`, needs `npm run dev`):** Chromium with touch emulating iPhone
+  SE, 15 Pro and 15 Pro Max (landscape), 15 Pro portrait, iPad Mini and Pro 11 (landscape) and
+  Pro 11 portrait, each on the test pad and on a track, with each device's real safe areas set
+  (notched iPhones 59 px sides + 21 px bottom in landscape). Checks: pedals visible, ≥ 56 px,
+  inside the safe area, own their touches, within right-thumb reach; chips inside the safe area;
+  steering zone clear of the swipe edge, covering the left; no overlaps among pedals, chips, dash
+  and the zone; then real multi-touch via CDP: first touch steers 0 with the slider under it, half
+  the range ≈ half lock, full lock past it, gas while steering, release order, brake held when the
+  thumb slides off, all released, re-zero on a new touch, release on page hide. 441/441.

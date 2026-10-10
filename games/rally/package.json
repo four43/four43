@@ -1,12 +1,13 @@
 {
   "name": "rally",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Rally sim test pad (Milestone 1)",
   "scripts": {
     "dev": "node dev.mjs",
     "test": "node test/gen-layout.mjs && node test/gen-terrain.mjs && node test/gen-surfaces.mjs && node test/physics.mjs && node test/snow.mjs && node test/markers.mjs && node test/verge.mjs && node test/track.mjs && node test/wild.mjs",
     "bake": "node bake.mjs",
-    "build": "python3 build.py"
+    "build": "python3 build.py",
+    "test:mobile": "node test/mobile.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
@@ -16,5 +17,8 @@
     "three": "^0.160.0"
   },
   "type": "module",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "playwright-core": "^1.64.0"
+  }
 }
