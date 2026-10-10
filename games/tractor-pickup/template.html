@@ -71,6 +71,13 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #word.on{opacity:1;pointer-events:auto}
 #word span{display:inline-block;transform:scale(0);animation:pop .3s ease-out forwards}
 #arrow{position:absolute;left:0;top:0;z-index:6;font-size:64px;color:#f5c84c;-webkit-text-stroke:3px #6b4428;pointer-events:none}
+/* M-72: held at the barn while another player's show has it: a bubble with that player's tractor and a turning hourglass */
+#barnwait{position:absolute;top:calc(env(safe-area-inset-top,0px) + 96px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:8px 20px 8px 10px;border-radius:30px;background:rgba(255,252,248,.95);border:4px solid #6b4428;box-shadow:0 6px 0 rgba(107,68,40,.4);z-index:6;pointer-events:none;animation:popx .35s ease-out}
+#barnwait[hidden]{display:none}
+#barnwait::after{content:'';position:absolute;left:50%;bottom:-18px;margin-left:-14px;border:14px solid transparent;border-top-color:#6b4428;border-bottom:0}
+#barnwait img{width:128px;height:96px;object-fit:contain;animation:bob 1.6s ease-in-out infinite}
+#barnwait svg{width:56px;height:72px;animation:sandturn 2.4s ease-in-out infinite}
+@keyframes sandturn{0%,40%{transform:rotate(0)}50%,90%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
 #show{position:absolute;inset:0;z-index:8;pointer-events:auto}
 #show .skip{all:unset;position:absolute;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);width:96px;height:64px;border-radius:32px;background:rgba(107,68,40,.75);border:3px solid #fff;display:grid;place-items:center;cursor:pointer}
 #show .skip svg{width:56px;height:38px}
@@ -208,6 +215,7 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .slot{width:auto;height:calc(min(56px,calc((100vw - 60px) / 6.4)) * 1.12);border-radius:11px}.slot.wagon{margin-left:0}
 .slot img{width:78%;height:auto}.slot span{font-size:10px}
 #word{top:calc(env(safe-area-inset-top,0px) + 240px);font-size:64px}
+#barnwait{top:calc(env(safe-area-inset-top,0px) + 232px)}#barnwait img{width:96px;height:72px}#barnwait svg{width:44px;height:56px}
 #show .big{top:calc(env(safe-area-inset-top,0px) + 220px)}
 #horn{width:88px;height:88px}
 #drivebtns{left:auto;bottom:auto;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 234px);gap:12px} /* review 3: up and out of the driving thumb's way */

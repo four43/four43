@@ -262,3 +262,17 @@ test('on the last drive before bedtime, an empty train also stops in the barn (E
   const ev = []; for (let i = 0; i < 60 * 8; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
   assert.ok(ev.some(e => e.type === 'barnPass'));
 });
+test('a closed barn gate holds the train in the barn with no show; the show starts when it opens; no gate is single player (M-71, M-72)', () => {
+  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g);
+  for (let i = 0; i < 60; i++) g.step(STILL);
+  place(g, pickable(g)[0]); assert.equal(g.barnGate, null); assert.equal(g.barnWait, 0);
+  let answer = 3, asked = 0; g.barnGate = () => { asked++; return answer; }; // player 3's show has the barn
+  const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
+  moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
+  assert.equal(asked, 0, 'only asked in the barn');
+  const ev = []; for (let i = 0; i < 60 * 10; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
+  assert.ok(asked > 0); assert.ok(!ev.some(e => e.type === 'barnPass'), 'no show while another has the barn');
+  assert.equal(g.mode, 'arrive'); assert.equal(g.barnWait, 3); assert.ok(g.tractor.speed < 0.3, 'held still');
+  answer = -1; g.step(STILL); assert.equal(g.barnWait, -1, 'asked, no answer yet: still waits');
+  answer = 0; const ev2 = g.step(STILL); assert.ok(ev2.some(e => e.type === 'barnPass')); assert.equal(g.barnWait, 0);
+});

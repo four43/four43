@@ -23,6 +23,7 @@ export function createBumper() {
   step(dt, tractor, others, events) {
     if ((cool -= dt) > 0) return;
     for (const o of others) {
+      if (o.held) continue; // M-72: a tractor that is not driving (its show, waiting for the barn, its sticker card) lets the next one drive into the barn
       const n = bumpNormal(tractor, o); if (!n) continue;
       const v = tractor.body.linvel(), along = v.x * n.x + v.z * n.z;
       if (along < BUMP.push) tractor.body.setLinvel({ x: v.x + n.x * (BUMP.push - along), y: v.y, z: v.z + n.z * (BUMP.push - along) }, true);

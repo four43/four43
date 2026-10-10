@@ -24,7 +24,7 @@
 - [ ] **B-2 Dirtiness replicates** — each train's dirt matches between devices.
 
 ### C. Ceremonies (M-70..M-74)
-- [ ] **C-1 Ceremony lock** — only one barn show at a time; a player who arrives while another's show runs waits and gets a (non-text) message.
+- [x] **C-1 Ceremony lock** — only one barn show at a time; a player who arrives while another's show runs waits and gets a (non-text) message.
 
 ### D. Players UI (M-75..M-79)
 - [ ] **D-1 Horn sprite + arrows** — a honk puts a small sprite over the honking tractor and shows every player small arrows (tractor color) pointing to the other players.

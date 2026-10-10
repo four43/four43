@@ -22,7 +22,7 @@ test('an animal round-trips: every field, positions within a step, ownership num
 });
 test('a tree, a player and a train round-trip (M-22, M-53)', () => {
   assert.deepEqual(one(TREE, 12, { state: 'broken' }).groups.get('tree').records.get(12), { state: 'broken' });
-  assert.deepEqual(one(PLAYER, 3, { body: 'rainbow', trim: 'blue', away: true, join: 255 }).groups.get('player').records.get(3), { body: 'rainbow', trim: 'blue', away: true, join: 255 });
+  assert.deepEqual(one(PLAYER, 3, { body: 'rainbow', trim: 'blue', away: true, join: 255, barn: true }).groups.get('player').records.get(3), { body: 'rainbow', trim: 'blue', away: true, join: 255, barn: true }); // barn: M-71
   const t = train(3), r = one(TRAIN, 2, t, { sender: 2 }).groups.get('train').records.get(2);
   assert.deepEqual([r.mode, r.full, r.riders.map(c => [c.id, c.slot, c.flying])], ['drive', true, [[30, 0, false], [31, 1, true], [32, 2, false]]]);
   t.bodies.forEach((b, i) => { for (const k of 'xyz') near(r.bodies[i].p[k], b.p[k], 1 / 128, 'p' + k); for (const k of 'xyzw') near(r.bodies[i].q[k], b.q[k], 1e-3, 'q' + k); });

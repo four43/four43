@@ -4,7 +4,7 @@
 // at each keyframe from the host the guest repairs what a lost message left wrong (M-56).
 import { encodeFrame, decodeFrame, createTracker, createStore, isFrame } from './replica.js';
 import { BINDINGS, ofAuthority, registryOf, readAll } from './bindings.js';
-import { checkFromHost, createRate, fitsJson, chunks, createWarnOnce, NET_VERSION, SILENT_MS, RATE, MAX_ID } from './protocol.js';
+import { checkFromHost, createRate, fitsJson, chunks, createWarnOnce, NET_VERSION, SILENT_MS, RATE, MAX_ID, MAX_PLAYERS } from './protocol.js';
 import { createPlayers, placeCarried, SEND } from './players.js';
 import { createInterp, lerp, lerpAngle } from './interp.js';
 import { createBumper } from '../sim/bump.js';
@@ -13,6 +13,7 @@ import { NOT_FREE, HELD } from '../sim/herd.js';
 const OWN = new Set([...HELD, 'gone']); // host data never moves these: this guest's own (HELD: in its train or its show), or unknown since the welcome (Decision 10: not toBarn)
 const HELLO_MS = 2000; // M-24: a hello is said again this often until the welcome comes (a lost hello)
 const TREE_GRACE_MS = 1000; // a keyframe does not grow back a tree this guest broke this recently (the keyframe may be older than the host's break) (M-17, M-56)
+export const BARN_WAIT_MS = 100000; // M-73: a guest waits for the barn at most this long (longer than the host's BARN_HOLD_MS: normally the host decides)
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
 // Two clocks, as in host.js: clock() is wall time (rate limits, the silence watchdog, hello and tree timers); nowMs is the frame clock (sending, interpolation).
@@ -21,6 +22,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   const reg = registryOf(bindings), ownRows = ofAuthority(bindings, 'owner');
   const store = createStore(bindings.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
   let you = 0, farm = -1, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
+  let barnAt = null; // M-72: when this train began to wait at the barn (wall time)
   let hostAway = false, silent = false, paused = false, lastFast = 0; // M-40: two sources (the server's hostAway, the silence watchdog); the host is away while either says so
   const setPaused = () => { const v = hostAway || silent; if (v === paused) return; paused = v; game.boopsPaused = v; const p = players.map.get(1); if (p) p.away = v; };
   const idLimit = herd => Math.max(herd.animals.length, hostNext) + ID_ROOM; // hostNext: the host's herd size from the welcome
@@ -65,7 +67,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
   function applyWelcome(m) {
     if (!you) lastFast = clock(); // the watchdog starts with the first welcome
     you = m.you; farm = m.farm; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
-    game.herd.remote = true; game.claims = true; game.boopsPaused = paused; // a host that is away stays away on the new farm (M-40)
+    game.herd.remote = true; game.claims = true; game.boopsPaused = paused; game.barnGate = barnGate; // a host that is away stays away on the new farm (M-40)
     pending.clear(); myBreaks.clear(); handedIn.clear(); herdBuf.reset(); store.clear(); mine.reset(); lastKey = -Infinity;
     for (const a of game.herd.animals) a.state = 'gone'; // M-24: nothing is free until the host's keyframe says so
     for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; }
@@ -82,7 +84,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
     if (alone) return; alone = true; deferred = deferredKey = null;
     try {
       for (const f of game.flights.filter(f => f.claim === 'pending')) game.resolveClaim(f.animal.id, true); // decision 3: nobody else can have it now
-      pending.clear(); game.claims = false; game.boopsPaused = false; game.herd.remote = false;
+      pending.clear(); game.claims = false; game.boopsPaused = false; game.herd.remote = false; game.barnGate = null;
       const herd = game.herd, isFree = a => a && !NOT_FREE.has(a.state);
       for (const a of herd.animals) if (a.state === 'carried' || a.state === 'elsewhere') a.state = 'gone';
       for (const a of herd.animals) if (a.state === 'idle' && a.leader !== null && isFree(herd.animals[a.leader])) a.state = 'follow'; // records carry no 'follow': chick lines walk again
@@ -136,12 +138,16 @@ export function createGuestSync({ game, net, paint, onFarm, clock = () => perfor
       a.state = 'carried'; placeCarried(a, c); }
   }
   const mineNow = () => readAll(ownRows, { game, you });
+  const barnHolder = () => { for (let n = 1; n <= MAX_PLAYERS; n++) if (store.get('player', n)?.barn) return n; return 0; }; // M-71: the host's player objects say whose show has the barn
+  // M-71..M-73: the barn is ours when the host says so. With no host to ask (away, silent, alone) or after BARN_WAIT_MS, the show starts anyway (R-1)
+  const barnGate = () => { if (alone || paused || !you) return 0; barnAt ??= clock(); if (clock() - barnAt > BARN_WAIT_MS) return 0; const h = barnHolder(); return h === you ? 0 : h || -1; };
   const sync = {
     players, handlers, out, pending, store,
-    get game() { return game; }, get you() { return you; }, get alone() { return alone; },
+    get game() { return game; }, get you() { return you; }, get alone() { return alone; }, get barnHolder() { return alone ? 0 : barnHolder(); },
     before(now) {
       nowMs = now; if (!you) { if (hostPeer && clock() - helloAt >= HELLO_MS) hello(); return out.splice(0); }
       if (!alone) { silent = clock() - lastFast > SILENT_MS; setPaused(); } // M-40: the silence watchdog
+      if (game.mode !== 'arrive') barnAt = null;
       if (deferred && game.mode === 'drive') { const m = deferred, k = deferredKey; deferred = deferredKey = null; applyWelcome(m); if (k) applyFrame(k); }
       if (!alone) { players.sample(now); if (!deferred) { settleClaims(); applyHerd(now); for (const a of game.herd.animals) if (a.state === 'carried') a.state = 'elsewhere'; applyCarried(); } } // M-19: a waiting welcome's herd is not put on the old farm
       game.others = players.others(); bumper.drive(game, out);
