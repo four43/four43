@@ -1,4 +1,4 @@
-// The other players' trains (M-2, M-11) in their paints, from the interpolated poses in sync.players; half transparent when away (M-39, M-40).
+// The other players' trains (M-2, M-11) in their paints and dirt (M-68), from the forecast poses in sync.players (M-65); half transparent when away (M-39, M-40).
 // Wheels have no physics here: they turn with the distance driven and sit at the rest length.
 import * as THREE from 'three';
 import { createVehicles3D } from './vehicles3d.js';
@@ -23,8 +23,9 @@ export function createOthers3D(scene) {
         v.stamp = stamp;
         if (p.paint.body !== v.body || p.paint.trim !== v.trim) { v.body = p.paint.body; v.trim = p.paint.trim; v.veh.setPaint(p.paint); }
         if (p.away !== v.ghost) { v.ghost = p.away; v.veh.setGhost(p.away); }
-        if (!p.away) v.s.wheel.rot += p.speed * dt;
+        if (!p.away) v.s.wheel.rot += p.ahead * dt; // backward when it reverses (M-66)
         toSnap(p.pose.tractor, v.snap.tractor); toSnap(p.pose.cars[0], v.snap.cars[0]); toSnap(p.pose.cars[1], v.snap.cars[1]);
+        v.snap.dirt = p.dirt[0]; v.s.train.cars[0].dirt = p.dirt[1]; v.s.train.cars[1].dirt = p.dirt[2]; // M-68: as dirty as on its own device
         v.veh.update(v.snap);
       }
       for (const [n, v] of views) if (v.stamp !== stamp) { v.veh.dispose(); views.delete(n); }

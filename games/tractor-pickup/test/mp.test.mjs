@@ -20,10 +20,10 @@ test('a guest gets the welcome, makes the host farm and starts at its spawn plac
   assert.deepEqual(g.sync.players.list().map(x => [x.n, x.paint]), [[1, PAINTS[0]]]);
   assert.ok(g.events.some(e => e.type === 'playerJoined' && e.n === 1) && w.host.events.some(e => e.type === 'playerJoined' && e.n === 2));
 });
-test('both devices see the other tractor where it really is, about 100 ms behind (M-11, M-22, M-25)', async () => {
+test('both devices see the other tractor where it really is now, forecast from its velocity (M-11, M-22, M-25, M-65)', async () => {
   const w = await mpWorld({ seed: 22 }); w.seconds(4, drive);
   const g = w.guests[0], seen = w.host.sync.players.map.get(2).pose.tractor.p, real = g.game.tractor;
-  assert.ok(dist(seen, real) < 0.2 + real.speed * 0.15, `host sees the guest ${dist(seen, real).toFixed(2)} m off`);
+  assert.ok(dist(seen, real) < 0.05 + real.speed * 0.03, `host sees the guest ${dist(seen, real).toFixed(2)} m off`);
   const hs = g.sync.players.map.get(1).pose.tractor.p; assert.ok(dist(hs, w.host.game.tractor) < 0.2);
   assert.ok(w.host.game.others.length === 1 && Math.abs(w.host.game.others[0].speed - real.speed) < 1.5, 'the herd knows the guest tractor and its speed');
 });

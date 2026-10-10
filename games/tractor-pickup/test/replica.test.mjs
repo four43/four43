@@ -9,7 +9,8 @@ const REGISTRY = registryOf(BINDINGS); // the game's own
 const near = (a, b, e, msg) => assert.ok(Math.abs(a - b) <= e, `${msg}: ${a} vs ${b}`);
 const q = (a = 0.3) => ({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) });
 const pig = (o = {}) => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 3, x: 10.5, y: 0.25, z: -7.25, yaw: 1.5, anim: 'walk', leader: null, line: 0, ...o });
-const train = (n = 2) => ({ mode: 'drive', full: true, bodies: [{ p: { x: 10.5, y: 0.8, z: -3 }, q: q() }, { p: { x: 7, y: 0.5, z: -3 }, q: q(0.2) }, { p: { x: 4, y: 0.5, z: -3 }, q: q(0.1) }],
+const still = { v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 }, dirt: 0 }; // M-66, M-68
+const train = (n = 2) => ({ mode: 'drive', full: true, bodies: [{ p: { x: 10.5, y: 0.8, z: -3 }, q: q(), v: { x: 5.25, y: -0.5, z: 1 }, w: { x: 0, y: 0.75, z: -0.1 }, dirt: 0.4 }, { p: { x: 7, y: 0.5, z: -3 }, q: q(0.2), ...still }, { p: { x: 4, y: 0.5, z: -3 }, q: q(0.1), ...still }],
   riders: Array.from({ length: n }, (_, i) => ({ id: 30 + i, slot: i, flying: i === 1, x: 5 + i, y: 1.2, z: -2, yaw: 1.5 })) });
 const frame = (groups, o = {}) => encodeFrame({ key: false, sender: 1, time: 1000, groups, ...o });
 const one = (k, id, rec, o) => decodeFrame(frame([{ kind: k, records: [[id, rec]] }], o), REGISTRY);
@@ -25,7 +26,8 @@ test('a tree, a player and a train round-trip (M-22, M-53)', () => {
   assert.deepEqual(one(PLAYER, 3, { body: 'rainbow', trim: 'blue', away: true, join: 255 }).groups.get('player').records.get(3), { body: 'rainbow', trim: 'blue', away: true, join: 255 });
   const t = train(3), r = one(TRAIN, 2, t, { sender: 2 }).groups.get('train').records.get(2);
   assert.deepEqual([r.mode, r.full, r.riders.map(c => [c.id, c.slot, c.flying])], ['drive', true, [[30, 0, false], [31, 1, true], [32, 2, false]]]);
-  t.bodies.forEach((b, i) => { for (const k of 'xyz') near(r.bodies[i].p[k], b.p[k], 1 / 128, 'p' + k); for (const k of 'xyzw') near(r.bodies[i].q[k], b.q[k], 1e-3, 'q' + k); });
+  t.bodies.forEach((b, i) => { for (const k of 'xyz') near(r.bodies[i].p[k], b.p[k], 1 / 128, 'p' + k); for (const k of 'xyzw') near(r.bodies[i].q[k], b.q[k], 1e-3, 'q' + k);
+    for (const k of 'xyz') { near(r.bodies[i].v[k], b.v[k], 1e-3, 'v' + k); near(r.bodies[i].w[k], b.w[k], 5e-4, 'w' + k); } near(r.bodies[i].dirt, b.dirt, 0.005, 'dirt'); }); // M-66, M-68
   near(r.riders[2].yaw, 1.5, 1e-4, 'rider yaw');
 });
 test('yaws of any size and NaN positions still encode (the farm keeps playing), clamped to the farm (M-44)', () => {
@@ -42,7 +44,7 @@ test('frames stay small: a big herd keyframe and a full train (M-53)', () => {
   const herd = Array.from({ length: 100 }, (_, i) => [i, pig()]), trees = Array.from({ length: 300 }, (_, i) => [i, { state: 'standing' }]);
   const key = encodeFrame({ key: true, sender: 1, time: 5, groups: [{ kind: ANIMAL, records: herd }, { kind: TREE, records: trees }] });
   assert.ok(key.byteLength <= 3500, `${key.byteLength} bytes`); assert.ok(key.byteLength <= MAX_FRAME);
-  assert.ok(frame([{ kind: TRAIN, records: [[2, train(12)]] }], { sender: 2 }).byteLength <= 220, "about 12 bytes per rider");
+  assert.ok(frame([{ kind: TRAIN, records: [[2, train(12)]] }], { sender: 2 }).byteLength <= 264, "about 12 bytes per rider, 14 per body for velocity, spin and dirt (M-66, M-68)");
   assert.throws(() => frame([{ kind: ANIMAL, records: Array.from({ length: LIMIT.animals + 1 }, (_, i) => [i, pig()]) }]), /too many/);
   assert.throws(() => frame([{ kind: TRAIN, records: [[2, train(LIMIT.riders + 1)]] }], { sender: 2 }), /bad list/);
   assert.throws(() => frame([{ kind: ANIMAL, records: [[1, pig({ type: 'dragon' })]] }]), /bad value/);

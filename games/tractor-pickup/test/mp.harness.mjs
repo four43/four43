@@ -54,7 +54,7 @@ export const quietWarn = fn => { const warn = console.warn, warned = []; console
 export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = {}) => w.host.net.send(to.net.id, encodeFrame({ key, sender: 1, time, groups: [{ kind: ANIMAL, records }] }), key);
 export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
 export const animalRec = o => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle', leader: null, line: 0, ...o });
-export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x, y: 1, z }, q: { x: 0, y: 0, z: 0, w: 1 } })), riders: [] });
+export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x, y: 1, z }, q: { x: 0, y: 0, z: 0, w: 1 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 }, dirt: 0 })), riders: [] });
 // M-58: what a guest shows that the host does not (empty: all devices agree). Per guest that is not alone:
 // - every host animal: gone on the host -> gone, not drawn (elsewhere) or missing here; held by this guest -> held here (fly, ride, show);
 //   held by another player -> carried or not drawn here; walking into the barn -> toBarn here; free -> free here;
