@@ -1,7 +1,8 @@
 # Rally Sim — Generated Tracks, Worlds and Game Loop
 
-Status: **Phase 1 built and live (0.3.1, 2026-10-10)**: free drive on generated loops/stages, with
-the round-3 additions (Twisty style, verge bumps, surface drag, tall grass); Phase 2 next. Companion to `rally-spec.md` (car,
+Status: **Phase 1 live (0.3.1); Phase 2 (game loop) built 2026-10-10, not yet released**: title menu, Free drive / Stage /
+Time attack, countdown, timing, splits, laps, bests, pause and results, on the round-3 tracks (Twisty style, verge bumps,
+surface drag, tall grass); Phase 3 (fresh snow on tracks) next. Companion to `rally-spec.md` (car,
 physics, test pad, snow). Requirement IDs are `T-n`.
 
 ## Goals
@@ -287,17 +288,111 @@ World = {
 
 ## Requirements — Phase 2 (game loop)
 
-- **T-20 States:** `menu → loading → ready → countdown → running → finished`, plus `paused`
-  overlay. `ready`: car held (brakes on, gearbox in gear, engine free to rev). `countdown`: 3-2-1-Go
-  over 3 s; moving > 0.5 m before Go is a jump start (+5 s penalty, shown). `finished`: results
-  with retry / new seed / menu.
-- **T-21 Modes** are objects hooking the states: `freeDrive`, `stage`, `timeAttack`.
-- **T-22 Stage:** point-to-point; clock from Go to the finish gate; splits at checkpoints
-  (compared with best).
-- **T-23 Time attack:** loops; the car starts stopped on the road a run-up before the line (the
-  distance covered in ~10 s by the autopilot's speed profile, clamped 150–400 m); each crossing
-  of the line ends a lap and starts the next; Restart returns to the run-up.
-- **T-24 Progress:** the game tracks `s` via the locator, requires checkpoints in order (cutting
-  doesn't count), and handles loop wrap.
-- **T-25 Bests:** saved in `localStorage` per (seed, kind, theme, density, car, mode).
-- **T-26 HUD:** timer, split delta, lap count, countdown lights, results card.
+Design agreed 2026-10-10 (plan: `docs/plans/2026-10-10-game-loop.md`). The game layer lives in
+`src/game/`: no DOM, no three.js, so it runs headless in Node with the autopilot. It reads car
+state and the track; the only thing it does to the car is place it, hold it and steer its inputs.
+
+| Path | Role |
+|------|------|
+| `src/game/progress.js` | Progress along the course: unwrapped position, checkpoints in order, line/finish crossings, missed checkpoints (T-24) |
+| `src/game/pace.js` | Allowed speed along the road (curvature, grip, obstacles) and the time-attack run-up distance; shared with `test/autopilot.js` |
+| `src/game/modes.js` | `freeDrive`, `stage`, `timeAttack` (T-21) |
+| `src/game/game.js` | `Game`: the state machine, clock, splits, laps, events (T-20) |
+| `src/game/bests.js` | Saved bests (T-25) |
+| `src/menus.js` | Title menu, pause menu, results card, game HUD (T-26) |
+| `test/game.mjs` | Headless validation (T-27) |
+
+- **T-20 States.** `title → loading → ready → countdown → running → finished`, plus `paused` over
+  `ready`/`countdown`/`running`. Main calls `game.step()` once per physics step (sim time, so
+  headless runs are deterministic) and doesn't step physics while paused.
+  - `title`: the menu over the live scene; the car sits held at the selected mode's start; the
+    camera orbits it.
+  - `loading`: a track is building (toast); the menu stays.
+  - `ready` (0.8 s, lets the suspension settle) → `countdown` (3 s: lights 3, 2, 1, then Go).
+    The car is **held** through both (`car.hold`): all brakes full, clutch open (gear shown as
+    N), so the engine revs freely and the car can't move or select reverse; on Go it drops into
+    1st and launches. No jump starts are possible, so there is no penalty.
+  - `running`: the clock runs. `finished` (Stage only): the car is slowed to a stop on its own
+    (throttle off, brake 0.5, held once under 1 m/s) and the results card shows.
+  - Free drive skips `ready`/`countdown`: `loading → running`, no clock.
+  - Events (`game.on(fn)`, `{ type, ... }`): `state`, `count {n: 3|2|1|0}`, `start`, `split`,
+    `lap`, `missed`, `blocked`, `finish`.
+- **T-21 Modes** are data the Game reads (`MODES` in `game/modes.js`): `{ id, label, kind (the
+  track kind it always uses, or null = the player's Loop/Stage choice), countdown, clock (null |
+  'go' | 'line'), laps, startOffset(track) (m from the start line, null = spawn) }`. The Game's
+  event handling branches on `clock` and `laps` (hooks per mode were more machinery than three
+  modes need). `freeDrive` (Loop or Stage, no clock), `stage` (always a stage track), `timeAttack`
+  (always a loop). The test pad is free drive only and hidden: `?pad` in the URL or
+  `rally.setWorld(...)`.
+- **T-22 Stage.** The car starts held 4 m behind the start gate; the clock runs from Go to the
+  finish gate. At each checkpoint the split (time since Go) shows with its delta to the best
+  run's split there. Crossing the finish with a checkpoint missed shows "Missed checkpoint — go
+  back" and the clock keeps running; going back through the missed checkpoint and on to the
+  finish counts. Results card: time, splits with deltas, previous best, "New best", and Retry /
+  New seed / Menu.
+- **T-23 Time attack (endless hot laps).** The car starts held on the road a **run-up** before the
+  line: the distance covered in 10 s from rest under the pace profile (accelerate at 0.45 μg,
+  brake at 0.4 μg, corner speeds as the autopilot's), clamped 150–400 m. After Go the clock waits
+  for the line (flying start); each crossing ends a lap and starts the next. A lap with a missed
+  checkpoint is shown "invalid" and not saved, but the next lap still starts. Per checkpoint a
+  split (time into the lap) with its delta to the best lap's split. Laps never end: the pause
+  menu lists them (time, valid, best marked). Restart returns to the run-up.
+- **T-24 Progress.** `makeProgress(track)` follows the car's course position `p` (m from the start
+  line, continuous: loop wrap is unwrapped, so lap n spans `[n·L, (n+1)·L)`), updated from the
+  locator each step. A checkpoint (every 250 m, from `roadside.checkpoints`) or the line counts
+  only when crossed forwards in order, with |d| ≤ 15 m, and with `p` moving ≤ 50 m in that update
+  (a bigger move is a shortcut across a hairpin or a teleport and credits nothing in between).
+  Passing a checkpoint's position by 30 m without crediting it raises `missed` (once) until it's
+  credited. The stage finish with a checkpoint missing raises `blocked`; a loop line crossing
+  ends the lap either way (valid only with every checkpoint).
+- **T-25 Bests** in `localStorage` (`rally-sim-bests`), keyed `mode|seed|kind|style|theme|density|
+  car`: Stage `{ time, splits }`, Time attack `{ lap, splits }` (best lap). Saved only when better.
+  Storage failures are ignored (private mode); the game works without it.
+- **T-26 UI.**
+  - *Title menu* over the live scene (top-left panel, the top bar hidden): Mode (Free drive /
+    Stage / Time attack) with a one-line description; for free drive Loop / Stage; seed (text +
+    🎲 + Go), Track style, Theme, Obstacles; Car; a footer with Settings, the best for this setup
+    ("Best 2:47.33" / "Best lap …" / "No time set yet") and **Drive** (Enter, gamepad A).
+    Changing the track rebuilds the preview behind the menu. Short wide screens (≤ 520 px tall,
+    ≥ 540 px wide: phones in landscape) get a wider panel with the heading beside the mode picker,
+    no description and the options in two columns; the options scroll, the footer always shows.
+  - *Settings sheet* keeps the driving options only (surface on the pad, Assisted / Sim, units,
+    gearbox, help); opens from the title footer or the pause menu.
+  - *Pause menu* (Esc, P, gamepad Start, or the Pause chip): Resume, Restart, Settings, Quit to
+    menu; Time attack adds the lap list. Restart is also Shift+R / hold Reset (a new countdown
+    from the start or run-up, markers home). Reset (R / tap) stays "back onto the road", clock
+    running. Leaving the page (hidden) pauses a timed run.
+  - *Game HUD:* timer (top centre, m:ss.cc), lap line under it ("Lap 3 · Last 1:02.31 · Best
+    1:01.88"; before the flying start "Run-up: the clock starts at the line"; Stage: "Best …"),
+    split pill ("Split 3/12 −0.42", green faster / red slower, 3 s), countdown lights (three
+    reds, then all green + GO for 1 s), banners (missed checkpoint, held until credited; best
+    lap; invalid lap). Screens narrower than 900 px put the HUD under the top bar (the chips fill
+    it); portrait phones hide the seed chip in timed runs and portrait touch screens move the dash
+    under the HUD. Cards (pause, results) are a column whose list scrolls so the buttons stay on
+    screen; on short wide screens they are two columns, buttons left and list right.
+  - *Body classes:* `scr-title` / `scr-play`, `menuOpen` (pause or results: touch controls
+    hidden), `timed`.
+  - *Debug hooks* (`window.rally.debug`, for the console, Playwright and phones):
+    `screen(name, { mode, n, time, best, splits })` jumps to `title`, `loading`, `ready`,
+    `countdown` (light n), `running`, `paused`, `results` or `settings` (stepping the game and
+    physics to get there); `finish(opts)`, `split(i, delta)`, `lap(valid)`, `missed(i)`,
+    `blocked(i)`, `count(n)` fire events; `teleport(p)` puts the car at course position p;
+    `nearFinish(d)` credits every checkpoint and puts the car d m before the finish/line;
+    `state()`. URL: `?debug=<screen>&mode=<mode>&n=<light>` opens straight onto a screen (on a
+    phone too); `?pad` drives the test pad.
+  - Settings v4: adds `mode`; saved `world: 'pad'` becomes free drive on a loop.
+- **T-27 Validation** (`test/game.mjs`): progress on synthetic paths (in-order checkpoints, loop
+  wrap, a shortcut jump credits nothing, missed raised and cleared, backwards crossings ignored);
+  the hold keeps the car within 5 cm at full throttle for 4 s and never selects reverse, and the
+  car launches on Go; the autopilot drives a stage from Go to finished with the clock equal to sim
+  time since Go and one split per checkpoint; a teleport past a checkpoint blocks the finish
+  until driven back; time attack starts the clock at the line and counts valid laps on two
+  seeds; run-up in 150–400 m; bests saved only when better. `test/mobile.mjs`: title menu, pause
+  menu and results card fit each device's safe area (Drive and the menu buttons reachable, ≥ 44 px),
+  the timer and HUD don't overlap the chips, pedals or dash in play.
+- **Phase 2 results (2026-10-10):** `test/game.mjs` 67 checks: the hold keeps both cars within 1 mm at full
+  throttle (7500–8000 rpm) and they launch to 9–14 m/s in 2 s; run-ups 150–171 m (rally pace
+  reaches the line in 10 s from about 160 m, so the 150 m floor often applies); the autopilot's
+  2.8 km stage 'g1' takes 167.4 s with 10 splits, clock = sim time since Go; time attack loops
+  'ta1'/'ta2' lap in 110.4 / 126.3 s. `test/mobile.mjs` 727 checks on 7 devices (pad + stage
+  each; title, HUD, pause and results added).

@@ -111,9 +111,8 @@ body.manual .shiftBtns { display: flex; }
 
 /* settings sheet */
 #sheet { position: fixed; top: calc(var(--sa-t) + 58px); left: calc(var(--sa-l) + 10px); width: min(360px, calc(100vw - 20px));
-  max-height: calc(100% - 80px); overflow: auto; background: var(--panel-solid); border-radius: 14px; padding: 14px 16px 16px; z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  max-height: calc(100% - var(--sa-t) - var(--sa-b) - 70px); overflow: auto; touch-action: pan-y; background: var(--panel-solid); border-radius: 14px; padding: 14px 16px 16px; z-index: 30; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
 #sheet h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-#sheet h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 600; color: var(--dim); }
 .seg { display: flex; background: rgba(237,230,214,.08); border-radius: 10px; padding: 3px; gap: 3px; }
 .seg button { flex: 1; border: 0; background: transparent; padding: 9px 4px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; color: var(--dim); }
 .seg button[aria-pressed="true"] { background: var(--bone); color: var(--panel-solid); }
@@ -123,10 +122,113 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 .seedRow input { flex: 1; min-width: 0; font: inherit; font-size: 17px; font-weight: 600; padding: 8px 10px; border-radius: 10px;
   border: 1px solid rgba(237,230,214,.25); background: rgba(237,230,214,.08); color: var(--bone); -webkit-user-select: text; user-select: text; }
 #seedChip { cursor: default; font-variant-numeric: tabular-nums; }
-#toast { position: fixed; left: 50%; top: calc(var(--sa-t) + 64px); transform: translateX(-50%); z-index: 30;
+#toast { position: fixed; left: 50%; top: calc(var(--sa-t) + 64px); transform: translateX(-50%); z-index: 40;
   background: var(--panel-solid); padding: 10px 18px; border-radius: 12px; font-size: 18px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
 #closeSheet { border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
 
+
+/* Screens (spec tracks T-26): body.scr-title shows the title menu over the live scene; body.scr-play
+   the driving HUD and touch controls; body.menuOpen (pause, results) hides the touch controls. */
+body.scr-title #dash, body.scr-title .touch, body.scr-title .bar, body.scr-title #hud, body.menuOpen .touch { display: none !important; }
+#pauseBtn { white-space: nowrap; }
+
+/* title menu */
+#title { position: fixed; z-index: 15; left: calc(var(--sa-l) + 10px); top: calc(var(--sa-t) + 10px); bottom: calc(var(--sa-b) + 10px);
+  width: min(420px, calc(100vw - var(--sa-l) - var(--sa-r) - 20px)); display: none; flex-direction: column;
+  background: var(--panel); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid rgba(237,230,214,.18); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+body.scr-title #title { display: flex; }
+.menuBody { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 10px; touch-action: pan-y; overscroll-behavior: contain; }
+#title h1 { margin: 0 0 12px; font-size: 40px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; line-height: 1; }
+#title h1 span { color: var(--amber); }
+.seg.big button { padding: 12px 4px; font-size: 18px; min-height: 46px; }
+.menuFoot .chip { min-height: 46px; }
+.modeHelp { margin: 8px 0 0; font-size: 15px; color: var(--dim); line-height: 1.35; }
+.opts { display: grid; grid-template-columns: 1fr; column-gap: 14px; }
+.opt h3, #sheet h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 600; color: var(--dim); }
+#title:not(.free) .freeOnly { display: none; }
+.menuFoot { display: flex; align-items: center; gap: 12px; padding: 10px 12px 12px; border-top: 1px solid rgba(237,230,214,.12); }
+#titleBest { flex: 1; font-size: 16px; line-height: 1.25; color: var(--dim); font-variant-numeric: tabular-nums; }
+#titleBest b { color: var(--bone); font-weight: 700; }
+button.go { background: var(--amber); color: var(--panel-solid); border: 0; border-radius: 12px; padding: 10px 30px; font-size: 22px; font-weight: 700; min-height: 52px; cursor: pointer; }
+button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
+/* Short, wide screens (phones in landscape): a wider panel with the options in two columns. */
+@media (max-height: 520px) and (min-width: 540px) {
+  #title { width: min(720px, calc(100vw - var(--sa-l) - var(--sa-r) - 20px)); }
+  .titleHead { display: flex; align-items: center; gap: 16px; }
+  .titleHead .seg { flex: 1; }
+  #title h1 { font-size: 26px; margin: 0; }
+  .modeHelp { display: none; }
+  .opts { grid-template-columns: 1fr 1fr; }
+  .opt h3 { margin: 10px 0 5px; }
+  .seg.big button { padding: 10px 4px; }
+}
+
+/* pause menu and results card */
+.card { position: fixed; z-index: 25; left: 50%; top: calc(50% + (var(--sa-t) - var(--sa-b)) / 2); transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - var(--sa-l) - var(--sa-r) - 24px)); max-height: calc(100% - var(--sa-t) - var(--sa-b) - 24px);
+  box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel-solid); border-radius: 16px; padding: 16px 18px 18px; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+.card[hidden] { display: none; }
+.cardSide { flex: 0 1 auto; min-height: 0; overflow: auto; touch-action: pan-y; overscroll-behavior: contain; }
+#results .cardSide { order: 1; } #results .cardBtns { order: 2; }
+.card h2 { margin: 0 0 8px; font-size: 28px; font-weight: 700; }
+.cardBtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 4px; flex: none; }
+#results .cardBtns { grid-template-columns: 1fr 1fr; }
+.cardBtns button:not(.go) { min-height: 48px; border-radius: 12px; border: 1px solid rgba(237,230,214,.2); background: rgba(237,230,214,.08); font-size: 18px; font-weight: 600; cursor: pointer; }
+.cardBtns .go { grid-column: 1 / -1; }
+.bigTime { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.05; }
+#resDelta { font-size: 18px; font-weight: 600; color: var(--dim); margin-top: 2px; }
+.times { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 16px; font-variant-numeric: tabular-nums; }
+.times td { padding: 3px 4px; border-top: 1px solid rgba(237,230,214,.1); }
+.times td:nth-child(n+2) { text-align: right; }
+.faster { color: var(--go); } .slower { color: var(--stop); } .dim { color: var(--dim); }
+.newBest { display: inline-block; background: var(--go); color: var(--panel-solid); border-radius: 8px; padding: 1px 8px; font-weight: 700; }
+
+/* game HUD: timer, lap line and split under it, countdown lights, banners */
+#hud { position: fixed; left: 50%; top: calc(var(--sa-t) + 10px); transform: translateX(-50%); z-index: 9; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; pointer-events: none; }
+#hud [hidden] { display: none; }
+#timer { background: var(--panel); border-radius: 10px; padding: 1px 14px; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(6px); text-shadow: 0 1px 6px rgba(0,0,0,.3); }
+#lapLine { font-size: 15px; font-weight: 600; background: var(--panel); border-radius: 8px; padding: 3px 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#split { font-size: 20px; font-weight: 700; padding: 2px 12px; border-radius: 8px; background: var(--panel-solid); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#split.faster { background: var(--go); color: var(--panel-solid); }
+#split.slower { background: var(--stop); color: var(--panel-solid); }
+#lights { position: fixed; left: 50%; top: calc(var(--sa-t) + 26%); transform: translateX(-50%); display: flex; gap: 14px; align-items: center;
+  padding: 12px 16px; background: var(--panel-solid); border-radius: 44px; z-index: 12; pointer-events: none; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+#lights[hidden] { display: none; }
+#lights i { width: 44px; height: 44px; border-radius: 50%; background: #3d4d53; }
+#lights i.on { background: var(--stop); box-shadow: 0 0 18px var(--stop); }
+#lights.go i { background: var(--go); box-shadow: 0 0 18px var(--go); }
+#lights b { display: none; font-size: 34px; font-weight: 700; color: var(--go); padding: 0 6px; }
+#lights.go b { display: block; }
+#banner { position: fixed; left: 50%; top: calc(var(--sa-t) + 40%); transform: translateX(-50%); z-index: 12; background: var(--panel-solid);
+  padding: 10px 20px; border-radius: 12px; font-size: 22px; font-weight: 700; pointer-events: none; text-align: center; max-width: calc(100vw - 40px); box-sizing: border-box; }
+#banner[hidden] { display: none; }
+#banner.warn { background: var(--stop); color: var(--panel-solid); }
+#banner.good { background: var(--go); color: var(--panel-solid); }
+
+/* Short, wide screens: cards in two columns, the buttons left and the list right. */
+@media (max-height: 520px) and (min-width: 540px) {
+  .card:has(.cardSide:not(:empty)) { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: min-content; column-gap: 20px;
+    width: min(720px, calc(100vw - var(--sa-l) - var(--sa-r) - 24px)); }
+  .card .cardSide { grid-column: 2; grid-row: 1 / span 20; contain: size; align-self: stretch; }
+  .card .cardSide .times { margin-top: 0; }
+  .card > :not(.cardSide) { grid-column: 1; }
+  .bigTime { font-size: 48px; }
+}
+/* Narrow screens: the timer goes under the top bar (the chips fill it), with the countdown lights
+   below it. Portrait phones: in a timed run the seed chip gives way and the dash moves under the HUD. */
+@media (max-width: 899px) {
+  #hud { top: calc(var(--sa-t) + 58px); }
+  #lights { top: calc(var(--sa-t) + max(28vh, 150px)); }
+}
+@media (max-width: 520px) {
+  body.timed #seedChip { display: none; }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  body.timed #dash { top: calc(var(--sa-t) + 170px) !important; }
+}
 /* per-wheel debug panel */
 #debug { position: fixed; top: calc(var(--sa-t) + 58px); right: calc(var(--sa-r) + 10px); z-index: 8;
   display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 290px; pointer-events: none; }
@@ -158,7 +260,7 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 <canvas id="view"></canvas>
 <div id="loading">Warming up the engine…</div>
 
-<div class="bar l"><button class="chip" id="menuBtn">Settings</button><span class="chip" id="seedChip" hidden></span></div>
+<div class="bar l"><button class="chip" id="pauseBtn" aria-label="Pause">❚❚ Pause</button><span class="chip" id="seedChip" hidden></span></div>
 <div id="toast" hidden></div>
 <div class="bar r">
   <button class="chip" id="camBtn">Camera</button>
@@ -166,22 +268,51 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
   <button class="chip" id="resetBtn">Reset</button>
 </div>
 
+<!-- title menu (spec tracks T-26): over the live scene, the camera circling the car -->
+<div id="title" class="menu">
+  <div class="menuBody">
+    <div class="titleHead"><h1>Rally <span>Sim</span></h1>
+    <div class="seg big" id="modeSeg"><button data-title="mode:freeDrive">Free drive</button><button data-title="mode:stage">Stage</button><button data-title="mode:timeAttack">Time attack</button></div></div>
+    <p class="modeHelp" id="modeHelp"></p>
+    <div class="opts">
+      <div class="opt freeOnly"><h3>Track</h3><div class="seg"><button data-title="world:loop">Loop</button><button data-title="world:stage">Stage</button></div></div>
+      <div class="opt"><h3>Seed</h3><form class="seedRow" id="seedForm"><input id="seedInput" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed" enterkeyhint="go"><button type="button" class="chip" id="diceBtn" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form></div>
+      <div class="opt"><h3>Track style</h3><div class="seg"><button data-title="style:twisty">Twisty</button><button data-title="style:flowing">Flowing</button></div></div>
+      <div class="opt"><h3>Theme</h3><div class="seg"><button data-title="theme:summer">Summer</button><button data-title="theme:winter">Winter</button></div></div>
+      <div class="opt"><h3>Obstacles</h3><div class="seg"><button data-title="density:mild">Mild</button><button data-title="density:wild">Wild</button></div></div>
+      <div class="opt"><h3>Car</h3><div class="seg"><button data-title="car:awd">R5 4WD</button><button data-title="car:rwd">Classic RWD</button></div></div>
+    </div>
+  </div>
+  <div class="menuFoot"><button class="chip" id="menuBtn">Settings</button><span id="titleBest"></span><button class="go" id="driveBtn">Drive</button></div>
+</div>
+
+<!-- pause menu -->
+<div id="pause" class="card" hidden>
+  <h2>Paused</h2>
+  <div class="cardBtns"><button class="go" id="resumeBtn">Resume</button><button id="restartBtn">Restart</button><button id="setBtn">Settings</button><button id="quitBtn">Quit to menu</button></div>
+  <div id="lapList" class="cardSide"></div>
+</div>
+
+<!-- stage results -->
+<div id="results" class="card" hidden>
+  <h2 id="resTitle">Stage complete</h2>
+  <div id="resTime" class="bigTime"></div>
+  <div id="resDelta"></div>
+  <div id="resSplits" class="cardSide"></div>
+  <div class="cardBtns"><button class="go" id="retryBtn">Retry</button><button id="newSeedBtn">New seed</button><button id="menuBtn2">Menu</button></div>
+</div>
+
+<!-- game HUD -->
+<div id="hud">
+  <div id="timer" hidden>0:00.00</div>
+  <div id="lapLine" hidden></div>
+  <div id="split" hidden></div>
+</div>
+<div id="lights" hidden><i></i><i></i><i></i><b>GO</b></div>
+<div id="banner" hidden></div>
+
 <div id="sheet" hidden>
   <h2>Settings <button id="closeSheet" aria-label="Close">×</button></h2>
-  <h3>World</h3>
-  <div class="seg"><button data-set="world:pad">Test pad</button><button data-set="world:loop">Loop</button><button data-set="world:stage">Stage</button></div>
-  <div class="trackOnly">
-    <h3>Seed</h3>
-    <form class="seedRow" id="seedForm"><input id="seedInput" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed"><button type="button" class="chip" id="diceBtn" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form>
-    <h3>Track style</h3>
-    <div class="seg"><button data-set="style:twisty">Twisty</button><button data-set="style:flowing">Flowing</button></div>
-    <h3>Theme</h3>
-    <div class="seg"><button data-set="theme:summer">Summer</button><button data-set="theme:winter">Winter</button></div>
-    <h3>Obstacles</h3>
-    <div class="seg"><button data-set="density:mild">Mild</button><button data-set="density:wild">Wild</button></div>
-  </div>
-  <h3>Car</h3>
-  <div class="seg"><button data-set="car:awd">R5 4WD</button><button data-set="car:rwd">Classic RWD</button></div>
   <h3 class="padOnly">Surface</h3>
   <div class="seg padOnly"><button data-set="surface:tarmac">Tarmac</button><button data-set="surface:hardpack">Dirt</button><button data-set="surface:gravel">Gravel</button><button data-set="surface:snow">Snow</button><button data-set="surface:ice">Ice</button></div>
   <h3>Driving</h3>
@@ -190,8 +321,8 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
   <div class="seg"><button data-set="units:mph">mph</button><button data-set="units:kmh">km/h</button></div>
   <h3>Gearbox</h3>
   <div class="seg"><button data-set="gearbox:auto">Auto</button><button data-set="gearbox:manual">Manual</button></div>
-  <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to reset (on a track: back onto the road; Shift+R or hold Reset: restart the track), C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift.</p>
-  <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st. The skidpad circle is 40 m across the pad from the start; the humps, kicker and 10 % slope are to the sides.</p>
+  <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to get back onto the road, Shift+R (or hold Reset) to restart, Esc or P to pause, C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift, Start to pause.</p>
+  <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st.</p>
 </div>
 
 <div id="debug" hidden>

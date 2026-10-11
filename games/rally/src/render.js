@@ -47,6 +47,7 @@ export class Renderer {
     this.scene = new THREE.Scene();
     this.cam = new THREE.PerspectiveCamera(62, 1, 0.1, 1500);
     this.camMode = 0; // 0 chase, 1 bumper, 2 bonnet
+    this.orbit = false; // title screen: circle the car instead
     const hemi = this.hemi = new THREE.HemisphereLight(0xdfeaf2, 0x6b5d4a, 1.1);
     this.scene.add(hemi);
     this.sunOffset = new THREE.Vector3(25, 45, 18);
@@ -153,7 +154,15 @@ export class Renderer {
     const cp = new THREE.Vector3(p.x, p.y, p.z), bq = new THREE.Quaternion(q.x, q.y, q.z, q.w);
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(bq); fwd.y = 0; fwd.normalize();
     const vel = new THREE.Vector3(v.x, 0, v.z);
-    if (this.camMode === 0) {
+    if (this.orbit) {
+      // Title screen: a slow circle round the car, a little above it.
+      this.orbitA = (this.orbitA ?? Math.atan2(-fwd.x, -fwd.z) + 0.6) + dt * 0.12;
+      this.camPos.set(p.x + 9 * Math.sin(this.orbitA), p.y + 3.2, p.z + 9 * Math.cos(this.orbitA));
+      this.camLook.set(p.x, p.y + 0.4, p.z);
+      this.cam.position.copy(this.camPos); this.cam.lookAt(this.camLook);
+      this.cam.fov = 55; this.cam.updateProjectionMatrix();
+      this.chaseDir = null; // the chase camera starts afresh behind the car
+    } else if (this.camMode === 0) {
       // Chase: look direction blends body heading with travel direction so slides read.
       const sp = vel.length();
       const dir = fwd.clone();

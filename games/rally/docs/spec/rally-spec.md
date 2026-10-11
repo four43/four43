@@ -15,8 +15,8 @@ at `four43.com/exp/rally/`.
 
 Two kinds of world: the **test pad** (flat, with features for exercising the car; kept for
 debugging) and **generated tracks** (loops and stages from a seed: hills, mixed surfaces, jumps;
-`tracks-spec.md`). Free drive only so far — the game loop (countdown, timing, modes) is the next
-phase.
+`tracks-spec.md`). The game loop (title menu, Free drive / Stage / Time attack, countdown,
+timing, bests) is specified there too (Phase 2).
 
 ## Stack and layout
 
@@ -40,7 +40,9 @@ phase.
 | `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
 | `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
 | `src/ui.js` | `Controls` (keyboard/gamepad/touch merge) and `Hud` |
-| `src/main.js` | Boot, settings sheet, world loading, frame loop, `window.rally` debug hook |
+| `src/game/*.js` | Game loop: progress, pace, modes, `Game` state machine, bests — `tracks-spec.md` Phase 2 |
+| `src/menus.js` | Title / pause / results menus and the timing HUD |
+| `src/main.js` | Boot, screens and settings, world loading, frame loop, `window.rally` debug hooks |
 | `src/assets.json` | Baked Kenney car-kit meshes (vertex coloured) |
 | `bake.mjs` | Bakes the GLBs in `assets/models/` → `src/assets.json` |
 | `assets/models/` | Source models: Kenney Car Kit 3.1 (CC0) — the 4 GLBs in use + `Textures/colormap.png` |
@@ -53,7 +55,8 @@ phase.
 | `test/markers.mjs` | Marker posts tip and settle |
 | `test/verge.mjs` | Grass verge drag and bumps |
 | `test/gen-*.mjs`, `test/track.mjs`, `test/wild.mjs`, `test/autopilot.js` | Generators and autopilot drives — `tracks-spec.md` |
-| `test/mobile.mjs` | Touch layout + multi-touch on emulated iPhones/iPads (`npm run test:mobile`, needs the dev server) |
+| `test/game.mjs` | Game loop: hold, pace, progress, bests, Stage / Time attack runs — `tracks-spec.md` T-27 |
+| `test/mobile.mjs` | Touch layout + multi-touch, and the game screens, on emulated iPhones/iPads (`npm run test:mobile`, needs the dev server) |
 | `test/browser.py`, `test/dbg.mjs` | Round-1 leftovers: Python Playwright smoke test (superseded by `mobile.mjs`), launch trace |
 
 Commands: `npm run dev`, `npm test` (all headless suites, ~4 min), `npm run test:mobile`, `npm run build`,
@@ -123,6 +126,9 @@ Defined in `SURFACES`: tarmac, hardpack, gravel, grass, sand, mud, snow, snowban
   angle, down to a 15 % floor at 2.5 × (`SLIDE` in `vehicle.js`). Steering is never capped: the
   driver always gets the lock they ask for. **Sim mode** turns all of these off.
 - Manual gearbox: shift up/down events. Pressing a shift button while in Auto switches to Manual.
+- **Hold** (`car.hold`, set by the game on the title, Ready and Countdown): all brakes full, the
+  clutch open (gear 0, shown N) so the engine revs freely, no auto-reverse; released, the car drops
+  into 1st.
 
 ### Cars (`cars.js`)
 
@@ -162,10 +168,13 @@ Steer is +left / −right.
 
 - **Keyboard:** W/S or ↑/↓ throttle/brake (ramped), A/D or ←/→ steer (ease-in, faster
   return-to-centre, snaps through centre), Space handbrake, Q/E shift, R reset (on a track: back
-  onto the road), Shift+R full restart, C camera, F3 or `` ` `` wheel debug. Keys typed into the
-  seed field don't drive.
-- **Gamepad:** left stick steer (8 % deadzone, slight expo), RT/LT throttle/brake, A handbrake,
-  RB/LB shift, Y reset, X camera.
+  onto the road), Shift+R restart (a timed run: a new countdown), Esc or P pause (or close the
+  settings sheet), Enter Drive on the title / Retry on the results card, C camera, F3 or `` ` ``
+  wheel debug. Keys typed into the seed field don't drive.
+- **Gamepad:** left stick steer (8 % deadzone, slight expo), RT/LT throttle/brake, A handbrake
+  (and Drive / Retry on menus), RB/LB shift, Y reset, X camera, Start pause.
+- Driving input reaches the car from Ready on (the engine revs on the line while held); menus
+  give it none. Resets and shifts only act while running or after the finish.
 - **Touch** (shown on `pointer: coarse`): a floating steering slider in the left half that zeroes
   where the thumb lands, and Gas / Brake / Handbrake press buttons for the right thumb (+ / − in
   Manual) — see [Round 4](#round-4-touch-controls-2026-10-10).
@@ -174,13 +183,15 @@ Steer is +left / −right.
 
 ## UI
 
-- Top-left **Settings** chip opens the settings sheet: World (Test pad / Loop / Stage); on tracks
-  Seed (text + 🎲 + Go), Track style (Twisty / Flowing), Theme (Summer / Winter), Obstacles (Mild /
-  Wild); Car; Surface (pad only); Driving (Assisted / Sim); Units (mph / km/h); Gearbox (Auto /
-  Manual); control help. Settings persist in `localStorage` (`rally-sim-settings`, `v` 3).
-- Next to it on tracks, a seed chip: "Loop · seed · 1.2 mi". A toast shows while a track builds,
-  and if one fails to build the game says so and falls back to the pad.
-- Top-right chips: Camera, Wheels (debug), Reset (tap: back onto the road; hold: full restart).
+- The game opens on the **title menu** (mode, track, car, Drive) and has pause and results menus
+  and a timing HUD: see `tracks-spec.md` T-26.
+- The **settings sheet** (Settings in the title footer, or Settings in the pause menu): Surface
+  (pad only), Driving (Assisted / Sim), Units (mph / km/h), Gearbox (Auto / Manual), control help.
+  Settings persist in `localStorage` (`rally-sim-settings`, `v` 4: adds `mode`; a saved
+  `world: 'pad'` becomes a loop — the pad is reached with `?pad`).
+- In play, top left: **Pause** chip and the seed chip ("Loop · seed · 1.2 mi"). A toast shows
+  while a track builds; a seed that fails to build says so and the current world stays.
+- Top-right chips: Camera, Wheels (debug), Reset (tap: back onto the road; hold: restart).
 - Dash: speed (mph or km/h), gear badge, 15-segment rev arc (green/amber/red; all red on limiter).
   Desktop: bottom centre (top, scaled, on short screens); touch: see Round 4.
 - Wheels debug panel: per wheel load (kN + bar), slip %, slip angle, surface or "airborne"; bar
@@ -188,9 +199,13 @@ Steer is +left / −right.
 
 ## Debug hook
 
-`window.rally` exposes `sim`, `view`, `controls`, `CARS`, `settings`, `setWorld(world)`,
-`loadTrack(opts)` (e.g. `{ world: 'stage', seed: 'abc', theme: 'winter', style: 'twisty' }`),
-`pause()`, `resume()`, `stepN(n)`, `render()`, `state()` (telemetry) for Playwright.
+`window.rally` exposes `sim`, `view`, `controls`, `CARS`, `MODES`, `settings`, `game`, `menus`,
+`setWorld(world)`, `loadTrack(opts)` (settings, then the title on that track, e.g. `{ mode:
+'stage', seed: 'abc', theme: 'winter' }` or `{ mode: 'freeDrive', world: 'loop' }`), `drive()`,
+`toTitle()`, `pause()` / `resume()` / `restart()` (the game's), `debugPause()` /
+`debugResume()` (freeze the frame loop's physics), `stepN(n)`, `render()`, `state()` (telemetry +
+game state), and `debug` — jump to any screen and fire HUD events (`tracks-spec.md` T-26 *Debug
+hooks*; also `?debug=<screen>&mode=<mode>` in the URL).
 
 ## Validation targets
 

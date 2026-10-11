@@ -72,6 +72,7 @@ export class Vehicle {
     this.input = { steer: 0, throttle: 0, brake: 0, handbrake: 0 };
     this.out = { throttle: 0, brake: 0 };
     this.reverseHold = 0;
+    this.hold = false;            // held on the start line (game)
     this.absF = [1, 1, 1, 1]; this.tcsF = 1; this.slideF = 1;
     this.tq = [0, 0, 0, 0];
     this.createBody(opts.pos || v3(0, 1, 0), opts.yaw || 0);
@@ -114,6 +115,14 @@ export class Vehicle {
     const inp = this.input, d = this.dt, c = this.cfg.drive;
     const vF = this.speed;
     let thr = inp.throttle, brk = inp.brake;
+    // Held on the start line (spec tracks T-20): brakes full and the clutch open, so the engine
+    // revs freely but the car can't creep or pick reverse; it drops into 1st when let go.
+    if (this.hold) {
+      d.gear = 0; this.reverseHold = 0;
+      this.out.throttle = thr; this.out.brake = 1;
+      return;
+    }
+    if (d.gear === 0) d.gear = 1;
     if (this.autoShift) {
       if (d.gear > 0 && vF < 0.5 && brk > 0.5 && thr < 0.05) {
         this.reverseHold += DT;

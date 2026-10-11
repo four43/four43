@@ -9,12 +9,14 @@ export class Controls {
     this.keys = new Set();
     this.kb = { steer: 0, throttle: 0, brake: 0 };
     this.touch = { steer: null, throttle: 0, brake: 0, handbrake: 0 };
-    this.events = []; // 'shiftUp', 'shiftDown', 'reset', 'resetAll', 'camera', 'debug'
+    this.events = []; // 'shiftUp', 'shiftDown', 'reset', 'resetAll', 'camera', 'debug', 'pause', 'confirm'
     addEventListener('keydown', (e) => {
       if (e.repeat || e.target.closest?.('input, textarea')) return; // typing a seed isn't driving
       const k = e.key.toLowerCase();
       this.keys.add(k);
-      const map = { q: 'shiftDown', e: 'shiftUp', r: e.shiftKey ? 'resetAll' : 'reset', c: 'camera', f3: 'debug', '`': 'debug' };
+      const map = { q: 'shiftDown', e: 'shiftUp', r: e.shiftKey ? 'resetAll' : 'reset', c: 'camera', f3: 'debug', '`': 'debug',
+        escape: 'pause', p: 'pause', enter: 'confirm' };
+      if (k === 'enter' && e.target.closest?.('button')) return; // the focused button's click handles it
       if (map[k]) this.events.push(map[k]);
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
     });
@@ -105,6 +107,7 @@ export class Controls {
       gp.handbrake = p.buttons[0]?.pressed ? 1 : 0;
       const edge = (i, ev) => { const pr = !!p.buttons[i]?.pressed; if (pr && !this.padPrev[i]) this.events.push(ev); this.padPrev[i] = pr; };
       edge(5, 'shiftUp'); edge(4, 'shiftDown'); edge(3, 'reset'); edge(2, 'camera');
+      edge(9, 'pause'); edge(0, 'confirm'); // Start; A is also the handbrake, confirm only acts on menus
       break;
     }
 

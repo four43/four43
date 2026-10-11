@@ -5,14 +5,9 @@ import { roadSurfaceAt } from '../src/gen/surfaces.js';
 import { pointAt } from '../src/world/trackWorld.js';
 import { qrot } from '../src/vehicle.js';
 import { DT } from '../src/sim.js';
+import { allowedSpeed, CAPS, V_MAX } from '../src/game/pace.js';
 
 const G = 9.81;
-// Speed caps (m/s) from OBSTACLE_LEAD m before an obstacle to its end, swept per feature on the
-// test seeds: kickers sometimes nose-dive into the landing from ~16, whoops launch and flip from
-// ~16 (and the tallest can't be crawled either: the hull grounds on the ridges).
-const OBSTACLE_V = 16, OBSTACLE_LEAD = 15;
-const V_MAX = 38;
-const CAPS = { kicker: 12, whoops: 12, crest: 16, tabletop: 16 };
 
 // opts: { lat = 0.55 (share of μ·g used in corners), brake = 0.4 (share of μ·g for braking),
 //         kYaw = 0.15 (rad of steer per rad/s of yaw-rate error), caps: { featureType: m/s } }
@@ -43,9 +38,7 @@ export function autopilot(sim, track, opts = {}) {
   for (let k = 0; k <= span; k += 2) {
     const pk = pointAt(L, s + k);
     if (!L.closed && pk.s >= L.length) break;
-    const muK = SURFACES[roadSurfaceAt(track.surfaces, pk.s).road].mu;
-    const kk = Math.max(Math.abs(L.curvature[pk.i]), Math.abs(L.curvature[pk.j]), 1e-4);
-    const va = Math.min(V_MAX, Math.sqrt(lat * muK * G / kk), obstacleCap(track, pk.s, caps));
+    const va = allowedSpeed(track, pk.s, { lat, caps });
     vt = Math.min(vt, Math.sqrt(va * va + 2 * a * k));
   }
 
@@ -55,17 +48,6 @@ export function autopilot(sim, track, opts = {}) {
   if (err > -0.5) throttle = Math.max(0, Math.min(1, 0.3 + 0.4 * err));
   else if (v > 2) brake = Math.max(0, Math.min(1, -0.25 * (err + 0.5)));
   return { steer, throttle, brake, handbrake: 0, target: vt, s };
-}
-
-function obstacleCap(track, s, caps) {
-  const len = track.layout.length;
-  for (const f of track.features) {
-    if (f.type === 'berm') continue;
-    let ds = s - (f.s0 - OBSTACLE_LEAD);
-    if (track.layout.closed) ds = ((ds % len) + len) % len;
-    if (ds >= 0 && ds <= f.s1 - f.s0 + OBSTACLE_LEAD) return caps[f.type] ?? OBSTACLE_V;
-  }
-  return V_MAX;
 }
 
 // Steps the sim with the autopilot at `rate` Hz until onStep(sim, ctl) returns true or maxTime.

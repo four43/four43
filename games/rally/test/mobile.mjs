@@ -1,6 +1,7 @@
 // Touch controls on iPhones and iPads (spec R4): layout inside each device's safe area with no
 // overlaps, thumb-reachable buttons, a floating steering slider that zeroes where the thumb lands,
-// and gas/brake/handbrake buttons that work while steering (multi-touch).
+// and gas/brake/handbrake buttons that work while steering (multi-touch). Plus the game screens
+// (spec tracks T-26/T-27): title menu, the timed HUD, pause menu and results card fit each device.
 // Needs the dev server (npm run dev) or URL=… ; Chromium from the Playwright cache.
 // Run: node test/mobile.mjs [filter]   (SHOTS=dir to save screenshots)
 import { chromium, devices } from 'playwright-core';
@@ -37,20 +38,21 @@ function check(name, ok, detail = '') {
 }
 
 const browser = await chromium.launch({ executablePath, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-// Each device on the test pad (layout + behaviour) and on a track (layout: the seed chip joins the top bar).
-for (const [name, dev, sa] of DEVICES) for (const world of ['pad', 'loop']) {
+// Each device on the test pad (?pad: straight into free drive; layout + touch behaviour), and on a
+// stage through the title menu (menus, the timed HUD, pause and results).
+const MIN_TAP = 44;
+for (const [name, dev, sa] of DEVICES) for (const world of ['pad', 'stage']) {
   if (only && !name.includes(only)) continue;
   console.log(`\n# ${name} (${dev.viewport.width}×${dev.viewport.height}), ${world}`);
   const ctx = await browser.newContext({ ...dev, userAgent: undefined });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.addInitScript((world) => { try { localStorage.setItem('rally-sim-settings', JSON.stringify({ v: 3, world, seed: 'mobile12' })); } catch {} }, world);
-  await page.goto(URL);
-  await page.waitForFunction('window.rally', null, { timeout: 60000 });
+  await page.addInitScript(() => { try { localStorage.setItem('rally-sim-settings', JSON.stringify({ v: 4, mode: 'stage', seed: 'mobile12' })); } catch {} });
+  await page.goto(world === 'pad' ? `${URL}?pad` : URL);
+  await page.waitForFunction(world === 'pad' ? 'window.rally' : 'window.rally && rally.game.state === "title"', null, { timeout: 90000 });
   await page.evaluate((sa) => {
     for (const [k, v] of Object.entries(sa)) document.documentElement.style.setProperty(`--sa-${k}`, `${v}px`);
-    rally.pause();
   }, sa);
   await page.waitForTimeout(100);
   const W = dev.viewport.width, H = dev.viewport.height;
@@ -64,6 +66,28 @@ for (const [name, dev, sa] of DEVICES) for (const world of ['pad', 'loop']) {
   const hits = (sel, b) => page.evaluate(([sel, x, y]) => document.querySelector(sel).contains(document.elementFromPoint(x, y)), [sel, b.x + b.w / 2, b.y + b.h / 2]);
   const inside = (b, pad = 0) => b.x >= sa.l + pad - 0.5 && b.y >= sa.t - 0.5 && b.x + b.w <= W - sa.r + 0.5 && b.y + b.h <= H - sa.b + 0.5;
   const overlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  // A menu or card: inside the safe area, each button at least MIN_TAP and taking its own taps.
+  const menuFits = async (label, panel, btns) => {
+    const p = await box(panel);
+    check(`${label} visible`, !!p); if (!p) return;
+    check(`${label} inside the safe area`, inside(p), JSON.stringify({ x: p.x | 0, y: p.y | 0, w: p.w | 0, h: p.h | 0 }));
+    for (const sel of btns) {
+      const b = await box(sel);
+      check(`${label} ${sel} visible`, !!b); if (!b) continue;
+      check(`${label} ${sel} ≥ ${MIN_TAP}px tall and inside`, b.h >= MIN_TAP && inside(b) && b.y + b.h <= p.y + p.h + 0.5, `${b.w | 0}×${b.h | 0} at ${b.x | 0},${b.y | 0}`);
+      check(`${label} ${sel} takes its own taps`, await hits(sel, b));
+    }
+  };
+  if (world === 'stage') {
+    await menuFits('title', '#title', ['#driveBtn', '#menuBtn', '[data-title="mode:timeAttack"]']);
+    if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: `${SHOTS}/${name.replace(/\W+/g, '-')}-title.png` }); }
+    await page.evaluate(() => rally.debug.screen('running'));
+    await page.evaluate(() => rally.debug.split(2, -0.42));
+  }
+  // Let a couple of frames run so the HUD reflects the state, then freeze the sim for the checks.
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.evaluate(() => rally.debugPause());
 
   // --- layout ---
   const buttons = { gas: '#gasBtn', brake: '#brakeBtn', handbrake: '#hbBtn' };
@@ -80,11 +104,11 @@ for (const [name, dev, sa] of DEVICES) for (const world of ['pad', 'loop']) {
   const keys = Object.keys(B).filter((k) => B[k]);
   let clash = '';
   for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) if (overlap(B[keys[i]], B[keys[j]])) clash += `${keys[i]}/${keys[j]} `;
-  const others = { dash: '#dash', settings: '#menuBtn', camera: '#camBtn', wheels: '#dbgBtn', reset: '#resetBtn', seed: '#seedChip' };
+  const others = { dash: '#dash', pause: '#pauseBtn', camera: '#camBtn', wheels: '#dbgBtn', reset: '#resetBtn', seed: '#seedChip', timer: '#timer', lapLine: '#lapLine', split: '#split' };
   const O = {};
   for (const [k, sel] of Object.entries(others)) {
     const b = O[k] = await box(sel); if (!b) continue;
-    if (k !== 'dash') check(`${k} chip inside the safe area`, inside(b), JSON.stringify({ x: b.x | 0, y: b.y | 0 }));
+    if (k !== 'dash') check(`${k} inside the safe area`, inside(b), JSON.stringify({ x: b.x | 0, y: b.y | 0 }));
     else check('dash inside the screen', b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H);
     for (const kb of keys) if (overlap(b, B[kb])) clash += `${k}/${kb} `;
   }
@@ -98,6 +122,7 @@ for (const [name, dev, sa] of DEVICES) for (const world of ['pad', 'loop']) {
     for (const kb of keys) if (overlap(steer, B[kb])) clash += `steer/${kb} `;
   }
   check('no controls overlap', !clash, clash.trim());
+  if (world === 'stage') check('timer shown in a timed run', !!O.timer);
 
   // --- behaviour: real multi-touch through CDP ---
   const cdp = await ctx.newCDPSession(page);
@@ -150,6 +175,17 @@ for (const [name, dev, sa] of DEVICES) for (const world of ['pad', 'loop']) {
     o = await out();
     check('page hidden mid-touch releases everything', o.steer === 0 && o.throttle === 0 && o.brake === 0, JSON.stringify(o));
     await touch('touchEnd', []);
+  }
+  if (world === 'stage') {
+    if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.evaluate(() => rally.render()); await page.screenshot({ path: `${SHOTS}/${name.replace(/\W+/g, '-')}-hud.png` }); }
+    await page.evaluate(() => { rally.debugResume(); return rally.debug.screen('paused'); });
+    await menuFits('pause', '#pause', ['#resumeBtn', '#restartBtn', '#setBtn', '#quitBtn']);
+    check('touch controls hidden under the pause menu', !(await box('#gasBtn')));
+    await page.evaluate(() => rally.debug.screen('results'));
+    await menuFits('results', '#results', ['#retryBtn', '#newSeedBtn', '#menuBtn2']);
+    const sp = await box('#resSplits');
+    check('results splits visible', !!sp && sp.h >= 40, sp ? `${sp.w | 0}×${sp.h | 0}` : 'hidden');
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name.replace(/\W+/g, '-')}-results.png` });
   }
   check('no page errors', errors.length === 0, errors.join(' | '));
   if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.evaluate(() => rally.render()); await page.screenshot({ path: `${SHOTS}/${name.replace(/\W+/g, '-')}-${world}.png` }); }
