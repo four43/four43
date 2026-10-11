@@ -38,6 +38,7 @@ import { parseLag } from './net/link.js';
 import { createOthers3D } from './render/others3d.js';
 import { START_PAINT } from './net/players.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
+import { installEngineHook } from 'lion-hawk/view';
 import { BURST } from './sim/scenery.js';
 import { singOrder } from './sim/sing.js';
 import { BED, clampBedtime, setBedtime, stepBedtime, sleepNow, wakeUp, minutesLeft } from './sim/bedtime.js';
@@ -124,6 +125,11 @@ async function main() {
     prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
     document.getElementById('tune')?.remove();
     if (params.has('tune')) { buildTunePanel(game); Object.assign(window, { game, fx, renderer, tp: { get game() { return game; }, get trip() { return trip; }, get progress() { return progress; }, get animals3d() { return animals3d; }, get seed() { return seed; }, sound, voice, startFarm } }); }
+    // D-4: the standard hook, always present (not only with ?tune); window.tp stays until phase 2 (D-5)
+    installEngineHook({
+      get seed() { return seed; }, get sim() { return game; },
+      state: () => { const p = game.tractor.body.translation(); return { mode: game.mode, landed: game.load.landed(), tractor: { x: p.x, z: p.z } }; },
+    }, { game: 'tractor-pickup' });
   }
   function dispose() {
     gen++; show?.end(); document.getElementById('show')?.remove(); voice.stop?.(); hud?.arrowTo(null);

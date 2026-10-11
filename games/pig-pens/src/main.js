@@ -6,6 +6,7 @@ import { createSim, ST, DT, FOOD_KINDS } from './sim.js';
 import { L } from './layout.js';
 import { Sound } from './sound.js';
 import { createTiltShift } from './tiltshift.js';
+import { installEngineHook } from 'lion-hawk/view';
 
 const $ = id => document.getElementById(id);
 async function main() {
@@ -694,5 +695,11 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
     render(dt = 1 / 60) { updatePigs(dt); updateDog(dt); updateFoods(); updateTroughFood(); extras.update(dt); if (selected) renderCard(); updateHud(); applyCam(); draw(); },
     toolDown, toolMove, toolUp, toss, aimHose, updateHose, enterDrive, exitDrive, driveInput, classify, act, select, extras, stick, get driving() { return driving; },
   };
+  // D-4: the standard hook; window.piggies stays until phase 2 (D-5)
+  installEngineHook({
+    stepN: window.piggies.stepN, pause: window.piggies.pause, render: window.piggies.render,
+    state: () => ({ pigs: sim.pigs.length, counts: [...sim.counts] }),
+    get sim() { return sim; },
+  }, { game: 'pig-pens' });
 }
 main().catch(err => { const l = $('loading'); if (l) l.textContent = 'Could not start: ' + err.message; console.error(err); });
