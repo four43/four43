@@ -10,6 +10,7 @@ import { generateTrack } from './gen/track.js';
 import { Game } from './game/game.js';
 import { MODES } from './game/modes.js';
 import { makeBests, bestKey } from './game/bests.js';
+import { installEngineHook } from 'lion-hawk/view';
 import { Menus, GameHud } from './menus.js';
 
 const SAVE_KEY = 'rally-sim-settings';
@@ -318,6 +319,10 @@ async function start() {
     render() { view.sync(sim); view.updateCamera(sim, 1 / 60); hud.update(sim.car); ghud.update(game); view.render(); },
     state() { return { ...sim.car.telemetry(), game: game.state, time: game.time, lapTime: game.lapTime }; },
   };
+  installEngineHook({
+    stepN: window.rally.stepN, render: window.rally.render, state: () => window.rally.state(),
+    debug: { get rally() { return window.rally; } },
+  }, { game: 'rally' });
   if (params.get('debug')) debug.screen(params.get('debug'), { mode: params.get('mode') || undefined, n: Number(params.get('n')) || undefined });
 }
 start();
