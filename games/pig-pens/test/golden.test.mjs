@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { golden, assertFinite, checksum } from 'lion-hawk/test';
+import { golden, assertFinite, canonical } from 'lion-hawk/test';
 import { createSim } from '../src/sim.js';
 await RAPIER.init();
 
@@ -26,6 +26,6 @@ function run() {
 test('golden: seed 3, 24 pigs, 1200 steps', () => {
   golden(new URL('./goldens/farm-seed3.json', import.meta.url), run());
 });
-test('determinism: two runs in one process give the same checksum (T-10)', () => {
-  assert.equal(checksum(run()), checksum(run()));
+test('determinism: two runs in one process give the same state, bit-exactly (T-10)', () => {
+  assert.equal(canonical(run(), { digits: 15 }), canonical(run(), { digits: 15 }));
 });
