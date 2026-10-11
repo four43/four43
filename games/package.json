@@ -2,5 +2,5 @@
   "name": "four43-games",
   "private": true,
   "workspaces": ["lion-hawk-engine", "pig-pens", "tractor-pickup"],
-  "scripts": { "test": "npm test --workspaces --if-present" }
+  "scripts": { "test": "node --test test/ && npm test --workspaces --if-present" }
 }
