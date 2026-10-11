@@ -16,7 +16,7 @@
     "@gltf-transform/extensions": "^4.5.1",
     "esbuild": "^0.28.2",
     "pngjs": "^7.0.0",
-    "lion-hawk": "0.1.0",
+    "lion-hawk": "file:../lion-hawk-engine",
     "three": "^0.160.0"
   },
   "type": "module"
