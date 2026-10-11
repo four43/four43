@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { golden, assertFinite, canonical } from 'lion-hawk/test';
+import { golden, assertFinite, canonical, checksum } from 'lion-hawk/test';
 import { createSim } from '../src/sim.js';
 await RAPIER.init();
 
@@ -14,13 +14,13 @@ const snapshot = sim => ({
   pigs: sim.pigs.map(p => ({ x: p.px, z: p.pz, state: p.state, hunger: p.hunger })),
 });
 function run() {
-  const sim = createSim(RAPIER, { pigs: 24, seed: 3 }), events = [];
+  const sim = createSim(RAPIER, { pigs: 24, seed: 3 }), events = [], trail = [];
   for (let i = 0; i < STEPS; i++) {
     sim.step();
     for (const e of sim.events.splice(0)) events.push(`${i}:${e.type}`);
-    if (i % 60 === 59) assertFinite(snapshot(sim), `step${i}`);
+    if (i % 60 === 59) { assertFinite(snapshot(sim), `step${i}`); trail.push(checksum(snapshot(sim))); }
   }
-  return { state: snapshot(sim), events };
+  return { state: snapshot(sim), events, trail };
 }
 
 test('golden: seed 3, 24 pigs, 1200 steps', () => {
