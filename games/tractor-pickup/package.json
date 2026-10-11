@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
-    "lion-hawk": "file:../lion-hawk-engine",
+    "lion-hawk": "file:../../../lion-hawk-engine",
     "qrcode-generator": "^1.5.2",
     "three": "^0.186.0"
   },
