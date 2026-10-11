@@ -697,9 +697,9 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
   };
   // D-4: the standard hook; window.piggies stays until phase 2 (D-5)
   installEngineHook({
-    stepN: window.piggies.stepN, pause: window.piggies.pause, render: window.piggies.render,
+    stepN: window.piggies.stepN,
     state: () => ({ pigs: sim.pigs.length, counts: [...sim.counts] }),
-    get sim() { return sim; },
+    debug: { pause: window.piggies.pause, render: window.piggies.render, get sim() { return sim; } },
   }, { game: 'pig-pens' });
 }
 main().catch(err => { const l = $('loading'); if (l) l.textContent = 'Could not start: ' + err.message; console.error(err); });

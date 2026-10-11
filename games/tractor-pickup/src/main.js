@@ -127,8 +127,9 @@ async function main() {
     if (params.has('tune')) { buildTunePanel(game); Object.assign(window, { game, fx, renderer, tp: { get game() { return game; }, get trip() { return trip; }, get progress() { return progress; }, get animals3d() { return animals3d; }, get seed() { return seed; }, sound, voice, startFarm } }); }
     // D-4: the standard hook, always present (not only with ?tune); window.tp stays until phase 2 (D-5)
     installEngineHook({
-      get seed() { return seed; }, get sim() { return game; },
+      get seed() { return seed; },
       state: () => { const p = game.tractor.body.translation(); return { mode: game.mode, landed: game.load.landed(), tractor: { x: p.x, z: p.z } }; },
+      debug: { get sim() { return game; } },
     }, { game: 'tractor-pickup' });
   }
   function dispose() {
