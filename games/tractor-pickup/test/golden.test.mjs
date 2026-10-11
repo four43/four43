@@ -38,7 +38,12 @@ test('determinism: two runs in one process give the same state, bit-exactly (T-1
 const STILL = { thr: 0, steer: 0, horn: false };
 function pickup() {
   const g = createGame(RAPIER, { seed: 14, power: 'medium' }), events = [], trail = [];
-  const step = input => { for (const e of g.step(input)) events.push(`${trail.length}:${e.type}`); };
+  let n = 0;                                                            // whole-scenario step counter: event keys and trail cadence
+  const step = input => {
+    for (const e of g.step(input)) events.push(`${n}:${e.type}`);
+    if (n % 60 === 59) trail.push(checksum(snapshot(g)));
+    n++;
+  };
   g.herd.animals.filter(a => a.home === 'yard').forEach(a => { a.state = 'gone'; });          // only placed animals get booped
   for (let i = 0; i < 60; i++) step(STILL);
   const single = g.herd.free().filter(x => !x.hidden && x.type !== 'chick' && !g.herd.animals.some(c => c.leader === x.id));
@@ -46,9 +51,12 @@ function pickup() {
     const p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
     for (let i = 0; i < 90; i++) step(STILL);
   }
-  for (let i = 0; i < 600; i++) { step({ thr: 1, steer: Math.sin(i / 50) * 0.5, horn: false }); if (i % 60 === 59) trail.push(checksum(snapshot(g))); }
+  for (let i = 0; i < 600; i++) step({ thr: 1, steer: Math.sin(i / 50) * 0.5, horn: false });
   return { state: { ...snapshot(g), slots: g.load.slots.map(s => ({ car: s.car, animal: s.animal?.id ?? null })) }, events, trail };
 }
+test('determinism: pickup twice is bit-identical', () => {
+  assert.equal(canonical(pickup(), { digits: 15 }), canonical(pickup(), { digits: 15 }));
+});
 test('golden: seed 14 pickup of three animals, then a 10 s drive', () => {
   const r = pickup();
   assert.equal(r.state.landed, 3, 'three animals ride');
