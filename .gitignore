@@ -8,3 +8,5 @@ vendor/
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .superpowers/
+games/node_modules
+games/tractor-pickup/node_modules
