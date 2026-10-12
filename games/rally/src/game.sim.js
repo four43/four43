@@ -33,10 +33,21 @@ function state(e) {
 export function rallyGame({ bests = makeBests() } = {}) {
   const { scene: stage, api } = makeStage({ R, bests });
   const { title, pause, results, settings } = makeOverlays(api);
-  // → window.engine.debug (R3 adds screen and the HUD fakes)
+  // → window.engine.debug. The HUD fakes emit events or run the moved handler; they show after the next step's flush.
   const debug = e => ({
     get sim() { return e.scene.state.sim; }, get settings() { return e.scene.state.settings; },
+    // name: title | loading | ready | countdown | running | paused | results | settings | nearFinish | teleport (#33: rebuilds the world)
+    screen(name, opts = {}) {
+      const s = e.scene.state;
+      e.jump('stage', name, opts, { settings: { ...s.settings, ...(opts.mode ? { mode: opts.mode } : {}) }, pad: s.pad });
+    },
     nearFinish: (d = 40) => api.nearFinish(e, d), teleport: p => api.teleport(e, p),
+    finish: o => api.finish(e, o),
+    split: (index = 0, delta = -0.42) => e.emit('split', { index, of: e.scene.state.progress?.cps.length ?? 10, time: 30 * (index + 1), delta }),
+    lap: (valid = true) => api.handle(e, { type: 'line', valid }),
+    missed: (index = 1) => api.handle(e, { type: 'missed', index }),
+    blocked: (index = 1) => api.handle(e, { type: 'blocked', index }),
+    count: (n = 3) => e.emit('count', { n }),
   });
   return defineGame({
     id: 'rally', sim: { hz: 1 / DT, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, start: 'stage',

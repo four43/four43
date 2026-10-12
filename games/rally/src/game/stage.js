@@ -166,6 +166,36 @@ export function makeStage({ R, bests = null }) {
       if (!s.pad && trackKey(s.settings) !== s.builtKey) { s.mode = modeOf(s); startLoad(e, s, 'title'); }
       else title(e, s);
     },
+    // Options on the title and settings sheets: apply at once; track-shaping ones rebuild through toTitle.
+    choose(e, key, value) {
+      const s = S(e); if (s.settings[key] === value) return;
+      s.settings[key] = value; s.settingsRev++;
+      switch (key) {
+        case 'car': s.sim.setCar(value); s.sim.car.autoShift = s.settings.gearbox === 'auto'; s.carRev++; api.toTitle(e); break;
+        case 'surface': if (s.pad) s.sim.setSurface(value); break;
+        case 'assist': s.sim.setAssist(value); break;
+        case 'gearbox': s.sim.car.autoShift = value === 'auto'; break;
+        case 'units': break; // the view reads it
+        default: api.toTitle(e); // mode, world, style, theme, density
+      }
+    },
+    setSeed(e, text) { const s = S(e); s.settings.seed = String(text).trim() || newSeed(e.rng('seeds')); s.settingsRev++; api.toTitle(e); },
+    rollSeed(e) { const s = S(e); s.settings.seed = newSeed(e.rng('seeds')); s.settingsRev++; api.toTitle(e); },
+    // Results → New seed: another track, then straight into a run (the pad has none: a plain restart).
+    newSeedRun(e) {
+      const s = S(e); if (s.pad) return api.restart(e);
+      e.close('pause'); e.close('results');
+      s.settings.seed = newSeed(e.rng('seeds')); s.settingsRev++;
+      startLoad(e, s, 'begin');
+    },
+    // A finish with fake numbers (debug and the results preset): time, previous best (or null), splits.
+    finish(e, { time = 163.42, best = 165, splits } = {}) {
+      const s = S(e), n = s.progress?.cps.length ?? 3;
+      s.time = time;
+      s.splits = splits ?? Array.from({ length: n }, (_, i) => (time * (i + 1)) / (n + 1));
+      s.best = best === null ? null : { time: best, splits: s.splits.map((t, i) => t + (i % 2 ? 0.4 : -0.3)) };
+      handle(e, s, { type: 'finish' });
+    },
     // Put the car at course position p (m from the start line), facing along the road, stopped; progress follows
     // without crediting anything in between.
     teleport(e, p) {
@@ -197,14 +227,14 @@ export function makeStage({ R, bests = null }) {
   function actions(e, s, dt) {
     const I = e.input.snapshot, live = s.phase === 'running' || s.phase === 'finished';
     const hold = I.resetHold;
+    if (!live) { s.holdT = 0; s.holdFired = false; return; } // the hold counts only while live: a chip held through the countdown must not fire on the first running step
     if (hold.down) {
       s.holdT += dt;
-      if (live && !s.holdFired && s.holdT >= RESET_HOLD - EPS) { s.holdFired = true; restartOrReset(e, s); return; }
+      if (!s.holdFired && s.holdT >= RESET_HOLD - EPS) { s.holdFired = true; restartOrReset(e, s); return; }
     } else {
-      if (hold.released && live && !s.holdFired) recover(s);
+      if (hold.released && !s.holdFired) recover(s);
       s.holdT = 0; s.holdFired = false;
     }
-    if (!live) return;
     if (I.resetAll.pressed) { restartOrReset(e, s); return; }
     if (I.reset.pressed) recover(s);
     const dir = I.shiftUp.pressed ? 1 : I.shiftDown.pressed ? -1 : 0;
@@ -214,7 +244,27 @@ export function makeStage({ R, bests = null }) {
     }
   }
 
+  // Presets (#25): set the state, never step. Each runs after enter, so the title is open on a track stage.
+  const live = (e, o) => { api.drive(e); const s = S(e); setPhase(e, s, 'running'); s.sim.car.hold = false; s.clockOn = s.mode.clock === 'go'; s.t = 0; s.countN = 0; };
+  const presets = {
+    title() {},
+    loading(e) { const s = S(e); startLoad(e, s, 'title'); },
+    ready(e) { api.drive(e); },
+    countdown(e, o = {}) {
+      const n = o.n ?? 3, s = S(e); api.drive(e);
+      s.t = (3 - n) * COUNT_T / 3; s.countN = n; s.sim.car.hold = true;
+      setPhase(e, s, 'countdown'); e.emit('count', { n });
+    },
+    running: live,
+    paused(e, o) { live(e, o); e.overlay('pause'); },
+    results(e, o = {}) { live(e, o); api.finish(e, o); S(e).resultsIn = 0; e.overlay('results'); }, // the card is open: no 1.5 s timer
+    settings(e) { e.overlay('settings'); },
+    nearFinish(e, o = {}) { live(e, o); api.nearFinish(e, o.d ?? 40); },
+    teleport(e, o = {}) { live(e, o); api.teleport(e, o.p ?? 0); },
+  };
+
   const scene = {
+    presets,
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = normalizeSettings(a.settings);
       if (!settings.seed) settings.seed = newSeed(e.rng('seeds'));
@@ -279,7 +329,7 @@ export function makeStage({ R, bests = null }) {
       }
     },
     ui(u) {
-      u.button({ id: 'pause', label: 'Pause', action: e => openOnce(e, 'pause'), when: e => DRIVING.has(e.scene.state.phase) && !isOpen(e, 'pause') });
+      u.button({ id: 'pause', label: 'Pause', action: 'pause', when: e => DRIVING.has(e.scene.state.phase) && !isOpen(e, 'pause') });
     },
   };
   api.handle = (e, ev) => handle(e, S(e), ev); // the debug HUD fakes (R3)
