@@ -1,7 +1,8 @@
 // The farm scene (lion-hawk 2f, [S-1]…[S-6], field notes #4, #28, #81, #87, #90): one main scene owns the createGame world
 // (farm, terrain, Rapier, tractor, train, herd) and the player's records. The flow main.js kept in its frame closure moves
 // into ctx.state ([S-4], #4). The whole pipeline is the scene's step hook (#90), so a load suspends all of it:
-// input → game.step → bridge → sounds → bedtime → the trip (flow.js; T6 adds the syncs). A new farm builds through ctx.load.
+// net before → input → game.step → bridge → net after → sounds → bedtime → the trip (flow.js). A new farm builds through ctx.load;
+// a guest's farm too (#80: the welcome waits for it, game/net.js).
 // While `raw` drives it nothing here touches the game, so the scene steps exactly the createGame the phase-0 goldens drive.
 import { createGame } from '../sim/game.js';
 import { createSandbox } from '../sim/sandbox.js';
@@ -13,6 +14,7 @@ import { DT } from '../sim/physics.js';
 import { TYPES } from '../sim/herd.js';
 import { clampBedtime, sleepNow } from '../sim/bedtime.js';
 import { clampProgress, clampSettings, wornHats, hasPaintChoice, seedParam, powerParam } from '../sim/progress.js';
+import { createWarnOnce } from 'lion-hawk/sim';
 import { play, stepFlow, stepBed, lastDrive, goSleep, wake, open, setGuide } from './flow.js';
 
 // The farm's own event types (never a game.step type), so the engine-path goldens can filter them out
@@ -56,8 +58,9 @@ function sounds(e, s) {
 }
 const freshSfx = () => ({ surface: 'gravel', air: 0, whee: false });
 
-export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, bindings: the syncs' (T6)
+export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, bindings: the syncs' (game/net.js reads them from the api)
   const S = e => { if (e.scene.name !== 'farm') throw new Error('tractor: the farm scene is not the main scene'); return e.scene.state; };
+  const warn = createWarnOnce(); // M-44: a sync error never stops the step
   // Builds this scene's farm (main.js build, sim half): hats (W-4), the bedtime phase (E-5) and the start mode (F-11).
   function build(e, s, seed, power, player) {
     s.game = createGame(R, { seed, power, player }); s.seed = seed; s.gen++; s.sfx = freshSfx();
@@ -66,8 +69,20 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
     s.game.mode = s.started ? (s.bed.phase === 'asleep' ? 'sleep' : 'drive') : hasPaintChoice(s.progress) ? 'start' : 'drive';
     e.emit('farm', { gen: s.gen, seed });
   }
+  // P-8, M-1, M-19: the old farm goes (the Rapier world with the terrain, trees, props and vehicles) and a new one is built;
+  // started and the bedtime stay. D-3: a farm that fails to build is tried once more with a fresh seed
+  function rebuild(e, s, seed, player) {
+    for (const n of ['show', 'reward', 'start']) e.close(n);
+    s.game.phys.world.free(); s.game = null;
+    s.trip = s.tripOn ? createTrip() : null; s.show = null; s.reward = null; s.showDone = s.rewardDone = false; setGuide(e, s, false);
+    try { build(e, s, seed, s.power, player); }
+    catch (err) { console.error('new farm failed, retrying with a fresh seed', err); s.game?.phys.world.free(); s.game = null; build(e, s, e.rng('seeds').int(0, 0xffffffff), s.power, player); }
+  }
+  // a load's then: the next farm asked for while it ran (a guest's welcome first: it is the host's)
+  const next = (e, ctx) => { const s = ctx.state; if (s.netFarm) api.guestFarm(e, ctx, s.netFarm.seed, s.netFarm.player); else if (s.nextFarm) { s.nextFarm = false; api.newFarm(e, ctx); } };
   // --- the API (commands, UI controls, presets and debug call these; each takes the engine first) ---------------
   const api = {
+    clock, bindings,
     play: e => play(e, S(e)), // F-11, A-7: the trip starts (flow.js)
     lastDrive: e => lastDrive(e, S(e)), goSleep: (e, o) => goSleep(e, S(e), o), wake: e => wake(e, S(e)),
     // n free single animals (no chick, no hen with a line: as test pickup() boops them) land in the first slots, as a
@@ -87,19 +102,21 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
       if (s.net?.role === 'guest') return; // M-19: the host's farm is the guest's
       if (e.loading.active) { s.nextFarm = true; return; }
       ctx.load({ label: 'farm', frames: 1,
-        build() {
-          for (const n of ['show', 'reward', 'start']) e.close(n);
-          s.game.phys.world.free(); s.game = null; // the Rapier world, with the terrain, trees, props and vehicles
-          s.trip = s.tripOn ? createTrip() : null; s.show = null; s.reward = null; s.showDone = s.rewardDone = false; setGuide(e, s, false);
-          const seed = s.settings.seed ?? e.rng('seeds').int(0, 0xffffffff); // #86
-          try { build(e, s, seed, s.power, s.player); }
-          catch (err) { console.error('new farm failed, retrying with a fresh seed', err); s.game?.phys.world.free(); s.game = null; build(e, s, e.rng('seeds').int(0, 0xffffffff), s.power, s.player); } // D-3
-        },
+        build() { rebuild(e, s, s.settings.seed ?? e.rng('seeds').int(0, 0xffffffff), s.player); }, // #86
         then() {
           if (s.net?.role === 'host') s.net.sync?.setGame(s.game); // M-19: the guests get the new farm too
-          enterStart(e, s);
-          if (s.nextFarm) { s.nextFarm = false; api.newFarm(e, ctx); }
+          enterStart(e, s); next(e, ctx);
         } });
+    },
+    // M-1, #80: a guest builds the host's farm (its seed, this guest's spawn place) through ctx.load, as main.js's onFarm did
+    // (and the trip starts); the guest sync's welcome waits for it (farmReady). A welcome during a load waits for that load's
+    // then, and the newest one wins: the build reads netFarm when it runs
+    guestFarm(e, ctx, seed, player) {
+      const s = ctx.state; s.netFarm = { seed, player };
+      if (e.loading.active) return;
+      ctx.load({ label: 'farm', frames: 1,
+        build() { const f = s.netFarm; s.netFarm = null; s.player = f.player; rebuild(e, s, f.seed, f.player); if (!s.started) play(e, s); },
+        then() { if (s.net?.role === 'guest') s.net.sync?.farmReady(s.game); enterStart(e, s); next(e, ctx); } });
     },
   };
   // F-11: the start screen (paint and go) is up only with a paint choice (build gave mode 'start')
@@ -128,7 +145,8 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
         game: null, gen: 0, seed, player, started: !!a.started, tripOn, trip: tripOn ? createTrip() : null,
         raw: null, pilot: createPilot(), stepIn: { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false },
         guide: false, sleepAfter: false, show: null, showDone: false, rewardDone: false, reward: null,
-        bed, date: null, progress, settings, power, sfx: freshSfx(), nextFarm: false,
+        bed, date: null, progress, settings, power, sfx: freshSfx(), nextFarm: false, netFarm: null,
+        net: { role: 'solo', sync: null, facade: null, at: null, registry: null }, // game/net.js (net.open)
       });
       build(e, s, seed, power, player);
       if (s.started && s.bed.phase === 'asleep') goSleep(e, s, { quiet: true }); // N-7: a reload while asleep
@@ -136,10 +154,14 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
     },
     exit(e, ctx) { ctx.state.game?.phys.world.free(); }, // [S-3], main.js dispose: the Rapier world with the terrain, trees, props and vehicles
     step(e, dt, ctx) {
-      const s = ctx.state, g = s.game, I = e.input.snapshot;
+      const s = ctx.state, I = e.input.snapshot, net = s.net; // #88: the sync is looked up here each step and called by name (tests replace its methods)
+      if (net.sync) { let nev = NONE; try { nev = net.sync.before(e.time.wall); } catch (err) { warn('net before', err); } bridge(e, nev); } // M-44: net events first
+      if (e.loading.active) return; // #80: the welcome asked for the host's farm: the old one steps no more (the load suspends this hook)
+      const g = s.game;
       if (!s.started && g.mode === 'drive' && (I.goX || I.goZ)) api.play(e); // A-7: the first stick move starts the trip
       const ev = g.step(readInput(e, s));
       bridge(e, ev);
+      if (net.sync) try { net.sync.after(ev, e.time.wall); } catch (err) { warn('net after', err); } // N-4: the step's wall stamp is the frame clock (M-69)
       sounds(e, s);
       if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepBed(e, s); // E-5, #85
       if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepFlow(e, s, ev); // spec 3.1 (not after bedtime put the farm to sleep)

@@ -21,7 +21,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock, bindings = BI
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), warn = createWarnOnce(), rate = { fast: createRate(RATE.guestFast), rel: createRate() }; // M-50
   const reg = registryOf(bindings), ownRows = ofAuthority(bindings, 'owner');
   const store = createStore(bindings.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
-  let you = 0, farm = -1, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null;
+  let you = 0, farm = -1, helloAt = -Infinity, hostNext = 0, hostPeer = null, lastTrain = -Infinity, lastKey = -Infinity, nowMs = 0, alone = false, myPaint = { ...paint }, deferred = null, deferredKey = null, building = false; // building: onFarm returned null (#80)
   let barnAt = null; // M-72: when this train began to wait at the barn (wall time)
   let hostAway = false, silent = false, paused = false, lastFast = 0; // M-40: two sources (the server's hostAway, the silence watchdog); the host is away while either says so
   const setPaused = () => { const v = hostAway || silent; if (v === paused) return; paused = v; game.boopsPaused = v; const p = players.map.get(1); if (p) p.away = v; };
@@ -64,24 +64,29 @@ export function createGuestSync({ game, net, paint, onFarm, clock, bindings = BI
     for (const b of bindings) SHOW[b.kind.name]?.(changes.filter(c => c.kind === b.kind.name), f);
     if (f.key && f.sender === 1 && !deferred) repair();
   }
-  function applyWelcome(m) {
+  function applyWelcome(m, key = null) { // key: the host keyframe kept while this welcome waited (M-19)
     if (!you) lastFast = clock(); // the watchdog starts with the first welcome
-    you = m.you; farm = m.farm; hostNext = m.next; game = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
-    game.herd.remote = true; game.claims = true; game.boopsPaused = paused; game.barnGate = barnGate; // a host that is away stays away on the new farm (M-40)
+    you = m.you; farm = m.farm; hostNext = m.next;
+    const g = onFarm(m.seed, m.you); // M-1: always rebuild from the host's seed (no solo riders come along). checkFromHost holds you to 2..MAX_PLAYERS
+    if (g) useFarm(g, key); else { deferred = m; deferredKey = key; building = true; } // #80: the farm is building (ctx.load); it waits as a deferred welcome does, and farmReady applies it
+  }
+  function useFarm(g, key) {
+    game = g; game.herd.remote = true; game.claims = true; game.boopsPaused = paused; game.barnGate = barnGate; // a host that is away stays away on the new farm (M-40)
     pending.clear(); myBreaks.clear(); handedIn.clear(); herdBuf.reset(); store.clear(); mine.reset(); lastKey = -Infinity;
     for (const a of game.herd.animals) a.state = 'gone'; // M-24: nothing is free until the host's keyframe says so
     for (const p of players.list()) { p.interp.reset(); p.latest = null; p.pose = null; }
+    if (key) applyFrame(key);
   }
   const handlers = {
     welcome(m) { if (you && m.you === you && m.farm === farm) return; if (deferred && deferred.farm === m.farm) return; // the host repeats it with each keyframe: one we have, or one that waits for the show, changes nothing (by farm number: a new farm may have the same seed)
-      if (['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show
+      if (!building && ['arrive', 'show', 'reward'].includes(game.mode) && you) { deferred = m; return; } applyWelcome(m); }, // M-19: after the show (a farm still building is asked again, #80)
     tree(m) { if (deferred) return; const e = game.trees.breakById(m.id); if (e) out.push(e); }, // M-17: gibs, no direction (not on the old farm while a new one waits)
     regrow() { if (!deferred) game.trees.reset(); },
     horn(m) { out.push({ type: 'remoteHorn', n: m.n }); }, // M-8
     help(m) { const a = m.id === null || deferred ? null : game.herd.animals[m.id]; if (a) out.push({ type: 'help', animal: a }); }, // M-9
   };
   function goAlone(reason) { // M-41: carry on alone on the same farm; nothing is made again
-    if (alone) return; alone = true; deferred = deferredKey = null;
+    if (alone) return; alone = true; deferred = deferredKey = null; building = false;
     try {
       for (const f of game.flights.filter(f => f.claim === 'pending')) game.resolveClaim(f.animal.id, true); // decision 3: nobody else can have it now
       pending.clear(); game.claims = false; game.boopsPaused = false; game.herd.remote = false; game.barnGate = null;
@@ -98,18 +103,28 @@ export function createGuestSync({ game, net, paint, onFarm, clock, bindings = BI
   net.on('hostBack', () => { hostAway = false; setPaused(); });
   net.on('closed', reason => goAlone(reason));
   net.on('peer', id => { hostPeer = id; hello(); });
-  net.on('message', (from, data, reliable) => {
+  // lion-hawk 2f T6: a JSON message (today's rate, size and schema checks) and a decoded frame are two entries, so the engine's port
+  // (net.frame and guest.* commands) and this transport listener feed the same code
+  const heard = (from, reliable) => from === hostPeer && !alone && (reliable ? rate.rel : rate.fast).allow(clock()); // M-50: the guest checks the host's messages too (in wall time)
+  function message(from, data, reliable) {
     try {
-      if (from !== hostPeer || alone || !(reliable ? rate.rel : rate.fast).allow(clock())) return; // M-50: the guest checks the host's messages too (in wall time)
-      if (data instanceof ArrayBuffer) {
-        if (!you) return; lastFast = clock();
-        const f = isFrame(data) && decodeFrame(data, reg); if (!f || f.sender === you) return;
-        if (deferred && f.key && f.sender === 1) deferredKey = f; // M-19: the new farm's state, for when its welcome is used
-        applyFrame(f);
-        return;
-      }
+      if (!heard(from, reliable)) return;
       if (!fitsJson(data)) return; // M-50
       const m = checkFromHost(data); if (m) handlers[m.t]?.(m);
+    } catch (e) { warn('net message', e); } // M-44
+  }
+  function frame(from, f) {
+    try {
+      if (from !== hostPeer || alone || !you) return; lastFast = clock(); if (f.sender === you) return;
+      if (deferred && f.key && f.sender === 1) deferredKey = f; // M-19: the new farm's state, for when its welcome is used
+      applyFrame(f);
+    } catch (e) { warn('net message', e); } // M-44
+  }
+  net.on('message', (from, data, reliable) => {
+    if (!(data instanceof ArrayBuffer)) return message(from, data, reliable);
+    try {
+      if (!heard(from, reliable) || !you) return; lastFast = clock();
+      const f = isFrame(data) && decodeFrame(data, reg); if (f) frame(from, f, reliable);
     } catch (e) { warn('net message', e); } // M-44
   });
   function settleClaims() { // M-14: a claim's answer is the animal's replicated owner, with a newer ownership number than at the boop
@@ -142,13 +157,13 @@ export function createGuestSync({ game, net, paint, onFarm, clock, bindings = BI
   // M-71..M-73: the barn is ours when the host says so. With no host to ask (away, silent, alone) or after BARN_WAIT_MS, the show starts anyway (R-1)
   const barnGate = () => { if (alone || paused || !you) return 0; barnAt ??= clock(); if (clock() - barnAt > BARN_WAIT_MS) return 0; const h = barnHolder(); return h === you ? 0 : h || -1; };
   const sync = {
-    players, handlers, out, pending, store,
+    players, handlers, out, pending, store, message, frame,
     get game() { return game; }, get you() { return you; }, get alone() { return alone; }, get barnHolder() { return alone ? 0 : barnHolder(); },
     before(now) {
       nowMs = now; if (!you) { if (hostPeer && clock() - helloAt >= HELLO_MS) hello(); return out.splice(0); }
       if (!alone) { silent = clock() - lastFast > SILENT_MS; setPaused(); } // M-40: the silence watchdog
       if (game.mode !== 'arrive') barnAt = null;
-      if (deferred && game.mode === 'drive') { const m = deferred, k = deferredKey; deferred = deferredKey = null; applyWelcome(m); if (k) applyFrame(k); }
+      if (deferred && !building && game.mode === 'drive') { const m = deferred, k = deferredKey; deferred = deferredKey = null; applyWelcome(m, k); }
       if (!alone) { players.sample(now); if (!deferred) { settleClaims(); applyHerd(now); for (const a of game.herd.animals) if (a.state === 'carried') a.state = 'elsewhere'; applyCarried(); } } // M-19: a waiting welcome's herd is not put on the old farm
       game.others = players.others(); bumper.drive(game, out);
       return out.splice(0);
@@ -168,6 +183,7 @@ export function createGuestSync({ game, net, paint, onFarm, clock, bindings = BI
       if (now - lastTrain >= SEND.train) { lastTrain = now; toHost(encodeFrame({ key: false, sender: you, time: now, groups: mine.diff(mineNow()) }), false); }
     },
     setGame(g) { game = g; },
+    farmReady(g) { if (!building) { game = g; return; } building = false; const k = deferredKey; deferred = deferredKey = null; useFarm(g, k); }, // #80: the farm a waiting welcome asked for is built
     setPaint(pt) { myPaint = { ...pt }; toHost({ t: 'paint', paint: myPaint }); },
     showStarted() { toHost({ t: 'regrow' }); }, // M-17
     delivered(riders) { const ids = riders.map(r => r.animal.id).filter(id => id <= MAX_ID); for (const id of ids) handedIn.add(id); for (const c of chunks(ids)) toHost({ t: 'delivered', ids: c }); }, // M-6, M-16; repair() sends it again while the host still has them in this train

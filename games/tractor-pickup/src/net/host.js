@@ -108,19 +108,29 @@ export function createHostSync({ game, net, paint, clock, bindings = BINDINGS })
   const passOn = (p, key) => { let time = 0; const groups = []; // M-23, C-3: a guest's newest objects as one frame from that guest, to the other guests
     for (const [kind, e] of p.fwd) { time = Math.max(time, e.time); groups.push({ kind, records: e.rec ? [[p.n, e.rec]] : [], removed: e.rec || key ? [] : [p.n] }); }
     all(encodeFrame({ key, sender: p.n, time, groups }), key, p.n); };
-  net.on('message', (from, data, reliable) => {
+  const playerOf = from => { const n = byPeer.get(from), p = n && players.map.get(n); return p && !closed ? p : null; };
+  // lion-hawk 2f T6: a JSON message (today's rate, size and schema checks) and a decoded frame are two entries, so the engine's port
+  // (net.frame and host.* commands) and this transport listener feed the same code
+  function message(from, data) {
     try {
-      const n = byPeer.get(from), p = n && players.map.get(n); if (!p || closed) return;
-      const r = rates.get(from), binary = data instanceof ArrayBuffer; if (!(binary ? reliable ? r.key : r.fast : r.rel).allow(clock())) return; // M-50: in wall time, so a frozen frame loop never closes the window for good
-      if (binary) {
-        if (!p.helloed || !isFrame(data)) return;
-        new DataView(data).setUint8(1, n); // M-50: a guest speaks only for itself
-        const f = decodeFrame(data, reg); if (f) onTrain(p, f);
-        return;
-      }
+      const p = playerOf(from); if (!p) return;
+      if (!rates.get(from).rel.allow(clock())) return; // M-50: in wall time, so a frozen frame loop never closes the window for good
       if (!fitsJson(data)) return; // M-50
       const m = checkFromGuest(data); if (!m || (!p.helloed && m.t !== 'hello')) return;
       handlers[m.t]?.(p, m);
+    } catch (e) { warn('net message', e); } // M-44
+  }
+  function frame(from, f) { // M-50, #77: a guest speaks only for itself: a frame that names another sender is dropped
+    try { const p = playerOf(from); if (p?.helloed && f.sender === p.n) onTrain(p, f); } catch (e) { warn('net message', e); } // M-44
+  }
+  net.on('message', (from, data, reliable) => {
+    if (!(data instanceof ArrayBuffer)) return message(from, data, reliable);
+    try {
+      const p = playerOf(from); if (!p) return;
+      if (!(reliable ? rates.get(from).key : rates.get(from).fast).allow(clock())) return; // M-50, in wall time
+      if (!p.helloed || !isFrame(data)) return;
+      new DataView(data).setUint8(1, p.n); // M-50: a guest speaks only for itself
+      const f = decodeFrame(data, reg); if (f) frame(from, f, reliable);
     } catch (e) { warn('net message', e); } // M-44
   });
   const rides = (riders, id) => { for (const c of riders) if (c.id === id) return true; return false; };
@@ -130,7 +140,7 @@ export function createHostSync({ game, net, paint, clock, bindings = BINDINGS })
       if (rides(p.latest.riders, a.id)) { missing.delete(a.id); continue; } const m = (missing.get(a.id) || 0) + dt; if (m >= REPAIR_MS) freeUp(a); else missing.set(a.id, m); }
   }
   const sync = {
-    players, handlers, out, barn,
+    players, handlers, out, barn, message, frame,
     get game() { return game; }, you: 1, get barnHolder() { return barn.holder; },
     before(now) {
       nowMs = now; for (const p of players.map.values()) p.away = !!p.serverAway || silent(p); // M-39: the roster, the drawing and the dodges use it
