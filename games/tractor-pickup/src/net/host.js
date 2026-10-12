@@ -27,7 +27,7 @@ const BUSY = new Set(['wait', 'show']); // M-73: a train in these modes still ha
 export const BARN_HOLD_MS = 90000; // M-73: the barn goes to the next player after this long, also when the show that has it has not ended (R-1)
 // Two clocks: clock() is wall time, for every rate limit and the silence watchdog (the frame clock stops while the page sleeps); nowMs is the
 // frame clock, for sending and for the interpolation buffers (sample(now) reads them in the same clock).
-export function createHostSync({ game, net, paint, clock = () => performance.now(), bindings = BINDINGS }) { // bindings: the replicated kinds
+export function createHostSync({ game, net, paint, clock, bindings = BINDINGS }) { if (!clock) throw new Error('host sync: clock required'); // bindings: the replicated kinds
   const players = createPlayers(), byPeer = new Map(), rates = new Map(), out = [], bumper = createBumper(), warn = createWarnOnce();
   const reg = registryOf(bindings), hostRows = ofAuthority(bindings, 'host'), ownRows = ofAuthority(bindings, 'owner');
   const world = createTracker(hostRows.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), missing = new Map(); // missing: animal id -> ms it has been owned by a guest but not in that guest's train (M-57)

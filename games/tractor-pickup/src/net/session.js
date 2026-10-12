@@ -62,7 +62,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
         r = await h.createRoom({ public: true, maxPlayers: MAX_PLAYERS, meta: {} });
         if (stale()) { if (!r.closed) r.leave(); return; }
         if (!CODE.test(r.code)) throw { code: 'other' }; // the code goes into the QR link
-        const y = createHostSync({ game: getGame(), net: link(r), paint: getPaint() });
+        const y = createHostSync({ game: getGame(), net: link(r), paint: getPaint(), clock: () => performance.now() });
         room = r; code = r.code; sync = y; watch(r); state = 'hosting';
         r.on('members', changed); r.on('meta', changed); r.on('peerAway', changed); r.on('peerBack', changed); r.on('peerLeft', changed); r.on('peer', p => { p.on?.('type', changed); changed(); });
       } catch (e) {
@@ -85,7 +85,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
       if (state !== 'prompt') return; state = 'joining'; welcomed = false; changed();
       const h = client(), stale = () => hs !== h || state !== 'joining'; let r = null;
       try { r = await h.joinRoom(code); if (stale()) { if (!r.closed) r.leave(); return; }
-        const y = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm }); room = r; sync = y; watch(r); state = 'joined';
+        const y = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm, clock: () => performance.now() }); room = r; sync = y; watch(r); state = 'joined';
         unstick(); waitT = setTimeout(() => { if (sync === y && !y.you) { stuck = true; log('no welcome from the host after', welcomeMs / 1000, 's: no peer connection?'); changed(); } }, welcomeMs); waitT?.unref?.(); // the panel says so; Leave still works
         r.on('members', changed); r.on('hostAway', changed); r.on('hostBack', changed); r.on('peer', p => { p.on?.('type', changed); changed(); }); } // the host row follows the real connection
       catch (e) { fail('join', e); if (r && room !== r && !r.closed) r.leave(); if (stale()) return; state = 'join'; error = joinText(e); code = null; info = null; idleClient(); }

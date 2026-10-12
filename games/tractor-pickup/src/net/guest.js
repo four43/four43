@@ -17,7 +17,7 @@ export const BARN_WAIT_MS = 100000; // M-73: a guest waits for the barn at most 
 const ID_ROOM = 512; // M-44, M-50: herd.ensure() fills every id up to the one asked for, so an id far past the host's herd is dropped, never grown into
 const leaderOf = (herd, a, id) => id !== null && id !== a.id && herd.animals[id] ? id : null; // a leader the guest does not have is no leader
 // Two clocks, as in host.js: clock() is wall time (rate limits, the silence watchdog, hello and tree timers); nowMs is the frame clock (sending, interpolation).
-export function createGuestSync({ game, net, paint, onFarm, clock = () => performance.now(), bindings = BINDINGS }) { // bindings: the replicated kinds
+export function createGuestSync({ game, net, paint, onFarm, clock, bindings = BINDINGS }) { if (!clock) throw new Error('guest sync: clock required'); // bindings: the replicated kinds
   const players = createPlayers(), herdBuf = createInterp(), out = [], bumper = createBumper(), warn = createWarnOnce(), rate = { fast: createRate(RATE.guestFast), rel: createRate() }; // M-50
   const reg = registryOf(bindings), ownRows = ofAuthority(bindings, 'owner');
   const store = createStore(bindings.map(b => b.kind)), mine = createTracker(ownRows.map(b => b.kind)), pending = new Map(), myBreaks = new Map(), handedIn = new Set(); // pending: animal id -> { e0: its ownership number at the boop, done: the flight is over }; handedIn: delivered, until the host has them
