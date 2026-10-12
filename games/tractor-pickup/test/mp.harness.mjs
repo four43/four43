@@ -8,11 +8,14 @@ import { createGuestSync } from '../src/net/guest.js';
 import { encodeFrame } from '../src/net/replica.js';
 import { ANIMAL, TRAIN, animalRecord } from '../src/net/kinds.js';
 import { HELD } from '../src/sim/herd.js';
+import { engineWorld } from './mp.engine.harness.mjs';
 export { moveTrain } from './train.mjs';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
-export async function mpWorld({ seed = 21, guests = 1, link = {}, join = true, clock = null, bindings } = {}) { // bindings: the replicated kinds (default: the game's own)
+// lion-hawk 2f T7: TP_MP=engine runs every mp suite on the engine path (mp.engine.harness.mjs: the same options and shape)
+export const mpWorld = process.env.TP_MP === 'engine' ? engineWorld : oldWorld;
+async function oldWorld({ seed = 21, guests = 1, link = {}, join = true, clock = null, bindings } = {}) { // bindings: the replicated kinds (default: the game's own)
   await RAPIER.init();
   const hub = createMemoryHub(link); let now = 0; const wall = clock || (() => now); // the syncs' wall clock (rate limits, the silence watchdog): the sim clock unless a test drives it
   const host = { name: 'host', events: [], game: createGame(RAPIER, { seed, power: 'medium' }) };

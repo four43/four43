@@ -92,7 +92,8 @@ test('a lost new-farm welcome: the host sends the welcome with each keyframe, so
   const t0 = w.now; let k = 0; while (g.game.farm.seed !== 98 && k++ < 180) w.step(1);
   assert.equal(g.game.farm.seed, 98); assert.ok(w.now - t0 <= 3000, `on the new farm after ${(w.now - t0).toFixed(0)} ms`);
   const built = g.game; w.seconds(2.5); assert.equal(s.game.farm.seed, 97, 'the show guest waits'); assert.equal(g.game, built, 'a repeated welcome does not build the farm again');
-  s.game.mode = 'drive'; w.step(1); const sb = s.game; assert.equal(sb.farm.seed, 98, 'after its show');
+  s.game.mode = 'drive'; w.step(2); // the guest's farm lands one step after the welcome on the engine path (#80, parity row 23)
+  const sb = s.game; assert.equal(sb.farm.seed, 98, 'after its show');
   w.seconds(4.5); assert.equal(s.game, sb, 'built once: the welcomes that came during the show do not build it again');
   assert.deepEqual(settle(w, 3), []);
 });
@@ -146,7 +147,8 @@ test('a new farm with the same seed (a set seed): the guest builds it again, als
   const t0 = w.now; let k = 0; while (g.game === old && k++ < 180) w.step(1);
   assert.notEqual(g.game, old, 'built again'); assert.ok(w.now - t0 <= 3000);
   w.seconds(2.5); assert.equal(s.game, oldS, 'the show guest waits'); assert.equal(g.sync.store.get('animal', id).epoch, 0, 'the new herd is taken');
-  const built = g.game; s.game.mode = 'drive'; w.step(1); const sb = s.game; assert.notEqual(sb, oldS, 'after its show');
+  const built = g.game; s.game.mode = 'drive'; w.step(2); // the guest's farm lands one step after the welcome on the engine path (#80, parity row 23)
+  const sb = s.game; assert.notEqual(sb, oldS, 'after its show');
   w.seconds(4.5); assert.equal(s.game, sb, 'built once'); assert.equal(g.game, built, 'built once');
   assert.deepEqual(settle(w, 3), []);
 });
