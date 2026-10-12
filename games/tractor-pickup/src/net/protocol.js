@@ -23,6 +23,7 @@ export const TO_GUEST = { // M-24: the herd, the trees and the players come as r
   welcome: { v: F.uint(1, NET_VERSION, NET_VERSION), seed: F.uint(4), farm: F.uint(4), you: F.uint(1, MAX_PLAYERS, 2), next: F.uint(2, MAX_ID + 1) }, // M-27: the same game version, as a guest's hello; farm: which farm of this host (a new farm may have the same seed); next: the host's herd size (the guest's id guard)
   tree: { id: F.uint(2, MAX_ID) }, regrow: {}, horn: { n: F.uint(1, MAX_PLAYERS, 1) }, help: { id: F.id() },
 };
+// a checked message is a copy; extra keys are dropped
 const check = table => m => {
   if (!m || typeof m !== 'object' || Array.isArray(m) || !Object.hasOwn(table, m.t)) return null;
   const d = checkSchema(table[m.t], m); return d && { t: m.t, ...d };

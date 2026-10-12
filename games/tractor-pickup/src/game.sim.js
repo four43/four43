@@ -27,11 +27,12 @@ function state(e) {
     bed: s.bed ? { phase: s.bed.phase, choice: s.bed.choice } : null, net: { role: s.net?.role ?? 'solo', you: s.net?.sync?.you || s.player || 1 },
     paint: s.progress ? { ...s.progress.paint } : null, shows: s.progress?.shows ?? 0, barnWait: g.barnWait ?? 0,
     // T8 ([T-9], #78): enough of the world that a tape's checksums catch a divergence away from the tractor (the sandbox has
-    // no herd, trees or flights). Rows are arrays to keep the canonical string short.
-    animals: g.herd?.animals.map(a => [a.id, a.type, a.state, a.x, a.y, a.z, a.yaw, a.epoch, a.hidden, a.golden, a.hat ?? null, a.dirt]) ?? [],
+    // no herd, trees or flights). Rows are arrays to keep the canonical string short; a possibly-undefined field is `?? null`, so
+    // rows are plain JSON (canonical() already wrote undefined in an array as null, so no checksum moves).
+    animals: g.herd?.animals.map(a => [a.id, a.type, a.state, a.x, a.y, a.z, a.yaw, a.epoch, a.hidden ?? null, a.golden ?? null, a.hat ?? null, a.dirt]) ?? [],
     cars: g.train.cars.map(c => { const q = c.body.translation(); return [q.x, q.y, q.z, c.dirt ?? 0]; }), dirt: g.dirt?.tractor ?? 0,
-    flights: g.flights?.map(f => [f.animal.id, f.u, f.claim]) ?? [], trees: g.trees?.list.filter(t => t.state !== 'standing').map(t => [t.id, t.state, t.grow]) ?? [],
-    others: g.others?.map(o => [o.n, o.x, o.z, o.yaw, o.held]) ?? [],
+    flights: g.flights?.map(f => [f.animal.id, f.u, f.claim ?? null]) ?? [], trees: g.trees?.list.filter(t => t.state !== 'standing').map(t => [t.id, t.state, t.grow]) ?? [],
+    others: g.others?.map(o => [o.n, o.x, o.z, o.yaw, o.held ?? null]) ?? [],
   };
 }
 

@@ -11,7 +11,8 @@ const NET = ['host', 'guest', 'players', 'kinds', 'bindings', 'protocol', 'repli
 const SIM = ['game.sim.js', 'game', 'sim', ...NET].map(p => p.startsWith('/') ? p : join(src, p));
 const files = p => !existsSync(p) ? [] : statSync(p).isDirectory() ? readdirSync(p).flatMap(n => files(join(p, n))) : p.endsWith('.js') ? [p] : [];
 const RULES = [/\blocalStorage\b/, /\bset(Timeout|Interval)\s*\(/, /\brequestAnimationFrame\b/,
-  /from\s*['"][^'"]*\/(main|game\.view|devices|ui\/[^'"]*|render\/[^'"]*|audio\/[^'"]*|net\/(session|link|netlog|handshake))(\.js)?['"]/];
+  /from\s*['"][^'"]*\/(main|game\.view|devices|ui\/[^'"]*|render\/[^'"]*|audio\/[^'"]*|net\/(session|link|netlog|handshake))(\.js)?['"]/,
+  /from\s*['"]lion-hawk\/(net|view|playwright)['"]/]; // sim files must not import the engine's net, view or playwright entries
 // #86: randomSeed() keeps its Math.random (its unit test imports it from sim/rng.js); only view code may call it
 const ALLOWED = [['sim/rng.js', 'math-random']];
 

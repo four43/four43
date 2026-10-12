@@ -65,3 +65,18 @@ test('the checksum catches a herd change made off the tape (solo and guest)', ()
   // a guest's herd follows the host's frames, so a nudge there heals within a few steps: nudge it at the checkpoint itself
   assert.throws(() => replay(g, gt, { invariants: [nudge(120)] }), /checksum differs at step 120/);
 });
+test('the checksum catches a dirt change, a car move and a broken tree made off the tape (the T8 probe table)', () => {
+  const g = tractorGame(), h = headless(g, { record: true, args: ARGS });
+  h.step(200, { goZ: 1 }); const tape = h.tape();
+  assert.equal(replay(g, tape).checksum(), h.checksum(), 'an untouched replay matches');
+  const at = (n, fn) => hh => { if (hh.time.step === n) fn(hh.engine.scene.state.game); };
+  const farTree = gm => { const p = gm.tractor.body.translation(); // the standing tree farthest from the tractor, so nothing else touches it
+    return gm.trees.list.filter(t => t.state === 'standing').reduce((b, t) => Math.hypot(t.x - p.x, t.z - p.z) > Math.hypot(b.x - p.x, b.z - p.z) ? t : b); };
+  const probes = {
+    'car dirt': gm => { gm.train.cars[0].dirt = 0.5; },
+    'car move': gm => { const c = gm.train.cars.at(-1), q = c.body.translation(); c.body.setTranslation({ x: q.x + 1, y: q.y, z: q.z }, true); },
+    'broken tree': gm => { assert.ok(gm.trees.breakById(farTree(gm).id)); },
+  };
+  for (const [name, fn] of Object.entries(probes))
+    assert.throws(() => replay(g, tape, { invariants: [at(130, fn)] }), /checksum differs at step 180/, name);
+});
