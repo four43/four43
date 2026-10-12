@@ -233,7 +233,7 @@ the button.
 ## Validation targets
 
 At 0.3.1: physics 50, snow 21, markers 7, verge 27 (plus the track suites in `tracks-spec.md`:
-gen-layout 657, gen-terrain 129, gen-surfaces 100, track 84, wild 12) and mobile 441 — all passing.
+gen-layout 657, gen-terrain 129, gen-surfaces 100, track 84, wild 12) and mobile 797 — all passing.
 The physics targets, with grip as raised in Round 3:
 
 Per car, headless with assists off unless noted:
@@ -397,4 +397,4 @@ specified in `tracks-spec.md`.
   steering zone clear of the swipe edge, covering the left; no overlaps among pedals, chips, dash
   and the zone; then real multi-touch via CDP: first touch steers 0 with the slider under it, half
   the range ≈ half lock, full lock past it, gas while steering, release order, brake held when the
-  thumb slides off, all released, re-zero on a new touch, release on page hide. 441/441.
+  thumb slides off, all released, re-zero on a new touch, release on page hide. 797/797.
