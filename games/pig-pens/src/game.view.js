@@ -71,6 +71,7 @@ export function pigPensView({ tilt = true } = {}) {
     },
     // view.dt is the driver's frame time; 0 for hook renders (#19), which only redraw.
     frame(engine, alpha, view) {
+      if (!world) return; // enter failed (no WebGL): nothing to draw
       const s = engine.scene.state, dt = view.dt;
       if (s.driving) { const t = s.sim.tractor; chase(t, dt); sound.engineLevel(t.engine, t.speed); }
       world.update(dt, s, frame); hud.update(engine, s, frame, dt);

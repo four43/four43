@@ -96,6 +96,7 @@ export function bindGestures(engine, canvas) {
       if (engine.scene.state.driving) rig.chaseOff += da; else { cam.yaw += da; panBy(n.cx - g.cx, n.cy - g.cy); }
       rig.gesture = n;
     } else if (pointers.size === 1 && g) {
+      if (g.kind === 'hand' && engine.scene.state.driving) { rig.gesture = null; return; } // a Hand gesture begun before the drive must not orbit it
       if (g.kind === 'chase') { rig.chaseOff -= (x - g.x) * 0.006; cam.pitch += (y - g.y) * 0.004; g.x = x; g.y = y; }
       else if (g.kind === 'orbit') { cam.yaw -= (x - g.x) * 0.006; cam.pitch += (y - g.y) * 0.005; g.x = x; g.y = y; }
       else if (g.kind === 'pan') { panBy(x - g.x, y - g.y); g.x = x; g.y = y; }
