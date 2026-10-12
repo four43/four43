@@ -1,7 +1,8 @@
-// The local commands (lion-hawk 2f T4, [I-7], #84): view → sim, game-wide, so a pausing overlay never drops them (#49).
+// The local commands (lion-hawk 2f T4–T5, [I-7], #84, #85): view → sim, game-wide, so a pausing overlay never drops them (#49).
 // The sim owns the player's records: each command validates or clamps its data, changes them and emits the record that
 // changed (`progress`, `settings`), which the view saves. Outside the farm (the sandbox) they do nothing.
 import { toggleHat, wornHats, placeSticker, unplaceSticker, seeBook, unlockedPaints, clampSettings } from '../sim/progress.js';
+import { setBedtime } from '../sim/bedtime.js';
 import { play, showDone, closeReward } from './flow.js';
 
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v < hi;
@@ -10,7 +11,8 @@ const progress = (e, s) => e.emit('progress', { progress: s.progress });
 // handler(engine, farm state, data) → a game-wide command that runs only while the farm is the main scene
 const farm = fn => (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) fn(e, ctx.state, d ?? {}); };
 
-export const localCommands = {
+// api: the farm's (newFarm)
+export const makeCommands = api => ({
   play: farm((e, s) => play(e, s)), // F-11, A-7: the view's first gesture
   // W-3: a pot on the paint screen; both paints must be unlocked
   paint: farm((e, s, d) => {
@@ -48,4 +50,12 @@ export const localCommands = {
   }),
   // F-10, #79: the view's show is over; where each rider stands
   'show.done': farm((e, s, d) => showDone(e, s, d.spots)),
-};
+  // #85: the view's wall date (epoch ms), once a second and on coming back to the page; the farm step checks bedtime against it
+  clock: farm((e, s, d) => { if (Number.isFinite(d.date)) s.date = d.date; }),
+  // E-5: the parent's bedtime (minutes: one of BEDTIME_CHOICES, or null to cancel), counted from the date it was set
+  'bed.set': farm((e, s, d) => {
+    if (!Number.isFinite(d.date)) return;
+    setBedtime(s.bed, d.minutes ?? null, d.date); s.date = d.date; e.emit('bed', { bed: s.bed });
+  }),
+  'farm.new': (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) api.newFarm(e, ctx); }, // P-8, M-19, [S-6]
+});

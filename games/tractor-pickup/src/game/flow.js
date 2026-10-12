@@ -1,11 +1,11 @@
-// The trip flow in the sim (lion-hawk 2f T4, spec 3.1, 3.4, [S-4], #4, #79, #84): the cues main.js handled in its frame loop
+// The trip flow in the sim (lion-hawk 2f T4–T5, spec 3.1, 3.4, 3.5, [S-4], #4, #79, #84, #85): the cues main.js handled in its frame loop
 // (main.js:298-318), with the view effects turned into events. Each function takes the engine and the farm's ctx.state.
 // What is purely visual (the sparkle trail, the arrows, the show camera and its blend back) is the view's reaction to the
 // `guide`, `show` and `reward` events and state.
 import { stepTrip, modeAfterDrive } from '../sim/trip.js';
 import { buildShowSteps } from '../sim/showSteps.js';
 import { completeShow, wornHats } from '../sim/progress.js';
-import { sleepNow, wakeUp } from '../sim/bedtime.js';
+import { sleepNow, wakeUp, stepBedtime } from '../sim/bedtime.js';
 import { DT } from '../sim/physics.js';
 
 const say = (e, ids) => e.emit('say', { ids });
@@ -66,6 +66,11 @@ function reward(e, s, riders) {
     e.emit('reward', { sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat });
     open(e, 'reward');
   } catch (err) { console.error('reward', err); s.reward = null; s.rewardDone = true; }
+}
+
+// E-5, #85: time is up on the view's last wall date (checked each step, the date arrives once a second). Before the trip.
+export function stepBed(e, s) {
+  if (s.date !== null && stepBedtime(s.bed, s.date) === 'last') { e.emit('bed', { bed: s.bed }); lastDrive(e, s); }
 }
 
 // spec 3.1: intro, drive, show, reward. Runs at the end of the farm step while the trip is on, started and not asleep.

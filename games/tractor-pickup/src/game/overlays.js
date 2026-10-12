@@ -1,9 +1,9 @@
-// The overlays over the farm (lion-hawk 2f T4, [S-2], [U-1], #4, #83): sim halves only (the view halves come in 2g). None
+// The overlays over the farm (lion-hawk 2f T4–T5, [S-2], [U-1], #4, #83): sim halves only (the view halves come in 2g). None
 // pauses: the farm keeps stepping under them (the tractor is held by its mode, the trip waits for its flags), and the
 // game-wide commands and network messages keep arriving (#49). Control ids are the test ids: start.go, show.skip,
-// reward.go, paint.close, book.close, parent.close, parent.mp, multiplayer.close (T5: sleep.wake).
+// reward.go, paint.close, book.close, parent.close, parent.mp, multiplayer.close, sleep.wake.
 import { seeBook } from '../sim/progress.js';
-import { play, closeReward, open } from './flow.js';
+import { play, closeReward, open, wake } from './flow.js';
 
 const F = e => e.scene.state; // the farm's ctx.state (the main scene)
 // U-6: the paint screen and the sticker book hold the tractor ('menu') until they close; a 'drive' cue does not free it
@@ -38,5 +38,7 @@ export function makeOverlays() {
     },
   };
   const multiplayer = { ui(u) { u.button({ id: 'close', label: 'Close', action: e => e.close('multiplayer') }); } };
-  return { start, show, reward, paint, book, parent, multiplayer };
+  // E-5: asleep (args { quiet }: the view shows the button at once, or after the dusk); wake up: a 5 s hold on wall time (#83)
+  const sleep = { ui(u) { u.hold({ id: 'wake', label: 'Wake up', seconds: 5, wall: true, action: e => wake(e, F(e)) }); } };
+  return { start, show, reward, paint, book, parent, multiplayer, sleep };
 }

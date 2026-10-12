@@ -49,3 +49,11 @@ test('drive buttons hold the tractor; the intro end does not free it; paints, ha
   h.tap('paint.close'); h.step(1); assert.equal(s.game.mode, 'drive');
   h.press('farm.parent'); h.seconds(1.9); assert.deepEqual(h.scene.overlays, []); h.seconds(0.2); assert.deepEqual(h.scene.overlays, ['parent']);
 });
+test('a new farm builds through ctx.load from farm.new and frees the old Rapier world (P-8, S-6)', () => {
+  const h = headless(tractorGame(), { args: { seed: 14, started: true, settings: { seed: 99 } } }), s = h.engine.scene.state, old = s.game;
+  let freed = 0; const free = old.phys.world.free.bind(old.phys.world); old.phys.world.free = () => { freed++; free(); };
+  h.command('farm.new', {}).step(1); assert.equal(h.engine.loading.active, true);
+  h.untilLoaded(); assert.equal(freed, 1); assert.notEqual(s.game, old); assert.equal(s.game.farm.seed, 99); assert.equal(s.gen, 2);
+  assert.equal(h.events.of('farm').at(-1).seed, 99); assert.equal(s.started, true);
+  h.command('farm.new', {}).command('farm.new', {}).step(1); h.untilLoaded(); h.untilLoaded(); assert.equal(s.gen, 4, 'the second request waited for the first');
+});

@@ -5,7 +5,7 @@ import R from '@dimforge/rapier3d-compat';
 import { defineGame, actions, axis, button } from 'lion-hawk/sim';
 import { makeFarm, makeSandbox, moveTrain, FARM_EVENTS } from './game/farm.js';
 import { makeOverlays } from './game/overlays.js';
-import { localCommands } from './game/commands.js';
+import { makeCommands } from './game/commands.js';
 
 export { FARM_EVENTS };
 
@@ -37,10 +37,11 @@ export function tractorGame({ clock, bindings } = {}) {
     drive(raw) { e.scene.state.raw = raw ?? null; }, // { thr, steer, turn?, horn } in place of the pilot; null gives it back
     trainAt(x, z, yaw) { moveTrain(e.scene.state.game, x, z, yaw, { ground: true }); },
     riders(n) { api.riders(e, n); }, // n free singles land in the slots
+    newFarm() { e.command('farm.new', {}); },
   });
   return defineGame({
     id: 'tractor-pickup', sim: { hz: 60, maxCatchUp: 3, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm', // hz: the physics step (DT)
-    scenes: { farm, sandbox, ...makeOverlays() }, commands: localCommands, state, debug,
+    scenes: { farm, sandbox, ...makeOverlays() }, commands: makeCommands(api), state, debug,
   });
 }
 
