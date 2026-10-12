@@ -17,13 +17,8 @@ export const DRIVING = new Set(['ready', 'countdown', 'running']);
 const START_Y = 0.6;          // CoM above the road when placed
 const EPS = 1e-9;
 
-const isOpen = (e, name) => e.scene.overlays.includes(name);
-// Opens an overlay unless it is open or already requested in this step/transition (the engine has no query for a
-// pending overlay: engine gap, see the R2 report).
-const openOnce = (e, name) => {
-  if (isOpen(e, name)) return;
-  try { e.overlay(name); } catch (err) { if (!/already open/.test(err.message)) throw err; }
-};
+// Opens an overlay unless it is open or already requested in this step/transition (#36).
+const openOnce = (e, name) => { if (!e.isOpen(name, { pending: true })) e.overlay(name); };
 
 export function makeStage({ R, bests = null }) {
   // --- state helpers (each takes the stage state s) -------------------------------------------------------------
@@ -96,18 +91,16 @@ export function makeStage({ R, bests = null }) {
     return true;
   }
 
-  // Leaves the loading hold (#21): build, then continue with load.then.
-  function finishLoad(e, s) {
-    const then = s.load.then; s.load = null;
-    build(e, s);
-    if (then === 'begin') begin(e, s); else title(e, s);
-  }
-  // A rebuild of the settings' track after LOAD_HOLD of engine time, so the browser paints its toast first (#21).
+  // A rebuild of the settings' track through the engine's loading state (lion-hawk [S-6], #21, #38): the stage step is
+  // suspended (the car stays held), the build waits LOAD_HOLD of engine time and a presented frame, so the browser
+  // paints its toast first, and the run or the title follows once the view has settled. s.loadThen: 'begin' | 'title'.
   function startLoad(e, s, then) {
-    s.load = { key: trackKey(s.settings), then, t: 0 };
+    s.loadThen = then;
     s.sim.car.hold = true;
     setPhase(e, s, 'loading');
     e.emit('toast', { text: 'Building the track…', seconds: null }); // null: shown while loading
+    s.ctx.load({ hold: LOAD_HOLD, settle: true, label: 'Building the track…', build: () => build(e, s),
+      then: () => { const t = s.loadThen; s.loadThen = null; if (t === 'begin') begin(e, s); else title(e, s); } });
   }
 
   // Run events from progress (moved from Game.handle).
@@ -155,7 +148,7 @@ export function makeStage({ R, bests = null }) {
     // During a loading hold (a seed edit's change lands before the click) it queues the run for when the load ends.
     drive(e) {
       const s = S(e);
-      if (s.phase === 'loading' && s.load) { s.load.then = 'begin'; e.close('title'); return; }
+      if (s.phase === 'loading' && s.loadThen) { s.loadThen = 'begin'; e.close('title'); return; }
       if (s.phase !== 'title') return;
       e.close('title'); begin(e, s);
     },
@@ -274,7 +267,7 @@ export function makeStage({ R, bests = null }) {
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = normalizeSettings(a.settings);
       if (!settings.seed) settings.seed = newSeed(e.rng('seeds'));
-      const s = Object.assign(ctx.state, { settings, pad: !!a.pad, sim: null, world: null, mode: null, phase: null, pose: null, load: null,
+      const s = Object.assign(ctx.state, { settings, pad: !!a.pad, sim: null, world: null, mode: null, phase: null, pose: null, loadThen: null, ctx,
         builtKey: null, poseCache: null, worldRev: 0, carRev: 0, settingsRev: 0, cam: 0, wheels: false, holdT: 0, holdFired: false, titleBest: null });
       clear(s);
       build(e, s);
@@ -293,12 +286,7 @@ export function makeStage({ R, bests = null }) {
     },
     exit(e, ctx) { ctx.state.sim?.dispose(); }, // [S-3]
     step(e, dt, ctx) {
-      const s = ctx.state, car = s.sim.car, I = e.input.snapshot;
-      if (s.phase === 'loading') {
-        car.hold = true;
-        if ((s.load.t += dt) >= LOAD_HOLD - EPS) finishLoad(e, s);
-        return;
-      }
+      const s = ctx.state, car = s.sim.car, I = e.input.snapshot; // not called while loading (the engine suspends it)
       actions(e, s, dt);
       if (I.pause.pressed && DRIVING.has(s.phase)) openOnce(e, 'pause'); // #23
       switch (s.phase) {
@@ -335,7 +323,7 @@ export function makeStage({ R, bests = null }) {
       }
     },
     ui(u) {
-      u.button({ id: 'pause', label: 'Pause', action: 'pause', when: e => DRIVING.has(e.scene.state.phase) && !isOpen(e, 'pause') });
+      u.button({ id: 'pause', label: 'Pause', action: 'pause', when: e => DRIVING.has(e.scene.state.phase) && !e.isOpen('pause') });
     },
   };
   api.handle = (e, ev) => handle(e, S(e), ev); // the debug HUD fakes (R3)

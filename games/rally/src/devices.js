@@ -9,9 +9,9 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 export const steerRange = (width = globalThis.innerWidth) => Math.max(60, Math.min(110, width * 0.12));
 
 // Keyboard steering (#14): the rate grows with how long a key is held (1.2 → 4.2 /s over 0.35 s), reversing snaps
-// through centre at 6 /s, letting go returns at 4.5 /s. st.hold is the hold time. dt is capped as the old loop did.
+// through centre at 6 /s, letting go returns at 4.5 /s. st.hold is the hold time. dt comes capped at maxFrame
+// (0.1 s, as the old loop did) from the engine's driver (#44).
 export function steerRamp(v, t, dt, st) {
-  dt = Math.min(0.1, dt);
   if (t !== 0) {
     const dir = Math.sign(t);
     st.hold = (st.hold || 0) + dt;
@@ -32,12 +32,8 @@ export const KEYS = {
   q: 'shiftDown', e: 'shiftUp', r: 'reset', 'shift+r': 'resetAll', c: 'camera', f3: 'debug', '`': 'debug',
   escape: 'pause', p: 'pause', enter: 'confirm',
 };
-// Pedal keys ease in and out (per second) towards 0 or 1, dt capped like the old loop (#44: the engine's { rise, fall }
-// ramps take the raw frame time, so a hitch would snap a pedal to full); the handbrake is on/off.
-export const pedalRamp = (rise, fall) => (v, t, dt) => {
-  dt = Math.min(0.1, dt);
-  return t > v ? Math.min(t, v + rise * dt) : Math.max(t, v - fall * dt);
-};
+// Pedal keys ease in and out (per second) towards 0 or 1 (dt capped by the engine, #44); the handbrake is on/off.
+export const pedalRamp = (rise, fall) => (v, t, dt) => t > v ? Math.min(t, v + rise * dt) : Math.max(t, v - fall * dt);
 export const RAMPS = { steer: steerRamp, throttle: pedalRamp(5, 8), brake: pedalRamp(6, 9) };
 
 // Standard mapping: left stick with a slight expo, triggers, A = handbrake and confirm (#16), bumpers shift,
@@ -48,7 +44,8 @@ export const PAD = {
   buttons: { 7: ['throttle', 1], 6: ['brake', 1], 0: [['handbrake', 1], 'confirm'], 5: 'shiftUp', 4: 'shiftDown', 3: 'reset', 2: 'camera', 9: 'pause' },
 };
 
-// Touch buttons (bindHold): pedals full on while pressed; the Reset chip is resetHold (tap = reset, held = restart).
+// Touch buttons (bindHold, which keeps focus off the button so Space/Enter stay the handbrake/confirm keys, #42): pedals
+// full on while pressed; the Reset chip is resetHold (tap = reset, held = restart).
 const HOLDS = [['#gasBtn', 'throttle'], ['#brakeBtn', 'brake'], ['#hbBtn', 'handbrake'], ['#upBtn', 'shiftUp'], ['#dnBtn', 'shiftDown'],
   ['#resetBtn', 'resetHold'], ['#camBtn', 'camera'], ['#dbgBtn', 'debug']];
 
@@ -61,15 +58,6 @@ export function devices(doc) {
     e => bindStick(e, { root: $('#steerZone'), x: ['steer', -1], axis: 'x', radius: () => steerRange(win.innerWidth), deadZone: 0, edge: 20,
       base: $('#steerBase'), knob: $('#steerKnob'), doc }),
   ];
-  for (const [sel, action] of HOLDS) {
-    out.push(e => {
-      const el = $(sel), h = bindHold(e, el, action);
-      // As ui.js did for the pedals: a press doesn't focus the button, so Space/Enter stay the handbrake/confirm
-      // keys afterwards (#15 hands both to a focused button).
-      const noFocus = ev => ev.preventDefault();
-      el.addEventListener('pointerdown', noFocus); el.addEventListener('mousedown', noFocus);
-      return { dispose() { el.removeEventListener('pointerdown', noFocus); el.removeEventListener('mousedown', noFocus); h.dispose(); } };
-    });
-  }
+  for (const [sel, action] of HOLDS) out.push(e => bindHold(e, $(sel), action));
   return out;
 }

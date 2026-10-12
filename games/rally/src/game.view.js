@@ -32,22 +32,6 @@ function splitTable(r) {
   }).join('')}</table>` : '';
 }
 
-// Focus a card's main button once the engine has enabled it: an overlay half enters before the UI sync that adopts
-// and enables its controls, so the first frame(s) may still see it disabled.
-function focuser(id) {
-  let want = false;
-  return {
-    arm() { want = true; },
-    disarm() { want = false; },
-    run(doc) {
-      if (!want) return;
-      const el = doc.querySelector(`[data-testid="${id}"]`);
-      if (!el || el.disabled) return;
-      el.focus({ preventScroll: true }); want = doc.activeElement !== el;
-    },
-  };
-}
-
 // The title, pause, results and settings halves: they show and fill the cards; the controls inside are the engine's.
 function overlayHalves() {
   let seedForm = null;
@@ -83,24 +67,21 @@ function overlayHalves() {
     },
   };
 
-  const resume = focuser('pause.resume');
   const pause = {
     enter(engine, view) {
       const s = engine.scene.state, doc = view.doc;
       doc.getElementById('pause').hidden = false;
       doc.getElementById('restartBtn').hidden = !s.world?.track;
       doc.getElementById('lapList').innerHTML = lapTable(s); // paused: the laps don't change while the card is up
-      resume.arm(); resume.run(doc);
+      view.focus('pause.resume'); // #46
     },
-    exit(engine, view) { view.doc.getElementById('pause').hidden = true; resume.disarm(); },
-    frame(engine, alpha, view) { resume.run(view.doc); },
+    exit(engine, view) { view.doc.getElementById('pause').hidden = true; },
   };
 
-  const retry = focuser('results.retry');
   let shown = null; // the result the card shows
   const results = {
-    enter(engine, view) { view.doc.getElementById('results').hidden = false; shown = null; retry.arm(); results.frame(engine, 0, view); },
-    exit(engine, view) { view.doc.getElementById('results').hidden = true; shown = null; retry.disarm(); },
+    enter(engine, view) { view.doc.getElementById('results').hidden = false; shown = null; view.focus('results.retry'); results.frame(engine, 0, view); },
+    exit(engine, view) { view.doc.getElementById('results').hidden = true; shown = null; },
     frame(engine, alpha, view) {
       const r = engine.scene.state.result, doc = view.doc;
       if (r && r !== shown) {
@@ -111,7 +92,6 @@ function overlayHalves() {
           : `Best ${fmtTime(r.prev)} <span class="slower">${fmtDelta(r.delta)}</span>`;
         doc.getElementById('resSplits').innerHTML = splitTable(r);
       }
-      retry.run(doc);
     },
   };
 
@@ -159,11 +139,8 @@ export function rallyView({ save = () => {} } = {}) {
       });
       const resize = () => renderer.resize(win.innerWidth, win.innerHeight);
       // Leaving the page mid-run pauses a timed run only (iOS app switch, tab change; tracks-spec): not free drive or the pad.
-      // Through the Pause chip, so its `when` decides.
-      const hidden = () => {
-        if (doc.visibilityState !== 'hidden' || !engine.scene.state?.mode?.clock) return;
-        try { engine.ui.tap('stage.pause'); } catch (err) { if (!/is disabled|is covered|no control/.test(err.message)) throw err; }
-      };
+      // Through the Pause chip, so its `when` decides (#45).
+      const hidden = () => { if (doc.visibilityState === 'hidden' && engine.scene.state?.mode?.clock) engine.ui.tryTap('stage.pause'); };
       win.addEventListener('resize', resize); doc.addEventListener('visibilitychange', hidden);
       off = () => { win.removeEventListener('resize', resize); doc.removeEventListener('visibilitychange', hidden); };
       resize();
@@ -179,7 +156,7 @@ export function rallyView({ save = () => {} } = {}) {
       const newWorld = s !== seen.s || s.worldRev !== seen.worldRev;
       if (newWorld || s.carRev !== seen.carRev) {
         renderer.setCar(s.sim.car);
-        if (newWorld) { view.wait(renderer.setWorld(s.world)); seen.surface = null; seen.units = null; }
+        if (newWorld) { view.wait(renderer.setWorld(s.world)); seen.surface = null; seen.units = null; } // [S-6] also holds a settling load (frame acks)
         if (s !== seen.s) seen.settingsRev = s.settingsRev; // a new stage (enter/jump) is not a settings change
         seen.s = s; seen.worldRev = s.worldRev; seen.carRev = s.carRev;
         cls(doc, 'onTrack', s.world.kind !== 'pad');
