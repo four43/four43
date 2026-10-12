@@ -167,6 +167,61 @@ test('a session of taps and drags records and replays to the same checksums (T-9
   h.step(60); h.tap('farm.tool.shoo'); tool(h, 'down', P);
   for (let k = 0; k < 30; k++) { tool(h, 'move', [P[0] + k * 0.1, 0, P[2]]); h.step(1); }
   tool(h, 'up', P); h.tap('farm.tool.feed'); tapAt(h, pen(sim, 4)); h.step(120);
+  // a Hose drag with aim, and a Grab (pick, lift, drop), recorded too
+  h.tap('farm.tool.hose'); const Q = pen(sim, 2); tool(h, 'down', Q, { aim: rayTo([Q[0], 0, Q[2] - 1]) });
+  for (let k = 0; k < 20; k++) { tool(h, 'move', [Q[0] + k * 0.1, 0, Q[2]], { aim: rayTo([Q[0] + k * 0.1, 0, Q[2] - 1]) }); h.step(1); }
+  tool(h, 'up', Q); h.step(10);
+  h.tap('farm.tool.grab'); const p = findPig(sim), at = [p.px, p.py, p.pz];
+  tool(h, 'down', at, { aim: rayTo([p.px, p.py, p.pz - 1.5]) }); h.step(20);
+  tool(h, 'move', [p.px + 1, 1.7, p.pz], { aim: rayTo([p.px + 1, 1.7, p.pz - 1]) }); h.step(20);
+  tool(h, 'up', at); h.step(120);
   const r = replay(pigPensGame(), h.tape());
   assert.equal(r.checksum(), h.checksum());
+});
+
+test('a held grab keeps copies of the command arrays (#72)', () => {
+  const { h, s, sim } = farm(); h.tap('farm.tool.grab'); const p = findPig(sim), at = [p.px, p.py, p.pz];
+  const ray = rayTo(at), aim = rayTo([p.px, p.py, p.pz - 1.5]), r0 = [...ray], a0 = [...aim];
+  h.command('tool', { phase: 'down', pointer: 1, button: 0, kind: 'touch', ray, aim }); h.step(1);
+  assert.equal(sim.grabbed, p.i); assert.notEqual(s.grab.ray, ray); assert.notEqual(s.grab.aim, aim);
+  ray.fill(0); aim.fill(0); assert.deepEqual(s.grab.ray, r0); assert.deepEqual(s.grab.aim, a0);
+  const r1 = rayTo([p.px + 1, 1.7, p.pz]); h.command('tool', { phase: 'move', pointer: 1, button: 0, kind: 'touch', ray: r1 }); h.step(1);
+  const keep = [...r1]; r1.fill(0); assert.deepEqual(s.grab.ray, keep);
+});
+
+test('Drive: throttle and steering (power 1.4) reach the tractor; H honks only while driving; E, Escape and Get out leave', () => {
+  const h = headless(pigPensGame(), { seed: 2, args: ARGS }), t = () => h.engine.scene.state.sim.tractor;
+  let m = h.mark(); h.step(1, { horn: true }); assert.equal(h.events.since(m).count('horn'), 0);
+  h.jump('farm', 'driving', {}, ARGS); assert.equal(h.state().driving, true);
+  h.step(1, { throttle: 1, steer: 0.5 }); assert.equal(t().inThr, 1); assert.ok(Math.abs(t().inSteer - 0.5 ** 1.4) < 1e-12);
+  h.step(1, { steer: -0.5 }); assert.ok(Math.abs(t().inSteer + 0.5 ** 1.4) < 1e-12);
+  h.seconds(4, { throttle: 1 }); assert.ok(t().speed > 4 && t().speed < 6.5, `${t().speed}`);
+  m = h.mark(); h.step(1, { horn: true }); assert.equal(h.events.since(m).count('horn'), 1);
+  h.step(1, { getOut: true }); assert.equal(h.state().driving, false); assert.equal(t().driven, false); assert.equal(t().inThr, 0);
+  h.jump('farm', 'driving', {}, ARGS); h.step(1, { back: true }); assert.equal(h.state().driving, false);
+  h.jump('farm', 'driving', {}, ARGS); h.tap('farm.exit'); assert.equal(h.state().driving, false);
+  h.step(1); // a tap between steps: its event flushes with the next step
+  assert.deepEqual(h.events.of('drive').map(e => e.on).slice(-2), [true, false]);
+});
+
+test('Drive: a tipped tractor is put back on its wheels with a hint', () => {
+  const h = headless(pigPensGame(), { seed: 2, args: ARGS }); h.jump('farm', 'driving', {}, ARGS);
+  const b = h.engine.scene.state.sim.tractor.body, k = Math.SQRT1_2;
+  b.setRotation({ x: k, y: 0, z: 0, w: k }, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  const m = h.mark(); h.step(1); assert.deepEqual(hints(h, m), ['Back on four wheels.']);
+});
+
+test('presets put the farm in a known state without stepping (S-5)', () => {
+  const h = headless(pigPensGame(), { args: ARGS });
+  h.jump('farm', 'night', {}, ARGS); assert.equal(h.state().night, true);
+  h.jump('farm', 'tool', { name: 'hose' }, ARGS); assert.equal(h.state().tool, 'hose');
+  h.jump('farm', 'selected', { kind: 'pig', i: 3 }, ARGS); assert.deepEqual(h.state().selected, { kind: 'pig', i: 3 });
+  h.jump('farm', 'driving', {}, ARGS); assert.equal(h.state().driving, true); assert.equal(h.state().selected, null);
+  assert.equal(h.engine.game.debug(h.engine).sim, h.engine.scene.state.sim);
+});
+
+test('Drive: Get out wins over the stick in the same step; horn and E do nothing on foot', () => {
+  const h = headless(pigPensGame(), { seed: 2, args: ARGS }), t = () => h.engine.scene.state.sim.tractor;
+  h.jump('farm', 'driving', {}, ARGS); h.step(1, { getOut: true, throttle: 1 }); assert.equal(h.state().driving, false); assert.equal(t().inThr, 0); // exit wins over input
+  const m = h.mark(); h.step(1, { getOut: true, horn: true }); assert.equal(h.events.since(m).count('horn'), 0); assert.equal(h.state().driving, false);
 });

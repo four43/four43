@@ -105,14 +105,14 @@ export function makeFarm({ R }) {
       if (!t) return api.hint(e, 'Touch a pig or a chicken to pick it up.', 1.8);
       if (t.kind === 'fox') { sim.flock.tapFox(); return; }
       if (t.kind === 'pig') sim.grab(t.i); else sim.flock.grab(t.i);
-      s.grab = { kind: t.kind, u: 0, ray: d.ray, aim: d.aim ?? null };
+      s.grab = { kind: t.kind, u: 0, ray: [...d.ray], aim: d.aim ? [...d.aim] : null }; // copies (#72): the issued arrays belong to the caller
       moveGrab(s);
     }
   }
   function move(e, s, g, d) {
     if (g.tool === 'shoo') shoo(e, s, d.ray, false);
     else if (g.tool === 'hose') aimHose(s, d);
-    else if (g.tool === 'grab' && s.grab) { s.grab.ray = d.ray; s.grab.aim = d.aim ?? null; moveGrab(s); }
+    else if (g.tool === 'grab' && s.grab) { s.grab.ray = [...d.ray]; s.grab.aim = d.aim ? [...d.aim] : null; moveGrab(s); }
   }
   // up or cancel (the gesture stays for its tap)
   function lift(e, s, g) {
@@ -179,14 +179,26 @@ export function makeFarm({ R }) {
   // Keys (input.apply, after the commands, as the old frame ran the pointer before the keys). Not driving: 1–5, B, Escape.
   function keys(e, s) {
     const I = e.input.snapshot;
-    if (s.driving) return; // P4: drive input, horn, Get out, auto-right
+    if (s.driving) { // horn, Get out (Escape, E, the button's own path), else the stick/keys with the old 1.4 curve, then auto-right
+      const T = s.sim.tractor;
+      if (I.horn.pressed) s.sim.horn();
+      if (I.back.pressed || I.getOut.pressed) return api.exitDrive(e);
+      const st = I.steer;
+      T.setInput(I.throttle, Math.sign(st) * Math.abs(st) ** STEER_POW);
+      if (T.speed < 0.3 && T.rightIfTipped()) api.hint(e, 'Back on four wheels.', 1.5);
+      return;
+    }
     for (let k = 0; k < TOOLS.length; k++) if (I[TOOLS[k]].pressed) api.setTool(e, TOOLS[k]);
     if (I.bell.pressed) api.ringBell(e);
     if (I.back.pressed) api.select(e, null);
   }
 
   const scene = {
-    presets: {},
+    // [S-5, #25] known states, never stepping; (engine, opts) as jump calls them
+    presets: {
+      driving: e => api.enterDrive(e), night: e => api.setNight(e, true),
+      tool: (e, o) => api.setTool(e, o.name), selected: (e, o) => api.select(e, { kind: o.kind, i: o.i }),
+    },
     enter(e, ctx) {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
