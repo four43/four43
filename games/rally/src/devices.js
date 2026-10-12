@@ -1,6 +1,6 @@
 // Rally's input devices on the engine (lion-hawk 2c-rally R5, spec R4; field notes #13–#17, #29, #30): the keyboard with
-// today's ease ramps, the pad with its expo stick, the touch steering slider and the pedal/chip buttons. The feel is
-// ui.js Controls' arithmetic, moved: the engine merges the sources (largest value wins, #29; every pad, #30).
+// the ease ramps, the pad with its expo stick, the touch steering slider and the pedal/chip buttons. The feel is
+// the removed Controls' arithmetic, moved: the engine merges the sources (largest value wins, #29; every pad, #30).
 import { bindKeyboard, bindGamepad, bindStick, bindHold } from 'lion-hawk/view';
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);

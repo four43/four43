@@ -297,14 +297,16 @@ state and the track; the only thing it does to the car is place it, hold it and 
 | `src/game/progress.js` | Progress along the course: unwrapped position, checkpoints in order, line/finish crossings, missed checkpoints (T-24) |
 | `src/game/pace.js` | Allowed speed along the road (curvature, grip, obstacles) and the time-attack run-up distance; shared with `test/autopilot.js` |
 | `src/game/modes.js` | `freeDrive`, `stage`, `timeAttack` (T-21) |
-| `src/game/game.js` | `Game`: the state machine, clock, splits, laps, events (T-20) |
+| `src/game/stage.js` | The run logic on engine time: state machine, clock, splits, laps, events (T-20) |
+| `src/game/overlays.js` | Title, pause, results and settings overlays (T-26) |
 | `src/game/bests.js` | Saved bests (T-25) |
-| `src/menus.js` | Title menu, pause menu, results card, game HUD (T-26) |
-| `test/game.mjs` | Headless validation (T-27) |
+| `src/game.view.js`, `src/menus.js` | The overlay and stage view halves; the game HUD (T-26) |
+| `test/game.mjs`, `test/flow.test.mjs` | Headless validation on the engine (T-27) |
 
-- **T-20 States.** `title → loading → ready → countdown → running → finished`, plus `paused` over
-  `ready`/`countdown`/`running`. Main calls `game.step()` once per physics step (sim time, so
-  headless runs are deterministic) and doesn't step physics while paused.
+- **T-20 States.** `title → loading → ready → countdown → running → finished`, and pause is
+  the `pause` overlay (`pauses: true`), not a state. The `stage` scene runs its logic once per physics step
+  (engine time, so headless runs are deterministic); results open on engine time, 1.5 s after the finish, and
+  don't pause: the car rolls to a stop under them. Rally still emits its own `state { state, from }` events.
   - `title`: the menu over the live scene; the car sits held at the selected mode's start; the
     camera orbits it.
   - `loading`: a track is building (toast); the menu stays.
@@ -315,15 +317,15 @@ state and the track; the only thing it does to the car is place it, hold it and 
   - `running`: the clock runs. `finished` (Stage only): the car is slowed to a stop on its own
     (throttle off, brake 0.5, held once under 1 m/s) and the results card shows.
   - Free drive skips `ready`/`countdown`: `loading → running`, no clock.
-  - Events (`game.on(fn)`, `{ type, ... }`): `state`, `count {n: 3|2|1|0}`, `start`, `split`,
+  - Events (`engine.on`/`engine.emit`): `state`, `count {n: 3|2|1|0}`, `start`, `split`,
     `lap`, `missed`, `blocked`, `finish`.
-- **T-21 Modes** are data the Game reads (`MODES` in `game/modes.js`): `{ id, label, kind (the
+- **T-21 Modes** are data the stage reads (`MODES` in `game/modes.js`): `{ id, label, kind (the
   track kind it always uses, or null = the player's Loop/Stage choice), countdown, clock (null |
-  'go' | 'line'), laps, startOffset(track) (m from the start line, null = spawn) }`. The Game's
+  'go' | 'line'), laps, startOffset(track) (m from the start line, null = spawn) }`. The stage's
   event handling branches on `clock` and `laps` (hooks per mode were more machinery than three
   modes need). `freeDrive` (Loop or Stage, no clock), `stage` (always a stage track), `timeAttack`
   (always a loop). The test pad is free drive only and hidden: `?pad` in the URL or
-  `rally.setWorld(...)`.
+  `engine.jump('stage', 'title', {}, { pad: true })`.
 - **T-22 Stage.** The car starts held 4 m behind the start gate; the clock runs from Go to the
   finish gate. At each checkpoint the split (time since Go) shows with its delta to the best
   run's split there. Crossing the finish with a checkpoint missed shows "Missed checkpoint — go
@@ -372,16 +374,19 @@ state and the track; the only thing it does to the car is place it, hold it and 
     screen; on short wide screens they are two columns, buttons left and list right.
   - *Body classes:* `scr-title` / `scr-play`, `menuOpen` (pause or results: touch controls
     hidden), `timed`.
-  - *Debug hooks* (`window.rally.debug`, for the console, Playwright and phones):
-    `screen(name, { mode, n, time, best, splits })` jumps to `title`, `loading`, `ready`,
-    `countdown` (light n), `running`, `paused`, `results` or `settings` (stepping the game and
-    physics to get there); `finish(opts)`, `split(i, delta)`, `lap(valid)`, `missed(i)`,
+  - *Debug hooks* (`window.engine`, for the console, Playwright and phones): the stage presets
+    (`engine.jump('stage', name, opts, { settings, pad })`) go to `title`, `loading`, `ready`,
+    `countdown` (light n), `running`, `paused`, `results`, `settings`, `nearFinish` or `teleport`
+    (setting the sub-state directly, no stepping); `engine.debug` has `screen(name, { mode, n, time, best, splits })`
+    (a jump), `finish(opts)`, `split(i, delta)`, `lap(valid)`, `missed(i)`,
     `blocked(i)`, `count(n)` fire events; `teleport(p)` puts the car at course position p;
     `nearFinish(d)` credits every checkpoint and puts the car d m before the finish/line;
-    `state()`. URL: `?debug=<screen>&mode=<mode>&n=<light>` opens straight onto a screen (on a
+    `engine.state()`. URL: `?debug=<screen>&mode=<mode>&n=<light>` opens straight onto a screen (on a
     phone too); `?pad` drives the test pad.
   - Settings v4: adds `mode`; saved `world: 'pad'` becomes free drive on a loop.
-- **T-27 Validation** (`test/game.mjs`): progress on synthetic paths (in-order checkpoints, loop
+- **T-27 Validation** (`test/game.mjs`, on the engine's `headless()`; `test/flow.test.mjs`: title → stage →
+  countdown → finish → results → retry, pause and settings overlays; `test/e2e.browser.mjs`: the same through
+  the browser; `test/mobile.mjs`, self-serving, on `lion-hawk/playwright`): progress on synthetic paths (in-order checkpoints, loop
   wrap, a shortcut jump credits nothing, missed raised and cleared, backwards crossings ignored);
   the hold keeps the car within 5 cm at full throttle for 4 s and never selects reverse, and the
   car launches on Go; the autopilot drives a stage from Go to finished with the clock equal to sim

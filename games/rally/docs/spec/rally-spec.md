@@ -39,10 +39,15 @@ timing, bests) is specified there too (Phase 2).
 | `src/render.js` | three.js renderer: lights/looks, car meshes, cameras; `setWorld` picks the world view |
 | `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
 | `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
-| `src/ui.js` | `Controls` (keyboard/gamepad/touch merge) and `Hud` |
-| `src/game/*.js` | Game loop: progress, pace, modes, `Game` state machine, bests — `tracks-spec.md` Phase 2 |
-| `src/menus.js` | Title / pause / results menus and the timing HUD |
-| `src/main.js` | Boot, screens and settings, world loading, frame loop, `window.rally` debug hooks |
+| `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
+| `src/devices.js` | Input devices on the engine: keyboard ramps, pad curves, the touch steering slider and pedals; the engine merges the sources |
+| `src/game.sim.js` | `defineGame`: `ACTIONS`, the `stage` main scene and the `title` / `pause` / `results` / `settings` overlays, presets, `game.state` and `game.debug` (no DOM, no three.js) |
+| `src/game.view.js` | `defineView`: the view halves of those scenes (renderer, camera, HUD, cards) over `engine.scene.state` |
+| `src/game/stage.js` | The run logic (ready, countdown, clock, progress, splits, laps, finish, roll-to-stop) on engine time, and the stage API (`drive`, `restart`, `toTitle`, `choose`, …) |
+| `src/game/overlays.js` | The four overlays and their registry controls |
+| `src/game/*.js` | The rest of the game layer: progress, pace, modes, bests, settings, autopilot — `tracks-spec.md` Phase 2 |
+| `src/menus.js` | The timing HUD (`GameHud`, on engine time) and time formatting |
+| `src/main.js` | Browser entry: awaits `RAPIER.init()`, loads/saves settings, calls `boot(game, view, { devices })`; `window.engine` is the debug hook |
 | `src/assets.json` | Baked Kenney car-kit meshes (vertex coloured) |
 | `bake.mjs` | Bakes the GLBs in `assets/models/` → `src/assets.json` |
 | `assets/models/` | Source models: Kenney Car Kit 3.1 (CC0) — the 4 GLBs in use + `Textures/colormap.png` |
@@ -55,11 +60,14 @@ timing, bests) is specified there too (Phase 2).
 | `test/markers.mjs` | Marker posts tip and settle |
 | `test/verge.mjs` | Grass verge drag and bumps |
 | `test/gen-*.mjs`, `test/track.mjs`, `test/wild.mjs`, `test/autopilot.js` | Generators and autopilot drives — `tracks-spec.md` |
-| `test/game.mjs` | Game loop: hold, pace, progress, bests, Stage / Time attack runs — `tracks-spec.md` T-27 |
-| `test/mobile.mjs` | Touch layout + multi-touch, and the game screens, on emulated iPhones/iPads (`npm run test:mobile`, needs the dev server) |
-| `test/browser.py`, `test/dbg.mjs` | Round-1 leftovers: Python Playwright smoke test (superseded by `mobile.mjs`), launch trace |
+| `test/game.mjs` | Game loop on the engine's `headless()`: hold, pace, progress, bests, Stage / Time attack runs — `tracks-spec.md` T-27 |
+| `test/flow.test.mjs` | Headless flow tests on the engine: title → stage → countdown → finish → results → retry, pause, settings, presets |
+| `test/devices.test.mjs`, `test/purity.test.mjs` | Device ramps/curves; the sim modules stay pure |
+| `test/e2e.browser.mjs` | Browser flow tests through `lion-hawk/playwright` (`npm run test:e2e`, builds and serves itself) |
+| `test/mobile.mjs` | Touch layout + multi-touch, and the game screens, on emulated iPhones/iPads (`npm run test:mobile`, builds and serves itself) |
+| `test/dbg.mjs` | Launch trace |
 
-Commands: `npm run dev`, `npm test` (all headless suites, ~4 min), `npm run test:mobile`, `npm run build`,
+Commands: `npm run dev`, `npm test` (all headless suites, ~4 min), `npm run test:e2e`, `npm run test:mobile`, `npm run build`,
 `npm run bake`. Release: bump `version` in `package.json`, `python3 build.py`, commit `games/rally` +
 `site/exp/rally`, push `gh-pages` (GitHub Actions deploys).
 
@@ -163,8 +171,12 @@ Defined in `SURFACES`: tarmac, hardpack, gravel, grass, sand, mud, snow, snowban
 
 ## Controls
 
-Inputs merge into one `{steer, throttle, brake, handbrake}`; physics never sees the source.
-Steer is +left / −right.
+Inputs are engine actions (`ACTIONS` in `game.sim.js`): axes `steer` (+left / −right), `throttle`, `brake`,
+`handbrake`; buttons `shiftUp`, `shiftDown`, `reset`, `resetAll`, `resetHold`, `camera`, `debug`, `pause`,
+`confirm`. The engine devices in `src/devices.js` feed them and the engine merges the sources (largest
+value wins; every connected pad); physics never sees the source. A button pressed and released between
+two steps still counts for one step (the engine's press latch). Enter and Space on a focused button belong to
+the button.
 
 - **Keyboard:** W/S or ↑/↓ throttle/brake (ramped), A/D or ←/→ steer (ease-in, faster
   return-to-centre, snaps through centre), Space handbrake, Q/E shift, R reset (on a track: back
@@ -178,13 +190,19 @@ Steer is +left / −right.
 - **Touch** (shown on `pointer: coarse`): a floating steering slider in the left half that zeroes
   where the thumb lands, and Gas / Brake / Handbrake press buttons for the right thumb (+ / − in
   Manual) — see [Round 4](#round-4-touch-controls-2026-10-10).
-- Strongest of the keyboard and gamepad steer wins; active touch steer overrides both. Throttle,
-  brake and handbrake take the max across sources.
+- Every source merges by the largest value, steering included (an idle touch thumb no longer overrides the
+  keyboard or pad).
 
 ## UI
 
-- The game opens on the **title menu** (mode, track, car, Drive) and has pause and results menus
-  and a timing HUD: see `tracks-spec.md` T-26.
+- The game opens on the **title** overlay (mode, track, car, Drive) and has `pause`, `results` and
+  `settings` overlays and a timing HUD: see `tracks-spec.md` T-26. The cards are the page's own markup in
+  `[data-lh-slot]` elements that the engine adopts as registry controls, so every control has a test id:
+  `stage.pause`; `title.mode.{freeDrive,stage,timeAttack}`, `title.world.{loop,stage}`, `title.seed` (field),
+  `title.dice`, `title.style.{twisty,flowing}`, `title.theme.{summer,winter}`, `title.density.{mild,wild}`,
+  `title.car.{awd,rwd}`, `title.settings`, `title.drive`; `pause.{resume,restart,settings,quit}`;
+  `results.{retry,newSeed,menu}`; `settings.surface.*`, `settings.assist.{true,false}`,
+  `settings.units.{mph,kmh}`, `settings.gearbox.{auto,manual}`, `settings.close`.
 - The **settings sheet** (Settings in the title footer, or Settings in the pause menu): Surface
   (pad only), Driving (Assisted / Sim), Units (mph / km/h), Gearbox (Auto / Manual), control help.
   Settings persist in `localStorage` (`rally-sim-settings`, `v` 4: adds `mode`; a saved
@@ -199,13 +217,18 @@ Steer is +left / −right.
 
 ## Debug hook
 
-`window.rally` exposes `sim`, `view`, `controls`, `CARS`, `MODES`, `settings`, `game`, `menus`,
-`setWorld(world)`, `loadTrack(opts)` (settings, then the title on that track, e.g. `{ mode:
-'stage', seed: 'abc', theme: 'winter' }` or `{ mode: 'freeDrive', world: 'loop' }`), `drive()`,
-`toTitle()`, `pause()` / `resume()` / `restart()` (the game's), `debugPause()` /
-`debugResume()` (freeze the frame loop's physics), `stepN(n)`, `render()`, `state()` (telemetry +
-game state), and `debug` — jump to any screen and fire HUD events (`tracks-spec.md` T-26 *Debug
-hooks*; also `?debug=<screen>&mode=<mode>` in the URL).
+`window.rally` is gone; `window.engine` (the Lion Hawk hook) covers it:
+
+- `engine.state()` (`game.state`: phase, mode, seed, kind, time, laps, p, speed, gear, rpm, pose, …),
+  `engine.stepN(n)`, `engine.render(0)`, `engine.settled()`, `engine.errors`.
+- `engine.jump('stage', preset, opts, { settings, pad })` goes to a screen. Presets: `title`, `loading`,
+  `ready`, `countdown { n }`, `running`, `paused`, `results { time, best, splits }`, `settings`,
+  `nearFinish { d }`, `teleport { p }`. Each jump rebuilds the world (field note #33).
+- `engine.debug` (`game.debug`): `sim`, `settings`, `screen(name, opts)`, `nearFinish(d)`, `teleport(p)`,
+  `finish(opts)`, `split(i, delta)`, `lap(valid)`, `missed(i)`, `blocked(i)`, `count(n)`. The HUD fakes show
+  after the next step's flush.
+- URL: `?debug=<screen>&mode=<mode>&n=<light>` opens straight onto a screen (on a phone too); `?pad` drives
+  the test pad; `?seed=` and `?lh-test` fix the engine seed.
 
 ## Validation targets
 
@@ -241,7 +264,6 @@ mobile test uses the Chromium in `~/.cache/ms-playwright`).
 
 - **Livery not applied:** `repaint()` in `render.js` is defined but never called, so cars show
   Kenney's stock paint (the AWD car is green, not its configured blue).
-- `test/browser.py` needs Python Playwright, which isn't installed; `test/mobile.mjs` covers it.
 - Fresh-snow rendering is unchecked on a phone/iPad: a 148k-vertex displaced mesh (drawn twice
   with the shadow pass, 1 texture read per pixel plus procedural noise) plus a 16 MB texture, and a refill (a 16 MB clear plus every driven tile) each time the car moves 64 m from the window centre.
 - Touch controls are tested in Chromium emulating iPhones/iPads, not real Safari; iOS-only

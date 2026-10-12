@@ -1,6 +1,6 @@
 // Rally's browser half (lion-hawk 2c-rally R5, [S-1]): view halves over the sim half's scenes. All content comes from
 // engine.scene.state (the stage state, #28). R5: the stage half (renderer, camera, HUD, toast, seed chip, body
-// classes, settings save); R6: the title/pause/results/settings halves (today's Menus, field note #18: the engine owns the
+// classes, settings save); R6: the title/pause/results/settings halves (field note #18, replacing the removed Menus: the engine owns the
 // adopted controls, these halves own the cards around them).
 import { defineView } from 'lion-hawk/view';
 import { Renderer } from './render.js';
@@ -19,7 +19,7 @@ const lengthText = (m, units) => units === 'mph' ? `${(m / 1609.344).toFixed(1)}
 const BUILDING = 'Building the track…';
 const STAGE_CLASSES = ['scr-title', 'scr-play', 'menuOpen', 'onTrack', 'manual'];
 
-// Lap table for the pause card (lap modes), split table for the results card: today's Menus markup.
+// Lap table for the pause card (lap modes), split table for the results card: the removed Menus' markup.
 function lapTable(s) {
   if (!s.mode?.laps || !s.laps.length) return '';
   const best = Math.min(...s.laps.filter(l => l.valid).map(l => l.time));
@@ -62,7 +62,7 @@ function overlayHalves() {
     },
     exit(engine, view) {
       seedForm?.el?.removeEventListener('submit', seedForm.on); seedForm = null; this.seen = null;
-      view.doc.activeElement?.blur?.(); // today's play(): a focused title button must not keep Space/Enter
+      view.doc.activeElement?.blur?.(); // the removed play(): a focused title button must not keep Space/Enter
     },
     frame(engine, alpha, view) {
       const s = engine.scene.state, doc = view.doc, seen = this.seen; if (!seen || !s.settings) return;

@@ -27,12 +27,5 @@ async function start() {
   const debug = () => engine.game.debug(engine);
   // ?debug=<screen>&mode=&n= on a phone: jump straight to a screen (the stage presets).
   if (q.get('debug')) debug().screen(q.get('debug'), { mode: q.get('mode') || undefined, n: Number(q.get('n')) || undefined });
-
-  // Thin alias of window.engine for old console habits (removed in R9).
-  window.rally = {
-    get engine() { return window.engine; }, get sim() { return engine.scene.state.sim; }, get settings() { return engine.scene.state.settings; },
-    state: () => window.engine.state(), stepN: n => window.engine.stepN(n), render: () => window.engine.render(0),
-    screen: (name, opts) => debug().screen(name, opts),
-  };
 }
 start();
