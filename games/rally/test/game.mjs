@@ -1,5 +1,5 @@
-// Game loop (spec tracks T-20 … T-27): the hold, pace/run-up, progress, bests and the Game state
-// machine driven headless by the autopilot. Run: node test/game.mjs [filter]
+// Game loop (spec tracks T-20 … T-27): the hold, pace/run-up, progress, bests and the stage scene
+// (engine headless(), autopilot policy). Run: node test/game.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
 import { Sim, DT } from '../src/sim.js';
 import { generateTrack } from '../src/gen/track.js';
@@ -8,8 +8,9 @@ import { makeLocator } from '../src/gen/locate.js';
 import { placeRoadside } from '../src/gen/roadside.js';
 import { allowedSpeed, runUpDistance, V_MAX } from '../src/game/pace.js';
 import { makeProgress } from '../src/game/progress.js';
-import { Game, READY_T, COUNT_T } from '../src/game/game.js';
-import { MODES } from '../src/game/modes.js';
+import { READY_T, COUNT_T } from '../src/game/stage.js';
+import { headless } from 'lion-hawk/test';
+import { rallyGame } from '../src/game.sim.js';
 import { makeBests, bestKey } from '../src/game/bests.js';
 import { autopilot } from './autopilot.js';
 await R.init();
@@ -142,63 +143,62 @@ await test('bests', () => {
   check(`key ${bestKey('stage', track, 'awd')}`, +(bestKey('stage', track, 'awd') === 'stage|s|stage|twisty|summer|mild|awd'), 1, 1);
 });
 
-// Runs the game with the autopilot driving (60 Hz control, like the track tests) until
-// until(game, events) is true or maxTime s of sim time pass. Returns the events seen.
-function play(game, track, { maxTime = 600, until, onEvent } = {}) {
-  const sim = game.sim, ev = [], every = Math.round(1 / (60 * DT));
-  const off = game.on((e) => { ev.push({ ...e, at: sim.time }); onEvent?.(e); });
+// A headless Rally on a generated track (field note #27): the settings are the old trackSim's (assist on, summer).
+function rally(seed, kind, mode, bests = makeBests(memStore())) {
+  const h = headless(rallyGame({ bests }), { args: { settings: { mode, seed, world: kind, theme: 'summer', assist: true } } });
+  return { h, bests, S: () => h.engine.scene.state, track: h.engine.scene.state.sim.world.track, sim: h.engine.scene.state.sim };
+}
+// Steps with the autopilot policy until until(h, events) is true or maxTime s of sim time pass. Returns the events seen,
+// stamped at = step · DT (an event's step is the step whose logic emitted it); onEvent runs at events.flush, after physics.
+function play(h, { maxTime = 600, until, onEvent } = {}) {
+  const ev = [], off = h.engine.events.on((e) => { ev.push({ ...e, at: e.step * DT }); onEvent?.(e); });
   for (let i = 0; i < maxTime / DT; i++) {
-    if (i % every === 0 && game.state === 'running') {
-      const c = autopilot(sim, track);
-      Object.assign(sim.car.input, { steer: c.steer, throttle: c.throttle, brake: c.brake, handbrake: 0 });
-    }
-    game.step(); sim.step();
-    if (until && until(game, ev)) break;
+    h.step(1, 'autopilot');
+    if (until && until(h, ev)) break;
   }
-  off();
+  off?.();
   return ev;
 }
+const finished = (h) => h.state().phase === 'finished';
+const retry = (h) => { h.untilScene('results', { maxSeconds: 2 }); h.tap('results.retry'); };
 
 await test('game stage', () => {
-  const { track, sim } = trackSim('g1', 'stage');
-  const game = new Game(sim, { bests: makeBests(memStore()) });
-  game.setMode(MODES.stage, 'awd');
-  game.title();
+  const { h, bests, S, track, sim } = rally('g1', 'stage', 'stage');
   check('title holds the car', +sim.car.hold, 1, 1);
-  const t0 = sim.time;
-  game.begin();
-  check('begin → ready', +(game.state === 'ready'), 1, 1);
+  const t0 = h.time.step * DT;
+  h.tap('title.drive');
+  check('begin → ready', +(h.state().phase === 'ready'), 1, 1);
   let goAt = null;
-  const ev = play(game, track, { until: (g) => g.state === 'finished', onEvent: (e) => { if (e.type === 'count' && e.n === 0) goAt = sim.time; } });
+  const ev = play(h, { until: finished, onEvent: (e) => { if (e.type === 'count' && e.n === 0) goAt = e.step * DT; } });
   const counts = ev.filter((e) => e.type === 'count').map((e) => e.n).join('');
   check(`countdown 3-2-1-Go: ${counts}`, +(counts === '3210'), 1, 1);
   check('ready + countdown (s)', goAt - t0, READY_T + COUNT_T - DT, READY_T + COUNT_T + 2 * DT);
-  check('finished', +(game.state === 'finished'), 1, 1);
+  check('finished', +(h.state().phase === 'finished'), 1, 1);
   const fin = ev.find((e) => e.type === 'finish');
   check('clock = sim time since Go (s)', Math.abs(fin.time - (fin.at - goAt)), 0, 2 * DT);
-  check('one split per checkpoint', ev.filter((e) => e.type === 'split').length, game.progress.cps.length, game.progress.cps.length);
+  check('one split per checkpoint', ev.filter((e) => e.type === 'split').length, S().progress.cps.length, S().progress.cps.length);
   check('first run is a best', +fin.isBest, 1, 1);
   console.log(`      stage ${track.layout.length.toFixed(0)} m in ${fin.time.toFixed(2)} s`);
   // Rolls to a stop after the finish.
-  play(game, track, { maxTime: 15 });
+  play(h, { maxTime: 15 });
   check('stopped after the finish (m/s)', Math.abs(sim.car.speed), 0, 0.3);
 
   // Second run, the same: splits now have deltas; a slower or equal time isn't a new best.
-  game.restart();
-  const ev2 = play(game, track, { until: (g) => g.state === 'finished' });
+  retry(h);
+  const ev2 = play(h, { until: finished });
   const sp = ev2.filter((e) => e.type === 'split');
   check('second run splits have deltas', sp.filter((e) => e.delta !== null).length, sp.length, sp.length);
   const fin2 = ev2.find((e) => e.type === 'finish');
   check('second run delta = time − prev (s)', Math.abs(fin2.delta - (fin2.time - fin.time)), 0, 1e-9);
   check('best kept only if faster', +(fin2.isBest === fin2.time < fin.time), 1, 1);
-  check('saved best is the faster', game.bests.get(game.key).time, Math.min(fin.time, fin2.time), Math.min(fin.time, fin2.time));
+  check('saved best is the faster', bests.get(bestKey('stage', track, 'awd')).time, Math.min(fin.time, fin2.time), Math.min(fin.time, fin2.time));
 
   // Teleport over a checkpoint: missed, and the finish is blocked until it's driven through.
-  game.restart();
-  const L = track.layout, P = () => game.progress;
+  retry(h);
+  const L = track.layout, P = () => S().progress;
   let jumped = false, back = false;
-  const ev3 = play(game, track, {
-    until: (g) => g.state === 'finished',
+  const ev3 = play(h, {
+    until: finished,
     onEvent: (e) => {
       if (e.type === 'split' && e.index === 0 && !jumped) {
         jumped = true; // land 60 m past checkpoint 1
@@ -218,16 +218,14 @@ await test('game stage', () => {
 
 await test('game time attack', () => {
   for (const seed of ['ta1', 'ta2']) {
-    const { track, sim } = trackSim(seed, 'loop');
-    const game = new Game(sim, { bests: makeBests(memStore()) });
-    game.setMode(MODES.timeAttack, 'awd');
-    game.begin();
-    const off = -game.startPose().off;
+    const { h, S, track } = rally(seed, 'loop', 'timeAttack');
+    h.tap('title.drive');
+    const off = -S().pose.off;
     let clockAtLine = null;
-    const ev = play(game, track, {
+    const ev = play(h, {
       maxTime: 500,
       until: (g, e) => e.filter((x) => x.type === 'lap').length >= 2,
-      onEvent: (e) => { if (e.type === 'start') clockAtLine = game.time + game.lapTime; },
+      onEvent: (e) => { if (e.type === 'start') clockAtLine = S().time + S().lapTime; },
     });
     check(`${seed} run-up (m)`, off, 150, 400);
     check(`${seed} clock still 0 at the flying start`, clockAtLine ?? -1, 0, 0);
@@ -236,22 +234,20 @@ await test('game time attack', () => {
     check(`${seed} laps valid`, laps.filter((l) => l.valid).length, 2, 2);
     check(`${seed} lap 1 (s)`, laps[0]?.time ?? 0, 30, 250);
     check(`${seed} lap 2 has a delta`, +(laps[1]?.delta !== null), 1, 1);
-    check(`${seed} game.laps recorded`, game.laps.length, 2, 2);
+    check(`${seed} game.laps recorded`, S().laps.length, 2, 2);
     console.log(`      ${seed} loop ${track.layout.length.toFixed(0)} m, laps ${laps.map((l) => l.time.toFixed(2)).join(' / ')} s`);
   }
 });
 
 await test('game free drive', () => {
-  const { sim } = trackSim('g1', 'loop');
-  const game = new Game(sim);
-  game.setMode(MODES.freeDrive);
-  game.begin();
-  check('free drive starts running', +(game.state === 'running'), 1, 1);
+  const { h, sim } = rally('g1', 'loop', 'freeDrive');
+  h.tap('title.drive');
+  check('free drive starts running', +(h.state().phase === 'running'), 1, 1);
   check('free drive not held', +sim.car.hold, 0, 0);
-  game.pause();
-  check('pause', +(game.state === 'paused'), 1, 1);
-  game.resume();
-  check('resume → running', +(game.state === 'running'), 1, 1);
+  h.step(1, { pause: true });
+  check('pause', +h.scene.overlays.includes('pause'), 1, 1);
+  h.tap('pause.resume');
+  check('resume → running', +(h.state().phase === 'running' && !h.scene.overlays.includes('pause')), 1, 1);
 });
 
 const fails = results.filter((r) => !r.ok).length;
