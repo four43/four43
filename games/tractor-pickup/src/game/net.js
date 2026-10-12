@@ -49,7 +49,7 @@ export function netCommands(api) {
   return {
     // N-1: a port is bound. An earlier sync is closed first, with its sends cut off (they would go out on this port)
     'net.open': (e, d, ctx) => {
-      if (ctx?.name !== 'farm' || !ctx.state.game) return;
+      if (ctx?.name !== 'farm' || !ctx.state.game) return warn('net open', new Error(`net.open with no farm (main scene '${ctx?.name}'): no sync`)); // M-44: said once, never silent
       const s = ctx.state, old = live(ctx);
       if (old) { old.facade.send = old.facade.leave = () => {}; try { old.sync.close(); } catch (err) { warn('net close', err); } end(e, old); }
       const host = d.role === 'host', n = s.net = { role: d.role, sync: null, facade: netFacade(e, { isHost: host, id: d.id, hostId: d.hostId }), at: null, registry: registryOf(rows) };

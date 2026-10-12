@@ -36,3 +36,13 @@ test('the host leaving sends the guest on alone on the same farm (M-41)', () => 
   const w = world(); w.seconds(1); w.host.net.leave(); w.seconds(0.5);
   const g = st(w.guests[0]); assert.equal(g.net.role, 'solo'); assert.equal(g.game.herd.remote, false); assert.equal(g.game.farm.seed, 21);
 });
+test('a guest that goes alone while its farm builds: the host-seed farm is built once, with no farmReady (M-41, #80)', () => {
+  const w = world(), g = w.guests[0], y = (w.step(1), st(g).net.sync); let ready = 0; const fr = y.farmReady; y.farmReady = (...a) => { ready++; return fr(...a); };
+  let k = 0; while (!g.engine.loading.active && k++ < 60) w.step(1);
+  assert.ok(g.engine.loading.active && st(g).gen === 1, 'the welcome asked for the farm; not built yet');
+  const builds = () => g.h.events.filter(e => e.type === 'farm').length, b0 = builds();
+  w.host.net.leave(); w.seconds(1); // the room closes before the build runs (commands come first in a step)
+  assert.equal(st(g).net.role, 'solo'); assert.equal(y.alone, true);
+  assert.equal(st(g).game.farm.seed, 21, "the host's farm"); assert.equal(st(g).gen, 2); assert.equal(builds() - b0, 1, 'built once');
+  assert.equal(ready, 0, 'no farmReady: the sync is gone'); assert.equal(st(g).game.herd.remote, false);
+});
