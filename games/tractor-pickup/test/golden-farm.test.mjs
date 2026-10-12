@@ -7,7 +7,7 @@ import { tractorGame, FARM_EVENTS } from '../src/game.sim.js';
 import { createGame } from '../src/sim/game.js';
 await R.init();
 
-const ARGS = { seed: 14, power: 'medium', started: true };
+const ARGS = { seed: 14, power: 'medium', started: true, trip: false }; // the trip off: no intro, help or bedtime cue can touch the run
 const STILL = { thr: 0, steer: 0, horn: false };
 const inputAt = i => i < 120 ? STILL : i < 600 ? { thr: 1, steer: Math.sin(i / 60) * 0.6, horn: i % 240 === 0 } : { thr: -0.5, steer: 0.3, horn: false };
 const body = b => ({ p: b.translation(), q: b.rotation(), v: b.linvel() });

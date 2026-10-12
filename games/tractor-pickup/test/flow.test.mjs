@@ -57,3 +57,11 @@ test('a new farm builds through ctx.load from farm.new and frees the old Rapier 
   assert.equal(h.events.of('farm').at(-1).seed, 99); assert.equal(s.started, true);
   h.command('farm.new', {}).command('farm.new', {}).step(1); h.untilLoaded(); h.untilLoaded(); assert.equal(s.gen, 4, 'the second request waited for the first');
 });
+test('a stale show ack from the farm before a new one does not end the new farm\'s show (#79, S-6)', () => {
+  const h = headless(tractorGame(), { args: ARGS }), s = h.engine.scene.state;
+  h.command('farm.new', {}).step(1); h.untilLoaded(); assert.equal(s.gen, 2);
+  h.debug.riders(2); const b = s.game.farm.yard.barn; h.debug.trainAt(b.x - Math.sin(b.yaw) * 20, b.z - Math.cos(b.yaw) * 20, b.yaw); h.seconds(3.1);
+  s.raw = { thr: 1, steer: 0, horn: false }; const sh = h.untilEvent('show', { maxSeconds: 15 }); s.raw = null; assert.equal(sh.gen, 2);
+  h.command('show.done', { gen: 1, spots: [] }).step(3); assert.equal(s.show.done, false); assert.equal(s.game.mode, 'show');
+  h.command('show.done', { gen: 2, spots: [] }); h.untilEvent('reward', { maxSteps: 5 }); assert.equal(s.game.mode, 'reward');
+});

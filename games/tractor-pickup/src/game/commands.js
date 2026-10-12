@@ -6,7 +6,7 @@ import { setBedtime } from '../sim/bedtime.js';
 import { play, showDone, closeReward } from './flow.js';
 
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v < hi;
-const progress = (e, s) => e.emit('progress', { progress: s.progress });
+const progress = (e, s) => e.emit('progress', { progress: structuredClone(s.progress) }); // a copy: the event log never sees later changes
 
 // handler(engine, farm state, data) → a game-wide command that runs only while the farm is the main scene
 const farm = fn => (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) fn(e, ctx.state, d ?? {}); };
@@ -49,13 +49,13 @@ export const makeCommands = api => ({
     e.emit('settings', { settings: s.settings });
   }),
   // F-10, #79: the view's show is over; where each rider stands
-  'show.done': farm((e, s, d) => showDone(e, s, d.spots)),
+  'show.done': farm((e, s, d) => showDone(e, s, d.spots, d.gen)),
   // #85: the view's wall date (epoch ms), once a second and on coming back to the page; the farm step checks bedtime against it
   clock: farm((e, s, d) => { if (Number.isFinite(d.date)) s.date = d.date; }),
   // E-5: the parent's bedtime (minutes: one of BEDTIME_CHOICES, or null to cancel), counted from the date it was set
   'bed.set': farm((e, s, d) => {
     if (!Number.isFinite(d.date)) return;
-    setBedtime(s.bed, d.minutes ?? null, d.date); s.date = d.date; e.emit('bed', { bed: s.bed });
+    setBedtime(s.bed, d.minutes ?? null, d.date); s.date = d.date; e.emit('bed', { bed: { ...s.bed } });
   }),
   'farm.new': (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) api.newFarm(e, ctx); }, // P-8, M-19, [S-6]
 });

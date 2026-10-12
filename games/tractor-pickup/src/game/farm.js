@@ -117,7 +117,7 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
         const g = S(e).game, b = g.farm.yard.barn; moveTrain(g, b.x - Math.sin(b.yaw) * 20, b.z - Math.cos(b.yaw) * 20, b.yaw, { ground: true });
       },
       // E-5: bedtime's last drive (the barn path and the voice), and asleep (quiet, as after a reload)
-      last: e => { const s = S(e); Object.assign(s.bed, { phase: 'last', at: null, choice: null }); e.emit('bed', { bed: s.bed }); if (s.started) api.lastDrive(e); else api.play(e); },
+      last: e => { const s = S(e); Object.assign(s.bed, { phase: 'last', at: null, choice: null }); e.emit('bed', { bed: { ...s.bed } }); if (s.started) api.lastDrive(e); else api.play(e); },
       asleep: e => { const s = S(e); if (s.started) api.goSleep(e, { quiet: true }); else { sleepNow(s.bed); api.play(e); } },
     },
     enter(e, ctx) {
@@ -149,7 +149,7 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
       const s = ctx.state, driving = () => s.started && s.game?.mode === 'drive' && !s.show; // U-6: the drive buttons
       u.button({ id: 'paint', label: 'Paint', when: driving, action: e => open(e, 'paint') });
       u.button({ id: 'book', label: 'Sticker book', when: driving, action: e => open(e, 'book') });
-      u.hold({ id: 'parent', label: 'Grown-ups', seconds: 2, wall: true, action: e => open(e, 'parent') }); // P-1, #83: a 2 s hold on wall time
+      u.hold({ id: 'parent', label: 'Grown-ups', seconds: 2, wall: true, action: e => open(e, 'parent') }); // P-1, #83: ui/menus.js's gear holdToFire(gear, 2000), on wall time
     },
   };
   return { scene, api };

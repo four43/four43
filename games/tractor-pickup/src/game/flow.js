@@ -24,7 +24,7 @@ export function lastDrive(e, s) {
 }
 // E-5: asleep. The tractor is held; the view brings the night, the lullaby and (unless quiet) the goodnight voice
 export function goSleep(e, s, { quiet = false } = {}) {
-  sleepNow(s.bed); e.emit('bed', { bed: s.bed });
+  sleepNow(s.bed); e.emit('bed', { bed: { ...s.bed } });
   s.sleepAfter = false; s.game.lastDrive = false; setGuide(e, s, false);
   s.game.mode = 'sleep';
   e.emit('sleep', { quiet });
@@ -32,7 +32,7 @@ export function goSleep(e, s, { quiet = false } = {}) {
 }
 // E-5: the 5 s wake hold (sleep.wake)
 export function wake(e, s) {
-  wakeUp(s.bed); e.emit('bed', { bed: s.bed });
+  wakeUp(s.bed); e.emit('bed', { bed: { ...s.bed } });
   e.close('sleep'); e.emit('wake');
   if (s.game.mode === 'sleep') s.game.mode = 'drive';
 }
@@ -45,9 +45,11 @@ export function play(e, s) {
 }
 // F-3: the card's go (or a clear of the stickers under it): the trip drives on at the next step
 export function closeReward(e, s) { s.rewardDone = true; s.reward = null; e.close('reward'); }
-// F-10, #79: the view's ack carries where each rider stands at the end of its show; they walk into the barn from there
-export function showDone(e, s, spots) {
+// F-10, #79: the view's ack carries where each rider stands at the end of its show; they walk into the barn from there.
+// gen: the farm the show was on (the `show` event's); an ack for an older farm's show is ignored
+export function showDone(e, s, spots, gen) {
   const sh = s.show; if (!sh || sh.done) return; // only while the show runs; a second ack does nothing
+  if (gen !== undefined && gen !== s.gen) return;
   if (Array.isArray(spots)) for (const p of spots) {
     if (!Array.isArray(p) || p.length !== 5 || !p.every(Number.isFinite)) continue;
     const r = sh.riders.find(x => x.animal.id === p[0]); if (!r) continue;
@@ -62,15 +64,15 @@ function reward(e, s, riders) {
     const r = completeShow(s.progress, riders.map(x => x.animal)); s.progress = r.progress;
     if (r.newHat) s.game.wearHats(wornHats(s.progress));
     s.reward = { sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat };
-    e.emit('progress', { progress: s.progress });
-    e.emit('reward', { sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat });
+    e.emit('progress', { progress: structuredClone(s.progress) }); // a copy: the event log never sees later changes
+    e.emit('reward', structuredClone(s.reward));
     open(e, 'reward');
   } catch (err) { console.error('reward', err); s.reward = null; s.rewardDone = true; }
 }
 
 // E-5, #85: time is up on the view's last wall date (checked each step, the date arrives once a second). Before the trip.
 export function stepBed(e, s) {
-  if (s.date !== null && stepBedtime(s.bed, s.date) === 'last') { e.emit('bed', { bed: s.bed }); lastDrive(e, s); }
+  if (s.date !== null && stepBedtime(s.bed, s.date) === 'last') { e.emit('bed', { bed: { ...s.bed } }); lastDrive(e, s); }
 }
 
 // spec 3.1: intro, drive, show, reward. Runs at the end of the farm step while the trip is on, started and not asleep.
@@ -93,7 +95,7 @@ export function stepFlow(e, s, ev) {
       if (!riders.length) { s.showDone = true; continue; } // E-5: an empty last drive has no show
       for (const r of riders) r.animal.state = 'show'; // #79: the slot spring lets go; the view animates its own copies
       open(e, 'show');
-      e.emit('show', { riders: riders.map(r => ({ id: r.animal.id, type: r.animal.type, golden: !!r.animal.golden, car: r.slot.car, k: r.slot.k })),
+      e.emit('show', { gen: s.gen, riders: riders.map(r => ({ id: r.animal.id, type: r.animal.type, golden: !!r.animal.golden, car: r.slot.car, k: r.slot.k })),
         steps: buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden }))) });
     }
     if (c === 'reward') {
