@@ -1,7 +1,9 @@
-import subprocess, pathlib, shutil, hashlib, json, base64
+import subprocess, pathlib, shutil, hashlib, json, base64, os
 here = pathlib.Path(__file__).resolve().parent
-out_dir = here.parents[1] / 'site/exp/tractor-pickup'
-subprocess.run(['npx', 'esbuild', 'src/main.js', '--bundle', '--format=iife', '--minify', '--loader:.json=json',
+# lion-hawk 2g: TRACTOR_ENTRY builds the engine entry (src/entry.js) until G7; TRACTOR_OUT writes the site elsewhere (checks, never site/exp)
+entry = os.environ.get('TRACTOR_ENTRY', 'src/main.js')
+out_dir = pathlib.Path(os.environ['TRACTOR_OUT']) if 'TRACTOR_OUT' in os.environ else here.parents[1] / 'site/exp/tractor-pickup'
+subprocess.run(['npx', 'esbuild', entry, '--bundle', '--format=iife', '--minify', '--loader:.json=json',
                 '--outfile=build/app.js', '--log-level=warning'], check=True, cwd=here)
 app = (here / 'build/app.js').read_text().replace('</script', '<\\/script')
 html = (here / 'template.html').read_text().replace('<!--APP-->', app)
