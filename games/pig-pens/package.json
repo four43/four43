@@ -5,7 +5,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node --test test/e2e.browser.mjs"
   },
   "keywords": [],
   "author": "",
@@ -19,5 +20,8 @@
     "lion-hawk": "file:../../../lion-hawk-engine",
     "three": "^0.186.0"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "playwright-core": "^1.64.0"
+  }
 }
