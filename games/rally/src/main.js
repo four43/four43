@@ -43,7 +43,7 @@ async function start() {
   view.setWorld(sim.world); view.setSurface(settings.surface); view.setCar(sim.car);
   const controls = new Controls(root), hud = new Hud(root), ghud = new GameHud();
   hud.setUnits(settings.units);
-  const bests = makeBests();
+  const bests = makeBests(localStorage);
   const game = new Game(sim, { bests });
   const mode = () => MODES[settings.mode];
 

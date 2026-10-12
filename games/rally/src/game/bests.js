@@ -5,7 +5,10 @@ const KEY = 'rally-sim-bests';
 export const bestKey = (modeId, track, carId) =>
   [modeId, track.seed, track.kind, track.style, track.theme, track.density, carId].join('|');
 
-export function makeBests(storage = globalThis.localStorage) {
+// In-memory default keeps the sim half pure; the view half passes localStorage.
+export function memoryStore() { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => { m.set(k, String(v)); } }; }
+
+export function makeBests(storage = memoryStore()) {
   const load = () => { try { return JSON.parse(storage.getItem(KEY)) || {}; } catch { return {}; } };
   return {
     get: (key) => load()[key] ?? null,

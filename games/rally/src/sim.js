@@ -17,6 +17,9 @@ export class Sim {
     this.setWorld(opts.world || new PadWorld({ pad: opts.pad, cones: opts.cones, surface: opts.surface }), opts.pos, opts.yaw);
   }
 
+  // Frees the Rapier world; idempotent.
+  dispose() { if (this.phys) this.phys.free(); this.phys = null; this.car = null; }
+
   // Swaps worlds by rebuilding the Rapier world from scratch (simplest way to drop every old
   // collider and prop) and re-creating the car at the new world's spawn (or pos/yaw).
   setWorld(world, pos, yaw) {
