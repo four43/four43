@@ -21,7 +21,7 @@ test('tractor: 0 to 5.2–5.6 m/s in 4 s; full steer turns 1.8–2.0 rad in 2 s;
   T.setInput(-1, 0); let stop = 0; steps(sim, 240, s => { if (!stop && T.fwd < 0.1) stop = s / 60; });
   assert.ok(stop > 1.2 && stop < 1.4, `${stop}`);
 });
-test('night (seed 9): all in bed by 15 s, a gulp at 20–24 s, a tap makes the fox spit, nobody is lost by morning', () => {
+test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 20–24 s, a tap makes the fox spit, nobody is lost by morning', () => {
   const sim = createSim(RAPIER, { pigs: 30, seed: 9 }), F = sim.flock; steps(sim, 300); sim.setNight(true);
   let bed = -1, gulp = -1, spit = null;
   steps(sim, 60 * 40, s => {
@@ -29,7 +29,7 @@ test('night (seed 9): all in bed by 15 s, a gulp at 20–24 s, a tap makes the f
     if (bed < 0 && F.birds.every(b => b.state === 10)) bed = s / 60;
     if (gulp >= 0 && !spit && s / 60 > gulp + 2 && F.fox.carrying) F.tapFox();
   });
-  assert.ok(bed > 0 && bed < 15, `${bed}`); assert.ok(gulp > 20 && gulp < 24, `${gulp}`);
+  assert.ok(bed > 10 && bed < 13, `${bed}`); assert.ok(gulp > 20 && gulp < 24, `${gulp}`);
   assert.equal(spit?.reason, 'tap'); assert.ok(spit.t - gulp > 1.9 && spit.t - gulp < 2.4, `${spit.t - gulp}`);
   sim.setNight(false); steps(sim, 60 * 20);
   assert.equal(F.birds.length, 11); assert.equal(F.birds.filter(b => b.state === 12).length, 0); assert.equal(F.fox.carrying, null);

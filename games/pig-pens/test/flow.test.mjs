@@ -168,11 +168,14 @@ test('a session of taps and drags records and replays to the same checksums (T-9
   for (let k = 0; k < 30; k++) { tool(h, 'move', [P[0] + k * 0.1, 0, P[2]]); h.step(1); }
   tool(h, 'up', P); h.tap('farm.tool.feed'); tapAt(h, pen(sim, 4)); h.step(120);
   // a Hose drag with aim, and a Grab (pick, lift, drop), recorded too
-  h.tap('farm.tool.hose'); const Q = pen(sim, 2); tool(h, 'down', Q, { aim: rayTo([Q[0], 0, Q[2] - 1]) });
-  for (let k = 0; k < 20; k++) { tool(h, 'move', [Q[0] + k * 0.1, 0, Q[2]], { aim: rayTo([Q[0] + k * 0.1, 0, Q[2] - 1]) }); h.step(1); }
+  h.tap('farm.tool.hose'); const Q = pen(sim, 2); tool(h, 'down', Q, { aim: rayTo([Q[0], 0, Q[2] - 1]) }); h.step(1);
+  let hosed = 0;
+  for (let k = 0; k < 20; k++) { tool(h, 'move', [Q[0] + k * 0.1, 0, Q[2]], { aim: rayTo([Q[0] + k * 0.1, 0, Q[2] - 1]) }); h.step(1); if (sim.hose?.active) hosed++; }
+  assert.ok(hosed > 0, 'the hose was active during the drag');
   tool(h, 'up', Q); h.step(10);
   h.tap('farm.tool.grab'); const p = findPig(sim), at = [p.px, p.py, p.pz];
   tool(h, 'down', at, { aim: rayTo([p.px, p.py, p.pz - 1.5]) }); h.step(20);
+  assert.equal(sim.grabbed, p.i, 'the grab took effect');
   tool(h, 'move', [p.px + 1, 1.7, p.pz], { aim: rayTo([p.px + 1, 1.7, p.pz - 1]) }); h.step(20);
   tool(h, 'up', at); h.step(120);
   const r = replay(pigPensGame(), h.tape());
