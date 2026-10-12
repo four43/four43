@@ -66,3 +66,16 @@ export function runUntil(sim, track, { maxTime = 600, rate = 60, onStep, opts } 
   }
   return false;
 }
+
+// The headless `autopilot` policy (lion-hawk [T-2]): drives while the stage is `running` on a track, recomputed every
+// 4th step (60 Hz in the 240 Hz sim, as the golden and the game tests) and held in between (#26: per-engine cache).
+const EVERY = 4, last = new WeakMap();
+export function autopilotPolicy(h) {
+  const e = h.engine, s = e.scene.state, track = s.sim?.world.track;
+  if (e.scene.name !== 'stage' || s.phase !== 'running' || !track) return {};
+  const c = last.get(e);
+  if (c && c.sim === s.sim && e.time.step - c.at < EVERY) return c.out;
+  const a = autopilot(s.sim, track), out = { steer: a.steer, throttle: a.throttle, brake: a.brake, handbrake: 0 };
+  last.set(e, { sim: s.sim, at: e.time.step, out });
+  return out;
+}
