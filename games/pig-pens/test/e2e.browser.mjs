@@ -174,7 +174,8 @@ test('iPhone: the toolbar, top bar and drive controls are tappable and inside th
     await game.jump('farm', 'driving', {}, ARGS); await game.render();
     const exitBox = await game.page.evaluate(() => { const r = document.querySelector('#exit').getBoundingClientRect(); return { w: r.width, h: r.height }; });
     assert.ok(exitBox.h >= 40, `Get out is at least 40 px tall: ${JSON.stringify(exitBox)}`);
-    await expectTappable(game, 'farm.exit', { min: 40 }); // known gap: about 42 px, under the 44 px guideline; restyle planned in the final pass (#63) await expectTappable(game, { css: '#horn' });
+    await expectTappable(game, 'farm.exit', { min: 40 }); // known gap: about 42 px, under the 44 px guideline; restyle planned in the final pass (#63)
+    await expectTappable(game, { css: '#horn' });
     await expectFitsSafeArea(game, '#stick'); await expectFitsSafeArea(game, '#driveBtns');
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
