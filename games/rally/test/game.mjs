@@ -185,11 +185,14 @@ await test('game stage', () => {
 
   // Second run, the same: splits now have deltas; a slower or equal time isn't a new best.
   retry(h);
+  h.step(1, 'autopilot'); // one extra step in ready shifts the autopilot's phase, so run 2 is a different time from run 1
   const ev2 = play(h, { until: finished });
   const sp = ev2.filter((e) => e.type === 'split');
   check('second run splits have deltas', sp.filter((e) => e.delta !== null).length, sp.length, sp.length);
   const fin2 = ev2.find((e) => e.type === 'finish');
   check('second run delta = time − prev (s)', Math.abs(fin2.delta - (fin2.time - fin.time)), 0, 1e-9);
+  console.log(`      run 1 ${fin.time.toFixed(3)} s, run 2 ${fin2.time.toFixed(3)} s`);
+  check('the two runs differ', +(fin2.time !== fin.time), 1, 1);
   check('best kept only if faster', +(fin2.isBest === fin2.time < fin.time), 1, 1);
   check('saved best is the faster', bests.get(bestKey('stage', track, 'awd')).time, Math.min(fin.time, fin2.time), Math.min(fin.time, fin2.time));
 

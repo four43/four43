@@ -135,3 +135,13 @@ test('the pause key and the Pause chip in one frame open pause once', () => {
   assert.deepEqual(h.scene.overlays, ['pause']);
   h.step(2); assert.deepEqual(h.scene.overlays, ['pause']);
 });
+
+test('seed edit then Drive in the same step: the tap queues behind the load and the run begins', () => {
+  const h = headless(rallyGame(), { args: { settings: { mode: 'stage', seed: 'q1' } } });
+  h.fill('title.seed', 'queued'); assert.equal(h.state().phase, 'loading');
+  h.tap('title.drive'); assert.deepEqual(h.scene.overlays, []);
+  assert.equal(h.state().phase, 'loading');
+  h.until(x => x.state().phase !== 'loading', { maxSteps: 60 });
+  assert.equal(h.state().seed, 'queued'); assert.equal(h.state().phase, 'ready');
+  running(h);
+});

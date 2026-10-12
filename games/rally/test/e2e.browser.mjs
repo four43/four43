@@ -105,3 +105,21 @@ test('desktop: title help and seed form, pause card, stage exit clears its body 
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
+
+test('desktop: a hidden page pauses a timed run but not free drive; a seed edit then Drive begins after the load', async t => {
+  if (skip) return t.skip(skip);
+  const hide = game => game.page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  const timed = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: SETTINGS });
+  try {
+    await timed.fill('title.seed', 'e2e3'); await timed.tap('title.drive'); // the change and the click land in one go
+    await timed.until(s => s.phase === 'running', { maxSteps: 2000 });
+    await hide(timed); await frames(timed); await timed.step(1);
+    assert.deepEqual((await timed.scene()).overlays, ['pause']);
+  } finally { await timed.close(); }
+  const free = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: { 'rally-sim-settings': { v: 4, mode: 'freeDrive', world: 'loop', seed: 'e2e4' } } });
+  try {
+    await free.tap('title.drive'); await expectState(free, 'phase', 'running');
+    await hide(free); await frames(free); await free.step(1);
+    assert.deepEqual((await free.scene()).overlays, []);
+  } finally { await free.close(); }
+});
