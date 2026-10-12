@@ -83,7 +83,10 @@ The code has two layers. The simulation layer has no rendering code. It operates
 | `src/layout.js` | Simulation | Farm layout data: fence edges, pens, troughs, obstacles, decor, destinations. |
 | `src/flow.js` | Simulation | Flow-field grid and obstacle tests. |
 | `src/sim.js` | Simulation | Rapier world, pig behavior, dog, snacks, mud, hose, grab. |
-| `src/main.js` | Presentation | (v1; now the engine browser entry) Scene, models, animation, mud shader, water particles, camera, input, minimap. |
+| `src/main.js` | Entry | Engine browser entry (about 20 lines); wires the game together. |
+| `src/game.sim.js`, `src/game/farm.js`, `src/game/pick.js` | Simulation | Game sim hooks, farm scene state and tool commands, picking. |
+| `src/game.view.js`, `src/view/*.js` | Presentation | Scene, models, animation, camera, HUD and rig (world, hud, rig). |
+| `src/devices.js` | Presentation | Input devices and gesture binding. |
 | `src/sound.js` | Presentation | Synthesized sounds. |
 | `src/assets.json` | Data | Baked Kenney geometry and animation tables. |
 | `bake.mjs` | Build tool | Converts Kenney GLB files into `assets.json`. |

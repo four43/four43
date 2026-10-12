@@ -425,9 +425,11 @@ A tap with the Hand tool selects the first match in this sequence:
 
 A drag with the Hand tool turns the camera.
 
-Every tool gesture is a recorded `tool` command (`bindPointer` on `#c`): its data carries the phase (`down`, `move`, `up`, `cancel`, `tap`, `press`) and the camera ray through the finger (and an `aim` ray for Hose and Grab on a finger). The sim does the picking (`src/game/pick.js`), so a replay reproduces a gesture. The toolbar, the day/night switch, the bell, the card's close button and Get out are registry controls with test ids: `farm.tool.hand`, `farm.tool.shoo`, `farm.tool.feed`, `farm.tool.hose`, `farm.tool.grab`, `farm.night`, `farm.bell`, `farm.close`, `farm.exit`.
+Every tool gesture is a recorded `tool` command (`bindPointer` on `#c`): its data carries the phase (`down`, `move`, `up`, `cancel`, `tap`, `press`) and the camera ray through the finger (and an `aim` ray for Hose and Grab on a finger). The sim does the picking (`src/game/pick.js`), so a replay reproduces a gesture. A pointer down while a gesture is still down ends the previous gesture (`endGesture`) before starting the new one. The toolbar, the day/night switch, the bell, the card's close button and Get out are registry controls with test ids: `farm.tool.hand`, `farm.tool.shoo`, `farm.tool.feed`, `farm.tool.hose`, `farm.tool.grab`, `farm.night`, `farm.bell`, `farm.close`, `farm.exit`.
 
 To reach a state in a test or in the console: `engine.jump('farm', 'driving' | 'night' | 'tool' | 'selected', opts, { pigs, seed })`; `engine.debug` gives `sim`, `farm` (the scene state), `tool(name)`, `select(sel)`, `drive()` and `night(on)`.
+
+The old `nan.mjs` script printed fleeing speed and y-range; that output was dropped (`invariants.finite` covers NaN).
 
 ### 10.3 Cards
 
