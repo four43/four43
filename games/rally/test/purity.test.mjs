@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { scanPurity } from 'lion-hawk/test';
+import { scanPurity, stripComments } from 'lion-hawk/test';
 import { rng } from 'lion-hawk/sim';
 import { normalizeSettings, newSeed } from '../src/game/settings.js';
 
@@ -16,10 +16,15 @@ const RALLY = [/\blocalStorage\b/, /\bset(Timeout|Interval)\s*\(/, /\brequestAni
   /from\s*['"][^'"]*\/(render|snowView|ui|menus|devices|game\.view|main)(\.js)?['"]/];
 
 test('sim modules pass the engine purity scan', () => { assert.deepEqual(scanPurity(SIM), []); });
+// Comments are stripped first (line numbers kept), so a trailing `// setTimeout(` or a `/* … */` block never flags.
+const rallyScan = (src, f = '') => stripComments(src).split('\n').map((l, i) => [f, i + 1, l])
+  .filter(([, , l]) => RALLY.some(r => r.test(l))).map(([f, n, l]) => `${f}:${n}: ${l.trim()}`);
 test('sim modules use no browser storage or timers and import no Rally view module', () => {
-  const bad = SIM.flatMap(files).flatMap(f => readFileSync(f, 'utf8').split('\n').map((l, i) => [f, i + 1, l]))
-    .filter(([, , l]) => !/^\s*\/\//.test(l) && RALLY.some(r => r.test(l))).map(([f, n, l]) => `${f}:${n}: ${l.trim()}`);
-  assert.deepEqual(bad, []);
+  assert.deepEqual(SIM.flatMap(files).flatMap(f => rallyScan(readFileSync(f, 'utf8'), f)), []);
+});
+test('the Rally scan ignores comments but still flags code', () => {
+  assert.deepEqual(rallyScan('a(); // setTimeout(f)\n/* localStorage */b'), []);
+  assert.equal(rallyScan('a();\nsetTimeout(f);').length, 1);
 });
 test('settings: normalizeSettings migrates without mutating, newSeed is a seeded 5-char id', () => {
   const saved = { v: 1, assist: true, mode: 'nope', world: 'pad' }, copy = { ...saved };

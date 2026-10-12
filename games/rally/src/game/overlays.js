@@ -3,14 +3,18 @@
 // Control ids are the test ids (U-1): title.drive, pause.resume, results.retry, settings.close.
 const settingsOpen = e => e.scene.overlays.includes('settings');
 
+// A settings choice: pick(id, label, values, when) with values as plain values or { value, label }; the value is the label
+// unless given. Reads and applies through the stage settings (api.choose).
+const choices = (u, api) => (id, label, values, when) => u.choice({ id, label, when,
+  options: values.map(v => typeof v === 'object' && v !== null ? v : { value: v, label: String(v) }),
+  get: e => e.scene.state.settings[id], set: (v, e) => api.choose(e, id, v) });
+
 export function makeOverlays(api) {
   const title = {
     ui(u) {
-      const st = e => e.scene.state.settings, set = key => (v, e) => api.choose(e, key, v);
-      const opts = (...vs) => vs.map(v => ({ value: v, label: String(v) }));
-      const pick = (id, label, values, when) => u.choice({ id, label, options: opts(...values), get: e => st(e)[id], set: set(id), when });
+      const pick = choices(u, api);
       pick('mode', 'Mode', ['freeDrive', 'stage', 'timeAttack']);
-      pick('world', 'World', ['loop', 'stage'], e => st(e).mode === 'freeDrive');
+      pick('world', 'World', ['loop', 'stage'], e => e.scene.state.settings.mode === 'freeDrive');
       pick('style', 'Style', ['twisty', 'flowing']);
       pick('theme', 'Theme', ['summer', 'winter']);
       pick('density', 'Density', ['mild', 'wild']);
@@ -42,10 +46,9 @@ export function makeOverlays(api) {
   };
   const settings = {
     ui(u) {
-      const st = e => e.scene.state.settings, set = key => (v, e) => api.choose(e, key, v);
-      const pick = (id, label, values, when) => u.choice({ id, label, options: values.map(v => ({ value: v, label: String(v) })), get: e => st(e)[id], set: set(id), when });
+      const pick = choices(u, api);
       pick('surface', 'Surface', ['tarmac', 'hardpack', 'gravel', 'snow', 'ice'], e => e.scene.state.pad);
-      pick('assist', 'Assist', [true, false]);
+      pick('assist', 'Assist', [{ value: true, label: 'On' }, { value: false, label: 'Off' }]); // test ids stay settings.assist.true|false
       pick('units', 'Units', ['mph', 'kmh']);
       pick('gearbox', 'Gearbox', ['auto', 'manual']);
       u.button({ id: 'close', label: 'Done', action: e => e.close('settings') });

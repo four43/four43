@@ -38,13 +38,14 @@ export function makeStage({ R, bests = null }) {
       resultsIn: 0 });
   }
 
+  // The road pose t m along the course from the start line: placed START_Y above the road, facing along it.
+  const poseAt = (t, p) => { const pt = pointAt(t.layout, t.roadside.gates[0].s + p); return { x: pt.x, y: pt.road(t.terrain.road) + START_Y, z: pt.z, yaw: pt.yaw, s: pt.s }; };
   // Where the mode starts the car: the spawn, or startOffset m from the start line along the road.
   function startPose(s) {
     const t = track(s), off = t ? s.mode.startOffset(t) : null;
     if (off === null) { const sp = s.sim.world.spawn; return { ...s.sim.spawnPos(s.sim.car.cfg), yaw: sp.yaw, off: null }; }
     if (s.poseCache?.track !== t || s.poseCache.mode !== s.mode) {
-      const p = pointAt(t.layout, t.roadside.gates[0].s + off);
-      s.poseCache = { track: t, mode: s.mode, pose: { x: p.x, y: p.road(t.terrain.road) + START_Y, z: p.z, yaw: p.yaw, off } };
+      s.poseCache = { track: t, mode: s.mode, pose: { ...poseAt(t, off), off } };
     }
     return s.poseCache.pose;
   }
@@ -142,7 +143,7 @@ export function makeStage({ R, bests = null }) {
   }
 
   // --- the API (overlays, debug and presets call these; each takes the engine first) ----------------------------
-  const S = e => e.scene.state;
+  const S = e => { if (e.scene.name !== 'stage') throw new Error('rally: the stage scene is not the main scene'); return e.scene.state; };
   const api = {
     // From the title only: close it and start the run.
     // During a loading hold (a seed edit's change lands before the click) it queues the run for when the load ends.
@@ -199,7 +200,7 @@ export function makeStage({ R, bests = null }) {
     // without crediting anything in between.
     teleport(e, p) {
       const s = S(e), t = track(s); if (!t) return null;
-      const pt = pointAt(t.layout, t.roadside.gates[0].s + p), pose = { x: pt.x, y: pt.road(t.terrain.road) + START_Y, z: pt.z, yaw: pt.yaw, s: pt.s };
+      const pose = poseAt(t, p);
       s.sim.car.reset(pose, pose.yaw);
       if (s.progress) { s.progress.p = p + s.progress.base; s.progress.s = pose.s; }
       return pose;
@@ -244,7 +245,7 @@ export function makeStage({ R, bests = null }) {
   }
 
   // Presets (#25): set the state, never step. Each runs after enter, so the title is open on a track stage.
-  const live = (e, o) => { api.drive(e); const s = S(e); setPhase(e, s, 'running'); s.sim.car.hold = false; s.clockOn = s.mode.clock === 'go'; s.t = 0; s.countN = 0; };
+  const live = e => { api.drive(e); const s = S(e); setPhase(e, s, 'running'); s.sim.car.hold = false; s.clockOn = s.mode.clock === 'go'; s.t = 0; s.countN = 0; };
   const presets = {
     title() {},
     loading(e) { const s = S(e); startLoad(e, s, 'title'); },
@@ -255,11 +256,11 @@ export function makeStage({ R, bests = null }) {
       setPhase(e, s, 'countdown'); e.emit('count', { n });
     },
     running: live,
-    paused(e, o) { live(e, o); e.overlay('pause'); },
-    results(e, o = {}) { live(e, o); api.finish(e, o); S(e).resultsIn = 0; e.overlay('results'); }, // the card is open: no 1.5 s timer
+    paused(e) { live(e); e.overlay('pause'); },
+    results(e, o = {}) { live(e); api.finish(e, o); S(e).resultsIn = 0; e.overlay('results'); }, // the card is open: no 1.5 s timer
     settings(e) { e.overlay('settings'); },
-    nearFinish(e, o = {}) { live(e, o); api.nearFinish(e, o.d ?? 40); },
-    teleport(e, o = {}) { live(e, o); api.teleport(e, o.p ?? 0); },
+    nearFinish(e, o = {}) { live(e); api.nearFinish(e, o.d ?? 40); },
+    teleport(e, o = {}) { live(e); api.teleport(e, o.p ?? 0); },
   };
 
   const scene = {

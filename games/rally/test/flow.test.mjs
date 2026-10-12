@@ -145,3 +145,35 @@ test('seed edit then Drive in the same step: the tap queues behind the load and 
   assert.equal(h.state().seed, 'queued'); assert.equal(h.state().phase, 'ready');
   running(h);
 });
+
+test('toTitle with a changed track goes through the loading hold back to the title', () => {
+  const args = { settings: { mode: 'stage', seed: 't1' } }, h = headless(rallyGame(), { args });
+  h.jump('stage', 'paused', {}, args);
+  h.engine.scene.state.settings.theme = 'winter'; // a track-shaping setting the built track doesn't have
+  h.tap('pause.quit');
+  assert.equal(h.state().phase, 'loading'); assert.equal(h.engine.loading.active, true); assert.deepEqual(h.scene.overlays, ['title']);
+  h.untilLoaded({ maxSteps: 60 });
+  assert.equal(h.state().phase, 'title'); assert.equal(h.engine.scene.state.world.track.theme, 'winter'); assert.deepEqual(h.scene.overlays, ['title']);
+});
+
+test('confirm on the title drives; on the results card it retries', () => {
+  const args = { settings: { mode: 'stage', seed: 'k1' } }, h = headless(rallyGame(), { args });
+  h.step(1, { confirm: true });
+  assert.deepEqual(h.scene.overlays, []); assert.equal(h.state().phase, 'ready');
+  h.jump('stage', 'results', {}, args); assert.deepEqual(h.scene.overlays, ['results']);
+  h.step(1); h.step(1, { confirm: true });
+  assert.deepEqual(h.scene.overlays, []); assert.equal(h.state().phase, 'ready'); assert.equal(h.state().time, 0);
+});
+
+test('the ready and loading presets; the settings preset on the pad opens only settings', () => {
+  const args = { settings: { mode: 'stage', seed: 'p3' } }, h = headless(rallyGame(), { args });
+  h.jump('stage', 'ready', {}, args);
+  assert.equal(h.state().phase, 'ready'); assert.deepEqual(h.scene.overlays, []);
+  h.jump('stage', 'loading', {}, args);
+  assert.equal(h.state().phase, 'loading'); assert.equal(h.engine.loading.active, true);
+  h.untilLoaded({ maxSteps: 60 });
+  assert.equal(h.state().phase, 'title'); assert.deepEqual(h.scene.overlays, ['title']);
+  const pad = { settings: { mode: 'freeDrive' }, pad: true };
+  h.jump('stage', 'settings', {}, pad);
+  assert.equal(h.state().kind, 'pad'); assert.deepEqual(h.scene.overlays, ['settings']); // on the pad there is no title to open over
+});

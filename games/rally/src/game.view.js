@@ -41,8 +41,10 @@ function overlayHalves() {
       const doc = view.doc;
       this.seen = { mode: null, best: undefined };
       // Go submits the seed form: never navigate; blurring the field fires its change, which the adopted field commits.
+      seedForm?.el?.removeEventListener('submit', seedForm.on); // idempotent: a second enter never adds a second listener
       seedForm = { el: doc.getElementById('seedForm'), on: ev => { ev.preventDefault(); doc.getElementById('seedInput')?.blur(); } };
       seedForm.el?.addEventListener('submit', seedForm.on);
+      title.frame(engine, 0, view); // the card is never stale for a frame (the UI synced before enter)
     },
     exit(engine, view) {
       seedForm?.el?.removeEventListener('submit', seedForm.on); seedForm = null; this.seen = null;
