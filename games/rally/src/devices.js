@@ -32,8 +32,13 @@ export const KEYS = {
   q: 'shiftDown', e: 'shiftUp', r: 'reset', 'shift+r': 'resetAll', c: 'camera', f3: 'debug', '`': 'debug',
   escape: 'pause', p: 'pause', enter: 'confirm',
 };
-// Pedal keys ease in and out (per second); the handbrake is on/off.
-export const RAMPS = { steer: steerRamp, throttle: { rise: 5, fall: 8 }, brake: { rise: 6, fall: 9 } };
+// Pedal keys ease in and out (per second) towards 0 or 1, dt capped like the old loop (#44: the engine's { rise, fall }
+// ramps take the raw frame time, so a hitch would snap a pedal to full); the handbrake is on/off.
+export const pedalRamp = (rise, fall) => (v, t, dt) => {
+  dt = Math.min(0.1, dt);
+  return t > v ? Math.min(t, v + rise * dt) : Math.max(t, v - fall * dt);
+};
+export const RAMPS = { steer: steerRamp, throttle: pedalRamp(5, 8), brake: pedalRamp(6, 9) };
 
 // Standard mapping: left stick with a slight expo, triggers, A = handbrake and confirm (#16), bumpers shift,
 // Y reset, X camera, Start pause.
