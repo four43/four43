@@ -1,5 +1,6 @@
 // Title menu, pause menu, results card and the game HUD (spec tracks T-26). DOM only: main.js
 // wires them to the Game and the settings.
+import { HELP } from './game.view.js'; // the mode help moved to the engine path's title half (R6)
 const $ = (id) => document.getElementById(id);
 
 export const fmtTime = (t) => {
@@ -7,13 +8,7 @@ export const fmtTime = (t) => {
   return `${m}:${s.toFixed(2).padStart(5, '0')}`;
 };
 export const fmtDelta = (d) => `${d < 0 ? '−' : '+'}${Math.abs(d).toFixed(2)}`;
-const deltaClass = (d) => (d === null || d === undefined ? '' : d < 0 ? 'faster' : d > 0 ? 'slower' : '');
-
-const HELP = {
-  freeDrive: 'Drive at your own pace: no clock. Knock the markers over, try the jumps.',
-  stage: 'Point to point against the clock: 3-2-1-Go, a split every 250 m, beat your best.',
-  timeAttack: 'Hot laps with a flying start: the clock starts at the line, and the laps go on until you stop.',
-};
+export const deltaClass = (d) => (d === null || d === undefined ? '' : d < 0 ? 'faster' : d > 0 ? 'slower' : '');
 
 export class Menus {
   // on: { change(key, value), seed(text), drive, resume, restart, settings, quit, retry, newSeed }

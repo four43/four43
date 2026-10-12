@@ -32,3 +32,76 @@ test('desktop: title → Drive → countdown → running, keyboard pause and res
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
+
+test('desktop: settings sheet, a title choice rebuilds the track, results card, Retry with Enter', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: SETTINGS });
+  try {
+    await game.tap('title.settings');
+    assert.equal(await game.page.locator('#sheet').isVisible(), true);
+    await game.tap('settings.units.kmh');
+    assert.equal(await game.page.locator('#unit').textContent(), 'km/h');
+    await game.tap('settings.close');
+    assert.equal(await game.page.locator('#sheet').isVisible(), false);
+    await game.tap('title.theme.winter');
+    await game.until(s => s.phase === 'title', { maxSteps: 120 });
+    await game.page.waitForFunction(() => window.engine.settled());
+    await game.fill('title.seed', 'e2e2');
+    await game.until(s => s.phase === 'title' && s.seed === 'e2e2', { maxSteps: 120 });
+    await game.page.focus('[data-testid="title.mode.stage"]');
+    await game.page.keyboard.press('Enter'); await frames(game); await game.step(2);
+    await expectState(game, 'phase', 'title'); // Enter on a focused button only clicks it, no confirm/Drive (#15)
+    await game.jump('stage', 'results', { time: 100, best: 101 }, { settings: { mode: 'stage', seed: 'e2e2' } });
+    await game.render();
+    assert.equal(await game.page.locator('#resTime').textContent(), '1:40.00');
+    await expectTappable(game, 'results.retry');
+    await game.page.keyboard.press('Enter'); await game.render(); // the focused Retry clicks
+    await expectState(game, 'phase', 'ready');
+    assert.deepEqual((await game.scene()).overlays, []);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop: title help and seed form, pause card, stage exit clears its body classes and toast', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: SETTINGS });
+  const body = () => game.page.evaluate(() => [...document.body.classList].filter(c => /^(scr-|menuOpen|onTrack|manual)/.test(c)).sort());
+  try {
+    assert.match(await game.page.locator('#modeHelp').textContent(), /Point to point/);
+    assert.equal(await game.page.locator('#titleBest').textContent(), 'No time set yet');
+    assert.equal(await game.page.evaluate(() => document.getElementById('title').classList.contains('free')), false);
+    await game.tap('title.mode.freeDrive');
+    await game.until(s => s.phase === 'title' && s.mode === 'freeDrive', { maxSteps: 120 });
+    assert.equal(await game.page.evaluate(() => document.getElementById('title').classList.contains('free')), true);
+    assert.equal(await game.page.locator('#titleBest').textContent(), '');
+    // The seed form's Go button commits the field (through its change) and doesn't navigate.
+    await game.page.locator('#seedInput').fill('gogo1');
+    await game.page.locator('#seedForm button[type="submit"]').click(); await game.render();
+    await game.until(s => s.phase === 'title' && s.seed === 'gogo1', { maxSteps: 120 });
+    assert.match(game.page.url(), /lh-test/); assert.doesNotMatch(game.page.url(), /seedInput|\?.*=gogo1/);
+
+    await game.jump('stage', 'paused', {}, { settings: { mode: 'stage', seed: 'e2e2' } });
+    await game.render();
+    assert.equal(await game.page.locator('#pause').isVisible(), true);
+    assert.equal(await game.page.locator('#restartBtn').isVisible(), true);
+    assert.equal(await game.page.evaluate(() => document.activeElement?.dataset.testid), 'pause.resume');
+    assert.deepEqual(await body(), ['menuOpen', 'onTrack', 'scr-play']);
+    await game.tap('pause.resume');
+    assert.equal(await game.page.locator('#pause').isVisible(), false);
+
+    await game.jump('stage', 'loading', {}, { settings: { mode: 'stage', seed: 'e2e3', gearbox: 'manual' } });
+    await game.render();
+    assert.equal(await game.page.locator('#toast').isVisible(), true);
+    assert.deepEqual(await body(), ['manual', 'onTrack', 'scr-title']);
+    // A jump exits and re-enters the stage half; until the next frame nothing it set is left behind (checked in the
+    // same task: the driver renders on every rAF).
+    const after = await game.page.evaluate(() => {
+      window.engine.jump('stage', 'running', {}, { settings: { mode: 'stage', seed: 'e2e3' } });
+      return { cls: [...document.body.classList].filter(c => /^(scr-|menuOpen|onTrack|manual)/.test(c)), toast: document.getElementById('toast').hidden };
+    });
+    assert.deepEqual(after, { cls: [], toast: true });
+    await game.render();
+    assert.deepEqual(await body(), ['onTrack', 'scr-play']);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
