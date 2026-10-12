@@ -7,6 +7,9 @@ import { createHash } from 'crypto';
 
 const port = Number(process.argv[2]) || 8740;
 const OUT = 'build/dev';
+// RALLY_ENTRY=src/entry.js serves the engine browser entry (lion-hawk 2c-rally R5) instead of src/main.js.
+const ENTRY = (process.env.RALLY_ENTRY || 'src/main.js').replace(/^\.\//, '');
+const entryFilter = new RegExp(ENTRY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
 // esbuild's live-reload stream; only injected into the dev page.
 const RELOAD = `<script>new EventSource('/esbuild').addEventListener('change', () => location.reload());</script>`;
 
@@ -28,7 +31,7 @@ const page = {
 const template = {
   name: 'template',
   setup(build) {
-    build.onLoad({ filter: /src\/main\.js$/ }, (a) => {
+    build.onLoad({ filter: entryFilter }, (a) => {
       const tpl = createHash('sha1').update(fs.readFileSync('index.template.html')).digest('hex');
       return { contents: `${fs.readFileSync(a.path, 'utf8')}\nglobalThis.__template = '${tpl}';\n`, watchFiles: ['index.template.html'], loader: 'js' };
     });
@@ -37,7 +40,7 @@ const template = {
 
 fs.mkdirSync(OUT, { recursive: true });
 const ctx = await esbuild.context({
-  entryPoints: ['src/main.js'], bundle: true, format: 'iife', sourcemap: 'inline',
+  entryPoints: [ENTRY], bundle: true, format: 'iife', sourcemap: 'inline',
   loader: { '.json': 'json' }, outfile: `${OUT}/bundle.js`, write: false, logLevel: 'warning',
   plugins: [template, page],
 });

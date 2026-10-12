@@ -41,9 +41,10 @@
   --stop: #e5604e;
   --font: 'Barlow Semi Condensed', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
   box-sizing: border-box;
-  /* Safe areas (notch, home bar) as variables, so tests can stand in for devices (test/mobile.mjs). */
-  --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px);
-  --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px);
+  /* Safe areas (notch, home bar) as variables, so tests can stand in for devices (test/mobile.mjs). The engine's
+     --lh-sa-* (set by boot and the lion-hawk/playwright presets) win over env() when present (field note #31). */
+  --sa-t: var(--lh-sa-top, env(safe-area-inset-top, 0px)); --sa-r: var(--lh-sa-right, env(safe-area-inset-right, 0px));
+  --sa-b: var(--lh-sa-bottom, env(safe-area-inset-bottom, 0px)); --sa-l: var(--lh-sa-left, env(safe-area-inset-left, 0px));
   /* Touch buttons scale with the short side of the screen. */
   --btn: clamp(64px, 21vmin, 104px); --gap: 12px; --edge: 16px;
 }
@@ -88,9 +89,12 @@ button { font: inherit; color: inherit; }
 #steerHint { position: absolute; left: 12px; bottom: calc(var(--sa-b) + 18px); font-size: 15px; font-weight: 600; color: var(--bone);
   opacity: .55; text-shadow: 0 1px 4px rgba(0,0,0,.5); pointer-events: none; }
 body.steering #steerHint { opacity: 0; }
+html[data-lh-scene] #steerZone[data-lh-active] #steerHint { opacity: 0; }
 #steerBase { position: fixed; height: 56px; border-radius: 28px; background: var(--panel); border: 1px solid rgba(237,230,214,.25);
   pointer-events: none; z-index: 5; backdrop-filter: blur(4px); }
 #steerBase[hidden] { display: none; }
+/* Engine path (lion-hawk bindStick, #17): the slider is placed at the thumb and sized from --lh-r (full lock, px). */
+html[data-lh-scene] #steerBase { width: calc(2 * var(--lh-r) + 56px); margin: -28px 0 0 calc(-1 * var(--lh-r) - 28px); }
 #steerBase::before { content: ''; position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; margin-left: -1px; background: rgba(237,230,214,.35); }
 #steerKnob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; background: var(--bone); }
 /* Pedals for the right thumb: gas in the corner, brake beside it, handbrake above the brake. Each is
@@ -101,9 +105,9 @@ body.steering #steerHint { opacity: 0; }
 #brakeBtn { right: calc(var(--sa-r) + var(--edge) + var(--btn) + var(--gap)); bottom: calc(var(--sa-b) + var(--edge)); width: var(--btn); height: var(--btn); }
 #hbBtn { right: calc(var(--sa-r) + var(--edge) + var(--btn) + var(--gap)); bottom: calc(var(--sa-b) + var(--edge) + var(--btn) + var(--gap));
   width: var(--btn); height: max(56px, calc(var(--btn) * 0.72)); font-size: 15px; }
-#gasBtn.on { background: var(--go); color: var(--panel-solid); }
-#brakeBtn.on { background: var(--stop); color: var(--panel-solid); }
-#hbBtn.on { background: var(--amber); color: var(--panel-solid); }
+#gasBtn.on, #gasBtn[data-lh-down] { background: var(--go); color: var(--panel-solid); }
+#brakeBtn.on, #brakeBtn[data-lh-down] { background: var(--stop); color: var(--panel-solid); }
+#hbBtn.on, #hbBtn[data-lh-down] { background: var(--amber); color: var(--panel-solid); }
 .shiftBtns { display: none; position: fixed; right: calc(var(--sa-r) + var(--edge)); bottom: calc(var(--sa-b) + var(--edge) + var(--btn) * 1.3 + var(--gap));
   width: var(--btn); flex-direction: column; gap: 8px; z-index: 6; }
 body.manual .shiftBtns { display: flex; }
@@ -260,7 +264,7 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
 <canvas id="view"></canvas>
 <div id="loading">Warming up the engine…</div>
 
-<div class="bar l"><button class="chip" id="pauseBtn" aria-label="Pause">❚❚ Pause</button><span class="chip" id="seedChip" hidden></span></div>
+<div class="bar l"><button class="chip" id="pauseBtn" data-lh-slot="stage.pause" aria-label="Pause">❚❚ Pause</button><span class="chip" id="seedChip" hidden></span></div>
 <div id="toast" hidden></div>
 <div class="bar r">
   <button class="chip" id="camBtn">Camera</button>
@@ -272,24 +276,24 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
 <div id="title" class="menu">
   <div class="menuBody">
     <div class="titleHead"><h1>Rally <span>Sim</span></h1>
-    <div class="seg big" id="modeSeg"><button data-title="mode:freeDrive">Free drive</button><button data-title="mode:stage">Stage</button><button data-title="mode:timeAttack">Time attack</button></div></div>
+    <div class="seg big" id="modeSeg"><button data-title="mode:freeDrive" data-lh-slot="title.mode.freeDrive">Free drive</button><button data-title="mode:stage" data-lh-slot="title.mode.stage">Stage</button><button data-title="mode:timeAttack" data-lh-slot="title.mode.timeAttack">Time attack</button></div></div>
     <p class="modeHelp" id="modeHelp"></p>
     <div class="opts">
-      <div class="opt freeOnly"><h3>Track</h3><div class="seg"><button data-title="world:loop">Loop</button><button data-title="world:stage">Stage</button></div></div>
-      <div class="opt"><h3>Seed</h3><form class="seedRow" id="seedForm"><input id="seedInput" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed" enterkeyhint="go"><button type="button" class="chip" id="diceBtn" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form></div>
-      <div class="opt"><h3>Track style</h3><div class="seg"><button data-title="style:twisty">Twisty</button><button data-title="style:flowing">Flowing</button></div></div>
-      <div class="opt"><h3>Theme</h3><div class="seg"><button data-title="theme:summer">Summer</button><button data-title="theme:winter">Winter</button></div></div>
-      <div class="opt"><h3>Obstacles</h3><div class="seg"><button data-title="density:mild">Mild</button><button data-title="density:wild">Wild</button></div></div>
-      <div class="opt"><h3>Car</h3><div class="seg"><button data-title="car:awd">R5 4WD</button><button data-title="car:rwd">Classic RWD</button></div></div>
+      <div class="opt freeOnly"><h3>Track</h3><div class="seg"><button data-title="world:loop" data-lh-slot="title.world.loop">Loop</button><button data-title="world:stage" data-lh-slot="title.world.stage">Stage</button></div></div>
+      <div class="opt"><h3>Seed</h3><form class="seedRow" id="seedForm"><input id="seedInput" data-lh-slot="title.seed" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed" enterkeyhint="go"><button type="button" class="chip" id="diceBtn" data-lh-slot="title.dice" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form></div>
+      <div class="opt"><h3>Track style</h3><div class="seg"><button data-title="style:twisty" data-lh-slot="title.style.twisty">Twisty</button><button data-title="style:flowing" data-lh-slot="title.style.flowing">Flowing</button></div></div>
+      <div class="opt"><h3>Theme</h3><div class="seg"><button data-title="theme:summer" data-lh-slot="title.theme.summer">Summer</button><button data-title="theme:winter" data-lh-slot="title.theme.winter">Winter</button></div></div>
+      <div class="opt"><h3>Obstacles</h3><div class="seg"><button data-title="density:mild" data-lh-slot="title.density.mild">Mild</button><button data-title="density:wild" data-lh-slot="title.density.wild">Wild</button></div></div>
+      <div class="opt"><h3>Car</h3><div class="seg"><button data-title="car:awd" data-lh-slot="title.car.awd">R5 4WD</button><button data-title="car:rwd" data-lh-slot="title.car.rwd">Classic RWD</button></div></div>
     </div>
   </div>
-  <div class="menuFoot"><button class="chip" id="menuBtn">Settings</button><span id="titleBest"></span><button class="go" id="driveBtn">Drive</button></div>
+  <div class="menuFoot"><button class="chip" id="menuBtn" data-lh-slot="title.settings">Settings</button><span id="titleBest"></span><button class="go" id="driveBtn" data-lh-slot="title.drive">Drive</button></div>
 </div>
 
 <!-- pause menu -->
 <div id="pause" class="card" hidden>
   <h2>Paused</h2>
-  <div class="cardBtns"><button class="go" id="resumeBtn">Resume</button><button id="restartBtn">Restart</button><button id="setBtn">Settings</button><button id="quitBtn">Quit to menu</button></div>
+  <div class="cardBtns"><button class="go" id="resumeBtn" data-lh-slot="pause.resume">Resume</button><button id="restartBtn" data-lh-slot="pause.restart">Restart</button><button id="setBtn" data-lh-slot="pause.settings">Settings</button><button id="quitBtn" data-lh-slot="pause.quit">Quit to menu</button></div>
   <div id="lapList" class="cardSide"></div>
 </div>
 
@@ -299,7 +303,7 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
   <div id="resTime" class="bigTime"></div>
   <div id="resDelta"></div>
   <div id="resSplits" class="cardSide"></div>
-  <div class="cardBtns"><button class="go" id="retryBtn">Retry</button><button id="newSeedBtn">New seed</button><button id="menuBtn2">Menu</button></div>
+  <div class="cardBtns"><button class="go" id="retryBtn" data-lh-slot="results.retry">Retry</button><button id="newSeedBtn" data-lh-slot="results.newSeed">New seed</button><button id="menuBtn2" data-lh-slot="results.menu">Menu</button></div>
 </div>
 
 <!-- game HUD -->
@@ -312,15 +316,15 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
 <div id="banner" hidden></div>
 
 <div id="sheet" hidden>
-  <h2>Settings <button id="closeSheet" aria-label="Close">×</button></h2>
+  <h2>Settings <button id="closeSheet" data-lh-slot="settings.close" aria-label="Close">×</button></h2>
   <h3 class="padOnly">Surface</h3>
-  <div class="seg padOnly"><button data-set="surface:tarmac">Tarmac</button><button data-set="surface:hardpack">Dirt</button><button data-set="surface:gravel">Gravel</button><button data-set="surface:snow">Snow</button><button data-set="surface:ice">Ice</button></div>
+  <div class="seg padOnly"><button data-set="surface:tarmac" data-lh-slot="settings.surface.tarmac">Tarmac</button><button data-set="surface:hardpack" data-lh-slot="settings.surface.hardpack">Dirt</button><button data-set="surface:gravel" data-lh-slot="settings.surface.gravel">Gravel</button><button data-set="surface:snow" data-lh-slot="settings.surface.snow">Snow</button><button data-set="surface:ice" data-lh-slot="settings.surface.ice">Ice</button></div>
   <h3>Driving</h3>
-  <div class="seg"><button data-set="assist:true">Assisted</button><button data-set="assist:false">Sim</button></div>
+  <div class="seg"><button data-set="assist:true" data-lh-slot="settings.assist.true">Assisted</button><button data-set="assist:false" data-lh-slot="settings.assist.false">Sim</button></div>
   <h3>Units</h3>
-  <div class="seg"><button data-set="units:mph">mph</button><button data-set="units:kmh">km/h</button></div>
+  <div class="seg"><button data-set="units:mph" data-lh-slot="settings.units.mph">mph</button><button data-set="units:kmh" data-lh-slot="settings.units.kmh">km/h</button></div>
   <h3>Gearbox</h3>
-  <div class="seg"><button data-set="gearbox:auto">Auto</button><button data-set="gearbox:manual">Manual</button></div>
+  <div class="seg"><button data-set="gearbox:auto" data-lh-slot="settings.gearbox.auto">Auto</button><button data-set="gearbox:manual" data-lh-slot="settings.gearbox.manual">Manual</button></div>
   <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to get back onto the road, Shift+R (or hold Reset) to restart, Esc or P to pause, C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift, Start to pause.</p>
   <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st.</p>
 </div>

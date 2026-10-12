@@ -92,26 +92,35 @@ export class Menus {
   hideResults() { this.resultsCard.hidden = true; this.syncMenuOpen(); }
 }
 
-// Timer, lap line, split pill, countdown lights and banners.
+// Timer, lap line, split pill, countdown lights and banners. With `now` (seconds, the engine clock) the hide timers are
+// deadlines run by update() (#22: U-5, they follow engine time); without it, setTimeout as before (the old main.js).
 export class GameHud {
-  constructor() {
+  constructor({ now } = {}) {
     this.timer = $('timer'); this.lapLine = $('lapLine'); this.split = $('split');
     this.lights = $('lights'); this.lamps = [...this.lights.querySelectorAll('i')]; this.banner = $('banner');
-    this.timers = {};
+    this.timers = {}; this.now = now ?? null;
   }
-  later(name, ms, f) { clearTimeout(this.timers[name]); this.timers[name] = setTimeout(f, ms); }
+  later(name, ms, f) {
+    if (this.now) { this.timers[name] = { at: this.now() + ms / 1000, f }; return; }
+    clearTimeout(this.timers[name]); this.timers[name] = setTimeout(f, ms);
+  }
+  cancel(name) { if (this.now) delete this.timers[name]; else clearTimeout(this.timers[name]); }
   reset() {
     this.split.hidden = true; this.lights.hidden = true; this.banner.hidden = true; this.sticky = false;
-    for (const t of Object.values(this.timers)) clearTimeout(t);
+    if (this.now) this.timers = {}; else for (const t of Object.values(this.timers)) clearTimeout(t);
   }
   say(text, kind = '', ms = 2500, sticky = false) {
     const b = this.banner;
     b.textContent = text; b.className = kind; b.hidden = false; this.sticky = sticky;
-    if (sticky) clearTimeout(this.timers.banner);
+    if (sticky) this.cancel('banner');
     else this.later('banner', ms, () => { b.hidden = true; });
   }
 
   update(game) {
+    if (this.now) { // due deadlines, in no particular order (each hides its own element)
+      const t = this.now();
+      for (const k in this.timers) { const d = this.timers[k]; if (t >= d.at) { delete this.timers[k]; d.f(); } }
+    }
     const timed = game.timed && game.state !== 'title' && game.state !== 'loading';
     if (timed !== this.wasTimed) { this.wasTimed = timed; document.body.classList.toggle('timed', timed); }
     this.timer.hidden = !timed;
