@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
-import { headless, golden, assertFinite, checksum } from 'lion-hawk/test';
+import { headless, golden, assertFinite, checksum, canonical } from 'lion-hawk/test';
+import { tool, tapAt, rayTo } from './rays.mjs';
 import { pigPensGame } from '../src/game.sim.js';
 import { FARM_EVENTS } from '../src/game/farm.js';
 import { createSim, DT } from '../src/sim.js';
@@ -36,4 +37,34 @@ test('the engine path and a direct createSim run agree to the last bit', () => {
   const got = run();
   assert.deepEqual(got.events, events);
   assert.deepStrictEqual(got.state, snapshot(sim)); // numbers compared with Object.is: every bit
+});
+
+// Every tool through the engine path, seed 5: a Shoo drag, three Feed taps, a Hose drag with a lifted aim, a Grab and
+// throw, the bell and nightfall; 1200 steps. New in 2e; re-bless only for a deliberate behaviour change.
+function scripted() {
+  const h = headless(pigPensGame(), { seed: 5, args: { pigs: 24 } }), sim = h.engine.scene.state.sim, lay = sim.lay;
+  const pen = i => [lay.pens[i].cx, 0, lay.pens[i].cz];
+  h.step(120);
+  h.tap('farm.tool.shoo'); tool(h, 'down', pen(1));
+  for (let k = 0; k < 60; k++) { tool(h, 'move', [pen(1)[0] + k * 0.1, 0, pen(1)[2]]); h.step(1); }
+  tool(h, 'up', pen(1)); h.step(60);
+  h.tap('farm.tool.feed'); for (let k = 0; k < 3; k++) { tapAt(h, [pen(4)[0] + k, 0, pen(4)[2]]); h.step(20); }
+  h.tap('farm.tool.hose'); tool(h, 'down', pen(2), { aim: rayTo([pen(2)[0], 0, pen(2)[2] - 1]) });
+  for (let k = 0; k < 60; k++) { tool(h, 'move', pen(2), { aim: rayTo([pen(2)[0] + k * 0.05, 0, pen(2)[2] - 1]) }); h.step(1); }
+  tool(h, 'up', pen(2)); h.step(60);
+  h.tap('farm.tool.grab'); const p = sim.pigs.find(q => !q.piglet), x0 = p.px, z0 = p.pz;
+  tool(h, 'down', [p.px, p.py, p.pz]); h.step(30);
+  for (let k = 0; k < 20; k++) { tool(h, 'move', [x0 + k * 0.3, 2, z0]); h.step(1); }
+  tool(h, 'up', [x0 + 6, 2, z0]); h.tap('farm.bell'); h.tap('farm.night');
+  h.step(1200 - h.time.step);
+  return {
+    state: { ...snapshot(sim), dog: [sim.dog.x, sim.dog.z], foods: sim.foods.length, handfuls: sim.flock.handfuls.length, night: sim.clock.night, grabbed: p.state },
+    events: h.events.map(e => `${e.step}:${e.type}`),
+  };
+}
+test('golden: every tool on the engine path (seed 5, 24 pigs, 1200 steps)', () => {
+  golden(new URL('./goldens/farm-scene.json', import.meta.url), scripted());
+});
+test('determinism: two scripted runs give the same state, bit-exactly', () => {
+  assert.equal(canonical(scripted(), { digits: 15 }), canonical(scripted(), { digits: 15 }));
 });
