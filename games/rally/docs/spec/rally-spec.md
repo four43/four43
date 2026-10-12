@@ -20,7 +20,7 @@ timing, bests) is specified there too (Phase 2).
 
 ## Stack and layout
 
-- three.js 0.160 (render), Rapier 3D compat 0.14 (rigid body + raycasts), esbuild bundle.
+- three.js 0.186 (render), Rapier 3D compat 0.21 (rigid body + raycasts), esbuild bundle.
 - Physics modules (`tire.js`, `drivetrain.js`, `vehicle.js`, `sim.js`, `cars.js`) have **no
   three.js imports** so they run headless in Node for tests.
 

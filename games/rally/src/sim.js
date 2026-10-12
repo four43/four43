@@ -72,6 +72,7 @@ export class Sim {
   step() {
     this.car.step();
     this.phys.step();
+    this.world.afterStep?.();
     this.time += DT;
   }
 }

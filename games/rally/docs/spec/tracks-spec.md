@@ -242,7 +242,7 @@ World = {
 - **T-7 Locator.** `locate(x, z)` → nearest sample via a uniform spatial hash (cell 16 m); loops
   wrap `s`. Accurate to ±0.5 m along, ±0.05 m across, near the road.
 - **T-8 Physics on tracks.** One Rapier heightfield collider for the ground (orientation verified
-  by a raycast test). rapier3d-compat 0.14: `ColliderDesc.heightfield(nrows, ncols, heights,
+  by a raycast test). rapier3d-compat 0.14–0.21 (unchanged): `ColliderDesc.heightfield(nrows, ncols, heights,
   scale)` takes *cell* counts (rows along z, columns along x), column-major heights
   (`iz + ix·nz`), `scale` = full extent `(nx−1, 1, nz−1)`, centred on the collider translation;
   each cell splits along its (x+1, z)–(x, z+1) diagonal; `heightAt` interpolates on the same

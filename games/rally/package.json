@@ -10,7 +10,7 @@
     "test:mobile": "node test/mobile.mjs"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.14.0",
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "@gltf-transform/core": "^4.5.1",
     "lion-hawk": "file:../../../lion-hawk-engine",
     "esbuild": "^0.28.2",

@@ -15,7 +15,7 @@ const RECOVER_BACK = 5, RECOVER_Y = 0.6;       // m back along the road; CoM abo
 const BLEND_KEYS = ['mu', 'C', 'kp', 'ap', 'crr', 'drag'];
 
 // Rapier heightfield from terrain heights (row-major, heights[iz * nx + ix] at (x0 + ix, z0 + iz)).
-// rapier3d-compat 0.14: heightfield(nrows, ncols, ...) takes SUBDIVISION counts (rows along z,
+// rapier3d-compat 0.14–0.21: heightfield(nrows, ncols, ...) takes SUBDIVISION counts (rows along z,
 // columns along x), heights are (nrows+1)·(ncols+1) in column-major order (index iz + ix·nz),
 // `scale` is the field's full extent and the field is centred on the collider's translation.
 export function heightfieldDesc(R, t) {
@@ -43,7 +43,7 @@ export class TrackWorld {
     this.ground = new Set([this.groundCollider.handle]);
     this.props = [];
     const pg = groups(GROUP_PROP, 0xffff);
-    this.R = R; this.phys = phys;
+    this.R = R; this.phys = phys; this.newPosts = [];
     for (const m of t.roadside.markers) {
       const home = { x: m.x, y: m.y + MARKER.h / 2, z: m.z, yaw: m.yaw };
       this.props.push({ body: this.makeMarker(home), home, kind: 'marker' });
@@ -84,7 +84,9 @@ export class TrackWorld {
   // A thin post on a sloped shoulder isn't stable in Rapier once awake (most tip over within a
   // few seconds), so posts start asleep and only fall when the car wakes them. Teleporting a
   // body home wakes it on the next step, so reset rebuilds each post instead (same prop object,
-  // new .body: views must read p.body every frame).
+  // new .body: views must read p.body every frame). Rapier 0.21 (persistent sleep islands) wakes
+  // a body inserted asleep on its first step, so afterStep() puts new posts back to sleep unless
+  // something really set them moving (one step of gravity is 0.04 m/s).
   makeMarker(home) {
     const R = this.R, phys = this.phys;
     const body = phys.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z)
@@ -92,7 +94,18 @@ export class TrackWorld {
       .setAngularDamping(MARKER.angDamp).setLinearDamping(MARKER.linDamp));
     phys.createCollider(R.ColliderDesc.cuboid(...MARKER.half).setMass(MARKER.mass)
       .setFriction(MARKER.friction).setCollisionGroups(groups(GROUP_PROP, 0xffff)), body);
+    this.newPosts.push(body);
     return body;
+  }
+
+  // Called by Sim after each physics step (spec R3-3: untouched posts stay standing).
+  afterStep() {
+    if (!this.newPosts.length) return;
+    for (const b of this.newPosts) {
+      const v = b.linvel(), w = b.angvel();
+      if (Math.hypot(v.x, v.y, v.z) < 0.2 && Math.hypot(w.x, w.y, w.z) < 0.5) b.sleep();
+    }
+    this.newPosts.length = 0;
   }
 
   resetProps() {

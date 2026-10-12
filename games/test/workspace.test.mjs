@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const games = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
 const engine = realpathSync(`${games}/../../lion-hawk-engine`);
-const members = ['pig-pens', 'tractor-pickup'];
+const members = ['pig-pens', 'tractor-pickup', 'rally'];
 const pkgJson = (dir, name) => realpathSync(findPackageJSON(name, pathToFileURL(`${games}/${dir}/package.json`)));
 
 test('every game consumes the engine from its own repo', () => {
