@@ -3,7 +3,7 @@
 // and gas/brake/handbrake buttons that work while steering (multi-touch). Plus the game screens
 // (spec tracks T-26/T-27): title menu, the timed HUD, pause menu and results card fit each device.
 // On lion-hawk/playwright (2c-rally R7): builds and serves the engine entry itself; Chromium from the Playwright cache.
-// Run: node test/mobile.mjs [filter]   (SHOTS=dir to save screenshots; RALLY_ENTRY overrides the entry)
+// Run: node test/mobile.mjs [filter]   (SHOTS=dir to save screenshots)
 import fs from 'fs';
 import { devices } from 'playwright-core';
 import { launch, openGame, expectTappable } from 'lion-hawk/playwright';
@@ -38,7 +38,7 @@ async function expectCheck(name, fn) { try { await fn(); check(name, true); } ca
 
 const t0 = Date.now();
 const chrome = await launch();
-const site = await serveRally({ entry: process.env.RALLY_ENTRY ?? 'src/entry.js' }); // R8 switches the default to src/main.js
+const site = await serveRally({ entry: 'src/main.js' });
 const SETTINGS = { mode: 'stage', seed: 'mobile12' };
 // Each device on the test pad (?pad: straight into free drive; layout + touch behaviour), and on a
 // stage through the title menu (menus, the timed HUD, pause and results).

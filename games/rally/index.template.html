@@ -88,13 +88,12 @@ button { font: inherit; color: inherit; }
   width: calc(50% - max(var(--sa-l), 20px) - 6px); z-index: 4; }
 #steerHint { position: absolute; left: 12px; bottom: calc(var(--sa-b) + 18px); font-size: 15px; font-weight: 600; color: var(--bone);
   opacity: .55; text-shadow: 0 1px 4px rgba(0,0,0,.5); pointer-events: none; }
-body.steering #steerHint { opacity: 0; }
-html[data-lh-scene] #steerZone[data-lh-active] #steerHint { opacity: 0; }
+#steerZone[data-lh-active] #steerHint { opacity: 0; }
 #steerBase { position: fixed; height: 56px; border-radius: 28px; background: var(--panel); border: 1px solid rgba(237,230,214,.25);
   pointer-events: none; z-index: 5; backdrop-filter: blur(4px); }
 #steerBase[hidden] { display: none; }
-/* Engine path (lion-hawk bindStick, #17): the slider is placed at the thumb and sized from --lh-r (full lock, px). */
-html[data-lh-scene] #steerBase { width: calc(2 * var(--lh-r) + 56px); margin: -28px 0 0 calc(-1 * var(--lh-r) - 28px); }
+/* lion-hawk bindStick (#17): the slider is placed at the thumb and sized from --lh-r (full lock, px). */
+#steerBase { width: calc(2 * var(--lh-r) + 56px); margin: -28px 0 0 calc(-1 * var(--lh-r) - 28px); }
 #steerBase::before { content: ''; position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; margin-left: -1px; background: rgba(237,230,214,.35); }
 #steerKnob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; background: var(--bone); }
 /* Pedals for the right thumb: gas in the corner, brake beside it, handbrake above the brake. Each is
@@ -105,9 +104,9 @@ html[data-lh-scene] #steerBase { width: calc(2 * var(--lh-r) + 56px); margin: -2
 #brakeBtn { right: calc(var(--sa-r) + var(--edge) + var(--btn) + var(--gap)); bottom: calc(var(--sa-b) + var(--edge)); width: var(--btn); height: var(--btn); }
 #hbBtn { right: calc(var(--sa-r) + var(--edge) + var(--btn) + var(--gap)); bottom: calc(var(--sa-b) + var(--edge) + var(--btn) + var(--gap));
   width: var(--btn); height: max(56px, calc(var(--btn) * 0.72)); font-size: 15px; }
-#gasBtn.on, #gasBtn[data-lh-down] { background: var(--go); color: var(--panel-solid); }
-#brakeBtn.on, #brakeBtn[data-lh-down] { background: var(--stop); color: var(--panel-solid); }
-#hbBtn.on, #hbBtn[data-lh-down] { background: var(--amber); color: var(--panel-solid); }
+#gasBtn[data-lh-down] { background: var(--go); color: var(--panel-solid); }
+#brakeBtn[data-lh-down] { background: var(--stop); color: var(--panel-solid); }
+#hbBtn[data-lh-down] { background: var(--amber); color: var(--panel-solid); }
 .shiftBtns { display: none; position: fixed; right: calc(var(--sa-r) + var(--edge)); bottom: calc(var(--sa-b) + var(--edge) + var(--btn) * 1.3 + var(--gap));
   width: var(--btn); flex-direction: column; gap: 8px; z-index: 6; }
 body.manual .shiftBtns { display: flex; }

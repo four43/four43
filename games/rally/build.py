@@ -1,8 +1,7 @@
 import subprocess, pathlib, shutil, hashlib, json, os
 here = pathlib.Path(__file__).resolve().parent
 out_dir = here.parents[1] / 'site/exp/rally'
-# RALLY_ENTRY=src/entry.js builds the engine browser entry (lion-hawk 2c-rally R5) instead of src/main.js.
-entry = os.environ.get('RALLY_ENTRY') or 'src/main.js'
+entry = 'src/main.js'
 subprocess.run(['npx','esbuild',entry,'--bundle','--format=iife','--minify','--loader:.json=json','--outfile=build/bundle.js','--log-level=warning'], check=True, cwd=here)
 b = (here / 'build/bundle.js').read_text()
 t = (here / 'index.template.html').read_text()

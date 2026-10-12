@@ -7,9 +7,8 @@ import { createHash } from 'crypto';
 
 const port = Number(process.argv[2]) || 8740;
 const OUT = 'build/dev';
-// RALLY_ENTRY=src/entry.js serves the engine browser entry (lion-hawk 2c-rally R5) instead of src/main.js.
-const ENTRY = (process.env.RALLY_ENTRY || 'src/main.js').replace(/^\.\//, '');
-const entryFilter = new RegExp(ENTRY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
+const ENTRY = 'src/main.js';
+const entryFilter = /src\/main\.js$/;
 // esbuild's live-reload stream; only injected into the dev page.
 const RELOAD = `<script>new EventSource('/esbuild').addEventListener('change', () => location.reload());</script>`;
 

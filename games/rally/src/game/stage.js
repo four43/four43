@@ -1,7 +1,7 @@
 // The stage scene (spec tracks T-20 … T-23; lion-hawk [S-3], field notes #7, #21–#23, #28): one main scene owns the
 // Sim, the Rapier world and the track and survives every menu (title, pause, results and settings are overlays).
 // Rally's run sub-states live in ctx.state.phase: title → loading → ready → countdown → running → finished.
-// The run logic is moved from game/game.js (Game): same constants, same order (clock first, then progress), with
+// The run logic moved here from the old Game class: same constants, same order (clock first, then progress), with
 // this.emit → e.emit, this.set → setPhase and DT → the step's dt (the same value).
 import { Sim } from '../sim.js';
 import { shift } from '../drivetrain.js';
@@ -223,7 +223,7 @@ export function makeStage({ R, bests = null }) {
   };
   const restartOrReset = (e, s) => { if (track(s)) api.restart(e); else s.sim.resetCar(); };
 
-  // Buttons that act in running/finished (menus and the countdown get no resets or shifts), as main.js handleEvents.
+  // Buttons that act in running/finished (menus and the countdown get no resets or shifts), as the old frame loop did.
   function actions(e, s, dt) {
     const I = e.input.snapshot, live = s.phase === 'running' || s.phase === 'finished';
     const hold = I.resetHold;

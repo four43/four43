@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { launch, openGame, expectScene, expectState, expectTappable } from 'lion-hawk/playwright';
 import { serveRally } from './serve.mjs';
 
-const ENTRY = process.env.RALLY_ENTRY ?? 'src/entry.js'; // R8 switches the default to src/main.js
+const ENTRY = 'src/main.js';
 const frames = game => game.page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); // devices update per frame
 const SETTINGS = { 'rally-sim-settings': { v: 4, mode: 'stage', seed: 'e2e1' } };
 let chrome, site, skip = false;
