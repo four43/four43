@@ -18,7 +18,7 @@ export function makeOverlays(api) {
       u.field({ id: 'seed', label: 'Track seed', get: e => e.scene.state.settings.seed, set: (t, e) => api.setSeed(e, t) });
       u.button({ id: 'dice', label: 'New seed', action: e => api.rollSeed(e) });
       u.button({ id: 'settings', label: 'Settings', action: e => e.overlay('settings') });
-      u.button({ id: 'drive', label: 'Drive', action: e => api.drive(e), when: e => e.scene.state.phase === 'title' });
+      u.button({ id: 'drive', label: 'Drive', action: e => api.drive(e), when: e => ['title', 'loading'].includes(e.scene.state.phase) });
     },
     step(e) { if (e.input.snapshot.confirm.pressed && !settingsOpen(e)) api.drive(e); },
   };

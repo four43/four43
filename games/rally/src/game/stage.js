@@ -152,7 +152,13 @@ export function makeStage({ R, bests = null }) {
   const S = e => e.scene.state;
   const api = {
     // From the title only: close it and start the run.
-    drive(e) { const s = S(e); if (s.phase !== 'title') return; e.close('title'); begin(e, s); },
+    // During a loading hold (a seed edit's change lands before the click) it queues the run for when the load ends.
+    drive(e) {
+      const s = S(e);
+      if (s.phase === 'loading' && s.load) { s.load.then = 'begin'; e.close('title'); return; }
+      if (s.phase !== 'title') return;
+      e.close('title'); begin(e, s);
+    },
     // Markers home, then a fresh run from the start (or the run-up).
     restart(e) {
       const s = S(e); e.close('pause'); e.close('results');

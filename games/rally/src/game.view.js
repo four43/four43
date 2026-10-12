@@ -158,9 +158,10 @@ export function rallyView({ save = () => {} } = {}) {
         ghud.event(e);
       });
       const resize = () => renderer.resize(win.innerWidth, win.innerHeight);
-      // Leaving the page mid-run pauses it (iOS app switch, tab change): through the Pause chip, so its `when` decides.
+      // Leaving the page mid-run pauses a timed run only (iOS app switch, tab change; tracks-spec): not free drive or the pad.
+      // Through the Pause chip, so its `when` decides.
       const hidden = () => {
-        if (doc.visibilityState !== 'hidden') return;
+        if (doc.visibilityState !== 'hidden' || !engine.scene.state?.mode?.clock) return;
         try { engine.ui.tap('stage.pause'); } catch (err) { if (!/is disabled|is covered|no control/.test(err.message)) throw err; }
       };
       win.addEventListener('resize', resize); doc.addEventListener('visibilitychange', hidden);
