@@ -42,7 +42,7 @@ export class Renderer {
   constructor(canvas) {
     this.r = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.r.setPixelRatio(Math.min(2, window.devicePixelRatio));
-    this.r.shadowMap.enabled = true; this.r.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.r.shadowMap.enabled = true; this.r.shadowMap.type = THREE.PCFShadowMap;
     this.r.toneMapping = THREE.ACESFilmicToneMapping; this.r.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
     this.cam = new THREE.PerspectiveCamera(62, 1, 0.1, 1500);

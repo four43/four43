@@ -15,7 +15,7 @@
     "lion-hawk": "file:../../../lion-hawk-engine",
     "esbuild": "^0.28.2",
     "pngjs": "^7.0.0",
-    "three": "^0.160.0"
+    "three": "^0.186.0"
   },
   "type": "module",
   "private": true,
