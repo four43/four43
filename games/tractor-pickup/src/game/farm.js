@@ -1,17 +1,19 @@
 // The farm scene (lion-hawk 2f, [S-1]…[S-6], field notes #4, #28, #81, #87, #90): one main scene owns the createGame world
 // (farm, terrain, Rapier, tractor, train, herd) and the player's records. The flow main.js kept in its frame closure moves
 // into ctx.state ([S-4], #4). The whole pipeline is the scene's step hook (#90), so a load suspends all of it:
-// input → game.step → bridge → sounds (T4 adds the trip, T5 bedtime, T6 the syncs).
+// input → game.step → bridge → sounds → the trip (flow.js; T5 adds bedtime, T6 the syncs).
 // While `raw` drives it nothing here touches the game, so the scene steps exactly the createGame the phase-0 goldens drive.
 import { createGame } from '../sim/game.js';
 import { createSandbox } from '../sim/sandbox.js';
 import { createPilot } from '../sim/pilot.js';
 import { createTrip } from '../sim/trip.js';
+import { newRider } from '../sim/slots.js';
 import { quatAxes } from '../sim/tractor.js';
 import { DT } from '../sim/physics.js';
 import { TYPES } from '../sim/herd.js';
 import { clampBedtime } from '../sim/bedtime.js';
 import { clampProgress, clampSettings, wornHats, hasPaintChoice, seedParam, powerParam } from '../sim/progress.js';
+import { play, stepFlow, lastDrive, goSleep, wake, open } from './flow.js';
 
 // The farm's own event types (never a game.step type), so the engine-path goldens can filter them out
 export const FARM_EVENTS = new Set(['play', 'say', 'guide', 'help', 'show', 'showSkip', 'reward', 'progress', 'settings', 'bed', 'sleep', 'wake',
@@ -20,7 +22,7 @@ const NONE = [];
 
 // Move the whole (straight, parked) train so the tractor stands at (x, z) facing yaw; the cars keep their offsets in the tractor's frame.
 // ground: also lift or lower it by the terrain height between the old and the new place (0.3 m above, so it settles onto its wheels).
-// A copy of test/train.mjs's (src never imports tests): debug.trainAt and the barn preset (T4).
+// A copy of test/train.mjs's (src never imports tests): debug.trainAt and the barn preset.
 export const moveTrain = (g, x, z, yaw, { ground = false } = {}) => {
   const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
   const dy = ground ? g.terrain.height(x, z) - g.terrain.height(p0.x, p0.z) + 0.3 : 0;
@@ -66,16 +68,34 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
   }
   // --- the API (commands, UI controls, presets and debug call these; each takes the engine first) ---------------
   const api = {
-    // F-11, A-7: the trip starts (T4 adds bedtime, the start overlay and the voice)
-    play(e) {
-      const s = S(e); if (s.started) return;
-      s.started = true; s.game.mode = 'drive';
-      e.emit('play');
+    play: e => play(e, S(e)), // F-11, A-7: the trip starts (flow.js)
+    lastDrive: e => lastDrive(e, S(e)), goSleep: (e, o) => goSleep(e, S(e), o), wake: e => wake(e, S(e)),
+    // n free single animals (no chick, no hen with a line: as test pickup() boops them) land in the first slots, as a
+    // flight's landing does (game.step), with their hats (W-4)
+    riders(e, n) {
+      const g = S(e).game, free = g.herd.free().filter(a => !a.hidden && a.type !== 'chick' && a.leader == null && !g.herd.animals.some(c => c.leader === a.id));
+      for (const a of free.slice(0, n)) {
+        const sl = g.load.reserve(a); if (!sl) break;
+        a.state = 'ride'; a.hidden = false; a.ride = { slot: sl, rider: newRider() }; g.load.land(sl);
+      }
+      g.wearHats(g.hats);
     },
   };
+  // F-11: the start screen (paint and go) is up only with a paint choice (build gave mode 'start')
+  const enterStart = (e, s) => { if (!s.started && s.game.mode === 'start') open(e, 'start'); };
 
   const scene = {
-    presets: {},
+    // [S-5, #25] known states, never stepping; (engine, opts) as jump calls them
+    presets: {
+      started: e => api.play(e),
+      riders: (e, o = {}) => { api.play(e); api.riders(e, o.n ?? 3); },
+      // n riders and the train 20 m out from the barn door, facing in: drive straight on for a barn pass. ground: the barn
+      // stands on a terrain pad, not where the farm put the tractor, so the train settles onto its wheels there (as trainAt)
+      barn: (e, o = {}) => {
+        api.play(e); api.riders(e, o.n ?? 3);
+        const g = S(e).game, b = g.farm.yard.barn; moveTrain(g, b.x - Math.sin(b.yaw) * 20, b.z - Math.cos(b.yaw) * 20, b.yaw, { ground: true });
+      },
+    },
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = clampSettings(a.settings), progress = clampProgress(a.progress, Object.keys(TYPES)), bed = clampBedtime(a.bed);
       const seed = seedParam(a.seed) ?? settings.seed ?? e.rng('seeds').int(0, 0xffffffff), power = powerParam(a.power, settings.power); // #86
@@ -84,16 +104,26 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
         game: null, gen: 0, seed, player, started: !!a.started, tripOn, trip: tripOn ? createTrip() : null,
         raw: null, pilot: createPilot(), stepIn: { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false },
         guide: false, sleepAfter: false, show: null, showDone: false, rewardDone: false, reward: null,
-        bed, date: null, progress, settings, sfx: freshSfx(), nextFarm: null,
+        bed, date: null, progress, settings, power, sfx: freshSfx(), nextFarm: false,
       });
       build(e, s, seed, power, player);
+      enterStart(e, s);
     },
     exit(e, ctx) { ctx.state.game?.phys.world.free(); }, // [S-3], main.js dispose: the Rapier world with the terrain, trees, props and vehicles
     step(e, dt, ctx) {
       const s = ctx.state, g = s.game, I = e.input.snapshot;
       if (!s.started && g.mode === 'drive' && (I.goX || I.goZ)) api.play(e); // A-7: the first stick move starts the trip
-      bridge(e, g.step(readInput(e, s)));
+      const ev = g.step(readInput(e, s));
+      bridge(e, ev);
       sounds(e, s);
+      if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepFlow(e, s, ev); // spec 3.1
+    },
+    // #69: the controls close over this scene's ctx.state
+    ui(u, e, ctx) {
+      const s = ctx.state, driving = () => s.started && s.game?.mode === 'drive' && !s.show; // U-6: the drive buttons
+      u.button({ id: 'paint', label: 'Paint', when: driving, action: e => open(e, 'paint') });
+      u.button({ id: 'book', label: 'Sticker book', when: driving, action: e => open(e, 'book') });
+      u.hold({ id: 'parent', label: 'Grown-ups', seconds: 2, wall: true, action: e => open(e, 'parent') }); // P-1, #83: a 2 s hold on wall time
     },
   };
   return { scene, api };

@@ -4,6 +4,8 @@
 import R from '@dimforge/rapier3d-compat';
 import { defineGame, actions, axis, button } from 'lion-hawk/sim';
 import { makeFarm, makeSandbox, moveTrain, FARM_EVENTS } from './game/farm.js';
+import { makeOverlays } from './game/overlays.js';
+import { localCommands } from './game/commands.js';
 
 export { FARM_EVENTS };
 
@@ -19,6 +21,8 @@ function state(e) {
   return {
     mode: g.mode ?? null, started: s.started, gen: s.gen, seed: s.seed, landed: g.load?.landed() ?? 0, full: g.load?.full() ?? false,
     tractor: { x: p.x, z: p.z, yaw: t.yaw, speed: t.speed }, trip: s.trip?.state ?? null, guide: !!s.guide,
+    show: s.show ? { riders: s.show.riders.map(r => r.animal.id), done: s.show.done, skipped: s.show.skipped } : null,
+    reward: s.reward ? { sticker: { ...s.reward.sticker }, newPaint: s.reward.newPaint, newHat: s.reward.newHat } : null,
     bed: s.bed ? { phase: s.bed.phase, choice: s.bed.choice } : null, net: { role: s.net?.role ?? 'solo', you: s.player ?? 1 },
     paint: s.progress ? { ...s.progress.paint } : null, shows: s.progress?.shows ?? 0, barnWait: g.barnWait ?? 0,
   };
@@ -26,16 +30,17 @@ function state(e) {
 
 // clock overrides the syncs' wall clock, bindings the replicated kinds (tests only, T6)
 export function tractorGame({ clock, bindings } = {}) {
-  const { scene: farm } = makeFarm({ R, clock, bindings }), { scene: sandbox } = makeSandbox({ R });
+  const { scene: farm, api } = makeFarm({ R, clock, bindings }), { scene: sandbox } = makeSandbox({ R });
   // → window.engine.debug
   const debug = e => ({
     get game() { return e.scene.state.game; }, get farm() { return e.scene.state; },
     drive(raw) { e.scene.state.raw = raw ?? null; }, // { thr, steer, turn?, horn } in place of the pilot; null gives it back
     trainAt(x, z, yaw) { moveTrain(e.scene.state.game, x, z, yaw, { ground: true }); },
+    riders(n) { api.riders(e, n); }, // n free singles land in the slots
   });
   return defineGame({
     id: 'tractor-pickup', sim: { hz: 60, maxCatchUp: 3, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm', // hz: the physics step (DT)
-    scenes: { farm, sandbox }, state, debug,
+    scenes: { farm, sandbox, ...makeOverlays() }, commands: localCommands, state, debug,
   });
 }
 
