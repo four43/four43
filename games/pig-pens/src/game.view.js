@@ -33,6 +33,7 @@ export function pigPensView({ tilt = true } = {}) {
       view.project = project;
       // #67: audio unlocks (and resumes) on any tap or key on the page, captured before the game sees it
       const unlock = () => sound.unlock();
+      const onKey = e => { if (e.key !== 'Escape') unlock(); }; // Escape is not a user activation in Chrome
       const flock = s.sim.flock, hint = (text, seconds) => hud.hint(text, seconds, engine.time.sim);
       const off = engine.events.on(ev => {
         sound.event(ev, camera);
@@ -57,10 +58,10 @@ export function pigPensView({ tilt = true } = {}) {
         }
       });
       win.addEventListener('resize', resize);
-      doc.addEventListener('pointerdown', unlock, true); doc.addEventListener('keydown', unlock, true);
+      doc.addEventListener('pointerdown', unlock, true); doc.addEventListener('keydown', onKey, true);
       offs = [bindGestures(engine, canvas), off, () => {
         win.removeEventListener('resize', resize);
-        doc.removeEventListener('pointerdown', unlock, true); doc.removeEventListener('keydown', unlock, true);
+        doc.removeEventListener('pointerdown', unlock, true); doc.removeEventListener('keydown', onKey, true);
       }];
     },
     exit(engine, view) {
