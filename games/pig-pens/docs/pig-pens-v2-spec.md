@@ -93,7 +93,8 @@ The coop, nest boxes, ramp, fox cheeks and grain are simple shapes made in code.
 | `src/layout.js` | Changed | Chicken run, coop, nest boxes, dust bath, gate objects, tractor start position |
 | `src/flow.js` | Changed | Partial grid refresh after a gate change; inactive obstacles |
 | `src/sim.js` | Changed | Day/night switch, gates, threats, tractor, flock, pig names, pig sleep |
-| `src/main.js` | Changed | Hand tool, cards, drive mode, eyelids, "z" letters, day/night switch |
+| `src/game.sim.js`, `src/game/farm.js`, `src/game/pick.js` | New | The headless half on the engine (`defineGame`): one `farm` scene that owns the world, the Hand/Shoo/Feed/Hose/Grab tool gestures, drive mode, analytic picks from camera rays |
+| `src/main.js`, `src/game.view.js`, `src/view/*`, `src/devices.js` | Changed | The browser half: `boot` with the farm view (3D world, camera rig, card, hints, badge, eggs) and the devices (pointer, keyboard, thumb pad, horn) |
 | `src/sound.js` | Changed | New sounds |
 | `bake.mjs` | Changed | Bakes the new models; supports wing and tail parts |
 
@@ -379,7 +380,7 @@ The drive force decreases linearly to zero at the maximum speed. If the tractor 
 
 ### 9.3 Controls
 
-To drive, press and hold the tractor with the Hand tool for 0.75 s. A ring fills around the finger. A timer starts the drive, so a slow frame rate cannot stop it.
+To drive, press and hold the tractor with the Hand tool for 0.75 s. A ring fills around the finger. The hold counts device time (the `press` of the `tool` pointer binding, 0.75 s), and the device time step is capped at 0.1 s, so below 10 frames per second the hold takes longer in wall time.
 
 | Control | Touch | Keyboard |
 |---|---|---|
@@ -387,7 +388,7 @@ To drive, press and hold the tractor with the Hand tool for 0.75 s. A ring fills
 | Horn | Horn button | H |
 | Stop the drive | Get out button | E or Escape |
 
-The steering input has a curve (power 1.4) for fine control near the center. While the user drives, the toolbar and the card are not visible.
+The steering input has a curve (power 1.4) for fine control near the center. The thumb stick is a fixed pad (`bindStick({ origin: 'centre' })`). A drive key held before the drive starts counts; W and S (or A and D) held together cancel to 0. While the user drives, the toolbar and the card are not visible.
 
 ### 9.4 Chase camera
 
@@ -423,6 +424,10 @@ A tap with the Hand tool selects the first match in this sequence:
 | Empty ground | Close the card |
 
 A drag with the Hand tool turns the camera.
+
+Every tool gesture is a recorded `tool` command (`bindPointer` on `#c`): its data carries the phase (`down`, `move`, `up`, `cancel`, `tap`, `press`) and the camera ray through the finger (and an `aim` ray for Hose and Grab on a finger). The sim does the picking (`src/game/pick.js`), so a replay reproduces a gesture. The toolbar, the day/night switch, the bell, the card's close button and Get out are registry controls with test ids: `farm.tool.hand`, `farm.tool.shoo`, `farm.tool.feed`, `farm.tool.hose`, `farm.tool.grab`, `farm.night`, `farm.bell`, `farm.close`, `farm.exit`.
+
+To reach a state in a test or in the console: `engine.jump('farm', 'driving' | 'night' | 'tool' | 'selected', opts, { pigs, seed })`; `engine.debug` gives `sim`, `farm` (the scene state), `tool(name)`, `select(sel)`, `drive()` and `night(on)`.
 
 ### 10.3 Cards
 
@@ -479,6 +484,8 @@ At night, a white "z" floats up from each sleeping pig every 2.2 to 3.6 s. The l
 
 ### 13.1 Headless tests
 
+The asserted tests run with `npm test` (`node --test test/*.test.mjs`): `golden.test.mjs` (the phase-0 sim golden), `golden-farm.test.mjs` (the same farm through the engine path, a scene golden and a replay), `flow.test.mjs` (tool gestures, drive, card and hints through `tool` commands), `invariants.test.mjs` (finite state) and `sim.test.mjs` (snack, tractor, night and gate facts), `pick.test.mjs`, `purity.test.mjs`. The scripts in `test/*.mjs` that print numbers (`day`, `door`, `food`, `grain`, `hose`, `night`, `tractor`, …) are the measurements behind the table below.
+
 | Check | Result |
 |---|---|
 | Eggs in 140 s of day (10 hens) | 10 |
@@ -502,7 +509,7 @@ At night, a white "z" floats up from each sleeping pig every 2.2 to 3.6 s. The l
 
 ### 13.2 Browser tests
 
-The tests use Playwright with Chromium and SwiftShader at a phone size of 390 × 844 px.
+`npm run test:e2e` (`test/e2e.browser.mjs`) builds the entry and serves it (`test/serve.mjs`), then drives it with `lion-hawk/playwright` on Chromium with SwiftShader: desktop (mouse tools, card, Escape, bell, night, drive with W) and iPhone 15 Pro portrait and landscape (touch tools, thumb stick, horn, pinch, tap targets and safe areas). The table below is the original phone-size check list (390 × 844 px).
 
 | Check | Result |
 |---|---|
@@ -594,6 +601,6 @@ The page is an installable PWA. The service worker gets the page from the networ
 
 ### 16.3 Test notes
 
-- The browser tests (`interact*.mjs`, `shot.mjs`) use fixed paths from the original build machine (`/opt/pw-browsers`, `/mnt/user-data/outputs/pig-pens.html`). Change these paths before you run them.
+- Run the asserted headless tests with `npm test` and the browser tests with `npm run test:e2e`. The old `interact*.mjs` and `shot.mjs` scripts (fixed build-machine paths, `window.piggies`) are deleted; `window.piggies` is replaced by `window.engine`.
 - `test/gates_fox.mjs` uses the v1 clock (`hour: 17.5`). The day/night switch replaced the clock, thus the fox part of this test does not start a visit. Use `test/night.mjs` for the fox.
 - The grain test gives 92 grains for the top 5 hens and 43 grains for the bottom 5 hens. Section 13.1 gives 80 and 46. The unchanged v2 source gives the same 92 and 43, thus the difference is not from the merge.

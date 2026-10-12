@@ -1,8 +1,7 @@
-import subprocess, pathlib, shutil, hashlib, json, os
+import subprocess, pathlib, shutil, hashlib, json
 here = pathlib.Path(__file__).resolve().parent
 out_dir = here.parents[1] / 'site/exp/piggie-game'
-# PIGPENS_ENTRY picks the entry while the engine browser half is new (lion-hawk 2e P6; src/entry.js), default src/main.js
-entry = os.environ.get('PIGPENS_ENTRY', 'src/main.js')
+entry = 'src/main.js'  # the engine browser entry (lion-hawk 2e P9)
 subprocess.run(['npx','esbuild',entry,'--bundle','--format=iife','--minify','--loader:.json=json','--outfile=build/app.js','--log-level=warning'], check=True, cwd=here)
 app = (here / 'build/app.js').read_text().replace('</script', '<\\/script')
 html = (here / 'template.html').read_text().replace('<!--APP-->', app)

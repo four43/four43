@@ -83,7 +83,7 @@ The code has two layers. The simulation layer has no rendering code. It operates
 | `src/layout.js` | Simulation | Farm layout data: fence edges, pens, troughs, obstacles, decor, destinations. |
 | `src/flow.js` | Simulation | Flow-field grid and obstacle tests. |
 | `src/sim.js` | Simulation | Rapier world, pig behavior, dog, snacks, mud, hose, grab. |
-| `src/main.js` | Presentation | Scene, models, animation, mud shader, water particles, camera, input, minimap. |
+| `src/main.js` | Presentation | (v1; now the engine browser entry) Scene, models, animation, mud shader, water particles, camera, input, minimap. |
 | `src/sound.js` | Presentation | Synthesized sounds. |
 | `src/assets.json` | Data | Baked Kenney geometry and animation tables. |
 | `bake.mjs` | Build tool | Converts Kenney GLB files into `assets.json`. |
@@ -648,13 +648,7 @@ To do a test:
 
 ### 14.2 Browser tests
 
-The browser tests use Playwright with Chromium and the SwiftShader software renderer. The page gives a debug object, `window.piggies`. This object can pause the simulation, do steps and operate the tools.
-
-| Test file | What it checks |
-|---|---|
-| `test/shot.mjs` | Screenshots at phone and desktop sizes |
-| `test/interact.mjs` | Tool buttons, Shoo drag, Feed tap, Grab and throw |
-| `test/interact2.mjs` | Hose drag, toolbar width on a 390 px screen |
+The browser tests (`npm run test:e2e`, `test/e2e.browser.mjs`) use Playwright with Chromium and the SwiftShader software renderer, through `lion-hawk/playwright`. The page gives the engine hook `window.engine` (state, `stepN`, `jump`, `debug`). The v1 scripts `shot.mjs`, `interact.mjs` and `interact2.mjs` were removed.
 
 NOTE: The software renderer gives approximately 4 frames per second. This value does not show the performance on a phone.
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { launch, openGame, expectScene, expectState, expectTappable, expectFitsSafeArea } from 'lion-hawk/playwright';
 import { servePigPens } from './serve.mjs';
 
-const ENTRY = process.env.PIGPENS_ENTRY ?? 'src/entry.js'; // P9 switches the default to src/main.js
+const ENTRY = process.env.PIGPENS_ENTRY ?? 'src/main.js';
 const ARGS = { pigs: 24 };
 const frames = game => game.page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); // devices update per frame
 const world = (game, fn) => game.page.evaluate(fn);
@@ -109,9 +109,9 @@ test('iPhone: Shoo and Hose drags; Grab lifts a pig by touch and throws it (#54)
     await game.tap('farm.tool.grab');
     const pig = await world(game, () => { const p = window.engine.debug.sim.pigs.find(q => !q.piglet); return [p.px, p.py, p.pz]; });
     await game.touch.start(1, { world: pig }); await frames(game); await game.step(2);
-    s = await game.state(); assert.ok(s.grabbed.pig >= 0 || s.grabbed.bird >= 0, 'an animal was lifted');
+    s = await game.state(); assert.ok(s.grabbed.pig >= 0, 'the pig under the finger was lifted (not a bird)');
     await game.step(45);
-    if (s.grabbed.pig >= 0) assert.ok(await game.page.evaluate(i => window.engine.debug.sim.pigs[i].py, s.grabbed.pig) > 1, 'lifted');
+    assert.ok(await game.page.evaluate(i => window.engine.debug.sim.pigs[i].py, s.grabbed.pig) > 1, 'lifted');
     await game.touch.end(1); await game.step(1);
     s = await game.state(); assert.deepEqual([s.grabbed.pig, s.grabbed.bird], [-1, -1]);
     assert.deepEqual(await game.errors(), []);
@@ -173,8 +173,8 @@ test('iPhone: the toolbar, top bar and drive controls are tappable and inside th
     await expectFitsSafeArea(game, '#tools'); await expectFitsSafeArea(game, '#top');
     await game.jump('farm', 'driving', {}, ARGS); await game.render();
     const exitBox = await game.page.evaluate(() => { const r = document.querySelector('#exit').getBoundingClientRect(); return { w: r.width, h: r.height }; });
-    assert.ok(exitBox.h >= 40 && exitBox.h < 44, `Get out is about 42 px tall (#63): ${JSON.stringify(exitBox)}`); // under the 44 px guideline; no restyling in 2e
-    await expectTappable(game, 'farm.exit', { min: 40 }); await expectTappable(game, { css: '#horn' });
+    assert.ok(exitBox.h >= 40, `Get out is at least 40 px tall: ${JSON.stringify(exitBox)}`);
+    await expectTappable(game, 'farm.exit', { min: 40 }); // known gap: about 42 px, under the 44 px guideline; restyle planned in the final pass (#63) await expectTappable(game, { css: '#horn' });
     await expectFitsSafeArea(game, '#stick'); await expectFitsSafeArea(game, '#driveBtns');
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }

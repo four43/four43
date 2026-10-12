@@ -43,15 +43,6 @@ export function buildFarmExtras({ scene, sim, matV, sun, hemi, fogColor }) {
     });
     leafMesh.instanceMatrix.needsUpdate = true;
   }
-  function pickGate(x, z) {
-    let best = null, bd = 1.5;
-    for (const g of lay.gates) {
-      const along = g.dir === 'x', hw = g.width / 2;
-      const ax = along ? Math.max(0, Math.abs(x - g.x) - hw) : Math.abs(x - g.x), az = along ? Math.abs(z - g.z) : Math.max(0, Math.abs(z - g.z) - hw);
-      const d = Math.hypot(ax, az); if (d < bd) { bd = d; best = g; }
-    }
-    return best;
-  }
 
   // ---------- coop, nest boxes, dust bath -------------------------------------------------------------
   const W = coop.hx * 2, D = coop.hz * 2, H = 1.45, cx = coop.x, cz = coop.z, front = cz + coop.hz;
@@ -105,11 +96,6 @@ export function buildFarmExtras({ scene, sim, matV, sun, hemi, fogColor }) {
     grainMesh.count = 0;
     for (const h of flock.handfuls) for (const g of h.grains) { if (g.eaten || grainMesh.count >= 120) continue; grainMesh.setMatrixAt(grainMesh.count++, M.compose(v.set(g.x, g.y, g.z), q.setFromAxisAngle(UP, g.x * 31), s.setScalar(1))); }
     grainMesh.instanceMatrix.needsUpdate = true;
-  }
-  function pickEgg(ray) {
-    let best = null, bd = 0.45;
-    for (const e of flock.eggs) { v.set(e.x, 0.12, e.z); const d = ray.distanceToPoint(v); if (d < bd) { bd = d; best = e; } }
-    return best;
   }
 
   // ---------- chickens --------------------------------------------------------------------------
@@ -245,7 +231,6 @@ export function buildFarmExtras({ scene, sim, matV, sun, hemi, fogColor }) {
     head.target.position.set(0, 0, 0).applyMatrix4(T.multiplyMatrices(chassis, T.makeTranslation(9, 0, 0)));
     head.intensity = (tr.driven ? 60 : 0) * night;
   }
-  function tractorHit(ray) { v.set(tr.x, 1.2, tr.z); return ray.distanceToPoint(v) < 2.1; }
 
   // ---------- day and night -----------------------------------------------------------------------
   const SKY_DAY = new THREE.Color('#bfe6f5'), SKY_DUSK = new THREE.Color('#f3a97a'), SKY_NIGHT = new THREE.Color('#152039');
@@ -276,7 +261,5 @@ export function buildFarmExtras({ scene, sim, matV, sun, hemi, fogColor }) {
     doorPanel.position.set(coop.doorX, 0.35 + doorAnim * 0.62, front + 0.04);
     updateEggsGrain(); updateBirds(dt); updateFox(dt); updateTractor(n);
   }
-  const pickDoor = (x, z) => Math.hypot(x - coop.doorX, z - (front + 0.5)) < 1.3;
-  const foxHit = ray => flock.fox.state !== FST.AWAY && ray.distanceToPoint(v.set(flock.fox.x, 0.4, flock.fox.z)) < 0.9;
-  return { update, pickGate, pickEgg, pickDoor, tractorHit, foxHit, spawnFeathers, get night() { return nightF; } };
+  return { update, spawnFeathers, get night() { return nightF; } };
 }
