@@ -1,0 +1,116 @@
+// The farm scene (lion-hawk 2f, [S-1]…[S-6], field notes #4, #28, #81, #87, #90): one main scene owns the createGame world
+// (farm, terrain, Rapier, tractor, train, herd) and the player's records. The flow main.js kept in its frame closure moves
+// into ctx.state ([S-4], #4). The whole pipeline is the scene's step hook (#90), so a load suspends all of it:
+// input → game.step → bridge → sounds (T4 adds the trip, T5 bedtime, T6 the syncs).
+// While `raw` drives it nothing here touches the game, so the scene steps exactly the createGame the phase-0 goldens drive.
+import { createGame } from '../sim/game.js';
+import { createSandbox } from '../sim/sandbox.js';
+import { createPilot } from '../sim/pilot.js';
+import { createTrip } from '../sim/trip.js';
+import { quatAxes } from '../sim/tractor.js';
+import { DT } from '../sim/physics.js';
+import { TYPES } from '../sim/herd.js';
+import { clampBedtime } from '../sim/bedtime.js';
+import { clampProgress, clampSettings, wornHats, hasPaintChoice, seedParam, powerParam } from '../sim/progress.js';
+
+// The farm's own event types (never a game.step type), so the engine-path goldens can filter them out
+export const FARM_EVENTS = new Set(['play', 'say', 'guide', 'help', 'show', 'showSkip', 'reward', 'progress', 'settings', 'bed', 'sleep', 'wake',
+  'whee', 'cheer', 'squelch', 'farm']);
+const NONE = [];
+
+// Move the whole (straight, parked) train so the tractor stands at (x, z) facing yaw; the cars keep their offsets in the tractor's frame.
+// ground: also lift or lower it by the terrain height between the old and the new place (0.3 m above, so it settles onto its wheels).
+// A copy of test/train.mjs's (src never imports tests): debug.trainAt and the barn preset (T4).
+export const moveTrain = (g, x, z, yaw, { ground = false } = {}) => {
+  const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
+  const dy = ground ? g.terrain.height(x, z) - g.terrain.height(p0.x, p0.z) + 0.3 : 0;
+  const list = [tb, ...g.train.cars.map(c => c.body)].map(b => { const t = b.translation(); return [b, g.tractorLocal(t.x, t.y, t.z, {})]; });
+  for (const [b, l] of list) {
+    b.setTranslation({ x: x + f.x * l.x + u.x * l.y + r.x * l.z, y: p0.y + dy + f.y * l.x + u.y * l.y + r.y * l.z, z: z + f.z * l.x + u.z * l.y + r.z * l.z }, true);
+    b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  }
+};
+
+// Input (C-1, C-2, C-8, #81): `raw` (goldens, the mp harness) or the world-frame stick through the pilot, into the reused stepIn.
+function readInput(e, s) {
+  const r = s.raw, o = s.stepIn;
+  if (r) { o.thr = r.thr; o.steer = r.steer; o.turn = r.turn ?? 0; o.onTarget = r.onTarget !== false; o.horn = !!r.horn; return o; } // as game.step reads a plain input
+  const I = e.input.snapshot, t = s.game.tractor, p = s.pilot.drive(I.goX, I.goZ, I.goBack.down, t.yaw, t.speed);
+  o.thr = p.thr; o.steer = p.steer; o.turn = p.turn; o.onTarget = p.onTarget; o.horn = I.horn.pressed;
+  return o;
+}
+// #57: game.step's events, in order, unchanged (the payload keeps its objects: animal, tree, slot)
+function bridge(e, ev) { for (let i = 0; i < ev.length; i++) e.emit(ev[i].type, ev[i]); }
+// Per-step sound cues (#87, main.js stepSounds): the squelch when the wheels enter mud (T-13, the sandbox only: the farm game sends
+// mud-enter); whee, and a cheer with riders aboard, when all four wheels leave the ground for over 0.15 s (T-14)
+function sounds(e, s) {
+  const g = s.game, t = g.tractor, f = s.sfx;
+  if (t.surface === 'mud' && f.surface !== 'mud' && !g.dirt) e.emit('squelch');
+  f.surface = t.surface;
+  let air = true; for (let i = 0; i < 4; i++) if (t.vc.wheelIsInContact(i)) { air = false; break; } // B-6: no closure per step
+  f.air = air ? f.air + DT : 0;
+  if (!air) f.whee = false;
+  else if (f.air > 0.15 && !f.whee) { f.whee = true; e.emit('whee'); if (g.load?.landed() > 0) e.emit('cheer'); }
+}
+const freshSfx = () => ({ surface: 'gravel', air: 0, whee: false });
+
+export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, bindings: the syncs' (T6)
+  const S = e => { if (e.scene.name !== 'farm') throw new Error('tractor: the farm scene is not the main scene'); return e.scene.state; };
+  // Builds this scene's farm (main.js build, sim half): hats (W-4), the bedtime phase (E-5) and the start mode (F-11).
+  function build(e, s, seed, power, player) {
+    s.game = createGame(R, { seed, power, player }); s.seed = seed; s.gen++; s.sfx = freshSfx();
+    s.game.wearHats(wornHats(s.progress));
+    s.game.lastDrive = s.bed.phase === 'last';
+    s.game.mode = s.started ? (s.bed.phase === 'asleep' ? 'sleep' : 'drive') : hasPaintChoice(s.progress) ? 'start' : 'drive';
+    e.emit('farm', { gen: s.gen, seed });
+  }
+  // --- the API (commands, UI controls, presets and debug call these; each takes the engine first) ---------------
+  const api = {
+    // F-11, A-7: the trip starts (T4 adds bedtime, the start overlay and the voice)
+    play(e) {
+      const s = S(e); if (s.started) return;
+      s.started = true; s.game.mode = 'drive';
+      e.emit('play');
+    },
+  };
+
+  const scene = {
+    presets: {},
+    enter(e, ctx) {
+      const a = ctx.args ?? {}, settings = clampSettings(a.settings), progress = clampProgress(a.progress, Object.keys(TYPES)), bed = clampBedtime(a.bed);
+      const seed = seedParam(a.seed) ?? settings.seed ?? e.rng('seeds').int(0, 0xffffffff), power = powerParam(a.power, settings.power); // #86
+      const player = Number.isInteger(a.player) && a.player >= 1 ? a.player : 1, tripOn = a.trip !== false;
+      const s = Object.assign(ctx.state, {
+        game: null, gen: 0, seed, player, started: !!a.started, tripOn, trip: tripOn ? createTrip() : null,
+        raw: null, pilot: createPilot(), stepIn: { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false },
+        guide: false, sleepAfter: false, show: null, showDone: false, rewardDone: false, reward: null,
+        bed, date: null, progress, settings, sfx: freshSfx(), nextFarm: null,
+      });
+      build(e, s, seed, power, player);
+    },
+    exit(e, ctx) { ctx.state.game?.phys.world.free(); }, // [S-3], main.js dispose: the Rapier world with the terrain, trees, props and vehicles
+    step(e, dt, ctx) {
+      const s = ctx.state, g = s.game, I = e.input.snapshot;
+      if (!s.started && g.mode === 'drive' && (I.goX || I.goZ)) api.play(e); // A-7: the first stick move starts the trip
+      bridge(e, g.step(readInput(e, s)));
+      sounds(e, s);
+    },
+  };
+  return { scene, api };
+}
+
+// ?sandbox (T-13, T-14): a flat test pad with a ramp and mud, driven like the farm (no trip, no net)
+export function makeSandbox({ R }) {
+  const scene = {
+    enter(e, ctx) {
+      const a = ctx.args ?? {}, settings = clampSettings(a.settings);
+      Object.assign(ctx.state, {
+        game: createSandbox(R, { power: powerParam(a.power, settings.power) }), gen: 1, seed: null, started: true, raw: null,
+        pilot: createPilot(), stepIn: { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false }, settings, sfx: freshSfx(),
+      });
+    },
+    exit(e, ctx) { ctx.state.game?.phys.world.free(); },
+    step(e, dt, ctx) { const s = ctx.state; bridge(e, s.game.step(readInput(e, s)) ?? NONE); sounds(e, s); },
+  };
+  return { scene };
+}
