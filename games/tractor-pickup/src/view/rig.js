@@ -20,6 +20,7 @@ export const rig = {
   shake(a) { rig.chase?.shake(a); },
   blendFrom(q) { showQuat.copy(q); blend = 0; }, // F-10: the show's last camera turn, eased out over 1 s
   // M-77: the point on the screen, -1..1 each way, its NDC depth, and whether it is behind the camera (one reused object)
+  // unlike main.js's toNdc: updates the camera's world matrix first and also returns nz (the NDC depth, project's z)
   toNdc(x, y, z) {
     const c = rig.camera; c.updateMatrixWorld();
     _ndc.behind = _v.set(x, y, z).applyMatrix4(c.matrixWorldInverse).z > 0;

@@ -28,7 +28,22 @@ test('desktop: boots into the farm; W drives away from the camera; H honks; the 
     await game.command('farm.new', {}); await game.step(1); await game.untilLoaded(); // the command is delivered at the next step (I-7): until then no load is active
     assert.equal((await game.state()).gen, 2);
     assert.ok(await game.page.evaluate(() => window.engine.debug.farm.gen === 2));
+    assert.equal(await game.page.evaluate(() => document.getElementById('c').dataset.tpGen), '2', 'the view rebuilt the 3D farm for the new generation');
     assert.ok(cam && typeof cam.onScreen === 'boolean');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop: a boop fills a slot with its word; the drive buttons open and close the paint screen; the gear needs a 2 s hold', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS });
+  try {
+    await game.jump('farm', 'riders', { n: 2 }, ARGS); await game.step(2);
+    assert.equal(await game.page.locator('#slots .slot.full').count(), 2);
+    await game.tap('farm.paint'); await game.step(1); await expectState(game, 'mode', 'menu');
+    await game.tap('paint.close'); await game.step(1); await expectState(game, 'mode', 'drive');
+    await game.press('farm.parent'); await game.step(60); assert.deepEqual((await game.scene()).overlays, []);
+    await game.step(70); assert.deepEqual((await game.scene()).overlays, ['parent']); await game.unpress('farm.parent');
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });

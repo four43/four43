@@ -19,7 +19,7 @@ export const PAD = { axes: { 0: ['sx', 1], 1: ['sy', -1] }, buttons: { 0: 'horn'
 export function controls(doc) {
   const ui = doc.getElementById('ui');
   if (!doc.getElementById('stickBase')) {
-    const base = doc.createElement('div'); base.id = 'stickBase'; base.className = 'lh-stick'; base.hidden = true;
+    const base = doc.createElement('div'); base.id = 'stickBase'; base.className = 'tp-stick'; base.hidden = true;
     const knob = doc.createElement('div'); knob.id = 'stickKnob'; base.appendChild(knob); ui.appendChild(base);
   }
   if (!doc.getElementById('horn')) { const horn = doc.createElement('button'); horn.id = 'horn'; horn.setAttribute('aria-label', 'Horn'); horn.innerHTML = HORN_SVG; ui.appendChild(horn); }

@@ -7,6 +7,7 @@ import { tractorGame } from './game.sim.js';
 import { tractorView } from './game.view.js';
 import { devices } from './devices.js';
 import { rig } from './view/rig.js';
+import { hudMarkup } from './view/hud.js';
 import { load } from './ui/store.js';
 import { TYPES } from './sim/herd.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, emptyProgress } from './sim/progress.js';
@@ -20,6 +21,7 @@ async function start() {
   const q = new URLSearchParams(location.search), sandbox = q.has('sandbox');
   const settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
   const bed = safe(() => clampBedtime(load('tp-bedtime', null)), () => clampBedtime(null));
+  if (!sandbox) hudMarkup(document); // the drive buttons, the gear and the red X: game markup, adopted at boot's first UI sync
   const { engine } = boot(tractorGame(), tractorView({ tune: q.has('tune'), fps: q.has('fps'), sandbox }), {
     seed: (Math.random() * 2 ** 32) >>> 0, scene: sandbox ? 'sandbox' : 'farm',
     args: { seed: seedParam(q.get('seed')) ?? undefined, power: powerParam(q.get('power'), settings.power), progress, settings, bed },

@@ -45,7 +45,7 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #c{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none}
 #stickBase{position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.28);border:3px solid rgba(90,56,32,.5);z-index:6;pointer-events:none;display:grid;place-items:center}
 #stickBase[hidden]{display:none}
-#stickBase.lh-stick{transform:translate(-50%,-50%)} /* lion-hawk bindStick places the base by its centre */
+#stickBase.tp-stick{transform:translate(-50%,-50%)} /* lion-hawk bindStick places the base by its centre */
 #stickKnob{width:64px;height:64px;border-radius:50%;background:#f6a9bd;box-shadow:inset 0 0 0 3px #d9667f}
 #horn{all:unset;position:absolute;right:calc(var(--lh-sa-right,env(safe-area-inset-right,0px)) + 24px);bottom:calc(var(--lh-sa-bottom,env(safe-area-inset-bottom,0px)) + 24px);width:110px;height:110px;border-radius:50%;background:#fffcf8;border:4px solid #6b4428;box-shadow:0 5px 0 #6b4428;display:grid;place-items:center;z-index:6;cursor:pointer}
 #horn svg{width:86%;height:86%;transform:rotate(-8deg)}
@@ -174,6 +174,8 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .finder{position:absolute;left:0;top:0;z-index:6;width:46px;height:46px;pointer-events:none;filter:drop-shadow(0 2px 0 rgba(58,36,18,.55))}
 .finder svg{width:100%;height:100%;display:block;overflow:visible}
 .gear i{position:absolute;inset:-3px;border-radius:50%;--p:0deg;background:conic-gradient(#f5c84c var(--p),transparent 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));pointer-events:none}
+.gear[data-lh-slot] i{--p:calc(var(--lh-progress,0) * 360deg)} /* lion-hawk: the farm.parent hold's progress fills the ring */
+#ui [data-lh-slot]:not([data-testid]){display:none} /* an adopted control out of the engine's registry (before boot, or its screen closed) */
 .parent{position:absolute;inset:0;z-index:30;background:rgba(40,25,15,.55);display:grid;place-items:center;pointer-events:auto;touch-action:pan-y}
 .parent .box{position:relative;background:#fffcf8;color:#3a2412;border-radius:18px;padding:18px 22px;width:min(520px,92vw);max-height:92vh;overflow:auto;font:16px/1.4 Andika,system-ui,sans-serif;user-select:auto;-webkit-user-select:auto}
 .parent h2{margin:0 0 8px;font-size:22px}

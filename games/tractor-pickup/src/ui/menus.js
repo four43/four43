@@ -27,7 +27,8 @@ export const areaSvg = (area, c) => { const on = a => a === area ? fill(c) : '#f
 const goSvg = () => '<svg viewBox="0 0 60 60" aria-hidden="true"><path d="M20 12 L48 30 L20 48 Z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg>';
 export { paintBtnSvg };
 export const bookSvg = () => `<svg viewBox="0 0 100 80" aria-hidden="true"><path d="M50 14 C36 6 18 8 8 14 V68 C18 62 36 60 50 68 C64 60 82 62 92 68 V14 C82 8 64 6 50 14 Z" fill="#fff6dc" stroke="#6b4428" stroke-width="4" stroke-linejoin="round"/><path d="M50 14 V68" stroke="#6b4428" stroke-width="3"/><circle cx="29" cy="38" r="10" fill="#f6a9bd" stroke="#6b4428" stroke-width="2"/><path d="M62 46 l8 -14 l8 14 z" fill="#f5c84c" stroke="#6b4428" stroke-width="2"/></svg>`;
-const gearSvg = () => `<svg viewBox="0 0 24 24" aria-hidden="true"><g stroke="#5a3820" stroke-width="2.6" stroke-linecap="round"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></g></svg>`; // U-3: the parent menu button: a classic three-line menu icon
+export const xSvg = () => '<svg viewBox="0 0 40 40"><path d="M8 8 L32 32 M32 8 L8 32" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>'; // the red close button
+export const gearSvg = () => `<svg viewBox="0 0 24 24" aria-hidden="true"><g stroke="#5a3820" stroke-width="2.6" stroke-linecap="round"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></g></svg>`; // U-3: the parent menu button: a classic three-line menu icon
 export const hatSvg = id => ({
   straw: '<svg viewBox="0 0 60 36"><ellipse cx="30" cy="28" rx="28" ry="7" fill="#f2c85a" stroke="#6b4428" stroke-width="2"/><path d="M16 28 C16 8 44 8 44 28 Z" fill="#e0b040" stroke="#6b4428" stroke-width="2"/><rect x="16" y="22" width="28" height="5" fill="#c0392b"/></svg>',
   cowboy: '<svg viewBox="0 0 60 40"><path d="M2 30 C10 36 50 36 58 30 C52 30 48 26 46 14 C40 4 20 4 14 14 C12 26 8 30 2 30 Z" fill="#8a5530" stroke="#4a2c14" stroke-width="2"/><rect x="15" y="22" width="30" height="4" fill="#4a2c14"/></svg>',
@@ -106,7 +107,6 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
 
   // W-1: a die-cut sticker picture
   const cut = st => { const im = document.createElement('img'), a = art.get(st); im.className = 'cut' + (st.golden ? ' golden' : ''); im.alt = ''; im.src = a.src; im.draggable = false; im.style.aspectRatio = `${a.w} / ${a.h}`; return im; };
-  const xSvg = () => '<svg viewBox="0 0 40 40"><path d="M8 8 L32 32 M32 8 L8 32" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>';
   const closeBtn = (s, fn) => pic(s, 'x', xSvg(), () => { close(); fn?.(); }, 'Close');
 
   // U-6: the paint screen while driving, with a close button
