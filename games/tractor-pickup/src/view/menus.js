@@ -19,14 +19,15 @@ export function menuHalves(pics) {
       onHats(_, id) { p.sound.plop(); command('hat', { id }); }, // W-4
       onPlace(i, at) { command('sticker.place', { i, page: at.page, x: at.x, y: at.y }); }, // W-2
       onUnplace(i) { command('sticker.unplace', { i }); },
-      onBookSeen() { command('book.seen', {}); }, // F-3: the book from the start screen or the card (the book overlay marks it itself)
+      onBookSeen() { if (!engine?.scene.overlays.includes('book')) command('book.seen', {}); }, // F-3: the book from the start screen or the card (the book overlay marks it itself)
     }));
   };
   const progressOf = e => structuredClone(e.scene.state.progress); // the screens change their copy as the player taps
   // one screen per overlay: show(menus, engine, progress, view) builds it; its go or close control is adopted at once
+  let ui = null; // the view's UI (adopt)
   const half = (show, more = {}) => ({
     enter(e, view) {
-      engine = e; if (!e.scene.state.progress) return;
+      engine = e; ui = view.ui; if (!e.scene.state.progress) return;
       show(menusOf(view.doc), e, progressOf(e), view); view.ui.adopt();
       more.enter?.(e, view);
     },
@@ -39,7 +40,7 @@ export function menuHalves(pics) {
     start: half((m, e, p) => m.showStart(p), {
       enter(e) {
         let n = e.scene.state.progress.stickers.length;
-        off = e.events.on(ev => { if (ev.type !== 'progress') return; const k = ev.progress.stickers.length; if (k < n) menus.showStart(structuredClone(ev.progress)); n = k; });
+        off = e.events.on(ev => { if (ev.type !== 'progress') return; const k = ev.progress.stickers.length; if (k < n) { menus.showStart(structuredClone(ev.progress)); ui?.adopt(); } n = k; });
       },
       exit() { off?.(); off = null; },
     }),

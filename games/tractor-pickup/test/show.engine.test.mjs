@@ -50,3 +50,11 @@ test('gesture: false leaves the layer to the caller; cheer() and hurry() do what
     assert.ok(done, 'each hurry finished a step');
   } finally { show.end(); clearInterval(tick); }
 });
+test('clock update: a slow frame\'s whole (uncapped) time counts: one 0.4 s update ends the intro\'s wait (#56)', async () => {
+  const { show } = make(), r = riders(['pig']);
+  show.play(r, steps(r));
+  await ms(20); assert.equal(show.step, 0);
+  show.update(0.4); await ms(20); // SHOW.step is 350 ms: one frame of 0.4 s (rawDt at 2.5 fps) is enough
+  assert.ok(show.step >= 1, `still on step ${show.step}`);
+  show.end();
+});

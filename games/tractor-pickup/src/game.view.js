@@ -127,7 +127,7 @@ function driveHalf({ withHud = false } = {}) {
       try { w.others3d.update(dt, players); } catch (e) { warnOnce('others3d', e); } // M-44
       vehSnap.dirt = g.dirt?.tractor; w.vehicles.update(vehSnap);
       const t = g.tractor, lv = t.body.linvel(), v0 = bodies.view[0].p, show = withHud ? link.show : null;
-      if (show?.active) show.update(dt); // F-5: the show has the camera
+      if (show?.active) show.update(view.rawDt); // F-5: the show has the camera; its waits on the uncapped frame time (#56, #83): a slow device does not stretch them, a hidden tab gives 0
       else { chaseIn.x = v0.x; chaseIn.y = v0.y; chaseIn.z = v0.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); rig.follow(dt, chaseIn); }
       if (withHud && !engine.scene.overlays.includes('book')) link.menus?.noteSeen(s);
       sound.engine(t.engine, t.speed / t.P.vmax, t.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t.slip) - 0.2) * 2)));
@@ -154,10 +154,11 @@ function showCopies(e, s) {
 }
 
 // The show overlay's half (F-5..F-8, F-10, F-12..F-16, parity #13, #14): the cutscene on the copies, on engine time (the waits
-// count the frames' dt), its skip button the sim's show.skip hold on game markup; a tap on the show cheers, a 1 s hold hurries
-// (bindGesture). When it settles, show.done tells the sim where each rider stands, unless the farm changed under it.
+// count the frames' uncapped dt), its skip button the sim's show.skip hold on game markup; a touch on the show cheers (pointerdown),
+// a 1 s hold hurries (bindGesture). When it settles, show.done tells the sim where each rider stands, unless the farm changed under it.
 function showHalf() {
   let show = null, gesture = null, layer = null, off = null, step = '';
+  const cheer = e => { if (!e.target?.closest?.('button')) show?.cheer(); }; // A-3: a child's touch cheers at once (on pointerdown, as before), a held one too
   const start = engine => {
     const p = link.pending, s = engine.scene.state, w = link.w;
     if (!p || !show || show.active || !w || p.state !== s || p.gen !== s.gen) return;
@@ -178,7 +179,8 @@ function showHalf() {
       show = createShow({ root: doc.getElementById('ui'), camera: page.camera, game: s.game, voice: page.voice, sound: page.sound, fx: w.fx, scene: w.group,
         onHop: r => link.hud?.hop(r), skip, gesture: false, clock: 'update' });
       layer = show.layer; link.show = show; view.ui.adopt();
-      gesture = bindGesture(engine, layer, { tap: () => show.cheer(), hold: { seconds: CHEER.fastMs / 1000, fire: () => show.hurry() } });
+      layer.addEventListener('pointerdown', cheer);
+      gesture = bindGesture(engine, layer, { hold: { seconds: CHEER.fastMs / 1000, fire: () => show.hurry() } }); // F-8: a 1 s hold finishes the step
       off = engine.events.on(e => { if (e.type === 'showSkip') show?.skip(); });
       link.kick = () => start(engine); start(engine);
     },
@@ -186,7 +188,7 @@ function showHalf() {
       off?.(); off = null; gesture?.dispose(); gesture = null; link.kick = null;
       if (show) {
         if (show.active && page) rig.blendFrom(page.camera.quaternion); // F-10: the camera turns back to the chase view over 1 s
-        show.end(); layer.remove();
+        show.end(); layer.removeEventListener('pointerdown', cheer); layer.remove();
       }
       if (link.show === show) { link.show = null; link.poses = null; }
       show = layer = null; step = '';
