@@ -49,6 +49,13 @@ test('drive buttons hold the tractor; the intro end does not free it; paints, ha
   h.tap('paint.close'); h.step(1); assert.equal(s.game.mode, 'drive');
   h.press('farm.parent'); h.seconds(1.9); assert.deepEqual(h.scene.overlays, []); h.seconds(0.2); assert.deepEqual(h.scene.overlays, ['parent']);
 });
+test('a clear of the stickers empties them and closes the parent menu and the book under it (P-6)', () => {
+  const p = { ...emptyProgress(), shows: 2, stickers: [{ type: 'pig', golden: false, show: 1 }] };
+  const h = headless(tractorGame(), { args: { seed: 14, started: true, progress: p } }), s = h.engine.scene.state;
+  h.tap('farm.book'); h.step(1); h.press('farm.parent'); h.seconds(2.1); h.unpress('farm.parent'); assert.deepEqual(h.scene.overlays, ['book', 'parent']);
+  h.command('stickers.clear', {}).step(1);
+  assert.deepEqual(s.progress.stickers, []); assert.deepEqual(h.scene.overlays, []); assert.equal(s.game.mode, 'drive');
+});
 test('a new farm builds through ctx.load from farm.new and frees the old Rapier world (P-8, S-6)', () => {
   const h = headless(tractorGame(), { args: { seed: 14, started: true, settings: { seed: 99 } } }), s = h.engine.scene.state, old = s.game;
   let freed = 0; const free = old.phys.world.free.bind(old.phys.world); old.phys.world.free = () => { freed++; free(); };

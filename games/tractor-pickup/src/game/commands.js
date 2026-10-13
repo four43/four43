@@ -37,10 +37,11 @@ export const makeCommands = api => ({
   }),
   'book.seen': farm((e, s) => { s.progress = seeBook(s.progress); progress(e, s); }), // F-3: the drive button's badge
   // P-6: in place (an open screen holds this same object, so its next save cannot bring the stickers back); a screen left
-  // open would show stickers that are gone, so it closes the way its own close button would
+  // open would show stickers that are gone, so it closes the way its own close button would. The parent menu it came from
+  // closes too (main.js's done())
   'stickers.clear': farm((e, s) => {
     s.progress.stickers.length = 0; progress(e, s);
-    for (const n of ['paint', 'book']) if (e.isOpen(n)) e.close(n);
+    for (const n of ['parent', 'paint', 'book']) if (e.isOpen(n)) e.close(n);
     if (e.isOpen('reward')) closeReward(e, s);
   }),
   // P-3..P-5: power applies at once, voice and music in the view, a seed with the next new farm

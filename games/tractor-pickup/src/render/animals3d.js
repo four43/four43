@@ -42,15 +42,17 @@ export function createAnimals3D(scene, herd) {
   return {
     views,
     sing(a, delay) { sings.set(a, -delay); },
-    // view: the interpolated car poses ({ p, q } per car) and the step alpha, so riders and fliers move with the drawn train (X-1)
+    // view: the interpolated car poses ({ p, q } per car) and the step alpha, so riders and fliers move with the drawn train (X-1);
+    // poses: an optional Map of animal id -> a pose object drawn instead of that animal
     update(dt, game, view) {
       flightOf.clear(); for (const f of game.flights) flightOf.set(f.animal, f);
       while (views.length < herd.animals.length) views.push(null); // respawned animals (G-3)
       for (let i = 0; i < views.length; i++) {
-        const a = herd.animals[i]; if (!a || a.state === 'gone') { drop(i); continue; } // G-3: a gone animal keeps no view; its slot may get a new animal
+        const sa = herd.animals[i]; if (!sa || sa.state === 'gone') { drop(i); continue; } // G-3: a gone animal keeps no view; its slot may get a new animal
         let v = views[i];
-        if (v && (v.a !== a || v.type !== a.type || v.golden !== a.golden)) { drop(i); v = null; } // a new animal in the slot, or a placeholder from herd.ensure got its real type (M-11)
-        v ||= views[i] = makeView(a);
+        if (v && (v.a !== sa || v.type !== sa.type || v.golden !== sa.golden)) { drop(i); v = null; } // a new animal in the slot, or a placeholder from herd.ensure got its real type (M-11)
+        v ||= views[i] = makeView(sa);
+        const a = view.poses?.get(sa.id) ?? sa; // lion-hawk 2g (#79): view.poses (id -> pose) draws the show's copy of a rider in its place
         v.t += dt;
         v.g.visible = a.state !== 'elsewhere'; if (!v.g.visible) continue;
         v.hat.visible = a.state === 'ride' || (a.state === 'carried' && !!a.riding); // hats show only on riders (W-4)

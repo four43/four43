@@ -24,14 +24,21 @@ export const CHEER = { hop: 0.35, h: 0.7, fastMs: 1000, skipMs: 1000 };
 export const LABEL = { pxPerLetter: 21, min: 0.5 };
 export const labelScale = pxPerM => Math.max(LABEL.min, Math.min(1, pxPerM * LINEUP.letter / LABEL.pxPerLetter));
 const RING = { line: 0.15, y: 0.03 }; // F-14: the tally circle on the ground: a light rim and a pale fill
-export function createShow({ root, camera, game, voice, sound, fx, scene, onHop }) {
+// F-13: the skip button's picture and its hold ring (<i>)
+export const skipSvg = () => '<svg viewBox="0 0 60 40" aria-hidden="true"><path d="M6 6 L28 20 L6 34 Z M30 6 L52 20 L30 34 Z" fill="#fff"/><rect x="52" y="6" width="5" height="28" rx="2" fill="#fff"/></svg><i></i>';
+// skip: a skip button made by the caller (lion-hawk 2g: the sim's show.skip hold on adopted markup), put in the show layer; the caller
+// calls skip() when it fires. Without it the show makes its own, held for CHEER.skipMs. gesture: false leaves the layer's tap and
+// hold to the caller (cheer() and hurry()); by default the show listens itself. clock: 'update' counts every wait (SHOW.step,
+// SUM_PAUSE, STAGE_PAUSE, tallyGap) in update(dt) time, so the show runs on the engine's time ([U-5]); the default 'wall' waits with setTimeout.
+export function createShow({ root, camera, game, voice, sound, fx, scene, onHop, skip: skipEl = null, gesture = true, clock = 'wall' }) {
   const el = document.createElement('div'); el.id = 'show'; el.hidden = true; root.appendChild(el);
   const big = document.createElement('div'); big.className = 'big'; el.appendChild(big);
   // F-13: a skip button ends the whole show at once (the reward card comes next). A-3: only after a 1 s hold, so a child's poke cannot
-  const skip = document.createElement('button'); skip.className = 'skip'; skip.setAttribute('aria-label', 'Skip');
-  skip.innerHTML = '<svg viewBox="0 0 60 40" aria-hidden="true"><path d="M6 6 L28 20 L6 34 Z M30 6 L52 20 L30 34 Z" fill="#fff"/><rect x="52" y="6" width="5" height="28" rx="2" fill="#fff"/></svg><i></i>'; el.appendChild(skip);
+  const skip = skipEl ?? document.createElement('button');
+  if (!skipEl) { skip.className = 'skip'; skip.setAttribute('aria-label', 'Skip'); skip.innerHTML = skipSvg(); }
+  el.appendChild(skip);
   let ring = null; const dropRing = () => { if (!ring) return; ring.removeFromParent(); ring.traverse(m => { m.geometry?.dispose(); m.material?.dispose(); }); ring = null; };
-  let tweens = [], labels = [], active = false, ended = false, skipped = false, camT = 1, cut = null, fast = false, cur = null, fastTimer = 0;
+  let tweens = [], labels = [], timers = [], active = false, ended = false, skipped = false, camT = 1, cut = null, fast = false, cur = null, fastTimer = 0, at = -1;
   const camFrom = new THREE.Vector3(), camTo = new THREE.Vector3(), look = new THREE.Vector3(), lookFrom = new THREE.Vector3(), lookTo = new THREE.Vector3(), v = new THREE.Vector3();
   // F-8: holding the screen for 1 s finishes the current step: hops in flight land at once, and the voice and the wait end together.
   // A-3: a short tap is the child's: the animal being counted hops and calls; the show goes on at its own pace.
@@ -44,11 +51,15 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
     sound?.animal?.(a.type); tweens.push({ a, from: { x: a.x, y: a.y || 0, z: a.z, yaw: a.yaw }, to: { x: a.x, y: a.y || 0, z: a.z }, t: 0, dur: CHEER.hop, h: CHEER.h, cheer: true, res: () => {} });
   };
   const release = () => { clearTimeout(fastTimer); fastTimer = 0; };
-  el.addEventListener('pointerdown', () => { if (!cut) return; cheer(); release(); fastTimer = setTimeout(() => { fastTimer = 0; hurry(); }, CHEER.fastMs); });
-  for (const n of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(n, release);
-  holdToFire(skip, CHEER.skipMs, () => { if (!cut) return; skipped = true; hurry(); });
+  if (gesture) {
+    el.addEventListener('pointerdown', () => { if (!cut) return; cheer(); release(); fastTimer = setTimeout(() => { fastTimer = 0; hurry(); }, CHEER.fastMs); });
+    for (const n of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(n, release);
+  }
+  const skipNow = () => { if (!cut) return; skipped = true; hurry(); };
+  if (!skipEl) holdToFire(skip, CHEER.skipMs, skipNow);
   let riders0 = null;
-  const wait = ms => fast ? Promise.resolve() : Promise.race([new Promise(res => setTimeout(res, ms)), cut.p]);
+  const timer = clock === 'update' ? ms => ms <= 0 ? Promise.resolve() : new Promise(res => timers.push({ left: ms, res })) : ms => new Promise(res => setTimeout(res, ms));
+  const wait = ms => fast ? Promise.resolve() : Promise.race([timer(ms), cut.p]);
   // R-1: a voice that throws or rejects must never stall the show
   const speak = ids => Promise.resolve().then(() => voice.say(ids)).catch(e => console.warn('voice', e));
   const say = ids => fast ? Promise.resolve() : Promise.race([speak(ids), cut.p]);
@@ -78,8 +89,12 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
   };
   return {
     get active() { return active; },
+    layer: el, // the show's own layer (#show)
+    get step() { return at; }, // the index of the step that runs (-1 before the first and after the show)
+    cheer() { if (cut) cheer(); }, hurry, skip: skipNow,
     update(dt) {
       if (!active) return;
+      if (timers.length) timers = timers.filter(tm => { if ((tm.left -= dt * 1000) > 0) return true; tm.res(); return false; }); // clock 'update'
       if (camT < 1) { camT = Math.min(1, camT + dt); const k = camT * camT * (3 - 2 * camT); camera.position.lerpVectors(camFrom, camTo, k); look.lerpVectors(lookFrom, lookTo, k); }
       camera.lookAt(look);
       tweens = tweens.filter(tw => {
@@ -115,9 +130,9 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
         const pxPerM = VIEW.h / (2 * Math.tan(camera.fov * Math.PI / 360) * camTo.distanceTo(v.set(C.x, 0.8, C.z)));
         el.style.setProperty?.('--k', labelScale(pxPerM).toFixed(3)); // F-12
         const faceCam = Math.atan2(F.side[0], F.side[1]), nums = [], tags = [];
-        for (const s of steps) {
+        for (const [i, s] of steps.entries()) {
           if (ended || skipped) break; // end() was called (a new farm) or the skip button: stop before the next step
-          newStep();
+          newStep(); at = i;
           if (s.kind === 'hop') { // F-6: into its group's block, counted within the group
             const r = riders[s.index], a = r.animal, p = lay.spots[s.group][s.n - 1]; cur = a; a.yaw = ridingYaw(r); a.state = 'show'; a.anim = 'idle'; sound?.boing?.(0.3);
             onHop?.(r); // F-15: its slot in the slot bar is marked off
@@ -170,7 +185,7 @@ export function createShow({ root, camera, game, voice, sound, fx, scene, onHop 
           if (!skipped) await wait(SHOW.step);
         }
       } finally { // R-1: whatever happens, nobody is left mid-hop
-        for (const tw of tweens) finish(tw); tweens = []; cut = null; fast = false; release();
+        for (const tw of tweens) finish(tw); tweens = []; timers = []; cut = null; fast = false; at = -1; release();
       }
     },
     end() { dropRing(); active = false; ended = true; fast = true; cut?.fire(); for (const tw of tweens) finish(tw); tweens = []; el.hidden = true; labels.forEach(L => L.d.remove()); labels = []; big.classList.remove('on'); big.innerHTML = ''; },

@@ -49,12 +49,17 @@ const pageSvg = k => { const [s0, s1, h0, h1, extra] = PAGE_ART[k % PAGE_ART.len
 const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${RB}</defs><path d="M14 26 H66 L62 70 Q40 76 18 70 Z" fill="#c9ccd4" stroke="#4a3a2c" stroke-width="4" stroke-linejoin="round"/>
 <ellipse cx="40" cy="26" rx="26" ry="8" fill="url(#rb)" stroke="#4a3a2c" stroke-width="4"/><path d="M18 22 Q40 2 62 22" fill="none" stroke="#4a3a2c" stroke-width="4"/></svg>`;
 
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onBookSeen, onParent, onMultiplayer, onBedtime, netlog = null }) {
+// gear: false makes no gear (lion-hawk 2g: the engine path adopts its own, farm.parent). slots: the go buttons and a close button with no
+// back are the engine's controls on game markup (data-lh-slot start.go, reward.go, paint.close, book.close, [U-1]): no listener of
+// their own, the engine taps them and its overlay's view half closes the screen. onPlace(i, { page, x, y }), onUnplace(i): a sticker
+// was dragged onto a page or back to the tray (before onStickers).
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onPlace, onUnplace, onBookSeen, onParent, onMultiplayer, onBedtime, netlog = null, gear: withGear = true, slots = false }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
   const pic = (parent, cls, html, fn, label) => { const b = el('pic ' + cls, 'button', parent); b.innerHTML = html; b.setAttribute('aria-label', label); b.addEventListener('click', e => { e.stopPropagation(); fn(); }); return b; };
-  const go = (parent, fn) => pic(parent, 'go', goSvg(), () => { close(); fn(); }, 'Go');
+  const slot = (parent, cls, html, id, label) => { const b = el('pic ' + cls, 'button', parent); b.type = 'button'; b.innerHTML = html; b.dataset.lhSlot = id; b.setAttribute('aria-label', label); return b; };
+  const go = (parent, fn, id) => slots ? slot(parent, 'go', goSvg(), id, 'Go') : pic(parent, 'go', goSvg(), () => { close(); fn(); }, 'Go');
 
   // W-3: the tractor in 3D at the left; at the right a row of pots for the body and one for the trim. fresh: the paint just won.
   function paintPanel(parent, progress, fresh) {
@@ -75,7 +80,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
       tag.innerHTML = `<img alt="" src="${icons.pig}"><span>${hatSvg(unlockedHats(progress)[0])}</span>`;
       const mark = () => [...hats.children].forEach(b => b.classList.toggle('on', wornHats(progress).includes(b.dataset.h)));
       for (const h of unlockedHats(progress)) {
-        const b = pic(hats, 'pot hat', hatSvg(h), () => { progress.hatsOff = toggleHat(progress, h).hatsOff; onHats?.(progress); mark(); }, `${h} hat`);
+        const b = pic(hats, 'pot hat', hatSvg(h), () => { progress.hatsOff = toggleHat(progress, h).hatsOff; onHats?.(progress, h); mark(); }, `${h} hat`);
         b.dataset.h = h;
       }
       mark();
@@ -87,7 +92,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
   function showStart(progress) {
     const s = open('start');
     paintPanel(s, progress);
-    go(s, onPlay);
+    go(s, onPlay, 'start.go');
     badge(pic(s, 'bookbtn', bookSvg(), () => showBook(progress, () => showStart(progress)), 'Sticker book'), progress);
   }
   // F-3: the number of new stickers (earned since the book was last opened), or nothing
@@ -101,23 +106,23 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     const top = el('rewardtop', 'div', s), big = el('bigsticker', 'div', top); big.appendChild(cut(sticker));
     if (newHat) { const h = el('extra hatted', 'div', top); h.innerHTML = `<img alt="" src="${icons.pig}"><span>${hatSvg(newHat)}</span>`; }
     if (newPaint) paintPanel(s, progress, newPaint);
-    go(s, onKeepDriving);
+    go(s, onKeepDriving, 'reward.go');
     badge(pic(s, 'bookbtn small', bookSvg(), () => showBook(progress, () => showReward({ sticker, newPaint, newHat, progress })), 'Sticker book'), progress);
   }
 
   // W-1: a die-cut sticker picture
   const cut = st => { const im = document.createElement('img'), a = art.get(st); im.className = 'cut' + (st.golden ? ' golden' : ''); im.alt = ''; im.src = a.src; im.draggable = false; im.style.aspectRatio = `${a.w} / ${a.h}`; return im; };
-  const closeBtn = (s, fn) => pic(s, 'x', xSvg(), () => { close(); fn?.(); }, 'Close');
+  const closeBtn = (s, fn, id) => slots && !fn ? slot(s, 'x', xSvg(), id, 'Close') : pic(s, 'x', xSvg(), () => { close(); fn?.(); }, 'Close');
 
   // U-6: the paint screen while driving, with a close button
-  function openPaint(progress, back) { const s = open('paint'); paintPanel(s, progress); closeBtn(s, back); }
+  function openPaint(progress, back) { const s = open('paint'); paintPanel(s, progress); closeBtn(s, back, 'paint.close'); }
 
   // W-2: pages with a farm picture, the tray of stickers not on a page, drag to place, drag again to move, drag to the tray to take off
   function showBook(progress, back, page = 0) {
     const s = open('book'), book = el('bookwrap', 'div', s), pg = el('page', 'div', book), tray = el('tray', 'div', s);
     const prev = pic(book, 'turn prev', '<svg viewBox="0 0 40 40"><path d="M26 6 L10 20 L26 34" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>', () => { page--; draw(); }, 'Previous page');
     const next = pic(book, 'turn next', '<svg viewBox="0 0 40 40"><path d="M14 6 L30 20 L14 34" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>', () => { page++; draw(); }, 'Next page');
-    closeBtn(s, back);
+    closeBtn(s, back, 'book.close');
     const seen = progress.bookSeen ?? 0; // the new stickers bounce once in the tray; opening the book makes them seen (F-3)
     progress.bookSeen = seeBook(progress).bookSeen; onStickers?.(progress); onBookSeen?.();
     const draw = () => {
@@ -142,8 +147,8 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
         const up = ev => {
           removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); ghost.remove();
           const cx = ev.clientX - dx, cy = ev.clientY - dy, pr = pg.getBoundingClientRect();
-          if (ev.type === 'pointerup' && inside(tray.getBoundingClientRect(), ev.clientX, ev.clientY)) progress.stickers = unplaceSticker(progress, i).stickers;
-          else if (ev.type === 'pointerup' && inside(pr, cx, cy)) progress.stickers = placeSticker(progress, i, { page, x: (cx - pr.left) / pr.width, y: (cy - pr.top) / pr.height }).stickers;
+          if (ev.type === 'pointerup' && inside(tray.getBoundingClientRect(), ev.clientX, ev.clientY)) { progress.stickers = unplaceSticker(progress, i).stickers; onUnplace?.(i); }
+          else if (ev.type === 'pointerup' && inside(pr, cx, cy)) { const at = { page, x: (cx - pr.left) / pr.width, y: (cy - pr.top) / pr.height }; progress.stickers = placeSticker(progress, i, at).stickers; onPlace?.(i, at); }
           onStickers?.(progress); draw();
         };
         addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
@@ -153,8 +158,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
   }
 
   // U-3: a small gear, top right. Hold for 2 s (a ring fills); a shorter press does nothing.
-  const gear = el('gear', 'button', root); gear.innerHTML = gearSvg() + '<i></i>'; gear.setAttribute('aria-label', 'Parent menu');
-  holdToFire(gear, 2000, () => onParent?.());
+  if (withGear) { const gear = el('gear', 'button', root); gear.innerHTML = gearSvg() + '<i></i>'; gear.setAttribute('aria-label', 'Parent menu'); holdToFire(gear, 2000, () => onParent?.()); }
 
   // U-3, E-7: the parent menu in the game's own button style. Every choice applies at once (no Apply button); the seed applies with the
   // next new farm. E-5: the bedtime row: Now, 3, 5 or 10 minutes; tap the lit one again to turn bedtime off.

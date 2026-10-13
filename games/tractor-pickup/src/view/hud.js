@@ -6,7 +6,7 @@
 import { createHud } from '../ui/hud.js';
 import { createRoster, createFinder, placeArrow } from '../ui/roster.js';
 import { createHornMarks } from '../render/hornMarks.js';
-import { paintBtnSvg, bookSvg, gearSvg, xSvg } from '../ui/menus.js';
+import { paintBtnSvg, bookSvg, gearSvg } from '../ui/menus.js';
 import { VIEW } from '../render/scene.js';
 import { slotIndex } from '../sim/slots.js';
 import { TYPES } from '../sim/herd.js';
@@ -20,8 +20,8 @@ const HELP_SECS = 10; // F-4: the arrow to the helper animal, on engine time
 
 // The adopted controls' markup, made once in #ui before boot so the first UI sync adopts it ([U-1]: the engine makes its own
 // element for a control with no slot when the control appears). U-6: the drive buttons (bottom left, hidden until driving);
-// U-3: the gear (top left; the ring is its <i>, filled from --lh-progress); the paint screen's and the book's red X. An adopted
-// control out of the registry has no data-testid: the template hides it then.
+// U-3: the gear (top left; the ring is its <i>, filled from --lh-progress). An adopted control out of the registry has no
+// data-testid: the template hides it then. The screens' own buttons (go, the red X) come with their screens (view/menus.js).
 export function hudMarkup(doc) {
   const ui = doc.getElementById('ui');
   if (doc.getElementById('drivebtns')) return;
@@ -30,8 +30,6 @@ export function hudMarkup(doc) {
   button(drive, 'pic paintbtn', 'farm.paint', paintBtnSvg(), 'Paint');
   button(drive, 'pic stickerbtn', 'farm.book', bookSvg(), 'Sticker book');
   button(ui, 'gear', 'farm.parent', gearSvg() + '<i></i>', 'Parent menu');
-  button(ui, 'pic x', 'paint.close', xSvg(), 'Close');
-  button(ui, 'pic x', 'book.close', xSvg(), 'Close');
 }
 
 // M-75: the horn marks live in the scene, not a farm: made once per scene (in it before the shader warm-up, B-2)
@@ -60,7 +58,7 @@ export function createTractorHud(root, { icons, voice, sound, rig, paints, tract
   const driveBtns = doc.getElementById('drivebtns'), bookBtn = driveBtns?.querySelector('.stickerbtn');
   const plop = () => sound.plop(); // a drive button's tap (the engine opens its screen; a disabled button gets no click)
   for (const b of driveBtns?.children ?? []) b.addEventListener('click', plop);
-  let sceneId, sync = null, guide = false, help = null, helpUntil = 0, pathT = 0, pathK = false, barnWay = null, barnBy = 0;
+  let sceneId, showOn = false, sync = null, guide = false, help = null, helpUntil = 0, pathT = 0, pathK = false, barnWay = null, barnBy = 0;
   const p0 = { x: 0, y: 0, z: 0 };
   // M-75: where a horn mark goes: key 0 is this device's tractor, else the other player's number
   const hornAt = (key, out) => { if (!key) { out.copy(tractorAt()); return true; } const p = sync?.players.map.get(key); if (!p?.pose) return false; const q = p.pose.tractor.p; out.set(q.x, q.y, q.z); return true; };
@@ -69,9 +67,10 @@ export function createTractorHud(root, { icons, voice, sound, rig, paints, tract
     const n = newStickers(progress); if (n) bookBtn.appendChild(Object.assign(doc.createElement('span'), { className: 'count', textContent: n }));
   }
   const unguide = () => { help = null; world()?.fx.sparkleTrail([]); hud.arrowTo(null); };
-  // 2f delta: the slot bar from the farm's state (presets land riders with no `land` event), the path and the badge
-  function reset(s) {
-    hud.reset(); help = null; pathT = 0; barnWay = null;
+  // 2f delta: the slot bar from the farm's state (presets land riders with no `land` event), the path and the badge. id: the
+  // scene id this state belongs to (engine.scene.id), so the next frame does not reset it again
+  function reset(s, id = sceneId) {
+    sceneId = id; showOn = !!s?.show; hud.reset(); help = null; pathT = 0; barnWay = null;
     const g = s?.game; if (!g) return;
     if (g.load) for (const sl of g.load.slots) if (sl.landed) hud.fill(slotIndex(sl) + 1, sl.animal.type, sl.animal.golden);
     guide = !!s.guide; badge(s.progress);
@@ -100,7 +99,8 @@ export function createTractorHud(root, { icons, voice, sound, rig, paints, tract
     // dt: the frame's (0 for a hook render)
     frame(engine, dt) {
       const s = engine.scene.state, g = s.game, t = g.tractor; sync = s.net?.sync ?? null;
-      if (engine.scene.id !== sceneId) { sceneId = engine.scene.id; reset(s); } // 2f delta: a jump re-entered the farm
+      if (engine.scene.id !== sceneId) reset(s, engine.scene.id); // 2f delta: a jump re-entered the farm
+      else if (showOn !== !!s.show) { showOn = !!s.show; if (!showOn) reset(s); } // the show is over: the bar is empty, even when the card failed (R-1)
       hornMarks.update(dt, hornAt); finder.update(dt, sync, !!s.show || g.mode !== 'drive'); roster.update(sync, s.progress.paint);
       if (driveBtns) { const on = s.started && g.mode === 'drive' && !s.show; if (driveBtns.hidden === on) driveBtns.hidden = !on; } // U-6
       // M-72: the bubble shows whose show has the barn; that tractor toots once. It goes when this train's own show starts
