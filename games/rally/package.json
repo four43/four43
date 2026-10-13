@@ -4,7 +4,7 @@
   "description": "Rally sim test pad (Milestone 1)",
   "scripts": {
     "dev": "node dev.mjs",
-    "test": "node --test test/*.test.mjs && node test/gen-layout.mjs && node test/gen-terrain.mjs && node test/gen-surfaces.mjs && node test/physics.mjs && node test/snow.mjs && node test/markers.mjs && node test/verge.mjs && node test/track.mjs && node test/wild.mjs && node test/game.mjs",
+    "test": "node --test --test-concurrency=4 test/*.test.mjs && node test/gen-layout.mjs && node test/gen-terrain.mjs && node test/gen-surfaces.mjs && node test/physics.mjs && node test/snow.mjs && node test/markers.mjs && node test/verge.mjs && node test/track.mjs && node test/wild.mjs && node test/game.mjs",
     "test:e2e": "node --test test/e2e.browser.mjs",
     "bake": "node bake.mjs",
     "build": "python3 build.py",

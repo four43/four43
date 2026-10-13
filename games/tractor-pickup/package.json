@@ -4,7 +4,7 @@
   "version": "1.8.0",
   "type": "module",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test --test-concurrency=4 test/",
     "bake": "node bake.mjs",
     "build": "python3 build.py",
     "test:e2e": "node --test test/e2e.browser.mjs"

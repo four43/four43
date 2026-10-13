@@ -2,5 +2,5 @@
   "name": "four43-games",
   "private": true,
   "workspaces": ["pig-pens", "tractor-pickup", "rally"],
-  "scripts": { "test": "node --test test/ && npm test --workspaces --if-present" }
+  "scripts": { "test": "node --test --test-concurrency=4 test/ && npm test --workspaces --if-present" }
 }
