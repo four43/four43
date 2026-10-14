@@ -16,21 +16,19 @@ export class Sound {
     }));
   }
   clip(buf, when, vol = 1) { const c = this.ctx, s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; g.gain.value = vol; s.connect(g); g.connect(this.master); s.start(c.currentTime + when); s.onended = () => { s.disconnect(); g.disconnect(); }; }
-  unlock() {
-    if (!this.ctx) {
-      try {
-        const C = window.AudioContext || window.webkitAudioContext; this.ctx = new C();
-        this.master = this.ctx.createGain(); this.master.gain.value = 0.55; const lim = this.ctx.createDynamicsCompressor(); // R-8: a soft limiter so nothing ever gets loud
-        lim.threshold.value = -14; lim.knee.value = 24; lim.ratio.value = 4; lim.attack.value = 0.005; lim.release.value = 0.2;
-        this.master.connect(lim); lim.connect(this.ctx.destination);
-        this.musicBus = this.ctx.createGain(); this.musicBus.gain.value = 0; this.musicBus.connect(this.master);
-        this.buildLoops();
-      } catch (e) { console.warn('sound: no audio', e); this.ctx = null; return Promise.resolve(); }
-    }
-    return this.ctx.state !== 'running' ? Promise.resolve(this.ctx.resume?.()).catch(e => console.warn('sound: resume', e)) : Promise.resolve(); // D-3: iOS refuses outside a gesture; the next gesture tries again
+  // #67 (3l): the engine audio service owns the context, unlock on the first gesture, page hide and resume, and the master volume
+  // (0.55) and limiter (R-8). The game's own bus goes into the service's master; loops, music and clips build on its context once it
+  // exists (attach builds at once if it does, else on unlock). onUnlocked: the entry's work for an unlock (voice prime, clips, music).
+  attach(audio) {
+    const build = () => {
+      if (this.ctx || !audio.ctx) return;
+      this.ctx = audio.ctx; this.master = this.ctx.createGain(); this.master.gain.value = 1; this.master.connect(audio.master);
+      this.musicBus = this.ctx.createGain(); this.musicBus.gain.value = 0; this.musicBus.connect(this.master);
+      this.buildLoops();
+    };
+    build();
+    audio.onUnlock?.(() => { build(); try { this.onUnlocked?.(); } catch (e) { console.warn('sound: unlock', e); } });
   }
-  // D-1: the page is hidden: stop every sound (the loops keep their gains, so they would drone on in a background tab); unlock() resumes
-  suspend() { if (this.ctx?.state === 'running') Promise.resolve(this.ctx.suspend()).catch(e => console.warn('sound: suspend', e)); }
   get ok() { return !!this.ctx && !this.muted && this.ctx.state === 'running'; }
   noiseBuffer() {
     if (!this._noise) { const c = this.ctx, n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; this._noise = b; }
