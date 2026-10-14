@@ -31,3 +31,20 @@ export async function serveRally({ entry = 'src/main.js' } = {}) {
   const url = `http://127.0.0.1:${server.address().port}/`;
   return { url, close: () => new Promise(r => { server.closeAllConnections?.(); server.close(() => r()); }) };
 }
+
+// A static server over a built directory (lion-hawk build output, or the baseline page): / → index.html, everything
+// else by path under dir. serveDir(dir) → { url, close }.
+export async function serveDir(dir) {
+  const rootDir = path.resolve(dir);
+  const TYPES2 = { ...TYPES, '.json': 'application/json', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg' };
+  const server = http.createServer((req, res) => {
+    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (p.endsWith('/')) p += 'index.html';
+    const f = path.join(rootDir, path.normalize(p));
+    if (!f.startsWith(rootDir) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'content-type': TYPES2[path.extname(f)] ?? 'application/octet-stream' }).end(fs.readFileSync(f));
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${server.address().port}/`;
+  return { url, close: () => new Promise(r => { server.closeAllConnections?.(); server.close(() => r()); }) };
+}
