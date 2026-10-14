@@ -18,6 +18,7 @@
 - Feel baseline: test/feel-baseline.json.
   - Stage times (s): t1 261.17, t2 231.97, t3 215.93 (t1 is a little over the brief's rough 100-250 s guess; recorded as measured).
   - Verge: grassTop 83.87 km/h, gravelTop 183.96 km/h, grassCoast 0.552 g, gravelCoast 0.133 g, offRoad (km/h after 4 s) 31.05, 30.65, 49.65, 50.72.
+- Bake (Task 3, `lion-hawk bake`, registry hash 9f901504 in phys.json): GLB bytes cone 4304, hatchback-sports 23096, sedan-sports 24260, wheel-racing 5780. Vertex counts baked vs today's assets.json (weld lowers them; triangles are identical): hatchback-sports 2048 vs 3709 (wheel 288 vs 528 each, body 896 vs 1597), sedan-sports wheels 288 vs 528 each (body and spoiler welded too), wheel-racing 336 vs 528, cone 176 vs 288.
 
 ## Golden re-blessings
 | Task | Cause | Feel table | Commit |
@@ -28,6 +29,7 @@
 ## Done-when evidence
 
 ## Contract issues
+- Task 3: the bake de-duplicates part names against every node and the scene (spec 3d C3), and the single-part GLBs have a root node named like the model. Baked part names are `wheel-racing-2` and `cone-2` (phys.json `parts` and colliders' `part`, GLB node names), not `wheel-racing` and `cone`. The brief's parity test expected the old names, so test/bake.test.mjs carries a `BAKED_NAMES` map for those two models (triangle counts unchanged: 332 and 172). The view (Task 13) must look up `wheel-racing-2` / `cone-2`, or a source rename must be asked of the engine.
 
 ## Integrator requests
 
