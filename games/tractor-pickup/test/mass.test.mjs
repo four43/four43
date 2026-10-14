@@ -31,3 +31,21 @@ test('the train despawns cleanly (controllers and joints freed with their entiti
   for (const c of [...tr.cars].reverse()) world.despawn(c.e); world.despawn(t.e);
   assert.equal(world.stats.bodies, n - 3);
 });
+
+import { addYardProps } from '../src/sim/scenery.js';
+import { createTrees } from '../src/sim/trees.js';
+import { generateFarm } from '../src/sim/track.js';
+test('yard props weigh the old setMass values: bale 150, cone 2, barrel 25 kg', () => {
+  const { world } = testWorld(); addGround(world);
+  const { props } = addYardProps(world, generateFarm(5)), want = { bale: 150, cone: 2, barrel: 25 };
+  assert.ok(props.length > 0);
+  for (const p of props) near(p.body.mass(), want[p.kind], 0.005, p.kind);
+});
+test('a broken tree\'s trunk stops colliding and a regrown one collides again (one entity each, bushes bodiless)', () => {
+  const { world } = testWorld(); addGround(world);
+  const T = createTrees(world, [{ kind: 'tree', x: 0, z: 10, r: 1.5 }, { kind: 'bush', x: 5, z: 10, r: 0.9 }]), [tree, bush] = T.list;
+  assert.equal(tree.e.colliders.length, 1); assert.equal(bush.e.body, undefined);
+  const c = tree.e.colliders[0].collider; assert.equal(c.isEnabled(), true);
+  T.breakById(0); assert.equal(c.isEnabled(), false); assert.equal(tree.solid, false);
+  T.regrowById(0); assert.equal(c.isEnabled(), true); assert.equal(tree.solid, true);
+});

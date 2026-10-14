@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT } from '../src/sim/physics.js';
+import { addGround, DT } from '../src/sim/ground.js';
+import { testWorld } from './helpers/world.mjs';
 import { createTractor, quatAxes } from '../src/sim/tractor.js';
 import { createTrain } from '../src/sim/hitch.js';
 import { generateFarm, layoutYard, yardFree, YARD_HALF, segDist, barnLocal, TREE_R } from '../src/sim/track.js';
@@ -10,15 +10,14 @@ import { roadside, curveCenters, ROADSIDE } from '../src/sim/scenery.js';
 import { makeRng } from '../src/sim/rng.js';
 import { createTrees, TREE } from '../src/sim/trees.js';
 import { stepGib } from '../src/render/gibs.js';
-await RAPIER.init();
 
 const oneTree = (x = 0, z = 0, young = false) => [{ kind: 'tree', x, z, r: young ? TREE_R.young : TREE_R.single, young, scale: young ? 0.62 : 1 }];
 const oneBush = (x = 0, z = 0) => [{ kind: 'bush', x, z, r: TREE_R.bush, scale: 1 }];
 const setup = (items, { x = -25, power = 'high' } = {}) => {
-  const phys = createPhysics(RAPIER), trees = createTrees(phys, items), t = createTractor(phys, { x, z: 0, yaw: Math.PI / 2, power }), train = createTrain(phys, t);
+  const { world, step } = testWorld(); addGround(world); const trees = createTrees(world, items), t = createTractor(world, { x, z: 0, yaw: Math.PI / 2, power }), train = createTrain(world, t);
   const events = [];
-  const tick = thr => { t.setInput(thr, 0); t.step(DT); train.step(DT, { parked: false }); events.push(...trees.step(DT, [t.body, ...train.cars.map(c => c.body)])); phys.world.step(); };
-  return { phys, trees, t, train, events, tick };
+  const tick = thr => step(1, () => { t.setInput(thr, 0); t.step(DT); train.step(DT, { parked: false }); events.push(...trees.step(DT, [t.body, ...train.cars.map(c => c.body)])); });
+  return { world, trees, t, train, events, tick };
 };
 
 test('the farmyard has 18 trees (10 large, young ones in groups) and 16 bushes, clear of lanes, barn and line-up (T-31, T-34)', () => {
@@ -57,7 +56,7 @@ test('roadside trees and bushes stand on the shoulders: about 1 tree and 2 bushe
 
 test('a fast tractor breaks a tree once, loses little speed and drives on upright (T-34)', () => {
   const { trees, t, events, tick } = setup(oneTree());
-  const tree = trees.list[0]; assert.ok(tree.collider); let pre = 0, passed = false;
+  const tree = trees.list[0]; assert.ok(tree.solid); let pre = 0, passed = false;
   for (let i = 0; i < 60 * 9 && !passed; i++) {
     tick(1); if (!events.length) pre = t.speed;
     if (events.length && t.body.translation().x > tree.x) { passed = true; assert.ok(t.speed > 0.6 * pre, `speed ${t.speed} vs ${pre}`); }
@@ -65,7 +64,7 @@ test('a fast tractor breaks a tree once, loses little speed and drives on uprigh
   assert.ok(passed, 'did not pass through the tree');
   assert.equal(events.filter(e => e.type === 'treeBreak').length, 1);
   const ev = events.find(e => e.type === 'treeBreak'); assert.equal(ev.tree, tree); assert.ok(ev.dir.x > 0.99 && ev.speed >= TREE.breakSpeed);
-  assert.equal(tree.state, 'broken'); assert.equal(tree.collider, null);
+  assert.equal(tree.state, 'broken'); assert.equal(tree.solid, false);
   for (let i = 0; i < 60; i++) tick(1);
   const { u } = quatAxes(t.body.rotation()); assert.ok(u.y > 0.9, `tilted ${u.y}`);
 });
@@ -80,7 +79,7 @@ test('a slow tractor bumps a tree: it wobbles and stays solid (T-34)', () => {
   }
   assert.ok(maxSpeed < TREE.breakSpeed, `speed ${maxSpeed}`);
   assert.equal(events.filter(e => e.type === 'treeBreak').length, 0); assert.equal(events.filter(e => e.type === 'treeBump').length, 1);
-  assert.equal(tree.state, 'standing'); assert.ok(tree.collider);
+  assert.equal(tree.state, 'standing'); assert.ok(tree.solid);
   assert.ok(maxX < tree.x - 1.5, `the tractor reached x=${maxX}`); // stopped before the trunk
 });
 
@@ -88,17 +87,17 @@ test('a trailer car goes through a standing tree: only the tractor hits trees (T
   const { trees, train, events, tick } = setup(oneTree(-9, 0), { x: 0 }); // the tractor reverses and the rear car meets the tree
   const tree = trees.list[0]; let minGap = 99;
   for (let i = 0; i < 60 * 8; i++) { tick(-1); minGap = Math.min(minGap, Math.abs(train.cars[1].body.translation().x - tree.x)); }
-  assert.equal(events.filter(e => e.type === 'treeBreak').length, 0); assert.equal(tree.state, 'standing'); assert.ok(tree.collider);
+  assert.equal(events.filter(e => e.type === 'treeBreak').length, 0); assert.equal(tree.state, 'standing'); assert.ok(tree.solid);
   assert.ok(minGap < 0.5, `the car stopped at the trunk: ${minGap}`);
 });
 test('a bush pops when the tractor touches it at any speed, and is never solid (T-34)', () => {
   const { trees, t, events, tick } = setup(oneBush(-3, 0.8), { x: -8, power: 'low' }); // beside the nose line, not on it
-  const bush = trees.list[0]; assert.equal(bush.collider, null);
+  const bush = trees.list[0]; assert.equal(bush.solid, false);
   t.body.setLinvel({ x: 1, y: 0, z: 0 }, true);
   for (let i = 0; i < 60 * 6; i++) tick(t.speed < 1 ? 0.2 : 0);
   assert.equal(events.filter(e => e.type === 'treeBreak').length, 1); assert.equal(bush.state, 'broken');
   assert.ok(t.body.translation().x > -3, 'the tractor drove on');
-  trees.reset(); assert.equal(bush.state, 'growing'); assert.equal(bush.collider, null);
+  trees.reset(); assert.equal(bush.state, 'growing'); assert.equal(bush.solid, false);
 });
 test('a parked tractor does not pop a bush it stands at', () => {
   const { trees, events, tick } = setup(oneBush(-24, 0), { x: -25 });
@@ -109,8 +108,8 @@ test('a parked tractor does not pop a bush it stands at', () => {
 test('reset() grows broken trees back with their colliders (T-32)', () => {
   const { trees, tick } = setup(oneTree());
   const tree = trees.list[0]; for (let i = 0; i < 60 * 9 && tree.state === 'standing'; i++) tick(1);
-  assert.equal(tree.state, 'broken'); assert.equal(tree.collider, null);
-  trees.reset(); assert.equal(tree.state, 'growing'); assert.ok(tree.collider);
+  assert.equal(tree.state, 'broken'); assert.equal(tree.solid, false);
+  trees.reset(); assert.equal(tree.state, 'growing'); assert.ok(tree.solid);
   for (let i = 0; i < Math.ceil(TREE.regrowTime * 60) + 2; i++) trees.step(DT, [{ translation: () => ({ x: 99, y: 0, z: 99 }), rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }), linvel: () => ({ x: 0, y: 0, z: 0 }) }]);
   assert.equal(tree.state, 'standing'); assert.equal(tree.grow, 1);
 });
@@ -125,7 +124,7 @@ test('stepGib: bounces, never goes below the ground, comes to rest and dies (gib
 test('a tree or bush can be broken by id (M-17)', () => {
   const { trees } = setup([...oneTree(0, 0), ...oneBush(20, 0)]);
   const ev = trees.breakById(0, { x: 1, z: 0 });
-  assert.equal(ev.type, 'treeBreak'); assert.equal(ev.tree.id, 0); assert.equal(ev.remote, true); assert.equal(trees.list[0].collider, null);
+  assert.equal(ev.type, 'treeBreak'); assert.equal(ev.tree.id, 0); assert.equal(ev.remote, true); assert.equal(trees.list[0].solid, false);
   assert.equal(trees.breakById(0), null, 'already broken'); assert.equal(trees.breakById(99), null, 'no such tree');
   assert.ok(trees.breakById(1)); assert.deepEqual(trees.list.filter(t => t.state === 'broken').map(t => t.id), [0, 1]);
   trees.reset(); assert.ok(trees.list.every(t => t.state !== 'broken'));
@@ -134,6 +133,6 @@ test('a tree or bush can be broken by id (M-17)', () => {
 test('one broken tree grows back by id, with its trunk; the others stay broken (M-56)', () => {
   const { trees } = setup([...oneTree(0, 0), ...oneTree(10, 0)]);
   trees.breakById(0); trees.breakById(1);
-  assert.equal(trees.regrowById(0), true); assert.equal(trees.list[0].state, 'growing'); assert.ok(trees.list[0].collider, 'solid again'); assert.equal(trees.list[1].state, 'broken');
+  assert.equal(trees.regrowById(0), true); assert.equal(trees.list[0].state, 'growing'); assert.ok(trees.list[0].solid, 'solid again'); assert.equal(trees.list[1].state, 'broken');
   assert.equal(trees.regrowById(0), false, 'not broken'); assert.equal(trees.regrowById(99), false, 'no such tree');
 });

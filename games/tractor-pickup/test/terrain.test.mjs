@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT } from '../src/sim/physics.js';
+import { addGround, DT } from '../src/sim/ground.js';
+import { testWorld } from './helpers/world.mjs';
 import { generateFarm, tileCenter, DIRS, YARD_HALF, SIZE, yardFree } from '../src/sim/track.js';
 import { buildRoad, ROAD_HALF, FARM_HALF } from '../src/sim/road.js';
 import { addFarmColliders } from '../src/sim/scenery.js';
@@ -9,7 +9,6 @@ import { createTerrain, HIGH, CELL, CUT, FENCE_D, YARD_LOW } from '../src/sim/te
 import { createTractor, quatAxes } from '../src/sim/tractor.js';
 import { createTrain } from '../src/sim/hitch.js';
 import { makeRng } from '../src/sim/rng.js';
-await RAPIER.init();
 
 const world = seed => { const farm = generateFarm(seed), road = buildRoad(farm); return { farm, road, terrain: createTerrain(farm, road, makeRng(seed)) }; };
 const at = (p, side, d) => ({ x: p.x - p.tz * side * d, z: p.z + p.tx * side * d }); // side +1: left of the direction of travel
@@ -57,18 +56,18 @@ for (const seed of [1, 2, 3]) test(`terrain ${seed}: road and shoulder flat, bar
 });
 
 for (const seed of [1, 2, 3]) test(`terrain ${seed}: the heightfield collider matches terrain.height`, () => {
-  const { terrain: T } = world(seed), phys = createPhysics(RAPIER, { terrain: T }), rng = makeRng(seed + 7);
-  phys.world.step();
+  const { terrain: T } = world(seed), { world: w, step } = testWorld(), rng = makeRng(seed + 7); addGround(w, { terrain: T });
+  step(1); const RAPIER = w.R;
   let cut = 0;
   for (let k = 0; k < 200; k++) {
     const x = rng.range(-FARM_HALF + 1, FARM_HALF - 1), z = rng.range(-FARM_HALF + 1, FARM_HALF - 1);
-    const hit = phys.world.castRay(new RAPIER.Ray({ x, y: 30, z }, { x: 0, y: -1, z: 0 }), 60, true);
+    const hit = w.rapier.castRay(new RAPIER.Ray({ x, y: 30, z }, { x: 0, y: -1, z: 0 }), 60, true);
     assert.ok(hit, `no ground at ${x},${z}`);
     const y = 30 - hit.timeOfImpact, h = T.height(x, z); if (h > 0.1 && h < HIGH - 0.1) cut++;
     assert.ok(Math.abs(y - h) < 0.15, `ground ${y.toFixed(3)} vs height ${h.toFixed(3)} at ${x.toFixed(2)},${z.toFixed(2)}`);
   }
   for (const [x, z] of [[-150, 60], [120, -170], [30, 140]]) { // asymmetric spots catch a transposed or flipped grid
-    const hit = phys.world.castRay(new RAPIER.Ray({ x, y: 30, z }, { x: 0, y: -1, z: 0 }), 60, true);
+    const hit = w.rapier.castRay(new RAPIER.Ray({ x, y: 30, z }, { x: 0, y: -1, z: 0 }), 60, true);
     assert.ok(Math.abs(30 - hit.timeOfImpact - T.height(x, z)) < 0.15);
   }
   assert.ok(T.grid.heights.some(h => h > HIGH - 0.01), 'no high ground');
@@ -76,12 +75,12 @@ for (const seed of [1, 2, 3]) test(`terrain ${seed}: the heightfield collider ma
 
 // A tractor (and optionally its trailer and wagon) on the seed's farm with the terrain and every static collider.
 function farmDrive(seed, { x, z, yaw, power = 'high', train = false }) {
-  const { farm, road, terrain } = world(seed), phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain);
-  const t = createTractor(phys, { x, z, yaw, power, surfaceAt: road.surfaceAt }), tr = train ? createTrain(phys, t) : null;
+  const { farm, road, terrain } = world(seed), { world: w, step } = testWorld(); addGround(w, { terrain }); addFarmColliders(w, farm, road, terrain);
+  const t = createTractor(w, { x, z, yaw, power, surfaceAt: road.surfaceAt }), tr = train ? createTrain(w, t) : null;
   const bodies = () => [t.body, ...(tr ? tr.cars.map(c => c.body) : [])];
   const s = { maxD: 0 };
   const run = (sec, thr, steer = 0) => { for (let i = 0; i < sec * 60; i++) {
-    t.setInput(thr, steer); t.step(DT); tr?.step(DT, { parked: Math.abs(thr) < 0.05 && t.speed < 0.3 }); phys.world.step();
+    step(1, () => { t.setInput(thr, steer); t.step(DT); tr?.step(DT, { parked: Math.abs(thr) < 0.05 && t.speed < 0.3 }); });
     for (const b of bodies()) { const p = b.translation(); s.maxD = Math.max(s.maxD, road.nearest(p.x, p.z).d); }
   } };
   const ups = () => bodies().map(b => quatAxes(b.rotation()).u.y);
