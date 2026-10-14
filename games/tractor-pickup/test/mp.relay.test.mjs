@@ -1,8 +1,8 @@
 // test/mp.relay.test.mjs: what a guest can make the host do (C-3, C-4, M-50)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, free, countCalls, trainFrame, parked } from './mp.harness.mjs';
-import { encodeFrame } from '../src/net/replica.js';
+import { mpWorld, free, countCalls, trainFrame, parked, quiet } from './mp.harness.mjs';
+import { encodeFrame } from 'lion-hawk/sim';
 import { TRAIN } from '../src/net/kinds.js';
 import { GUEST_SPEED } from '../src/net/host.js';
 import { POWER } from '../src/sim/tractor.js';
@@ -21,7 +21,7 @@ test('the host passes on each guest train at most once a send tick, on the fast 
   assert.ok(count.fast <= 90, `${count.fast} fast messages to the other guest in 1 s (host world 15 + host train 20 + 2 trains x 20)`);
   assert.ok(count.rel <= 12, `${count.rel} reliable messages to the other guest in 1 s`);
   w.hub.drop = null; w.seconds(0.3);
-  const lx = g3.sync.players.map.get(2).latest.bodies[0].p.x, hx = w.host.sync.players.map.get(2).latest.bodies[0].p.x;
+  const lx = g3.sync.players.map.get(2).latest.body.p.x, hx = w.host.sync.players.map.get(2).latest.body.p.x;
   assert.ok(hx >= 10 && Math.abs(lx - hx) < 0.1, `the other guest has the newest record the host took (x ${lx}, the host ${hx})`);
 });
 
@@ -40,11 +40,11 @@ test("the guest speed cap is a tractor's top speed with a margin (C-4)", () => {
 
 test('a guest that reports a jump is held to tractor speed for claims and tree breaks (C-4, M-50)', async () => {
   const w = await mpWorld({ seed: 83 }); w.seconds(1);
-  const g = w.guests[0], H = w.host.net.id, at = { ...w.host.sync.players.map.get(2).latest.bodies[0].p };
+  const g = w.guests[0], H = w.host.net.id, at = { ...w.host.sync.players.map.get(2).latest.body.p };
   const ha = w.host.game.herd.free().find(a => !a.hidden && a.type !== 'chick' && a.home === 'route' && dist(a, at) > 60 && !w.host.game.herd.animals.some(c => c.leader === a.id));
   const tree = w.host.game.trees.list.find(x => x.kind === 'tree' && dist(x, at) > 60);
   assert.ok(ha && tree, 'an animal and a tree far from the guest');
-  g.sync.after = () => {}; // only the frames below
+  quiet(w, g, { ahead: true, json: true }); // only the frames below, and its messages
   let t = 100000;
   const report = (x, z) => { g.net.send(H, trainFrame(2, 2, parked(x, z), t += 50), false); w.step(3); };
   const hold = a => { a.state = 'idle'; a.timer = 99; };

@@ -31,3 +31,6 @@ test('the per-game GPU hygiene and geometry helpers are gone; the farm builds on
   assert.match(farm, /createInstances/); assert.doesNotMatch(farm, /new THREE\.Mesh(Lambert|Phong|Standard)Material\(/);
   for (const f of ['render/fx.js', 'render/gibs.js']) assert.match(readFileSync(join(src, f), 'utf8'), /lion-hawk\/kits\/fx\/view/, f);
 });
+test('others3d and poseAt are gone; riders come from train entities', () => {
+  assert.equal(existsSync(join(src, 'render/others3d.js')), false); assert.doesNotMatch(readFileSync(join(src, 'game.view.js'), 'utf8'), /poseAt|others3d/);
+});

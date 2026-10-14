@@ -9,7 +9,7 @@ import { STILL, PAINTS } from './mp.harness.mjs';
 
 // clampProgress keeps only unlocked paints: 18 shows unlock every one PAINTS uses; the hats that unlocks stay off, as createGame has none
 const progressOf = i => ({ shows: 18, hatsOff: HATS.map(h => h.id), paint: PAINTS[i % PAINTS.length] });
-export async function engineWorld({ seed = 21, guests = 1, link = {}, join = true, clock = null, bindings } = {}) { // bindings: the replicated kinds (default: the game's own)
+export async function engineWorld({ seed = 21, guests = 1, link = {}, join = true, clock = null } = {}) {
   await RAPIER.init(); // #6: before any engine is made
   let inputs = []; // this step's: [hostInput, guest1Input, ...] (missing = STILL), or a function (dev, index) -> input
   const devs = [], seen = []; // seen[i]() notes device i's live sync
@@ -24,7 +24,7 @@ export async function engineWorld({ seed = 21, guests = 1, link = {}, join = tru
     p.engine.events.on(e => { d.events.push(e); }); // every engine event, with its fields (the payload keeps its objects)
     devs.push(d); return d;
   };
-  const w0 = mp(tractorGame({ clock: clock ?? undefined, bindings }), { peers: join ? 1 + guests : 1, link, clock: clock ?? undefined,
+  const w0 = mp(tractorGame({ clock: clock ?? undefined }), { peers: join ? 1 + guests : 1, link, clock: clock ?? undefined,
     argsOf: i => ({ seed: i ? 1000 + i : seed, started: true, trip: false, progress: progressOf(i) }), // a guest's own solo farm until the welcome
     beforeStep: (p, i) => { const d = devs[i]; seen[i](); p.engine.scene.state.raw = (typeof inputs === 'function' ? inputs(d, i) : inputs[i]) || STILL; } });
   for (const p of w0.peers) device(p);

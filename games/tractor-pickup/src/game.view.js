@@ -21,7 +21,8 @@ import { menuHalves } from './view/menus.js';
 import { createShow, skipSvg, CHEER } from './ui/show.js';
 import { renderIcons, tractorPicture } from './ui/icons.js';
 import { PAINTS, PAINT_LOOK, trainViews } from './view/vehicles.js';
-import { placeCarried, START_PAINT } from './net/players.js';
+import { START_PAINT } from './net/players.js';
+import { createRiderPoses } from './view/riders.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { tuneGet, tuneValues } from './sim/tune.js';
 
@@ -88,18 +89,16 @@ function onEvent(e, w, s) {
 // the show half takes it. menus: the overlays' screens (view/menus.js), whose book needs the seen mark from the farm's frames.
 const link = { w: null, hud: null, show: null, poses: null, pending: null, kick: null, menus: null };
 
-// #102 (as #79): the animals other players carry, drawn where their drawn train has them this frame. A pose copy per animal id
-// (pooled), only for an animal the sim has as carried by that player; the show's copies (#79) win. Returns the map animals3d
-// draws in place of the sim's animals (or the show's own map, or null, when no train carries anything)
-const carriedPoses = new Map(), posePool = new Map();
-function posesOf(herd, others, show) {
+// #102 (as #79): the animals other players carry, drawn where this view draws their train (view/riders.js: read-only from the train
+// entities). Only an animal the sim has as carried by that player; each pose gets its kind and dirt from the sim animal; the show's
+// copies (#79) win. Returns the map animals3d draws in place of the sim's animals (or the show's own map, or null)
+const carriedPoses = new Map();
+function posesOf(herd, others, show, ownerOf) {
   if (!others?.size || !herd) return show;
   carriedPoses.clear();
-  for (const o of others.values()) if (!o.away) for (const c of o.carried) {
-    const a = herd.animals[c.id]; if (a?.state !== 'carried' || a.owner !== o.n) continue;
-    let p = posePool.get(c.id); if (!p) posePool.set(c.id, p = { id: c.id });
-    // every field animals3d reads off an animal: its kind (type, golden) and dirt from the sim animal, the place from the train
-    p.type = a.type; p.golden = !!a.golden; p.state = 'carried'; p.ride = null; p.hidden = false; p.dirt = a.dirt; placeCarried(p, c); carriedPoses.set(c.id, p);
+  for (const [id, p] of others) {
+    const a = herd.animals[id]; if (a?.state !== 'carried' || a.owner !== ownerOf.get(id)) continue;
+    p.type = a.type; p.golden = !!a.golden; p.dirt = a.dirt; carriedPoses.set(id, p);
   }
   if (!carriedPoses.size) return show;
   if (show) for (const [id, p] of show) carriedPoses.set(id, p);
@@ -112,7 +111,7 @@ function posesOf(herd, others, show) {
 // fps: the ?fps meter (X-4, B-1)
 function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
   let w = null, gen = -1, offs = [], hud = null, pageDoc = null, panel = null;
-  const warnOnce = createWarnOnce(), netView = new Map(); // netView: players.poseAt's (#102)
+  const warnOnce = createWarnOnce(), netView = new Map(), owners = new Map(), riderPoses = createRiderPoses(); // netView: the other trains' rider poses (#102)
   const carPose = [{ p: null, q: null }, { p: null, q: null }], animView = { cars: carPose, alpha: 0, poses: null }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every frame
   let view0 = null; // the view the drive half entered with (sync, assets, materials)
   // the drawn train (view sync's objects, interpolated): the tractor's position, and each car's { p, q } for the riders (X-1)
@@ -138,8 +137,11 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       view.project = rig.project;
       // the train's hooks before any train is drawn (sync measures the wheel hubs after the create hooks): paint (W-3) from the player's
       // records (the sandbox keeps none: the stored ones from the scene args), coverage for the dirt (T-16)
-      const paintOf = () => engine.scene.state.progress?.paint ?? engine.scene.args?.progress?.paint ?? START_PAINT, cov = coverageView(view.sync, view.materials);
-      offs.push(trainViews(view.sync, { materials: view.materials, paintOf }), () => cov.off());
+      // another player's train (a net replica) takes that player's roster paint and is a ghost while they are away (M-2, M-39, M-40)
+      const self = () => engine.world?.net?.self ?? 0, rowOf = e => e.netId && e.netId !== self() ? engine.scene.state.net?.sync?.players.map.get(e.netId) : null;
+      const myPaint = () => engine.scene.state.progress?.paint ?? engine.scene.args?.progress?.paint ?? START_PAINT, cov = coverageView(view.sync, view.materials);
+      const paintOf = e => (e.netId && e.netId !== self() ? rowOf(e)?.paint : null) ?? myPaint(), awayOf = e => !!rowOf(e)?.away;
+      offs.push(trainViews(view.sync, { materials: view.materials, paintOf, awayOf }), () => cov.off());
       // INTERIM (engine request in the phase 3l notes, as Pig Pens' 3k): view sync clones a drawn entity's model on the first frame it
       // sees it and throws while that model is still loading, so its frames wait for the preload
       const sync = view.sync, syncFrame = sync.frame, loaded = () => MODELS.every(k => view.assets.has(k));
@@ -205,11 +207,14 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       // M-65, #102: the other trains (and their riders) where the forecast has them this frame (the step's wall stamp plus the alpha,
       // #76), from the view's own read-only poses: the sim's players, forecasts and herd are never touched here
       let others = null;
-      if (players) try { others = players.poseAt(engine.time.wall + alpha * 1000 / engine.game.sim.hz, netView); } catch (e) { warnOnce('net draw', e); }
+      if (players) try {
+        others = riderPoses.update(engine.world, view.sync, engine.time.wall + alpha * 1000 / engine.game.sim.hz, netView); owners.clear();
+        for (const e of engine.world.with('net')) if (e.net === 'train' && e.riders && !players.map.get(e.netId)?.away) for (const c of e.riders) owners.set(c.id, e.netId);
+        for (const id of others.keys()) if (!owners.has(id)) others.delete(id); // an away player's riders are not drawn (M-39)
+      } catch (e) { warnOnce('net draw', e); }
       const t = g.tractor, to = drawn(t.e), v0 = to?.position ?? t.body.translation(); // the drawn (interpolated) tractor
       g.train.cars.forEach((c, k) => { const o = drawn(c.e); carPose[k].p = o?.position ?? c.body.translation(); carPose[k].q = o?.quaternion ?? c.body.rotation(); });
-      w.gibs.update(dt); w.farm3d?.update(v0); animView.alpha = alpha; animView.poses = posesOf(g.herd, others, withHud ? link.poses : null); w.animals3d?.update(dt, g, animView);
-      try { w.others3d.update(dt, others); } catch (e) { warnOnce('others3d', e); } // M-44
+      w.gibs.update(dt); w.farm3d?.update(v0); animView.alpha = alpha; animView.poses = posesOf(g.herd, others, withHud ? link.poses : null, owners); w.animals3d?.update(dt, g, animView);
       const lv = t.body.linvel(), show = withHud ? link.show : null;
       if (show?.active) show.update(view.rawDt); // F-5: the show has the camera; its waits on the uncapped frame time (#56, #83): a slow device does not stretch them, a hidden tab gives 0
       else { chaseIn.x = v0.x; chaseIn.y = v0.y; chaseIn.z = v0.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); rig.follow(chaseIn, dt); }

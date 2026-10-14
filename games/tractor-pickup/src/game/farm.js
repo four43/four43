@@ -59,7 +59,7 @@ function sounds(e, s) {
 }
 const freshSfx = () => ({ surface: 'gravel', air: 0, whee: false });
 
-export function makeFarm({ clock = null, bindings = null } = {}) { // clock, bindings: the syncs' (game/net.js reads them from the api)
+export function makeFarm({ clock = null } = {}) { // clock: the syncs' wall clock (game/net.js reads it from the api; tests only)
   const S = e => { if (e.scene.name !== 'farm') throw new Error('tractor: the farm scene is not the main scene'); return e.scene.state; };
   const warn = createWarnOnce(); // M-44: a sync error never stops the step
   // Builds this scene's farm (main.js build, sim half): hats (W-4), the bedtime phase (E-5) and the start mode (F-11).
@@ -95,7 +95,7 @@ export function makeFarm({ clock = null, bindings = null } = {}) { // clock, bin
   const next = (e, ctx) => { const s = ctx.state; if (s.netFarm) api.guestFarm(e, ctx, s.netFarm.seed, s.netFarm.player); else if (s.nextFarm) { s.nextFarm = false; api.newFarm(e, ctx); } };
   // --- the API (commands, UI controls, presets and debug call these; each takes the engine first) ---------------
   const api = {
-    clock, bindings,
+    clock,
     play: e => play(e, S(e)), // F-11, A-7: the trip starts (flow.js)
     lastDrive: e => lastDrive(e, S(e)), goSleep: (e, o) => goSleep(e, S(e), o), wake: e => wake(e, S(e)),
     // n free single animals (no chick, no hen with a line: as test pickup() boops them) land in the first slots, as a

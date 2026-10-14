@@ -14,7 +14,7 @@ test('determinism: two runs of 1800 steps on seed 14 agree at every checksum (T-
   const r = checks.determinism(tractorGame(), { seed: 14, steps: 1800, input: drive, args: ARGS }); assert.ok(r.ok, JSON.stringify(r));
 });
 test('sim purity over the game\'s sim roots (T-12)', () => {
-  const r = checks.simPurity(tractorGame(), { roots: ['game.sim.js', 'game', 'sim', 'defs', 'net/host.js', 'net/guest.js', 'net/players.js', 'net/kinds.js', 'net/bindings.js', 'net/protocol.js'].map(src) });
+  const r = checks.simPurity(tractorGame(), { roots: ['game.sim.js', 'game', 'sim', 'defs', 'net/host.js', 'net/guest.js', 'net/players.js', 'net/kinds.js', 'net/entities.js', 'net/protocol.js'].map(src) });
   const found = r.found.filter(f => !(f.file.endsWith('sim/rng.js') && f.rule === 'math-random')); // #86: randomSeed, view-only (purity.test.mjs)
   assert.deepEqual(found, []);
 });

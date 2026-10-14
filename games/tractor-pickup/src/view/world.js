@@ -7,7 +7,6 @@ import { createFx } from '../render/fx.js';
 import { createAnimals3D } from '../render/animals3d.js';
 import { buildFarm3D } from '../render/farm3d.js';
 import { instancedShadows, warm, disposeTree } from 'lion-hawk/view';
-import { createOthers3D } from '../render/others3d.js';
 import { makeGravelTexture, worldUV } from '../render/textures.js';
 
 // One farm's 3D: main.js build's view half, on the engine pipeline (boot's view.gfx, view.assets, view.materials). The tractor and
@@ -18,17 +17,17 @@ export function buildWorld({ view, game, aniso }) {
   const farm3d = game.farm ? buildFarm3D(world, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso, trees: game.trees, assets, compiler }) : (buildSandbox3D(world, game, aniso), null);
   const groundY = game.terrain ? (x, z) => game.terrain.height(x, z) : undefined;
   const gibs = createGibs(world, { compiler, groundY });
-  const animals3d = game.herd ? createAnimals3D(world, game.herd, { assets, compiler }) : null, others3d = createOthers3D(world, { assets, compiler });
+  const animals3d = game.herd ? createAnimals3D(world, game.herd, { assets, compiler }) : null;
   const fx = createFx(world, groundY, { compiler });
   const fxs = { dust: 0, mud: 0, mark: 0, halo: 0, spray: false, drip: new Set() }, wheelPt = {}, sprinklers = farm3d?.sprinklers || [];
   instancedShadows(world); // X-4: no shadow-pass program churn
   try { warm(renderer, scene, camera); } catch (e) { console.warn('shader warm-up', e); } // B-2
   return {
-    group: world, game, farm3d, gibs, animals3d, others3d, fx,
+    group: world, game, farm3d, gibs, animals3d, fx,
     stepFx: (sound, dt) => stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt),
     drip: a => fxs.drip.add(a), // A-5: a duck from the pond drips
     // main.js dispose's view half: no loop of the old farm (a sprinkler, a skid) keeps sounding; geometries, materials, textures, instance buffers
-    dispose(sound) { sound.spray(false); sound.skid(0); others3d.dispose(); scene.remove(world); disposeTree(world, { keepShared: r => !!r.isTexture }); }, // compiled materials, model geometry (lhShared) and the page's textures are shared across farms
+    dispose(sound) { sound.spray(false); sound.skid(0); scene.remove(world); disposeTree(world, { keepShared: r => !!r.isTexture }); }, // compiled materials, model geometry (lhShared) and the page's textures are shared across farms
   };
 }
 

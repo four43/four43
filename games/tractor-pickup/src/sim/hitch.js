@@ -15,16 +15,21 @@ const local2world = (b, l) => { const p = b.translation(), { f, u, r } = quatAxe
 
 const Q0 = [0, 0, 0, 1];
 export const CAR_WHEELS = ['wheel-left', 'wheel-right']; // the kit's wheel parts, side -1 then +1 (the view's car hook names the nodes)
-function createCar(world, frontE, frontAnchor, index) {
-  const front = frontE.body, h = local2world(front, frontAnchor), q = front.rotation(), { f } = quatAxes(q);
+// a car's spawn desc behind its front body (anything with translation() and rotation()) at frontAnchor; also a remote train's
+export function carDesc(front, frontAnchor) {
+  const h = local2world(front, frontAnchor), q = front.rotation(), { f } = quatAxes(q);
   const cx = h.x - f.x * TR.tongue.x, cz = h.z - f.z * TR.tongue.x;
-  const e = world.spawn({ tags: ['car'], model: 'trailer', coverage: { dirt: 0 }, at: [cx, h.y - TR.tongue.y, cz], q: [q.x, q.y, q.z, q.w],
+  return { tags: ['car'], model: 'trailer', coverage: { dirt: 0 }, at: [cx, h.y - TR.tongue.y, cz], q: [q.x, q.y, q.z, q.w],
     body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.6 },
     colliders: [ // bed: 260 kg and tongue: 5 kg through their materials' densities (src/defs/materials.js), as setMass gave
       { shape: 'box', half: [TR.half.x, TR.half.y, TR.half.z], p: [0, 0, 0], q: Q0, part: 'bed', material: 'bed' },
       { shape: 'box', half: [0.9, 0.06, 0.08], p: [TR.half.x + 0.9, -0.15, 0], q: Q0, part: 'tongue', material: 'tongue' },
     ],
-    groups: { member: ['trailer'], filter: ['ground', 'static', 'prop', 'wall'] } });
+    groups: { member: ['trailer'], filter: ['ground', 'static', 'prop', 'wall'] } };
+}
+// what a desc cannot hold: the vehicle kit and the hitch joint to the front entity
+function attachCar(world, e, frontE, frontAnchor, index) {
+  const front = frontE.body;
   const body = e.body, car = createVehicle(world, e, { forward: 'x', rayGroups: { member: [...GROUPS], filter: ['ground', 'static'] },
     wheels: [-1, 1].map((side, k) => ({ at: [TR.axleX, 0, side * TR.track], radius: TR.wheelR, front: false, part: CAR_WHEELS[k], slip: 2.5, side: 1.2,
       suspension: { rest: TR.suspRest, stiffness: 22, compression: 2.2, relaxation: 2.8, travel: 0.4, maxForce: 1e5 } })) }), vc = car.controller;
@@ -34,10 +39,18 @@ function createCar(world, frontE, frontAnchor, index) {
     get dirt() { return e.coverage.dirt; }, set dirt(v) { e.coverage.dirt = v; } }; // the coverage kit's level (T-16)
 }
 
+const createCar = (world, frontE, frontAnchor, index) => attachCar(world, world.spawn(carDesc(frontE.body, frontAnchor)), frontE, frontAnchor, index);
+// the trailer and wagon behind a tractor, linked on its entity as e.trailer and e.wagon (the train's net record reads all three bodies, 3i)
 export function createTrain(world, tractor) {
   const c0 = createCar(world, tractor.e, TRACTOR_HITCH, 0);
   const c1 = createCar(world, c0.e, TR.rear, 1);
-  const cars = [c0, c1], carSet = { brake: 0 };
+  world.add(tractor.e, 'trailer', c0.e); world.add(tractor.e, 'wagon', c1.e);
+  return trainOf(world, [c0, c1]);
+}
+// the same train over existing car entities (a remote train: the net part spawned and linked them)
+export const attachTrain = (world, tractor, trailerE, wagonE) => trainOf(world, [attachCar(world, trailerE, tractor.e, TRACTOR_HITCH, 0), attachCar(world, wagonE, trailerE, TR.rear, 1)]);
+function trainOf(world, cars) {
+  const c0 = cars[0], carSet = { brake: 0 };
   const angle = i => {
     const a = quatAxes(cars[i].front.rotation()).f, b = quatAxes(cars[i].body.rotation()).f;
     return Math.atan2(a.z * b.x - a.x * b.z, a.x * b.x + a.z * b.z);

@@ -35,16 +35,25 @@ export function quatAxes(q) {
 }
 const ease = (cur, tgt, rate, dt) => cur + Math.max(-rate * dt, Math.min(rate * dt, tgt - cur));
 
-export function createTractor(world, { x, z, yaw, power = 'medium', materialAt = () => 'route' }) { // materialAt: the ground's material id (M-10)
+// The tractor's spawn desc (also a remote train's, src/sim/trains.js): tractor to tractor solid (M-7, user decision 2026-10-13: the
+// 'vehicle' filter; a solo farm has one tractor, so nothing changes there); model, scale: view data (view sync); coverage: the dirt level (T-16)
+export function tractorDesc({ x, z, yaw, y = 0.3 }) {
   const a = yaw - Math.PI / 2; // the chassis +x is the heading
-  const e = world.spawn({ tags: ['tractor'], model: 'tractor', scale: TP.scale, coverage: { dirt: 0 }, at: [x, 0.3, z], q: [0, Math.sin(a / 2), 0, Math.cos(a / 2)], // model, scale: view data (view sync); coverage: the dirt level (T-16, coverage kit)
+  return { tags: ['tractor'], model: 'tractor', scale: TP.scale, coverage: { dirt: 0 }, at: [x, y, z], q: [0, Math.sin(a / 2), 0, Math.cos(a / 2)],
     body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.8,
       massProps: { mass: TP.mass, com: [0.15, 0.45, 0], inertia: [900, 2200, 2000] } }, // lh-allow: D3, the playtested 1400 kg and tuned inertia
     colliders: [
       { shape: 'box', half: [1.55, 0.5, 1.0], p: [0.27, 0.95, 0], q: Q0, part: 'body', material: 'chassis' },
       { shape: 'box', half: [0.55, 0.55, 0.62], p: [-0.55, 1.95, 0], q: Q0, part: 'cab', material: 'chassis' },
     ],
-    groups: { member: ['vehicle'], filter: ['ground', 'static', 'prop', 'wall'] } });
+    groups: { member: ['vehicle'], filter: ['ground', 'static', 'prop', 'wall', 'vehicle'] } };
+}
+export const createTractor = (world, opts) => attachTractor(world, world.spawn(tractorDesc(opts)), opts);
+// what a desc cannot hold: the vehicle kit, its wheels and the driving maths. yaw: the heading it reports before its first step
+// (the body's when not given)
+export function attachTractor(world, e, { power = 'medium', materialAt = () => 'route', yaw = null } = {}) { // materialAt: the ground's material id (M-10)
+  const p0 = e.body.translation(), x = p0.x, z = p0.z;
+  if (yaw === null) { const f0 = quatAxes(e.body.rotation()).f; yaw = Math.atan2(f0.x, f0.z); }
   const body = e.body, cols = e.colliders.map(c => c.collider), W = TRACTOR_WHEELS.map(w => ({ ...w }));
   const car = createVehicle(world, e, { forward: 'x', rayGroups: { member: [...GROUPS], filter: ['ground', 'static'] },
     wheels: W.map(w => ({ at: [w.cx, w.cy + 0.12, w.cz], radius: w.radius, front: w.front, part: w.name, // the baked node: the kit writes its pose

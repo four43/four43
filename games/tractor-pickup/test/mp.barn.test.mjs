@@ -4,11 +4,14 @@ import assert from 'node:assert/strict';
 import { mpWorld, moveTrain } from './mp.harness.mjs';
 import { newRider } from '../src/sim/slots.js';
 
-// a rider aboard (not a herd animal: the host never sees it as its own) and the train 20 m + extra out from the barn, facing in from end side (1 or -1)
+// a rider aboard (not a herd animal: the host never sees it as its own) and the train 20 m + extra out from the barn, facing in from end side (1 or -1).
+// Tractors are solid (3l, user decision 2026-10-13): each device drives its own lane through the 10 m wide barn, so one train standing in its
+// show does not block another that comes to wait (playtest list: solid trains in the barn)
+const LANE = { host: -2.8, guest1: 2.8, guest2: 0 };
 function ready(d, side, extra = 0) {
-  const g = d.game, b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], out = 20 + extra;
+  const g = d.game, b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], r = [Math.cos(b.yaw), -Math.sin(b.yaw)], out = 20 + extra, lane = LANE[d.name] ?? 0;
   g.load.land(g.load.reserve({ id: 900, state: 'ride', type: 'pig', golden: false, x: 0, y: 0, z: 0, ride: { rider: newRider() } }));
-  moveTrain(g, b.x - side * f[0] * out, b.z - side * f[1] * out, side > 0 ? b.yaw : b.yaw + Math.PI);
+  moveTrain(g, b.x - side * f[0] * out + r[0] * lane, b.z - side * f[1] * out + r[1] * lane, side > 0 ? b.yaw : b.yaw + Math.PI);
 }
 // as main.js: a barnPass starts the show; it ends after showS (or never: Infinity), then the sticker card (mode 'reward'). Each device drives in while in 'drive'.
 function play(w, s, { showS = 3, driving = w.devs } = {}) {
