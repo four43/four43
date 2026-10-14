@@ -14,7 +14,7 @@ Branch `feat/lion-hawk-3-pigpens`, engine `phase-3` (lion-hawk 0.8.0 at the time
 - `createSim(world, opts)` on the scene's World; `farm.think` runs before `lh.physics.step`, `farm.settle` after `lh.physics.events`. Pigs, the dog, the birds, the fox, snacks, the tractor, the ground, the obstacles and each shut gate are entities with registry materials and named groups (2.1.0's bit order). No `new RAPIER.World`, `ColliderDesc` or `RigidBodyDesc` in game code.
 - `yaw` is a spawn-desc key (the pose), so the herd's heading is set on the entity after the spawn.
 - The tractor's `massProps` reproduce 2.1.0's body as Rapier summed it (1400 kg tuned + the two density-5 boxes, 38.5 kg, about the joint centre of mass): 1438.5 kg, com (0.1489, 0.5659, 0), inertia (933.9, 2241.0, 2052.3). The 0.3° tilt of the old principal frame is dropped.
-- The vehicle controller stays Rapier's own (`world.rapier.createVehicleController`, freed through `world.own`) until `lion-hawk/kits/vehicle` reaches `phase-3`.
+- The tractor drives on `lion-hawk/kits/vehicle` (`createVehicle`, `forward: 'x'`, wheel `part` names, so the kit writes the four wheel part poses); `farm.think` sits before `VEHICLE_SYSTEM`.
 
 ### Lines with `lh-allow`
 

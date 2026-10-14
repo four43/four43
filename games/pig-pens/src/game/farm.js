@@ -1,8 +1,9 @@
 // The farm scene (lion-hawk 2e, [S-1]…[S-5], field notes #4, #28, #57, #58): one main scene owns the createSim world
 // (pigs, dog, chickens, fox, tractor, gates, coop, day/night) for the life of the page. The flow state main.js kept
 // in its closure lives in ctx.state ([S-4], #4): the tool, the selection, drive mode and the per-gesture state.
-// Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.physics.step → read →
+// Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.kit.vehicle → lh.physics.step → read →
 // events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
+import { VEHICLE_SYSTEM } from 'lion-hawk/kits/vehicle';
 import { createSim } from '../sim.js';
 import { planeHit, classify, grabTarget } from './pick.js';
 
@@ -210,7 +211,7 @@ export function makeFarm() {
       ctx.system('farm.ease', (e, dt) => ease(s, dt), { stage: 'input.apply', after: ['lh.input'], before: ['lh.commands'] });
       ctx.system('farm.keys', () => keys(e, s), { stage: 'input.apply', after: ['lh.commands'] });
       // the farm step around the engine's Rapier step (overview §4.4): think before lh.physics.step, settle after the events
-      ctx.system('farm.think', () => s.sim.think(), { stage: 'physics.world', before: ['lh.physics.step'] });
+      ctx.system('farm.think', () => s.sim.think(), { stage: 'physics.world', before: [VEHICLE_SYSTEM, 'lh.physics.step'] }); // the tractor's controls first
       ctx.system('farm.settle', () => s.sim.settle(), { stage: 'physics.world', after: ['lh.physics.events'] });
       // #57: the sim's own queue, bridged in order, unfiltered, once per step
       ctx.system('farm.events', () => {

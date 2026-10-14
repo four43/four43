@@ -124,7 +124,7 @@ export function createSim(world, opts = {}) {
     emit('daynight', { night: n });
   }
   // ---- tractor ----
-  const tractor = createTractor(world, lay.tractorSpawn);
+  const tractor = createTractor(world, lay.tractorSpawn, GROUPS);
   function horn() { tractor.horn = 1.6; emit('horn', { x: tractor.x, z: tractor.z }); }
   const tmp = [0, 0];
 

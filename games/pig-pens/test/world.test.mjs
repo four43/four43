@@ -40,3 +40,12 @@ test('grabbing swaps a pig onto the grip material and settling swaps it back (wo
   sim.release(); h.until(() => p.state !== 8, { maxSteps: 60 * 10, message: 'the pig lands' });
   assert.equal(h.world.materialOf(p.colliders[0].collider.handle), 'pet');
 });
+test('the tractor drives on the vehicle kit (lion-hawk/kits/vehicle) and the kit writes the wheel part poses', () => {
+  const sim = farmSim({ pigs: 24, seed: 2 }); assert.ok(sim.tractor.car?.controller, 'tractor.car from createVehicle');
+  assert.equal(sim.tractor.vc, sim.tractor.car.controller);
+  const { e, car, W } = sim.tractor;
+  assert.deepEqual(Object.keys(e.partXf), ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'], 'the wheels name their GLB nodes');
+  sim.step(60);
+  W.forEach((w, i) => { const P = e.partXf[w.name];
+    assert.deepEqual([P.p.x, P.p.y, P.p.z], [w.cx, w.cy + 0.12 - car.wheels[i].suspension, w.cz], `${w.name}: the kit writes the hub`); });
+});
