@@ -1,6 +1,7 @@
 // Rally-feel tractor on Rapier's ray-cast vehicle controller (spec D-1..D-9).
 // Chassis frame: +x forward, +y up, +z right. Kenney model +z maps to chassis +x.
-import { G, groups } from './physics.js';
+import { rayMask } from './ground.js';
+const Q0 = [0, 0, 0, 1];
 
 export const POWER = {
   low:    { vmax: 6,  force: 5200,  rearSide: 0.85, slideMax: 0.35, loose: 0.08 },
@@ -30,30 +31,30 @@ export function quatAxes(q) {
     r: { x: 2 * (x * z + w * y), y: 2 * (y * z - w * x), z: 1 - 2 * (x * x + y * y) },
   };
 }
-const yawQuat = yaw => { const a = yaw - Math.PI / 2; return { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }; };
 const ease = (cur, tgt, rate, dt) => cur + Math.max(-rate * dt, Math.min(rate * dt, tgt - cur));
 
-export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = () => 'gravel' }) {
-  const { RAPIER, world } = phys;
-  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, 0.3, z).setRotation(yawQuat(yaw))
-    .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.8)
-    .setAdditionalMassProperties(TP.mass, { x: 0.15, y: 0.45, z: 0 }, { x: 900, y: 2200, z: 2000 }, { x: 0, y: 0, z: 0, w: 1 }));
-  const cg = groups(G.VEHICLE, G.GROUND | G.STATIC | G.PROP | G.WALL);
-  const cols = [
-    world.createCollider(RAPIER.ColliderDesc.cuboid(1.55, 0.5, 1.0).setTranslation(0.27, 0.95, 0).setDensity(0.1).setFriction(0.2).setRestitution(0).setCollisionGroups(cg), body),
-    world.createCollider(RAPIER.ColliderDesc.cuboid(0.55, 0.55, 0.62).setTranslation(-0.55, 1.95, 0).setDensity(0.1).setFriction(0.2).setCollisionGroups(cg), body),
-  ];
-  const vc = world.createVehicleController(body);
+export function createTractor(world, { x, z, yaw, power = 'medium', surfaceAt = () => 'gravel' }) {
+  const a = yaw - Math.PI / 2; // the chassis +x is the heading
+  const e = world.spawn({ tags: ['tractor'], at: [x, 0.3, z], q: [0, Math.sin(a / 2), 0, Math.cos(a / 2)],
+    body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.8,
+      massProps: { mass: TP.mass, com: [0.15, 0.45, 0], inertia: [900, 2200, 2000] } }, // lh-allow: D3, the playtested 1400 kg and tuned inertia
+    colliders: [
+      { shape: 'box', half: [1.55, 0.5, 1.0], p: [0.27, 0.95, 0], q: Q0, part: 'body', material: 'chassis' },
+      { shape: 'box', half: [0.55, 0.55, 0.62], p: [-0.55, 1.95, 0], q: Q0, part: 'cab', material: 'chassis' },
+    ],
+    groups: { member: ['vehicle'], filter: ['ground', 'static', 'prop', 'wall'] } });
+  const body = e.body, cols = e.colliders.map(c => c.collider), vc = world.rapier.createVehicleController(body);
+  world.own(e, () => world.rapier.removeVehicleController(vc));
   const W = TRACTOR_WHEELS.map(w => ({ ...w }));
   W.forEach((w, i) => {
     vc.addWheel({ x: w.cx, y: w.cy + 0.12, z: w.cz }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, TP.suspRest, w.radius);
     vc.setWheelSuspensionStiffness(i, TP.stiffness); vc.setWheelSuspensionCompression(i, TP.compression);
     vc.setWheelSuspensionRelaxation(i, TP.relaxation); vc.setWheelMaxSuspensionForce(i, 1e6); vc.setWheelMaxSuspensionTravel(i, TP.travel);
   });
-  const rayGroups = groups(0xffff, G.GROUND | G.STATIC), own = new Set(cols.map(c => c.handle));
+  const rayGroups = rayMask(world), own = new Set(cols.map(c => c.handle));
 
   const t = {
-    body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, inTurn: 0, assist: 0,
+    e, body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, inTurn: 0, assist: 0,
     x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, surface: 'gravel',
     setPower(name) { this.power = name; this.P = POWER[name]; },
     setInput(thr, steer, turn = 0) { this.inThr = Math.max(-1, Math.min(1, thr)); this.inSteer = Math.max(-1, Math.min(1, steer)); this.inTurn = Math.max(-1, Math.min(1, turn)); },

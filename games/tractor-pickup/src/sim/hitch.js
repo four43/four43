@@ -1,5 +1,5 @@
 // Trailer and wagon: dynamic bodies on two-wheel ray-cast controllers, joined by spherical joints (D-4, D-10, D-11).
-import { G, groups } from './physics.js';
+import { rayMask } from './ground.js';
 import { quatAxes } from './tractor.js';
 
 export const TR = {
@@ -11,30 +11,33 @@ export const TRACTOR_HITCH = { x: -1.75, y: 0.62, z: 0 };
 
 const local2world = (b, l) => { const p = b.translation(), { f, u, r } = quatAxes(b.rotation()); return { x: p.x + f.x * l.x + u.x * l.y + r.x * l.z, y: p.y + f.y * l.x + u.y * l.y + r.y * l.z, z: p.z + f.z * l.x + u.z * l.y + r.z * l.z }; };
 
-function createCar(phys, front, frontAnchor, index) {
-  const { RAPIER, world } = phys;
-  const h = local2world(front, frontAnchor), q = front.rotation(), { f } = quatAxes(q);
+const Q0 = [0, 0, 0, 1];
+function createCar(world, frontE, frontAnchor, index) {
+  const front = frontE.body, h = local2world(front, frontAnchor), q = front.rotation(), { f } = quatAxes(q);
   const cx = h.x - f.x * TR.tongue.x, cz = h.z - f.z * TR.tongue.x;
-  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(cx, h.y - TR.tongue.y, cz).setRotation(q)
-    .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.6));
-  const cg = groups(G.TRAILER, G.GROUND | G.STATIC | G.PROP | G.WALL);
-  world.createCollider(RAPIER.ColliderDesc.cuboid(TR.half.x, TR.half.y, TR.half.z).setMass(TR.mass).setFriction(0.2).setCollisionGroups(cg), body);
-  world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.06, 0.08).setTranslation(TR.half.x + 0.9, -0.15, 0).setMass(5).setCollisionGroups(cg), body); // tongue
-  const vc = world.createVehicleController(body);
+  const e = world.spawn({ tags: ['car'], at: [cx, h.y - TR.tongue.y, cz], q: [q.x, q.y, q.z, q.w],
+    body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.6 },
+    colliders: [ // bed: 260 kg and tongue: 5 kg through their materials' densities (src/defs/materials.js), as setMass gave
+      { shape: 'box', half: [TR.half.x, TR.half.y, TR.half.z], p: [0, 0, 0], q: Q0, part: 'bed', material: 'bed' },
+      { shape: 'box', half: [0.9, 0.06, 0.08], p: [TR.half.x + 0.9, -0.15, 0], q: Q0, part: 'tongue', material: 'tongue' },
+    ],
+    groups: { member: ['trailer'], filter: ['ground', 'static', 'prop', 'wall'] } });
+  const body = e.body, vc = world.rapier.createVehicleController(body);
+  world.own(e, () => world.rapier.removeVehicleController(vc));
   for (const side of [-1, 1]) vc.addWheel({ x: TR.axleX, y: 0, z: side * TR.track }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, TR.suspRest, TR.wheelR);
   for (let i = 0; i < 2; i++) {
     vc.setWheelSuspensionStiffness(i, 22); vc.setWheelSuspensionCompression(i, 2.2); vc.setWheelSuspensionRelaxation(i, 2.8);
     vc.setWheelFrictionSlip(i, 2.5); vc.setWheelSideFrictionStiffness(i, 1.2); vc.setWheelMaxSuspensionForce(i, 1e5); vc.setWheelMaxSuspensionTravel(i, 0.4);
   }
-  const joint = world.createImpulseJoint(RAPIER.JointData.spherical(frontAnchor, TR.tongue), front, body, true);
+  const joint = world.joint(frontE, e, world.R.JointData.spherical(frontAnchor, TR.tongue)); // engine request: world.joint without JointData (notes, Integrator request 1)
   joint.setContactsEnabled(false);
-  return { body, vc, index, joint, front, frontAnchor, dirt: 0 };
+  return { e, body, vc, index, joint, front, frontAnchor, dirt: 0 };
 }
 
-export function createTrain(phys, tractor) {
-  const c0 = createCar(phys, tractor.body, TRACTOR_HITCH, 0);
-  const c1 = createCar(phys, c0.body, TR.rear, 1);
-  const cars = [c0, c1], rayGroups = groups(0xffff, G.GROUND | G.STATIC);
+export function createTrain(world, tractor) {
+  const c0 = createCar(world, tractor.e, TRACTOR_HITCH, 0);
+  const c1 = createCar(world, c0.e, TR.rear, 1);
+  const cars = [c0, c1], rayGroups = rayMask(world);
   const angle = i => {
     const a = quatAxes(cars[i].front.rotation()).f, b = quatAxes(cars[i].body.rotation()).f;
     return Math.atan2(a.z * b.x - a.x * b.z, a.x * b.x + a.z * b.z);

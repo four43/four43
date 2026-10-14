@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT } from '../src/sim/physics.js';
+import { addGround, DT } from '../src/sim/ground.js';
+import { testWorld } from './helpers/world.mjs';
 import { createTractor } from '../src/sim/tractor.js';
 import { bumpNormal, createBumper, BUMP } from '../src/sim/bump.js';
-await RAPIER.init();
 
 test('two tractors touch when their capsules overlap; the normal points from the other to us (M-7)', () => {
   const n = bumpNormal({ x: 0, z: 0, yaw: 0 }, { x: 2, z: 0, yaw: 0 }); // side by side, 2 m apart
@@ -14,16 +13,15 @@ test('two tractors touch when their capsules overlap; the normal points from the
   assert.equal(bumpNormal({ x: 0, z: 0, yaw: 0 }, { x: 0, z: 6, yaw: Math.PI }), null);
 });
 test('a bump pushes only our own tractor away at 2 m/s, with a boing event and a cooldown (M-7)', () => {
-  const phys = createPhysics(RAPIER), t = createTractor(phys, { x: 0, z: 0, yaw: 0 }), b = createBumper(), ev = [];
-  for (let i = 0; i < 30; i++) { t.setInput(0, 0); t.step(DT); phys.world.step(); }
+  const { world, step } = testWorld(); addGround(world); const t = createTractor(world, { x: 0, z: 0, yaw: 0 }), b = createBumper(), ev = [];
+  step(30, () => { t.setInput(0, 0); t.step(DT); });
   b.step(DT, t, [{ n: 2, x: 2, z: 0, yaw: 0 }], ev);
   const v = t.body.linvel(); assert.ok(v.x <= -BUMP.push + 1e-6, `vx ${v.x}`);
   assert.deepEqual(ev, [{ type: 'bump', other: 2 }]);
   b.step(DT, t, [{ n: 2, x: 2, z: 0, yaw: 0 }], ev); assert.equal(ev.length, 1, 'cooldown');
 });
 test('a tractor that is not driving (its show, waiting for the barn, its card) does not bump: the next one drives into the barn (M-72)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default; await RAPIER.init();
-  const { createGame } = await import('../src/sim/game.js'), g = createGame(RAPIER, { seed: 3, power: 'medium' }), t = g.tractor, ev = [];
+  const RAPIER = (await import('@dimforge/rapier3d-compat')).default;   const { createGame } = await import('../src/sim/game.js'), g = createGame(RAPIER, { seed: 3, power: 'medium' }), t = g.tractor, ev = [];
   createBumper().step(1 / 60, t, [{ n: 2, x: t.x, z: t.z, yaw: t.yaw, speed: 0, held: true }], ev); assert.equal(ev.length, 0);
   createBumper().step(1 / 60, t, [{ n: 2, x: t.x, z: t.z, yaw: t.yaw, speed: 0, held: false }], ev); assert.equal(ev.length, 1);
 });

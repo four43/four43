@@ -1,15 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT } from '../src/sim/physics.js';
+import { addGround, DT } from '../src/sim/ground.js';
+import { testWorld } from './helpers/world.mjs';
 import { createTractor, POWER, quatAxes } from '../src/sim/tractor.js';
-await RAPIER.init();
 
 const make = (power = 'medium', surface = 'gravel') => {
-  const phys = createPhysics(RAPIER);
-  const t = createTractor(phys, { x: 0, z: 0, yaw: 0, power, surfaceAt: () => surface });
-  const run = (sec, thr, steer, each) => { for (let i = 0; i < sec * 60; i++) { t.setInput(thr, steer); t.step(DT); phys.world.step(); each?.(); } };
-  return { phys, t, run };
+  const { world, step } = testWorld(); addGround(world);
+  const t = createTractor(world, { x: 0, z: 0, yaw: 0, power, surfaceAt: () => surface });
+  const run = (sec, thr, steer, each) => { for (let i = 0; i < sec * 60; i++) { step(1, () => { t.setInput(thr, steer); t.step(DT); }); each?.(); } };
+  return { world, t, run };
 };
 
 test('settles on four wheels', () => {
@@ -71,8 +70,8 @@ test('rights itself when tipped past 35 degrees', () => {
 
 test('the wheel layout is data, the same for every tractor (for drawing other players)', async () => {
   const { TRACTOR_WHEELS, createTractor } = await import('../src/sim/tractor.js');
-  const { createPhysics } = await import('../src/sim/physics.js');
-  const t = createTractor(createPhysics(RAPIER), { x: 0, z: 0, yaw: 0 });
+  const { world } = testWorld(); addGround(world);
+  const t = createTractor(world, { x: 0, z: 0, yaw: 0 });
   assert.equal(TRACTOR_WHEELS.length, 4); assert.deepEqual(t.W.map(w => [w.name, w.cx, w.cz, w.radius]), TRACTOR_WHEELS.map(w => [w.name, w.cx, w.cz, w.radius]));
   assert.notEqual(t.W[0], TRACTOR_WHEELS[0], 'each tractor has its own copy');
 });
