@@ -1,11 +1,13 @@
 // Real-Chromium flows on Tractor Pickup's engine browser half (lion-hawk 2g). Run: npm run test:e2e
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, openGame, peers, expectScene, expectState } from 'lion-hawk/playwright';
+import { launch, openGame, peers, expectScene, expectState, expectTappable, expectFitsSafeArea, presets } from 'lion-hawk/playwright';
 import { serveTractor } from './serve.mjs';
+import { PHRASES } from '../src/sim/words.js';
 
 const ENTRY = process.env.TRACTOR_ENTRY ?? 'src/entry.js'; // G7 switches the default to src/main.js
 const ARGS = { seed: 14, started: true };
+const IPAD = 'iPad Pro 11 landscape', PHONE = 'iPhone 15 Pro portrait'; // X-3 the main device, X-12
 const frames = game => game.page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 const untilRewarded = async game => { for (let i = 0; i < 100; i++) { if (await game.page.evaluate(() => window.engine.events.since(0).some(e => e.type === 'reward'))) return; await game.page.waitForTimeout(50); await game.step(1); } throw new Error('no reward after the show'); };
 let chrome, site, skip = false;
@@ -202,6 +204,100 @@ test('desktop: a ?tune slider issues a tune command; the sim\'s preset changes a
     await game.page.evaluate(() => { const i = document.querySelector('#tune input[data-tune="TP.slip"]'); i.max = '99'; i.value = '50'; i.dispatchEvent(new Event('input', { bubbles: true })); });
     await game.step(1);
     assert.equal(await game.page.locator('#tune input[data-tune="TP.slip"] + output').textContent(), '6', 'the sim clamps; the panel shows what it wrote');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+// G6: iPad and iPhone (X-3, X-12), parity #4, #5, #7, #13, #16, #18, #20; field notes #43, #63, #82
+test('iPad: a thumb pushed up drives away from the camera; pulled down reverses; the horn button honks', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: IPAD, args: ARGS });
+  try {
+    await expectState(game, 'mode', 'drive');
+    await game.touch.start(1, { x: 600, y: 600 }); await game.touch.move(1, { x: 600, y: 520 }); await frames(game); await game.step(90);
+    const s = await game.state(); assert.ok(s.tractor.speed > 1.5, `forward ${s.tractor.speed}`);
+    assert.ok(await game.page.evaluate(() => window.engine.debug.game.tractor.fwd > 0), 'the stick pushed up drives forward (C-2)');
+    await game.touch.move(1, { x: 600, y: 680 }); await frames(game); await game.step(120);
+    assert.ok(await game.page.evaluate(() => window.engine.debug.game.tractor.fwd < 0), 'reversing (C-8)');
+    await game.touch.end(1); await game.step(1);
+    await game.touch.start(2, '#horn'); await frames(game); await game.untilEvent('horn', { maxSteps: 5 }); await game.touch.end(2);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('iPhone portrait: the horn, drive buttons, gear and slot bar are tappable and inside the safe area (X-12)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: PHONE, args: ARGS });
+  try {
+    await expectState(game, 'mode', 'drive'); await game.step(1);
+    await expectTappable(game, 'farm.paint'); await expectTappable(game, 'farm.book'); await expectTappable(game, 'farm.parent');
+    await expectTappable(game, { css: '#horn' });
+    await expectFitsSafeArea(game, '#horn'); await expectFitsSafeArea(game, '#slots'); await expectFitsSafeArea(game, '#drivebtns');
+    await expectFitsSafeArea(game, '.gear');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+// The show's pace is its waits and the voice's lines. A stub speech that never ends (initScript, as the brief's judgment asks) holds
+// every line to the voice's safety timeout (audio/voice.js: 1.2 s + 0.15 s a letter, from when the line starts), and notes when each
+// line starts, so a step that ends before its line could have is one a hold finished (F-8).
+const SILENT = () => {
+  window.__spoken = [];
+  Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speak(u) { window.__spoken.push({ text: u.text, at: performance.now() }); }, cancel() {}, pause() {}, resume() {}, getVoices: () => [], paused: false, speaking: false, pending: false, addEventListener() {}, removeEventListener() {} } });
+};
+const LETS_COUNT = PHRASES['lets-count'], LINE_MS = 1200 + 150 * LETS_COUNT.length; // the show's intro line (sim/showSteps.js)
+
+// Field note (G6): SwiftShader draws the iPad's 1.5x canvas at ~2 fps; at 1x (the same CSS layout and touch points) a frame takes
+// ~0.4 s. bindGesture counts whole frames (update(rawDt)) and a lift arrives only after the frame it fell in, so at 2 fps a 150 ms
+// tap already spans 1.1 s of frames and fires the 1 s hold: the gesture test runs the iPad layout at 1x.
+test('iPad: the wake button needs its full 5 s hold by touch; on the show a short tap is a cheer, a 1 s hold finishes the step (N-5, F-8, A-3)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: { ...presets[IPAD], deviceScaleFactor: 1 }, args: ARGS, initScript: SILENT });
+  const step = () => game.page.evaluate(() => Number(document.querySelector('#show').dataset.step));
+  // the page's clock at each change of #show's step index (the show half writes it each frame), watched from before the show starts
+  const watch = () => game.page.evaluate(() => { const log = window.__steps = []; let last = ''; const f = () => { const k = document.querySelector('#show')?.dataset.step; if (k !== undefined && k !== last) { last = k; log.push({ k: Number(k), at: performance.now() }); } requestAnimationFrame(f); }; f(); });
+  const after = a => game.page.waitForFunction(a => window.__steps.find(s => s.k > a), a, { timeout: 15000 }).then(h => h.jsonValue());
+  try {
+    await game.jump('farm', 'asleep', {}, ARGS); await game.step(2);
+    assert.equal(await game.page.locator('[data-testid="sleep.wake"]').count(), 1, 'one wake control: the game\'s, not the engine\'s fallback');
+    assert.equal(await game.page.locator('#sleep [data-testid="sleep.wake"]').isVisible(), true);
+    await game.press('sleep.wake'); await game.step(270); await expectState(game, 'mode', 'sleep');
+    await game.step(40); await game.unpress('sleep.wake'); await expectState(game, 'mode', 'drive');
+    await game.jump('farm', 'barn', { n: 2 }, ARGS); await game.step(190); await watch();
+    await game.page.evaluate(() => window.engine.debug.drive({ thr: 1, steer: 0, horn: false }));
+    await game.untilEvent('show', { maxSteps: 900 }); await game.page.evaluate(() => window.engine.debug.drive(null));
+    assert.equal((await after(-1)).k, 0, 'the show starts with its intro');
+    // both gestures in the intro, which cannot end before its line has been spoken (queued behind the voice's earlier lines) and timed out
+    await game.touch.start(1, { x: 600, y: 500 }); await game.touch.end(1); await game.page.waitForTimeout(100);
+    assert.equal(await step(), 0, 'a tap does not change the pace (A-3)');
+    await game.touch.start(1, { x: 600, y: 500 });
+    const next = await after(0); await game.touch.end(1);
+    const line = await game.page.evaluate(text => window.__spoken.find(s => s.text === text) ?? null, LETS_COUNT);
+    assert.ok(!line || next.at - line.at < LINE_MS, `the hold ended the intro (step ${next.k}) before its line could (F-8, #56): ${line ? Math.round(next.at - line.at) + ' ms after it started' : 'never spoken'}`);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+// G6, the parked G4 case: a new farm from the parent menu while asleep. The sleep overlay stays open over the new farm (the sim's
+// rebuild closes only the show, the card and the start screen, and builds the farm in 'sleep'), so its view half neither exits
+// nor re-enters: the night layer, its shown wake button and the lullaby carry on, as main.js did (its build kept sleepEl)
+test('desktop: a new farm while asleep stays asleep; the night layer and its wake button carry over; the wake still needs its hold (E-5, P-8)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS });
+  try {
+    await game.jump('farm', 'asleep', {}, ARGS); await game.step(2);
+    await game.page.evaluate(() => { document.getElementById('sleep').dataset.mark = '1'; });
+    await openParent(game);
+    assert.deepEqual((await game.scene()).overlays, ['sleep', 'parent'], 'the gear opens the parent menu over the night');
+    await game.page.locator('.parent [data-a="new"]').click(); await game.step(1); await game.untilLoaded();
+    const s = await game.state(); assert.equal(s.gen, 2); assert.equal(s.mode, 'sleep'); assert.equal(s.bed.phase, 'asleep');
+    assert.deepEqual((await game.scene()).overlays, ['sleep']);
+    assert.equal(await game.page.locator('#sleep[data-mark="1"]').count(), 1, 'the same night layer: the sleep half did not re-enter');
+    assert.equal(await game.page.locator('[data-testid="sleep.wake"]').count(), 1);
+    assert.equal(await game.page.locator('#sleep [data-testid="sleep.wake"]').isVisible(), true, 'the wake button is not hidden for another dusk');
+    assert.equal(await game.page.evaluate(() => document.getElementById('c').dataset.tpGen), '2', 'the 3D farm was rebuilt under the night');
+    await game.press('sleep.wake'); await game.step(250); await expectState(game, 'mode', 'sleep'); await game.step(60); await game.unpress('sleep.wake');
+    await expectState(game, 'mode', 'drive'); assert.equal(await game.page.locator('#sleep').count(), 0);
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
