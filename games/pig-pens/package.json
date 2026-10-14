@@ -6,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test --test-concurrency=4 test/*.test.mjs",
-    "test:e2e": "node --test test/e2e.browser.mjs"
+    "test:e2e": "node --test test/e2e.browser.mjs",
+    "bake": "lion-hawk bake --game .",
+    "build": "lion-hawk build --game ."
   },
   "keywords": [],
   "author": "",
