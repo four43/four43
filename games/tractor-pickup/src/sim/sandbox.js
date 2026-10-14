@@ -11,8 +11,8 @@ export function addRamp(phys, { x, z, yaw, width = 7 }) { // kicker along +headi
   world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pts)).setFriction(0.9).setCollisionGroups(groups(G.STATIC, 0xffff)));
 }
 
-export function createSandbox(RAPIER, { power = 'medium' } = {}) {
-  const phys = createPhysics(RAPIER);
+export function createSandbox(RAPIER, { power = 'medium', timer = null } = {}) { // timer: ?fps (physics.js)
+  const phys = createPhysics(RAPIER, { timer });
   const ramps = [{ x: 0, z: 40, yaw: 0 }], mud = [{ x: 25, z: 20, r: 8 }];
   ramps.forEach(r => addRamp(phys, r));
   const surfaceAt = (x, z) => mud.some(m => Math.hypot(x - m.x, z - m.z) < m.r) ? 'mud' : 'gravel';
@@ -23,7 +23,7 @@ export function createSandbox(RAPIER, { power = 'medium' } = {}) {
     step(input) {
       tractor.setInput(input.thr, input.steer, input.turn || 0); tractor.step(DT);
       train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 });
-      phys.world.step();
+      phys.step();
     },
   };
 }

@@ -65,7 +65,7 @@ export function createFpsMeter(renderer) {
     begin(now) { start = now; }, // rAF time at the start of this frame
     event(type) { cur.evs.add(type); },
     step() { cur.steps++; },
-    worldMs(ms) { cur.world += ms; }, // Rapier World.step time, from a wrapper set up under ?fps
+    worldMs(ms) { cur.world += ms; }, // Rapier World.step time: the sim times its own steps under ?fps (sim/physics.js worldMs)
     tick(dt, gap, simMs, drawMs, dist, programsBefore) {
       clock += dt; win.push(dt); if (win.length > 300) win.shift();
       if (gap > 50) log(`${clock.toFixed(1)}s gap ${gap.toFixed(0)}ms | before: sim ${prev.sim.toFixed(1)} (rapier ${prev.world.toFixed(1)}, ${prev.steps} steps) draw ${prev.draw.toFixed(1)}${prev.compiled ? ` +${prev.compiled} shaders` : ''}${prev.speech ? ' speech' : ''} [${prev.evs}] | idle ${(start - prev.end).toFixed(0)}ms${longTasks ? ` longtasks ${longTasks}` : ''} | now: ${cur.steps} steps | ${dist.toFixed(0)}m`);

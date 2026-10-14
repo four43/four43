@@ -58,12 +58,12 @@ function sounds(e, s) {
 }
 const freshSfx = () => ({ surface: 'gravel', air: 0, whee: false });
 
-export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, bindings: the syncs' (game/net.js reads them from the api)
+export function makeFarm({ R, clock = null, bindings = null, timer = null } = {}) { // clock, bindings: the syncs' (game/net.js reads them from the api); timer: ?fps (sim/physics.js)
   const S = e => { if (e.scene.name !== 'farm') throw new Error('tractor: the farm scene is not the main scene'); return e.scene.state; };
   const warn = createWarnOnce(); // M-44: a sync error never stops the step
   // Builds this scene's farm (main.js build, sim half): hats (W-4), the bedtime phase (E-5) and the start mode (F-11).
   function build(e, s, seed, power, player) {
-    s.game = createGame(R, { seed, power, player }); s.seed = seed; s.gen++; s.sfx = freshSfx();
+    s.game = createGame(R, { seed, power, player, timer }); s.seed = seed; s.gen++; s.sfx = freshSfx();
     s.game.wearHats(wornHats(s.progress));
     s.game.lastDrive = s.bed.phase === 'last';
     s.game.mode = s.started ? (s.bed.phase === 'asleep' ? 'sleep' : 'drive') : hasPaintChoice(s.progress) ? 'start' : 'drive';
@@ -180,12 +180,12 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
 }
 
 // ?sandbox (T-13, T-14): a flat test pad with a ramp and mud, driven like the farm (no trip, no net)
-export function makeSandbox({ R }) {
+export function makeSandbox({ R, timer = null }) {
   const scene = {
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = clampSettings(a.settings);
       Object.assign(ctx.state, {
-        game: createSandbox(R, { power: powerParam(a.power, settings.power) }), gen: 1, seed: null, started: true, raw: null,
+        game: createSandbox(R, { power: powerParam(a.power, settings.power), timer }), gen: 1, seed: null, started: true, raw: null,
         pilot: createPilot(), stepIn: { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false }, settings, sfx: freshSfx(),
       });
     },

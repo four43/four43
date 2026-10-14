@@ -4,7 +4,9 @@ export const DT = 1 / 60;
 // beside its body would otherwise start its ray inside the wall and jack that side up.
 export const G = { GROUND: 1, STATIC: 2, VEHICLE: 4, TRAILER: 8, PROP: 16, WALL: 32 };
 export const groups = (member, filter) => ((member & 0xffff) << 16) | (filter & 0xffff);
-export function createPhysics(RAPIER, { terrain } = {}) {
+// timer (B-1, X-4 ?fps only): the entry's performance.now, passed in (the sim reads no clock itself). With it, step() adds Rapier's
+// World.step time to worldMs, a running total in ms that the ?fps meter reads; a diagnostic, never in state() or a checksum
+export function createPhysics(RAPIER, { terrain, timer = null } = {}) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   const cg = groups(G.GROUND, 0xffff);
@@ -13,5 +15,7 @@ export function createPhysics(RAPIER, { terrain } = {}) {
     world.createCollider(RAPIER.ColliderDesc.heightfield(n - 1, n - 1, heights, { x: size, y: 1, z: size }, RAPIER.HeightFieldFlags.FIX_INTERNAL_EDGES)
       .setFriction(0.6).setCollisionGroups(cg));
   } else world.createCollider(RAPIER.ColliderDesc.cuboid(200, 0.5, 200).setTranslation(0, -0.5, 0).setFriction(0.9).setCollisionGroups(cg));
-  return { RAPIER, world };
+  const phys = { RAPIER, world, worldMs: 0,
+    step: timer ? () => { const t0 = timer(); world.step(); phys.worldMs += timer() - t0; } : () => world.step() };
+  return phys;
 }

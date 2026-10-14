@@ -87,3 +87,12 @@ test('a join link opens the Multiplayer panel through a command; its close close
   h.command('multiplayer.open', {}).step(1); assert.deepEqual(h.scene.overlays, ['multiplayer'], 'never twice');
   h.tap('multiplayer.close'); h.step(1); assert.deepEqual(h.scene.overlays, []);
 });
+test('?fps: with the entry\'s timer the sim times its own Rapier steps; the state and its checksum do not see it (B-1, #106)', () => {
+  let now = 0; const timer = () => (now += 0.5); // each World.step reads it twice: 0.5 ms per step
+  for (const scene of ['farm', 'sandbox']) {
+    const h = headless(tractorGame({ timer }), { scene, args: ARGS }), plain = headless(tractorGame(), { scene, args: ARGS });
+    h.step(10); plain.step(10);
+    assert.equal(h.engine.scene.state.game.phys.worldMs, 5, scene); assert.equal(plain.engine.scene.state.game.phys.worldMs, 0, `${scene}: no timer, no timing`);
+    assert.equal(h.checksum(), plain.checksum(), `${scene}: timing is no sim state`);
+  }
+});

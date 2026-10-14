@@ -107,7 +107,6 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
     bodies.rebind(g); animView.cars = vehSnap.cars = bodies.cars; vehSnap.tractor = bodies.view[0];
     rig.attach(page.camera, { canvas: page.canvas, tractor: g.tractor });
     panel?.refresh(); // a new farm: the picker shows its tractor's preset
-    if (page.perf) { const pw = g.phys.world, st = pw.step; pw.step = (...a) => { const t = performance.now(); st.apply(pw, a); page.perf.worldMs(performance.now() - t); }; } // B-1: Rapier's share (?fps only: timing, no state)
   };
   const drop = () => { w?.dispose(page.sound); w = null; };
   // ?fps: a rAF callback asked for during this frame runs before the driver's next tick, so it stamps the start of the next frame
@@ -130,7 +129,13 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
         hud.reset(s, engine.scene.id); // 2f delta: the slot bar from state on enter
         Object.assign(link, { w, hud, pending: null });
       }
-      if (page.perf) offs.push(engine.onStep(() => page.perf.step()));
+      if (page.perf) { // B-1, #106: Rapier's share, read from the sim's own running total (the entry gave it the timer under ?fps)
+        let last = null, ms = 0;
+        offs.push(engine.onStep(() => {
+          page.perf.step(); const p = engine.scene.state.game?.phys; if (!p) return;
+          if (p === last) page.perf.worldMs(p.worldMs - ms); last = p; ms = p.worldMs;
+        }));
+      }
       offs.push(bodies.watch(engine), engine.events.on(e => {
         page.perf?.event(e.type);
         if (e.type === 'tune' && panel) try { panel.shown(e.key, e.value); } catch (err) { warnOnce('tune', err); }

@@ -36,9 +36,10 @@ function state(e) {
   };
 }
 
-// clock overrides the syncs' wall clock, bindings the replicated kinds and the port's (tests only, T6)
-export function tractorGame({ clock, bindings } = {}) {
-  const { scene: farm, api } = makeFarm({ R, clock, bindings }), { scene: sandbox } = makeSandbox({ R });
+// clock overrides the syncs' wall clock, bindings the replicated kinds and the port's (tests only, T6). timer: ?fps only, the
+// entry's performance.now: the sim times its own Rapier steps into game.phys.worldMs for the meter (sim/physics.js, #106)
+export function tractorGame({ clock, bindings, timer } = {}) {
+  const { scene: farm, api } = makeFarm({ R, clock, bindings, timer }), { scene: sandbox } = makeSandbox({ R, timer });
   // → window.engine.debug
   const debug = e => ({
     get game() { return e.scene.state.game; }, get farm() { return e.scene.state; }, get sync() { return e.scene.state.net?.sync ?? null; },

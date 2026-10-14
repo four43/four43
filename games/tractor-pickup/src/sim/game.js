@@ -21,10 +21,10 @@ const STILL = { thr: 0, steer: 0, horn: false };
 export const CLAIM_WAIT = 1; // M-14: s a guest's animal waits at the top of its arc for the host's answer
 const STOP = 0.88; // F-5: speed kept per step while the train stops in the barn (stopped from full speed in about half a second)
 
-export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
+export function createGame(RAPIER, { seed, power = 'medium', player = 1, timer = null }) { // timer: ?fps (physics.js)
   const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1)), rng = makeRng(seed ^ 0x51ed);
   const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
-  const phys = createPhysics(RAPIER, { terrain }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
+  const phys = createPhysics(RAPIER, { terrain, timer }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
   const yardProps = addYardProps(phys, farm), s = spawnPoint(farm, player); // M-10
   const trees = createTrees(phys, [...farm.yard.obstacles.filter(o => o.kind === 'tree' || o.kind === 'bush'), ...roadside(farm, road, makeRng(seed ^ 0x70adc0de))]); // T-34, T-35
   const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
@@ -80,7 +80,7 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1 }) {
       tractor.setAssist(tractor.fwd > 0.5 && drive.onTarget !== false ? assist : 0); // C-11: only when nearly on the wanted heading
       tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer, drive.turn || 0); tractor.step(DT);
       train.step(DT, { parked: tractor.hold || (Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3) });
-      events.push(...trees.step(DT, bodies, game.mode === 'drive')); phys.world.step(); // trees first: a broken trunk's collider is gone before contact resolves
+      events.push(...trees.step(DT, bodies, game.mode === 'drive')); phys.step(); // trees first: a broken trunk's collider is gone before contact resolves
       axes = quatAxes(tractor.body.rotation());
       herd.step(DT, { tractor, others: game.others });
       // boops (B-1, B-2: any speed; A-13: a hider sits at its bush, so driving into the bush finds it) and the dog that jumps in by itself (A-7)
