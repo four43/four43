@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test --test-concurrency=4 test/",
     "bake": "lion-hawk bake",
-    "build": "python3 build.py",
+    "build": "lion-hawk build",
+    "dev": "lion-hawk dev",
     "test:e2e": "node --test test/e2e.browser.mjs"
   },
   "dependencies": {
