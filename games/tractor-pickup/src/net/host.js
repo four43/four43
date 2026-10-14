@@ -167,7 +167,7 @@ export function createHostSync({ game, net, paint, clock, bindings = BINDINGS })
       for (const p of players.map.values()) { p.interp.reset(); p.latest = null; p.pose = null; p.fwd = null; p.fwdNew = false; if (p.helloed) { startTrust(p); send(p.n, welcome(p)); } } }, // M-19, C-4
     setPaint(pt) { myPaint = { ...pt }; },
     showStarted() { all({ t: 'regrow' }); }, // M-17: the host's own startShow already reset its trees
-    delivered() {}, requestHelp() {}, // the host's own animals need no message; main.js calls callHelp directly on the host
+    delivered() {}, requestHelp() {}, // the host's own animals need no message; game/flow.js calls callHelp directly on the host
     close() { closed = true; game.barnGate = null; game.barnWait = 0; barn.holder = 0; for (const n of [...players.map.keys()]) dropPlayer(n); byPeer.clear(); rates.clear(); game.others = []; herdSize(); }, // M-39: the host keeps playing alone and its herd refills
   };
   game.barnGate = hostGate;

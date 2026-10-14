@@ -14,11 +14,10 @@ const snapObj = () => ({ p: new THREE.Vector3(), q: new THREE.Quaternion() });
 export function createOthers3D(scene) {
   const views = new Map(); let stamp = 0; // allocation free per frame: a view not stamped this update belongs to a player who is gone
   return {
-    // players: sync.players (the old main.js), or the view's Map from players.poseAt (#102): both have n, pose, paint, away, ahead, dirt
+    // players: the view's Map from players.poseAt (#102), or null outside a room: n, pose, paint, away, ahead, dirt
     update(dt, players) {
       stamp++;
-      const list = players instanceof Map ? players : players?.map;
-      if (list) for (const p of list.values()) {
+      if (players) for (const p of players.values()) {
         if (!p.pose) continue;
         let v = views.get(p.n);
         if (!v) { const s = stub(); v = { s, veh: createVehicles3D(scene, s.tractor, s.train, { wheelShadows: false }), body: '', trim: '', ghost: false, stamp, snap: { tractor: snapObj(), cars: [snapObj(), snapObj()], dirt: 0 } }; views.set(p.n, v); }

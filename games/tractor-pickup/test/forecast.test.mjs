@@ -33,7 +33,7 @@ function drive({ hostHz = 60, guestHz = 60, spike = 0.05, seed = 7, vx = 6, curv
   msgs.sort((a, b) => a.arrive - b.arrive);
   const pl = createPlayers(); pl.ensure(1); let i = 0, stamp = 0; const shown = [];
   for (const f of G) { for (const s of f.steps) { stamp = s.stamp; while (i < msgs.length && msgs[i].arrive <= stamp) { pl.push(1, msgs[i].time, msgs[i].rec, stamp, []); i++; } pl.sample(stamp); }
-    pl.drawAt(f.now, null); const p = pl.map.get(1).pose; if (p && f.now > 1500) shown.push({ t: f.now, x: p.tractor.p.x, z: p.tractor.p.z, truth: at((f.now) / (DT * 1000)) }); }
+    pl.sample(f.now); const p = pl.map.get(1).pose; if (p && f.now > 1500) shown.push({ t: f.now, x: p.tractor.p.x, z: p.tractor.p.z, truth: at((f.now) / (DT * 1000)) }); }
   let se = 0, worst = 0, stalls = 0, lag = 0;
   for (let j = 2; j < shown.length; j++) { const a = shown[j - 2], b = shown[j - 1], c = shown[j], d = Math.hypot(c.x - b.x, c.z - b.z);
     se += (d / ((c.t - b.t) / 1000) - vx) ** 2; worst = Math.max(worst, Math.hypot(c.x - 2 * b.x + a.x, c.z - 2 * b.z + a.z)); if (d === 0) stalls++; lag = Math.max(lag, Math.hypot(c.x - c.truth.x, c.z - c.truth.z)); }

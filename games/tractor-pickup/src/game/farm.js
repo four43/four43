@@ -171,7 +171,7 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
       const s = ctx.state, driving = () => s.started && s.game?.mode === 'drive' && !s.show; // U-6: the drive buttons
       u.button({ id: 'paint', label: 'Paint', when: driving, action: e => open(e, 'paint') });
       u.button({ id: 'book', label: 'Sticker book', when: driving, action: e => open(e, 'book') });
-      u.hold({ id: 'parent', label: 'Grown-ups', seconds: 2, wall: true, action: e => open(e, 'parent') }); // P-1, #83: ui/menus.js's gear holdToFire(gear, 2000), on wall time
+      u.hold({ id: 'parent', label: 'Grown-ups', seconds: 2, wall: true, action: e => open(e, 'parent') }); // P-1, #83: the old gear's holdToFire(gear, 2000) (ui/hold.js), on wall time
     },
   };
   return { scene, api };

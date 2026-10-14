@@ -451,6 +451,8 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 | C-5 | Gamepad | The left stick. Button A is the horn: each press fires the horn once, and each gamepad has its own button state. When the game drives with no start screen, the first stick move starts the trip (F-11), as a touch does. |
 | C-6 | Horn | A large horn button at the bottom right. The gamepad A button and the H key also work. A loud bulb-horn "HONK-honk" sound (S-7). All animals look at the tractor. Some animals come (A-11). The riders sing (S-8). |
 
+The inputs are Lion Hawk engine devices (`src/devices.js`): the stick is `bindStick`, the keys `bindKeyboard`, the gamepad `bindGamepad` and the horn button `bindHold`. The stick, the keys and the left pad stick all go through one map that turns the screen stick into a world direction using the chase camera's heading (C-1). The holds (the gear, the show's skip and the wake button) are engine hold controls on wall time.
+
 ### 7.4 Camera
 
 | ID | Item | Description |
@@ -547,7 +549,7 @@ The parent menu uses the game's button style: large rounded buttons with thick b
 | X-9 | Ground and roads | The ground, the roads, the edges, the ramps, the fences along the routes and the pond are made in code from the farm layout. They are not model files. |
 | X-13 | Page hidden | When the page hides, all sound stops (the audio context is suspended) and the voice stops. When the page shows again, the game tries to resume the sound, and the next touch, click or key press resumes it (iOS allows audio only in a gesture). If the audio is interrupted with no page hide (for example Siri, a call or an alarm), the next gesture also resumes it. |
 | X-14 | Back gesture | The game adds one history entry when it starts, and adds it again after each back step. Thus a swipe from the left edge (Safari) or a back button does not leave the game. The thumb stick does not start within 24 px of the left edge (C-3). |
-| X-15 | Debug tools | `?tune` shows a panel of sliders for the feel values. `?fps` shows the readout of X-4. The browser console stays quiet unless `?fps` or `?tune` is in the URL. An error that the game recovers from is never silent: it shows as a console warning. |
+| X-15 | Debug tools | `?tune` shows a panel of sliders for the feel values. A slider does not write the value itself. It sends the sim a `tune` command, and the sim writes the same feel constants that the game reads (`src/sim/tune.js`). The panel then shows the value that the sim wrote after clamping. The camera sliders are the view's own. A guest cannot tune. `?fps` shows the readout of X-4. The debug hook is `window.engine` (Lion Hawk): `debug.game`, `debug.farm`, `debug.sync`, `jump`, `state`, `command`, `stepN`, `render` and `view.project`. The game has no `window.tp` or `window.game`. The browser console stays quiet unless `?fps` or `?tune` is in the URL. An error that the game recovers from is never silent: it shows as a console warning. |
 
 ---
 
@@ -596,6 +598,8 @@ The game joins files to make sentences. For example: `lets-find` + `animals`, `t
 ---
 
 ## 13. Test results
+
+How to run the tests (in `games/tractor-pickup/`): `npm test` runs the unit and multiplayer tests in Node. `TP_MP=engine npm test` runs the multiplayer suites through the engine harness (`test/mp.engine.harness.mjs`) instead of the bare host and guest syncs. One test fails there by design: the M-50 test "the rate limits count in wall time: with the game frozen". On the engine path a message is handled at the next step, so a frozen game handles none (engine field note #75). `npm run test:e2e` builds `src/main.js`, serves it and plays it in headless Chromium through `lion-hawk/playwright`. It uses three presets: a desktop, an iPad Pro 11 in landscape (X-3) and an iPhone 15 Pro in portrait (X-12). A two-page test plays a host and a guest through a Node bridge (M-54). The workspace suite (`npm test` in `games/`) runs these with the Pig Pens and Rally tests. After the move to the Lion Hawk engine (no spec version change), `npm test` has 774 tests and `npm run test:e2e` has 14, and all pass.
 
 State at version 1.12, game 1.8.0 (`npm test`: 722 tests, all pass). Version 1.11 had 688, version 1.10 had 662, version 1.9 had 640, version 1.8 had 602, version 1.7 had 490, version 1.6 had 485, version 1.5 had 475, release 1.0.0 had 464. "Desktop" means a manual check in desktop Chromium with Playwright (keyboard, mouse, screenshots). No iPad was available for these checks. Sound and touch were not tested on a device.
 
@@ -807,9 +811,9 @@ The players are children. These rules apply to all items in section 14.
 
 | ID | Item | Description |
 |---|---|---|
-| M-52 | Two games in one test | Automated tests run a host game and a guest game in Node, connected by an in-memory link that can add delay, jitter and loss (as M-28). They check: the guest makes the same farm; both see the same animals; a claim, a refusal (the "poof") and a late yes (M-14); delivery and respawn; tree breaks and regrow; away, back and alone on the same farm (M-39 to M-41); new farm; old messages (M-26); bad messages (M-50). |
+| M-52 | Two games in one test | Automated tests run a host game and a guest game in Node (also on the engine path: `TP_MP=engine`, section 13), connected by an in-memory link that can add delay, jitter and loss (as M-28). They check: the guest makes the same farm; both see the same animals; a claim, a refusal (the "poof") and a late yes (M-14); delivery and respawn; tree breaks and regrow; away, back and alone on the same farm (M-39 to M-41); new farm; old messages (M-26); bad messages (M-50). |
 | M-53 | Debug log | A "?" button in the Multiplayer panel shows a log of the last 400 network events, with a "Copy" button: the panel states, the server socket (message types only), HTTP calls (path and status, and the ICE servers TURN gave), and each peer connection (its relay rule, states, candidate types and errors). The log never holds a token, an SDP, a candidate address or another IP address. |
 | M-53 | Messages | Automated tests encode and decode each kind, keyframe and diff, check the size limits, and check that bad data is refused. Loss tests drop all claim messages and replicated messages during a connection change, and check that all devices agree again in 3 s (M-58). |
 | M-74 | Barn lock | Automated tests (M-52) check: two trains arrive together, one show runs and the other waits (it knows whose show it is), then shows by itself, and two shows never run at the same time; the train that has the barn leaves, goes away, or keeps it past the time limit, and the waiting train shows; a guest that waits for the host goes on when the host is away; a host with no guests shows at once; after a show the barn is free for the next train. |
-| M-54 | Browser | A desktop check with two browser windows: host, join with the code, drive both tractors, boop, bump, show, leave. |
+| M-54 | Browser | A desktop check with two browser windows: host, join with the code, drive both tractors, boop, bump, show, leave. The automated browser test (`npm run test:e2e`) plays a host page and a guest page through a Node bridge in place of WebRTC. It checks that the guest gets the host's farm, that each page sees the other, that a horn reaches the other page and that a guest that leaves goes on alone. The real WebRTC connection is checked only by hand. |
 | M-55 | Handshake | Handshake has its own tests (its `SPEC.md`). |

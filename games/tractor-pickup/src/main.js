@@ -1,79 +1,88 @@
-import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { DT } from './sim/physics.js';
-import { createGame } from './sim/game.js';
-import { TYPES } from './sim/herd.js';
-import { createGibs } from './render/gibs.js';
-import { createFx } from './render/fx.js';
-import { randomSeed } from './sim/rng.js';
-import { createAnimals3D } from './render/animals3d.js';
-import { renderIcons, tractorPicture } from './ui/icons.js';
-import { createStickerArt } from './ui/stickerArt.js';
-import { createHud } from './ui/hud.js';
-import { slotIndex } from './sim/slots.js';
-import { buildFarm3D } from './render/farm3d.js';
-import { createSandbox } from './sim/sandbox.js';
-import { createScene, VIEW } from './render/scene.js';
-import { instancedShadows } from './render/shadows.js';
-import { warmShaders } from './render/warm.js';
-import { createChaseCam } from './render/camera.js';
-import { createVehicles3D, PAINTS } from './render/vehicles3d.js';
-import { createInput } from './ui/input.js';
-import { createPilot } from './sim/pilot.js';
-import { makeGravelTexture, worldUV } from './render/textures.js';
-import { createTrip, stepTrip, modeAfterDrive } from './sim/trip.js';
-import { buildShowSteps } from './sim/showSteps.js';
-import { createShow } from './ui/show.js';
-import { Sound } from './audio/sound.js';
-import { createVoice } from './audio/voice.js';
-import { createMenus, paintBtnSvg, bookSvg, sunSvg } from './ui/menus.js';
-import { disposeTree } from './render/dispose.js';
-import { load, save } from './ui/store.js';
+// Tractor Pickup's browser entry on the lion-hawk engine (2g G1; the shipped entry since G7): Rapier first (#6),
+// then boot the sim half with the view half and the devices. The stored records are the farm's args (#84), and the sim's
+// `progress`, `settings` and `bed` events are saved back. #35: a random engine seed per visit; ?seed= and ?lh-test win inside boot.
+// G4: the 1 Hz wall date for bedtime (#85), audio unlock and page hide (X-13, D-1), the back guard (X-14, D-2).
+// G5: the Multiplayer panel's session binds a joined Handshake room to the engine through a port (#75); ?lag=, ?signal= and ?r=
+// as the old main.js; the netlog; ?lh-bridge=host|guest (tests, with ?lh-test) binds lion-hawk/playwright's Node bridge instead.
+import R from '@dimforge/rapier3d-compat';
+import { boot } from 'lion-hawk/view';
+import { createPort, bridgeTransport, parseLag } from 'lion-hawk/net';
 import { Handshake } from './net/handshake.js';
 import { createNetLog, loggedTransports } from './net/netlog.js';
 import { createSession, parseRoomInput, signalServer } from './net/session.js';
-import { stepStamp } from './net/players.js';
-import { createWarnOnce } from './net/protocol.js';
-import { parseLag } from './net/link.js';
-import { createOthers3D } from './render/others3d.js';
 import { START_PAINT } from './net/players.js';
-import { buildTunePanelDirect, createFpsMeter } from './ui/debug.js';
-import { installEngineHook } from 'lion-hawk/view';
-import { BURST } from './sim/scenery.js';
-import { singOrder } from './sim/sing.js';
-import { BED, clampBedtime, setBedtime, stepBedtime, sleepNow, wakeUp, minutesLeft } from './sim/bedtime.js';
-import { holdToFire } from './ui/hold.js';
-import { createRoster, createFinder, placeArrow } from './ui/roster.js';
-import { createHornMarks } from './render/hornMarks.js';
-import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
+import { tractorGame } from './game.sim.js';
+import { tractorView, audioOf } from './game.view.js';
+import { devices } from './devices.js';
+import { rig } from './view/rig.js';
+import { hudMarkup } from './view/hud.js';
+import { load, save } from './ui/store.js';
+import { TYPES } from './sim/herd.js';
+import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, emptyProgress } from './sim/progress.js';
+import { clampBedtime } from './sim/bedtime.js';
 
-const MAX_STEPS = 3; // B-5
-// M-72: the hourglass in the bubble of a train that waits for the barn
-const HOURGLASS_SVG = `<svg viewBox="0 0 60 76" aria-hidden="true"><path d="M12 10h36c0 14-12 20-12 28s12 14 12 28H12c0-14 12-20 12-28S12 24 12 10z" fill="#e8f4ff" stroke="#6b4428" stroke-width="3" stroke-linejoin="round"/><path d="M18 17h24c-3 8-9 11-12 15-3-4-9-7-12-15z" fill="#f5c84c"/><path d="M30 50c-5 3-11 8-12 14h24c-1-6-7-11-12-14z" fill="#f5c84c"/><rect x="6" y="3" width="48" height="8" rx="4" fill="#a0673a"/><rect x="6" y="65" width="48" height="8" rx="4" fill="#a0673a"/></svg>`;
-const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
-const snapInto = (b, s) => { const t = b.translation(), q = b.rotation(); s.p.set(t.x, t.y, t.z); s.q.set(q.x, q.y, q.z, q.w); };
-function lerpSnap(a, b, t, out) { out.p.lerpVectors(a.p, b.p, t); out.q.slerpQuaternions(a.q, b.q, t); return out; }
+// X-15: no storage content may stop the game starting (the old main.js's safe)
+const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } };
 
-async function main() {
-  await RAPIER.init();
-  const params = new URLSearchParams(location.search), sandbox = params.has('sandbox'), ui = document.getElementById('ui');
-  const lag = parseLag(params.get('lag')), signal = signalServer(params.get('signal'), location.origin); // M-28; M-48: only a local server or this origin
-  const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } }; // no storage content may stop the game starting
-  let settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
-  let powerNow = powerParam(params.get('power'), settings.power);
-  const { renderer, scene, camera, follow, setNight } = createScene(document.getElementById('c'));
-  // M-75: the horn marks live in the scene, not a farm: made once
-  const hornMarks = createHornMarks(scene);
-  const bed = safe(() => clampBedtime(load('tp-bedtime', null)), () => clampBedtime(null)), saveBed = () => save('tp-bedtime', bed); // E-5
-  let nightK = 0, nightTo = bed.phase === 'asleep' ? 1 : 0, sleepAfter = false, sleepEl = null;
-  const aniso = renderer.capabilities.getMaxAnisotropy(), perf = params.has('fps') ? createFpsMeter(renderer) : null;
-  const sound = new Sound(), voice = createVoice(sound); // recorded words, with the browser's speech for any word not recorded yet
-  voice.enabled = settings.voice;
+// N-1, #75: a joined room's transport bound to the engine. The port is made once the farm is the main scene (2f delta: a net.open
+// before that is warned and dropped), so its net.open starts the sim's host or guest sync. close(then) ends that sync (net.close:
+// a guest's leave and a host's leave go out through the outbox) and lets go of the transport after the step that drained them
+// (2f delta), then calls then(); a room that closes by itself (the host left, kicked) lets go the same way. A page that does not
+// step (hidden) gives up waiting after 1 s: the outbox is dropped at the next step with no port, and then() leaves the room.
+// transport: a net, or a function that makes it when the port is made (the test bridge replays its early events to the first listener)
+function bindPort(engine, { role, transport, clock }) {
+  let port = null, done = false, waiting = null;
+  const ready = () => engine.scene.name === 'farm' && !!engine.scene.state?.game;
+  const release = then => {
+    waiting?.(); waiting = null; const p = port; port = null;
+    if (!p) { then?.(); return; }
+    let t = 0; const off = engine.onStep(() => { off(); clearTimeout(t); p.close(); then?.(); });
+    t = setTimeout(() => { off(); p.close(); then?.(); }, 1000);
+  };
+  const open = () => { const t = typeof transport === 'function' ? transport() : transport; port = createPort(engine, { transport: t, role, clock }); t.on('closed', () => { done = true; release(); }); };
+  if (ready()) open(); else waiting = engine.onStep(() => { if (!done && ready()) { waiting(); waiting = null; open(); } });
+  return {
+    sync: () => done ? null : engine.scene.state?.net?.sync ?? null, // 2f delta: null until the step after the bind
+    close(then) {
+      if (done) { then?.(); return; } done = true;
+      if (port) try { engine.command('net.close', {}); } catch (e) { console.warn('net close', e); }
+      release(then);
+    },
+  };
+}
+
+async function start() {
+  await R.init();
+  const q = new URLSearchParams(location.search), sandbox = q.has('sandbox');
+  const settings = safe(() => clampSettings(load('tp-settings', DEFAULT_SETTINGS)), () => clampSettings({})), progress = safe(() => clampProgress(load('tp-progress', null), Object.keys(TYPES)), emptyProgress);
+  const bed = safe(() => clampBedtime(load('tp-bedtime', null)), () => clampBedtime(null));
+  const { sound, voice } = audioOf();
+  if (!sandbox) hudMarkup(document); // the drive buttons, the gear and the red X: game markup, adopted at boot's first UI sync
+  // M-53: the multiplayer debug log (the "?" in the Multiplayer panel); Handshake's, the port's and the syncs' warnings go into it too
+  const net = sandbox ? null : { session: null, netlog: createNetLog(), refresh: null }, netlog = net?.netlog;
+  if (netlog) { netlog.log('device', navigator.userAgent); for (const k of ['warn', 'error']) { const orig = console[k].bind(console); console[k] = (...a) => { if (typeof a[0] === 'string' && /^(handshake|multiplayer|net[ :])/.test(a[0])) netlog.log(k, ...a.map(x => x instanceof Error ? x.message : typeof x === 'string' ? x : String(x))); orig(...a); }; } }
+  const { engine } = boot(tractorGame(), tractorView({ tune: q.has('tune'), fps: q.has('fps'), sandbox, net }), {
+    seed: (Math.random() * 2 ** 32) >>> 0, scene: sandbox ? 'sandbox' : 'farm',
+    args: { seed: seedParam(q.get('seed')) ?? undefined, power: powerParam(q.get('power'), settings.power), progress, settings, bed },
+    devices: devices(document, { rig }),
+  });
+  const failed = window.engine?.errors?.[0]; if (failed) throw new Error(failed.message); // the view half could not start (WebGL)
+  // #84: the sim owns the records and says when one changed; voice and music follow the settings at once (P-4, P-5)
+  let music = (engine.scene.state.settings ?? settings).music; voice.enabled = (engine.scene.state.settings ?? settings).voice;
+  engine.events.on(e => {
+    if (e.type === 'progress') save('tp-progress', e.progress);
+    else if (e.type === 'bed') save('tp-bedtime', e.bed);
+    else if (e.type === 'settings') { const s = e.settings; save('tp-settings', s); voice.enabled = s.voice; if (!s.voice) voice.stop?.(); music = s.music; sound.music(s.music); }
+  });
+  // #85: the sim checks bedtime against the view's wall date: once a second, and at once on coming back to the page
+  const clock = () => { try { engine.command('clock', { date: Date.now() }); } catch (e) { console.warn('clock', e); } };
+  clock(); setInterval(clock, 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') clock(); });
   // iOS: audio and speech only start inside a gesture, and the context can be interrupted later. Try on every kind of gesture and on coming back to the page,
-  // and stop listening only once the context is really running. The start screen's tap is the real gesture (menus onPlay); this stays as the fallback.
+  // and stop listening only once the context is really running. (Moved unchanged from the old main.js.)
   const GEST = ['pointerup', 'touchend', 'click', 'keydown'];
-  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(settings.music); voice.preload(); sound.loadClips(); watchCtx(); // B-8, E-2, D-1
- for (const n of GEST) removeEventListener(n, unlock, true); } }); };
+  const unlock = () => { voice.prime(); Promise.resolve(sound.unlock()).then(() => { if (sound.ctx?.state === 'running') { sound.music(music); voice.preload(); sound.loadClips(); watchCtx(); // B-8, E-2, D-1
+    for (const n of GEST) removeEventListener(n, unlock, true); } }); };
   for (const n of GEST) addEventListener(n, unlock, true);
   const relisten = () => { sound.unlock(); for (const n of GEST) addEventListener(n, unlock, true); };
   document.addEventListener('visibilitychange', () => { // D-1: silent while hidden; back on the page, the next gesture (or this call) resumes
@@ -81,351 +90,25 @@ async function main() {
   addEventListener('pageshow', () => { if (sound.ctx && sound.ctx.state !== 'running') relisten(); });
   // D-1: Siri, a call or an alarm can interrupt the context with no page hide: listen for the next gesture again
   const watchCtx = () => { if (sound.ctx && !sound.ctx.onstatechange) sound.ctx.onstatechange = () => { if (sound.ctx.state !== 'running' && document.visibilityState === 'visible') relisten(); }; };
+  // M-29..M-36: the Multiplayer panel's session. A joined room's link is bound to the engine (bindPort); the session keeps the
+  // panel's states, errors, the M-31 retry and the M-33 close. Real rooms stamp on performance.now(); the test bridge on the
+  // engine's wall time, as the tests step it by hand (real time would trip the rate limits)
+  if (net) {
+    const role = q.has('lh-test') ? q.get('lh-bridge') : null, bridged = role === 'host' || role === 'guest';
+    const clock = bridged ? () => engine.time.wall : () => performance.now();
+    const log = netlog.log, lag = bridged ? null : parseLag(q.get('lag')), signal = signalServer(q.get('signal'), location.origin); // M-28; M-48: only a local server or this origin
+    net.session = createSession({ Handshake, server: signal, lag, log, transports: loggedTransports(log), getPaint: () => engine.scene.state?.progress?.paint ?? START_PAINT,
+      bind: ({ role: r, transport }) => bindPort(engine, { role: r, transport, clock }), onChange: () => net.refresh?.() });
+    engine.onStep(() => net.session.poll()); // the welcome's log line; a late welcome clears the panel's text
+    if (bridged) bindPort(engine, { role, transport: () => bridgeTransport(), clock }); // tests: the page is in the Node hub's room from the start
+    const linkCode = parseRoomInput(q.get('r')); // M-34: a QR link opens the join prompt
+    if (q.has('r')) { const u = new URL(location.href); u.searchParams.delete('r'); history.replaceState(null, '', u); } // a reload does not ask again
+    if (linkCode) { engine.command('multiplayer.open', {}); net.session.openJoin(); net.session.submitCode(linkCode); }
+  }
   // D-2: a swipe from the left edge (Safari, not installed) or a stray back press must not leave the game: back stays on this page
   if (!sandbox) { history.pushState({ tp: 1 }, '', location.href); addEventListener('popstate', () => history.pushState({ tp: 1 }, '', location.href)); }
-  const input = createInput(ui);
-  const icons = sandbox ? null : renderIcons(renderer), hud = sandbox ? null : createHud(ui, { icons, onWordTap: ids => voice.say(ids), onSlotTap: (type, golden) => { sound.animal(type); voice.say(golden ? ['golden', type] : [type]); } }); // E-3
-  const showQuat = new THREE.Quaternion(), chaseQuat = new THREE.Quaternion();
-  // M-75..M-79: the players' circles by the menu button, and after a honk in a room, arrows to the other players
-  const roster = sandbox ? null : createRoster(ui, PAINTS), finder = sandbox ? null : createFinder(ui, PAINTS, (x, y, z) => toNdc(camera, x, y, z), () => VIEW);
-  let hornQueued = false; input.onHorn(() => { hornQueued = true; });
-  // Everything below `world` belongs to one farm. startFarm throws it all away and builds the next one; trips on the same farm rebuild nothing.
-  let world, game, farm3d, vehicles, gibs, animals3d, others3d, fx, chase, trip, show, sprinklers, fxs, wheelPt, prev, curr, view, viewCars, bodyList, seed, gen = 0;
-  const pilot = createPilot(), stepIn = { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false }, animView = { cars: null, alpha: 0 }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every step/frame: nothing allocated in the loop
-  let started = sandbox, showDone, rewardDone, riders, guideToBarn, helpTarget, pathT, pathK = false, barnWay = null, camBlend, acc = 0, last = performance.now();
-  const sfx = { surface: 'gravel', air: 0, whee: false };
-  const bodies = () => bodyList;
-  // M-75: where a horn mark goes: key 0 is this device's tractor, else the other player's number
-  const hornAt = (key, out) => { if (!key) { out.copy(view[0].p); return true; } const p = session?.sync?.players.map.get(key); if (!p?.pose) return false; const q = p.pose.tractor.p; out.set(q.x, q.y, q.z); return true; };
-  const applyHats = () => game?.wearHats?.(wornHats(progress)); // W-4, M-60: this player's riders wear them; the others see the same hats
-
-  function build(newSeed, power, player = 1) {
-    seed = newSeed; gen++;
-    world = new THREE.Group(); scene.add(world);
-    const t0 = performance.now(); game = sandbox ? createSandbox(RAPIER, { power }) : createGame(RAPIER, { seed, power, player });
-    if (perf || params.has('tune')) console.log('seed', seed, 'sim build ms', Math.round(performance.now() - t0)); // D-6: quiet unless debugging
-    const t1 = performance.now(); farm3d = game.farm ? buildFarm3D(world, game.farm, game.road, game.terrain, game.items, game.yardProps.props, { anisotropy: aniso, trees: game.trees }) : (buildSandbox3D(world, game, aniso), null);
-    if (perf || params.has('tune')) console.log('farm 3d build ms', Math.round(performance.now() - t1));
-    vehicles = createVehicles3D(world, game.tractor, game.train); vehicles.setPaint(progress.paint);
-    gibs = createGibs(world); chase = createChaseCam(camera);
-    animals3d = game.herd ? createAnimals3D(world, game.herd) : null; applyHats(); others3d = createOthers3D(world);
-    fx = createFx(world, game.terrain ? (x, z) => game.terrain.height(x, z) : undefined);
-    fxs = { dust: 0, mud: 0, mark: 0, halo: 0, spray: false, drip: new Set() }; wheelPt = {}; sprinklers = farm3d?.sprinklers || [];
-    trip = game.herd ? createTrip() : null; show = game.herd ? createShow({ root: ui, camera, game, voice, sound, fx, scene: world, onHop: r => hud.markOut(slotIndex(r.slot) + 1) }) : null;
-    showDone = rewardDone = false; riders = []; guideToBarn = false; helpTarget = null; pathT = 0; camBlend = 1;
-    instancedShadows(world); // X-4: no shadow-pass program churn (render/shadows.js)
-    try { Promise.resolve(warmShaders(renderer, scene, camera)).catch(e => console.warn('shader warm-up', e)); } catch (e) { console.warn('shader warm-up', e); } // B-2
-    if (!started) game.mode = 'start'; // the start screen is up: nothing moves until the tap
-    if (game.herd) game.lastDrive = bed.phase === 'last'; // E-5: a new farm (or a reload) keeps the bedtime phase
-    if (started && bed.phase === 'asleep') game.mode = 'sleep';
-    if (perf) { const w = game.phys.world, step = w.step; w.step = (...a) => { const t = performance.now(); step.apply(w, a); perf.worldMs(performance.now() - t); }; } // B-1: Rapier's share of the sim
-    bodyList = [game.tractor.body, ...game.train.cars.map(c => c.body)];
-    prev = bodyList.map(snapOf); curr = bodyList.map(snapOf); view = prev.map(s => ({ p: s.p.clone(), q: s.q.clone() })); viewCars = view.slice(1); animView.cars = vehSnap.cars = viewCars; vehSnap.tractor = view[0];
-    document.getElementById('tune')?.remove();
-    if (params.has('tune')) { buildTunePanelDirect(game); Object.assign(window, { game, fx, renderer, tp: { get game() { return game; }, get trip() { return trip; }, get progress() { return progress; }, get animals3d() { return animals3d; }, get seed() { return seed; }, sound, voice, startFarm } }); }
-    // D-4: the standard hook, always present (not only with ?tune); window.tp stays until phase 2 (D-5)
-    installEngineHook({
-      get seed() { return seed; },
-      state: () => { const p = game.tractor.body.translation(); return { mode: game.mode, landed: game.load.landed(), tractor: { x: p.x, z: p.z } }; },
-      debug: { get sim() { return game; } },
-    }, { game: 'tractor-pickup' });
-  }
-  function dispose() {
-    gen++; show?.end(); document.getElementById('show')?.remove(); voice.stop?.(); hud?.arrowTo(null);
-    sound.spray(false); sound.skid(0); sfx.surface = 'gravel'; sfx.air = 0; sfx.whee = false; // no loop of the old farm (a sprinkler, a skid) keeps sounding
-    scene.remove(world); disposeTree(world); // geometries, materials, textures, instance buffers
-    game.phys.world.free(); // the Rapier world, with the terrain heightfield, trees, props and vehicles
-  }
-  function startFarm({ seed: s, power, player }) {
-    renderer.setAnimationLoop(null);
-    try {
-      dispose();
-      try { build(s ?? randomSeed(), power ?? powerNow, player); } catch (e) { console.error('new farm failed, retrying with a fresh seed', e); try { world && (scene.remove(world), disposeTree(world)); } catch (e2) { console.warn('half-built farm cleanup', e2); } build(randomSeed(), power ?? powerNow, player); } // D-3: the cleanup error is reported
-      hud?.reset();
-      const t = game.tractor, p = t.body.translation(); chase.update(1, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); // the camera starts behind the new tractor
-    } catch (e) { console.error('new farm', e); } finally { acc = 0; last = performance.now(); renderer.setAnimationLoop(frame); }
-    return game;
-  }
-  // E-5: bedtime. The last drive: the barn path shows (even with an empty trailer) and the voice says go to the barn.
-  function lastDrive() { if (!game.herd) return; game.lastDrive = true; if (game.mode === 'drive' || game.mode === 'menu') { voice.say(['go-to-barn']); guideToBarn = true; pathT = 0; } else sleepAfter = game.mode === 'show' || game.mode === 'reward' || sleepAfter; }
-  // Asleep: the tractor is held, night falls, the lullaby plays; a big "Wake Up!" button (held 5 s, for a grown-up) ends it.
-  function goSleep({ quiet = false } = {}) {
-    sleepNow(bed); saveBed(); sleepAfter = false; game.lastDrive = false; guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud?.arrowTo(null);
-    game.mode = 'sleep'; nightTo = 1; sound.lullaby(true); if (!quiet) voice.say(['sleepy', 'goodnight']);
-    sleepEl?.remove(); sleepEl = document.createElement('div'); sleepEl.id = 'sleep'; sleepEl.hidden = !quiet; ui.appendChild(sleepEl);
-    sleepEl.innerHTML = `<button class="pic wake" aria-label="Wake up">${sunSvg()}<span>Wake Up!</span><i></i></button>`;
-    holdToFire(sleepEl.querySelector('button'), BED.wakeHold, wake);
-    sleepEl.addEventListener('pointerdown', e => e.stopPropagation());
-    if (!quiet) setTimeout(() => { if (sleepEl) sleepEl.hidden = false; }, BED.dusk * 1000);
-  }
-  function wake() {
-    wakeUp(bed); saveBed(); sleepEl?.remove(); sleepEl = null; nightTo = 0; sound.lullaby(false); voice.say(['wake-up']);
-    if (game.mode === 'sleep') game.mode = 'drive';
-  }
-  const showReward = rs => { // W-1, W-3, W-4: the sticker, a new color or hat, then the card. R-1: a failure here never leaves the game held
-    try {
-      const r = completeShow(progress, rs.map(x => x.animal)); progress = r.progress;
-      if (r.newHat) applyHats();
-      save('tp-progress', progress);
-      if (r.newPaint || r.newHat) sound.bells();
-      menus.showReward({ sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat, progress }); driveBadge();
-      voice.say(['you-did-it', 'new-sticker']);
-    } catch (e) { console.error('reward', e); menus.hide(); rewardDone = true; }
-  };
-  // The trip starts on a real gesture: it unlocks audio and speech (iOS). F-11: the start screen shows only when there is a
-  // paint to choose; otherwise the tractor can drive at once and the first touch or key press starts the trip.
-  function play() { if (started) return; voice.prime(); started = true; game.mode = 'drive'; if (bed.phase === 'asleep') goSleep({ quiet: true }); else if (bed.phase === 'last') lastDrive(); Promise.resolve(sound.unlock()).then(() => sound.music(settings.music)); }
-  function enterStart() {
-    if (!menus) return;
-    if (hasPaintChoice(progress)) { menus.showStart(progress); return; }
-    game.mode = 'drive';
-    const first = () => { removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); play(); };
-    addEventListener('pointerdown', first, true); addEventListener('keydown', first, true);
-  }
-  // M-53: the multiplayer debug log (the "?" in the Multiplayer panel); Handshake's own warnings go into it too
-  const netlog = sandbox ? null : createNetLog();
-  if (netlog) { netlog.log('device', navigator.userAgent); for (const k of ['warn', 'error']) { const orig = console[k].bind(console); console[k] = (...a) => { if (typeof a[0] === 'string' && /^(handshake|multiplayer|net )/.test(a[0])) netlog.log(k, ...a.map(x => x instanceof Error ? x.message : typeof x === 'string' ? x : String(x))); orig(...a); }; } }
-  const tractorPic = sandbox ? null : tractorPicture(renderer);
-  const menus = sandbox ? null : createMenus(ui, {
-    netlog,
-    icons, art: createStickerArt(renderer), tractorPic,
-    onStickers(p) { save('tp-progress', p); }, // W-2: a sticker was placed, moved or taken off a page
-    onBookSeen() { driveBadge(); }, // F-3
-    onHats(p) { save('tp-progress', p); applyHats(); sound.plop(); }, // W-4: a hat was turned off or on
-    onPlay: play,
-    onKeepDriving() { rewardDone = true; },
-    onNewFarm() { startFarm({ seed: settings.seed ?? randomSeed(), power: powerNow }); session?.setGame(game); if (!started) enterStart(); }, // M-19: a host's guests get the new farm too. R-1: from the start screen (or its sticker book) the new farm waits for the go tap; otherwise it is driving
-    onPaint(p) { progress.paint = p; vehicles.setPaint(p); save('tp-progress', progress); sound.plop(); session?.setPaint(p); }, // W-3
-    onSettings(s) { // power, voice and music apply at once; a seed applies with the next new farm
-      settings = s; save('tp-settings', s); powerNow = s.power; game.tractor.setPower?.(s.power);
-      voice.enabled = s.voice; if (!s.voice) voice.stop?.();
-      sound.music(s.music);
-    },
-    onClearStickers() { // in place: an open screen holds this same object, so its next save cannot bring the stickers back
-      progress.stickers.length = 0; save('tp-progress', progress); driveBadge();
-      if (!menus.open) return; menus.hide(); // a book left open would show stickers that are gone; close it the way its own X would
-      if (!started) enterStart(); else if (game.mode === 'menu') game.mode = 'drive'; else if (game.mode === 'reward') rewardDone = true;
-    },
-    onParent() { menus.openParent(settings, seed, { guest: !!session?.isGuest, bed: { choice: bed.choice, left: minutesLeft(bed, Date.now()), phase: bed.phase } }); },
-    onBedtime(min) { setBedtime(bed, min, Date.now()); saveBed(); }, // E-5 // M-19: no new farm for a guest
-    onMultiplayer() { menus.openMultiplayer(session); },
-  });
-  const session = sandbox ? null : createSession({ Handshake, server: signal, lag, log: netlog ? netlog.log : undefined, transports: netlog ? loggedTransports(netlog.log) : {}, getGame: () => game, getPaint: () => progress.paint,
-    onFarm: (s, n) => { startFarm({ seed: s, power: powerNow, player: n }); if (!started) play(); return game; }, // M-1: the guest makes the host's farm
-    onChange: () => menus.refreshMultiplayer() });
-  const warnOnce = createWarnOnce(); // M-44: once per kind, never a flood each frame
-  let lastSync = null; // a room that just ended: the events its sync pushed on the way out (playerGone poofs, M-39, M-41) still play
-  const netEvents = now => { try { const y = session.sync, left = lastSync && lastSync !== y ? lastSync.out.splice(0) : []; lastSync = y; const e = session.before(now); return left.length ? [...left, ...e] : e; } catch (e) { warnOnce('net before', e); return []; } }; // M-44: a sync error never stops the frame loop
-
-  // U-6: while driving, the paint screen and the sticker book are a tap away (bottom left); the tractor is held while one is open
-  const driveBtns = sandbox ? null : Object.assign(document.createElement('div'), { id: 'drivebtns', hidden: true });
-  if (driveBtns) {
-    ui.appendChild(driveBtns);
-    const btn = (cls, svg, label, openIt) => { const b = document.createElement('button'); b.className = 'pic ' + cls; b.innerHTML = svg; b.setAttribute('aria-label', label);
-      b.addEventListener('pointerdown', e => e.stopPropagation()); b.addEventListener('click', e => { e.stopPropagation(); if (game.mode !== 'drive') return; game.mode = 'menu'; sound.plop(); openIt(() => { if (game.mode === 'menu') game.mode = 'drive'; }); }); driveBtns.appendChild(b); };
-    btn('paintbtn', paintBtnSvg(), 'Paint', back => menus.openPaint(progress, back));
-    btn('stickerbtn', bookSvg(), 'Sticker book', back => menus.showBook(progress, back));
-  }
-  // M-72: held at the barn while another player's show has it: a bubble with that player's tractor and a turning hourglass (no text, R-2)
-  const barnWaitEl = sandbox ? null : Object.assign(document.createElement('div'), { id: 'barnwait', hidden: true });
-  if (barnWaitEl) { barnWaitEl.innerHTML = `<img alt="">${HOURGLASS_SVG}`; ui.appendChild(barnWaitEl); }
-  let barnBy = 0;
-  function driveBadge() { // F-3: the drive button's badge: new stickers only
-    const b = driveBtns?.querySelector('.stickerbtn'); if (!b) return; b.querySelector('.count')?.remove();
-    const n = newStickers(progress); if (n) b.appendChild(Object.assign(document.createElement('span'), { className: 'count', textContent: n }));
-  }
-  driveBadge();
-  build(seedParam(params.get('seed')) ?? settings.seed ?? randomSeed(), powerNow);
-  const frame = now => {
-    const gap = now - last, dt = Math.min(0.1, gap / 1000); last = now; acc = Math.min(acc + dt, MAX_STEPS * DT); perf?.begin(now); // B-5: after a hitch, catch up at most MAX_STEPS steps; the rest of the lost time is dropped
-    const inp = input.read(), t0 = perf ? performance.now() : 0;
-    if (!started && menus && game.mode === 'drive' && (inp.x || inp.y)) play(); // A-7: a gamepad drives with no touch or key: its first move starts the trip, or a barn pass would give no show
-    while (acc >= DT) {
-      { const t = game.tractor, o = pilot.update(inp, chase.yaw ?? t.yaw, t.yaw, t.speed); // C-1, C-2: point to go
-        stepIn.thr = o.thr; stepIn.steer = o.steer; stepIn.turn = o.turn; stepIn.onTarget = o.onTarget; stepIn.horn = hornQueued; }
-      const g0 = gen, nowMs = stepStamp(now, acc), netEv = session ? netEvents(nowMs) : []; // before game.step: a welcome may rebuild the farm here (M-1)
-      if (gen !== g0) { acc -= DT; continue; } // a new farm: fresh bodies and snapshots, its first step comes next
-      const old = prev; prev = curr; curr = old; // two snapshot sets swap places: nothing is allocated per step
-      const ev = game.step(stepIn) || []; if (netEv.length) ev.unshift(...netEv); hornQueued = false; for (let i = 0; i < bodyList.length; i++) snapInto(bodyList[i], curr[i]); acc -= DT; // B-6: no new array per step (net events first, as before)
-      if (session) try { session.after(ev, nowMs); } catch (e) { warnOnce('net after', e); } // M-44
-      if (perf) { perf.step(); for (const e of ev) perf.event(e.type); }
-      for (const e of ev) try {
-        if (e.type === 'treeBreak') { const t = e.tree, bush = t.kind === 'bush', b = BURST[bush ? 'bush' : t.young ? 'young' : 'tree']; gibs.burst(t.x, b.y * b.k, t.z, e.dir, b.k, bush); if (bush) sound.bushPop(); else sound.treePop(); }
-        if (e.type === 'horn') { sound.horn(); for (const s of singOrder(game.load.slots)) { sound.animal(s.animal.type, s.delay); animals3d?.sing(s.animal, s.delay); } } // E-1: the riders sing along
-        if (e.type === 'dodge') sound.boing(0.2); // B-14
-        if (e.type === 'treeBump') sound.clunk(); // T-34: a soft bump when a tree holds
-        if (e.type === 'boop') { chase.shake(0.35); sound.boing(); sound.animal(e.animal.type); if (e.animal.golden) sound.bells(); fx.stars(e.animal.x, 1, e.animal.z); }
-        if (e.type === 'launch' && e.animal.type === 'duck' && game.farm && Math.hypot(e.animal.x - game.farm.yard.pond.x, e.animal.z - game.farm.yard.pond.z) < game.farm.yard.pond.r + 3) fxs.drip.add(e.animal); // A-5: a duck from the pond drips
-        if (e.type === 'mud-enter') { fx.mudSplash(game.tractor.x, game.tractor.z); sound.squelch(); } // T-13
-        if (e.type === 'washed') { const t = game.tractor; for (let k = 0; k < 3; k++) fx.sparkles(t.x, 1.8, t.z); sound.squeaky(); } // T-15
-        if (e.type === 'bump') { sound.boing(0.6); sound.horn(0.5); chase.shake(0.25); } // M-7
-        if (e.type === 'remoteHorn') sound.horn(0.4); // M-8
-        if (e.type === 'remoteHorn') hornMarks.honk(e.n);
-        if (e.type === 'horn' && session?.sync) { hornMarks.honk(0); finder?.show(); }
-        if (e.type === 'unclaim') { fx.stars(e.pos.x, e.pos.y, e.pos.z); sound.plop(); hud.reset(); for (const s of game.load.slots) if (s.landed) hud.fill(slotIndex(s) + 1, s.animal.type, s.animal.golden); } // M-14: poof; the slot bar packs up
-        if (e.type === 'help') { helpTarget = { a: e.animal, t: 10 }; sound.animal(e.animal.type); } // M-9
-        if (e.type === 'playerJoined') { for (let k = 0; k < 3; k++) fx.sparkles(e.x, 1.6, e.z); sound.horn(0.6); } // M-10
-        if (e.type === 'playerGone') { fx.stars(e.x, 1.2, e.z); sound.plop(); } // M-39
-        if (e.type === 'land' && e.animal.golden) { sound.fanfare(); hud.goldFlash(); fx.confetti(e.animal.x, 2, e.animal.z); } // E-6, A-8: a large celebration
-        if (e.type === 'land') { sound.plop(); voice.say(e.animal.golden ? ['golden', e.animal.type] : [e.animal.type], { low: true }); const n = slotIndex(e.slot) + 1; hud.fill(n, e.animal.type, e.animal.golden); hud.showWord((e.animal.golden ? 'Golden ' : '') + TYPES[e.animal.type].word, n, e.animal.golden ? ['golden', e.animal.type] : [e.animal.type]); }
-      } catch (err) { warnOnce('event ' + e.type, err); } // M-44: a bad event (a remote animal, a poof) never stops the frame loop
-      stepSounds(game, sound, sfx);
-      if (trip && started && bed.phase !== 'asleep' && stepBedtime(bed, Date.now()) === 'last') { saveBed(); lastDrive(); } // E-5: time is up
-      if (trip && started && bed.phase !== 'asleep') { // spec 3.1: intro, drive, show, reward
-        const cues = stepTrip(trip, { dt: DT, landed: game.load.landed(), booped: ev.some(e => e.type === 'boop'), barnPass: ev.some(e => e.type === 'barnPass'), showDone, rewardDone });
-        showDone = rewardDone = false;
-        for (const c of cues) {
-          if (c === 'drive' && sleepAfter) { goSleep(); continue; } // E-5: the card of the last show is closed: goodnight
-          if (c === 'drive') game.mode = modeAfterDrive(game.mode); // the card is gone: driving and boops work again (U-6: not under paint or book)
-          if (c === 'say-intro') voice.say(['lets-find', 'animals']);
-          if (c === 'full') { voice.say(['great-job', 'go-to-barn']); guideToBarn = true; pathT = 0; }
-          if (c === 'help' && !game.barnWait) { if (!session?.requestHelp()) { const h = game.herd.callHelp(game.tractor); if (h) { helpTarget = { a: h, t: 10 }; sound.animal(h.type); } } } // F-4: the helper calls out; M-9: a guest asks the host (its answer is a help event, or none)
-          if (c === 'show') {
-            const myGen = gen;
-            guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud.arrowTo(null); riders = game.startShow(); session?.showStarted(); // M-17
-            if (bed.phase === 'last') sleepAfter = true; // E-5: this was the last drive
-            if (!riders.length) { showDone = true; continue; } // E-5: an empty last drive has no show
-            show.play(riders, buildShowSteps(riders.map(r => ({ type: r.animal.type, golden: r.animal.golden }))))
-              .catch(e => console.error('show', e)).finally(() => { if (gen === myGen) showDone = true; }); // R-1: an error in the show never locks the game
-          }
-          if (c === 'reward' && !riders.length) { show.end(); game.finishShow(riders); hud.reset(); rewardDone = true; game.mode = 'reward'; continue; } // E-5: no animals, no sticker: straight on to sleep
-          if (c === 'reward') { showQuat.copy(camera.quaternion); camBlend = 0; show.end(); game.finishShow(riders); session?.delivered(riders); game.mode = 'reward'; hud.reset(); showReward(riders); } // F-3: held (no driving, no boops) until a card button is tapped
-        }
-      }
-    }
-    const a = acc / DT; view.forEach((v, i) => lerpSnap(prev[i], curr[i], a, v));
-    stepFx(game, fx, sound, fxs, wheelPt, sprinklers, dt); fx.update(dt);
-    if (session?.sync?.players) try { session.sync.players.drawAt(now, game.herd); } catch (e) { warnOnce('net draw', e); } // M-65: other trains (and their riders) where the forecast has them this frame
-    gibs.update(dt); farm3d?.update(view[0].p); animView.alpha = a; animals3d?.update(dt, game, animView); try { others3d?.update(dt, session?.sync?.players ?? null); } catch (e) { warnOnce('others3d', e); } // M-44
-    vehSnap.dirt = game.dirt?.tractor; vehicles.update(vehSnap);
-    hornMarks.update(dt, hornAt); finder?.update(dt, session?.sync, show?.active || game.mode !== 'drive'); roster?.update(session?.sync, progress.paint);
-    const t = game.tractor, lv = t.body.linvel();
-    if (show?.active) show.update(dt);
-    else {
-      chaseIn.x = view[0].p.x; chaseIn.y = view[0].p.y; chaseIn.z = view[0].p.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); chase.update(dt, chaseIn);
-      if (camBlend < 1) { camBlend = Math.min(1, camBlend + dt); const k = camBlend * camBlend * (3 - 2 * camBlend); chaseQuat.copy(camera.quaternion); camera.quaternion.slerpQuaternions(showQuat, chaseQuat, k); } // F-10: turn back smoothly
-    }
-    if (driveBtns) { const on = started && game.mode === 'drive' && !show?.active; if (driveBtns.hidden === on) driveBtns.hidden = !on; }
-    // M-72: the bubble shows whose show has the barn; that tractor toots once. It goes when this train's own show starts
-    if (barnWaitEl) { const n = game.barnWait > 0 ? game.barnWait : 0;
-      if (n !== barnBy) { barnBy = n; barnWaitEl.hidden = !n; if (n) { barnWaitEl.firstChild.src = tractorPic(session?.sync?.players.map.get(n)?.paint ?? START_PAINT); sound.horn(0.4); } } }
-    if (trip && started) { // F-2: sparkle path and arrow to the barn; F-4: arrow to the helper animal for 10 s
-      if (helpTarget && ((helpTarget.t -= dt) <= 0 || !game.herd.free().includes(helpTarget.a))) helpTarget = null;
-      if (guideToBarn && (pathT -= dt) <= 0) { pathT = 0.25; barnWay = barnPath(game, t.x, t.z); if ((pathK = !pathK)) fx.sparkleTrail(barnWay.path); fx.sparkleFrame(barnWay.frame); } // the door frame twice as often
-      const aim = show.active ? null : helpTarget ? { x: helpTarget.a.x, y: 1, z: helpTarget.a.z } : guideToBarn && barnWay ? barnWay.aim : null;
-      hud.arrowTo(aim && edgeArrow(camera, aim));
-    }
-    { const t2 = game.tractor; sound.engine(t2.engine, t2.speed / t2.P.vmax, t2.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t2.slip) - 0.2) * 2))); }
-    follow(view[0].p.x, view[0].p.z);
-    if (nightK !== nightTo) { nightK = nightTo > nightK ? Math.min(nightTo, nightK + dt / BED.dusk) : Math.max(nightTo, nightK - dt / BED.wakeFade); setNight(nightK); } // E-5
-    const t1 = perf ? performance.now() : 0, progs = perf ? perf.programs() : 0; renderer.render(scene, camera);
-    if (perf) { const y = game.farm?.yard.barn; perf.tick(dt, gap, t1 - t0, performance.now() - t1, y ? Math.hypot(game.tractor.x - y.x, game.tractor.z - y.z) : 0, progs); }
-  };
-  enterStart();
-  const linkCode = parseRoomInput(params.get('r')); // M-34: a QR link opens the join prompt
-  if (session && params.has('r')) { const u = new URL(location.href); u.searchParams.delete('r'); history.replaceState(null, '', u); } // a reload does not ask again
-  if (session && linkCode) { menus.openMultiplayer(session); session.openJoin(); session.submitCode(linkCode); }
-  renderer.setAnimationLoop(frame);
+  // F-11, A-7: with no start screen the first touch or key starts the trip (the farm also starts on the first stick move)
+  const first = () => { removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); if (engine.scene.state?.game?.mode === 'drive') engine.command('play', {}); };
+  if (!sandbox) { addEventListener('pointerdown', first, true); addEventListener('keydown', first, true); }
 }
-
-// Per-step sound cues: the squelch when the wheels enter mud (T-13); whee and a cheer when all four wheels leave the ground for over 0.15 s (T-14)
-function stepSounds(game, sound, s) {
-  const t = game.tractor;
-  if (t.surface === 'mud' && s.surface !== 'mud' && !game.dirt) sound.squelch(); // the farm game sends a mud-enter event instead
-  s.surface = t.surface;
-  let air = true; for (let i = 0; i < 4; i++) if (t.vc.wheelIsInContact(i)) { air = false; break; } // B-6: no closure per step
-  s.air = air ? s.air + DT : 0;
-  if (!air) s.whee = false;
-  else if (s.air > 0.15 && !s.whee) { s.whee = true; sound.whee(); if (game.load?.landed() > 0) sound.cheer(); }
-}
-
-// F-2: the way to the barn. Along the route to the yard gate, then to a point on the barn axis 16 m out from the opening that
-// faces the player (going around the side first if the player is beside the barn, clear of the open door leaves), then straight
-// in along the axis to the barn's middle: points every 3 m. frame: points around the whole door opening; aim: its center.
-const BARN_DOOR = { half: 4.6, h: 4.8 }; // the opening between the walls (m either side of the axis) and up to the header
-function barnPath(game, x, z) {
-  const { road, farm, terrain } = game, b = farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], rt = [Math.cos(b.yaw), -Math.sin(b.yaw)], pts = [];
-  const at = (a, sd) => ({ x: b.x + f[0] * a + rt[0] * sd, z: b.z + f[1] * a + rt[1] * sd }), local = p => ({ a: (p.x - b.x) * f[0] + (p.z - b.z) * f[1], s: (p.x - b.x) * rt[0] + (p.z - b.z) * rt[1] });
-  const line = (p, q) => { const m = Math.max(1, Math.round(Math.hypot(q.x - p.x, q.z - p.z) / 3)); for (let i = pts.length ? 1 : 0; i <= m && pts.length < 60; i++) pts.push({ x: p.x + (q.x - p.x) * i / m, z: p.z + (q.z - p.z) * i / m }); };
-  let from = { x, z };
-  if (!road.inYard(x, z)) {
-    const n = road.nearest(x, z), R = road.routes[n.pt.r], dir = n.pt.s < R.length - n.pt.s ? -1 : 1;
-    for (let i = n.pt.n; i >= 0 && i < R.pts.length && pts.length < 40; i += dir * 3) pts.push(R.pts[i]);
-    from = R.pts[dir < 0 ? 0 : R.pts.length - 1];
-  }
-  const L = local(from), end = L.a >= 0 ? 1 : -1, out = b.half + b.leaf + 5, q = at(end * out, 0), door = at(end * b.half, 0);
-  const way = [from];
-  if (Math.abs(L.a) < out && Math.abs(L.s) < b.width + 4) way.push(at(L.a, (L.s >= 0 ? 1 : -1) * (b.width + 4))); // beside the barn or a door leaf: step out to the side first
-  if (Math.abs(L.a) < out) way.push(at(end * out, local(way.at(-1)).s));                                          // then along the side, past the leaves
-  way.push(q, door, at(0, 0));
-  for (let i = 1; i < way.length; i++) line(way[i - 1], way[i]);
-  const frame = [], fa = end * (b.half + 0.4);
-  for (let k = -BARN_DOOR.half; k <= BARN_DOOR.half; k += 0.35) frame.push({ ...at(fa, k), y: BARN_DOOR.h });
-  for (const sd of [-1, 1]) for (let y = 0.2; y < BARN_DOOR.h; y += 0.35) frame.push({ ...at(fa, sd * BARN_DOOR.half), y });
-  return { path: pts.map(p => ({ x: p.x, y: terrain.height(p.x, p.z) + 0.6, z: p.z })), frame, aim: { ...door, y: BARN_DOOR.h / 2 } };
-}
-
-// Continuous effects, once per drawn frame (the one-off ones come from game events): D-9 gravel spray, tire marks and dust, T-13 mud splashes,
-// T-15 sprinkler water, golden rainbow trails (A-8) and the pond duck's drips (A-5)
-function stepFx(game, fx, sound, s, w, sprinklers, dt) {
-  const t = game.tractor; if (!game.tractorWorld) return;
-  s.dust -= dt; s.mud -= dt; s.mark -= dt;
-  const lv = t.body.linvel(), sp = Math.hypot(lv.x, lv.z), hx = sp > 1 ? lv.x / sp : Math.sin(t.yaw), hz = sp > 1 ? lv.z / sp : Math.cos(t.yaw);
-  if (game.mode === 'drive' && t.surface === 'gravel' && (Math.abs(t.slip) > 0.25 || (t.engine > 0.8 && t.speed < 3))) {
-    for (const i of [2, 3]) { game.tractorWorld({ x: t.W[i].cx, y: 0, z: t.W[i].cz }, w); fx.gravel(w.x, w.z, hx, hz, 2); if (s.mark <= 0) fx.tireMark(w.x, w.z, Math.atan2(hx, hz), Math.min(1, Math.abs(t.slip) * 2)); }
-    if (s.mark <= 0) s.mark = 0.06;
-  }
-  if (t.speed > 4 && t.surface === 'gravel' && s.dust <= 0) { s.dust = 0.1; fx.dust(t.x - hx * 2, t.z - hz * 2); }
-  if (t.surface === 'mud' && t.speed > 2 && s.mud <= 0) { s.mud = 0.15; for (const i of [2, 3]) { game.tractorWorld({ x: t.W[i].cx, y: 0, z: t.W[i].cz }, w); fx.mudSplash(w.x, w.z); } }
-  let near = false;
-  for (const sp2 of sprinklers) if (Math.hypot(sp2.x - t.x, sp2.z - t.z) < 15) { near = true; fx.water(sp2.x, sp2.z, sp2.yaw, sp2.h ?? 4.1, 8, sp2.spread ?? 14, sp2.depth ?? 18); } // route sprinklers and the farmyard wash (T-36)
-  if (near !== s.spray) { s.spray = near; sound.spray(near); }
-  if (game.herd && (s.halo -= dt) <= 0) { s.halo = 0.05; for (const a of game.herd.animals) if (a.golden && !a.hidden && a.state !== 'gone' && a.state !== 'fly' && a.state !== 'ride' && a.state !== 'elsewhere') fx.rainbowHalo(a.x, (a.y || 0) + 0.3, a.z); } // E-6
-  for (const f of game.flights) {
-    if (f.u < 0) continue;
-    if (f.animal.golden) for (let k = 0; k < 3; k++) fx.rainbowTrail(f.pos.x, f.pos.y, f.pos.z, k); // E-6: a wider ribbon
-    if (s.drip.has(f.animal)) { if (f.u > 0.6) s.drip.delete(f.animal); else fx.water(f.pos.x, f.pos.z, 0, f.pos.y - game.terrain.height(f.pos.x, f.pos.z), 1, 0.6); }
-  }
-}
-
-// F-2, F-4: a point off screen (or behind the camera) gives an arrow on a screen ellipse inset by 70 px, pointing toward it; on screen gives null
-const _v = new THREE.Vector3(), _ndc = { nx: 0, ny: 0, behind: false }, _at = { x: 0, y: 0, angle: 0, on: false };
-// M-77: the point on the screen, -1..1 each way, and whether it is behind the camera
-function toNdc(camera, x, y, z) {
-  _ndc.behind = _v.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z > 0;
-  _v.set(x, y, z).project(camera); _ndc.nx = _v.x; _ndc.ny = _v.y; return _ndc;
-}
-function edgeArrow(camera, p) {
-  const s = toNdc(camera, p.x, p.y, p.z);
-  placeArrow(s.nx, s.ny, s.behind, VIEW.w, VIEW.h, 70, _at); return _at.on ? null : _at;
-}
-
-function buildSandbox3D(scene, game, anisotropy) {
-  const ground = new THREE.Mesh(worldUV(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), 8), new THREE.MeshLambertMaterial({ map: makeGravelTexture({ anisotropy }) }));
-  ground.receiveShadow = true; scene.add(ground);
-  addMarkers(scene, game);
-  for (const m of game.mud) { const g = new THREE.Mesh(new THREE.CircleGeometry(m.r, 32).rotateX(-Math.PI / 2), new THREE.MeshPhongMaterial({ color: '#7a5233', shininess: 60 })); g.position.set(m.x, 0.02, m.z); scene.add(g); }
-  for (const r of game.ramps) { // simple visual for the sandbox kicker
-    const s = new THREE.Shape([[-5, 0], [0, 0.6], [1, 0.6], [4, 0]].map(([a, y]) => new THREE.Vector2(a, y)));
-    const g = new THREE.ExtrudeGeometry(s, { depth: 7, bevelEnabled: false }); g.translate(0, 0, -3.5); g.rotateY(-Math.PI / 2);
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#b89a70' })); m.position.set(r.x, 0, r.z); m.rotation.y = r.yaw; m.receiveShadow = m.castShadow = true; scene.add(m);
-  }
-}
-
-// Cones scattered every ~12 m for parallax. Keeps the lane to the ramp and the mud patch clear.
-function addMarkers(scene, game) {
-  const spots = []; let seed = 3; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  for (let x = -150; x <= 150; x += 12) for (let z = -150; z <= 150; z += 12) {
-    const px = x + (rnd() - 0.5) * 8, pz = z + (rnd() - 0.5) * 8;
-    if (Math.abs(px) < 10 && pz > -15 && pz < 70) continue;
-    if (game.mud.some(m => Math.hypot(px - m.x, pz - m.z) < m.r + 2)) continue;
-    spots.push([px, pz]);
-  }
-  const cone = new THREE.ConeGeometry(0.35, 1, 10).translate(0, 0.5, 0);
-  const mesh = new THREE.InstancedMesh(cone, new THREE.MeshLambertMaterial({ color: '#ff7a1a' }), spots.length), M = new THREE.Matrix4();
-  spots.forEach(([x, z], i) => { const s = 0.8 + rnd() * 0.8; M.makeScale(s, s, s).setPosition(x, 0, z); mesh.setMatrixAt(i, M); });
-  mesh.castShadow = true; scene.add(mesh);
-}
-
-// ?tune: sliders for live feel tuning during the playtest. Values print to the console to copy into tractor.js.
-main();
+start().catch(err => console.error('Tractor Pickup could not start', err));

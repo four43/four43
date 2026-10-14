@@ -69,12 +69,6 @@ export function createPlayers() {
       }
       return out;
     },
-    // the old browser path (main.js, until G7): each drawn frame (M-65) samples again at the frame's time and puts the animals in
-    // other trains on their drawn cars, which writes the sim (#102); the engine view uses poseAt
-    drawAt(now, herd) {
-      this.sample(now); if (!herd) return;
-      for (const p of map.values()) if (p.pose && !p.away) for (const c of p.carried) { const a = herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) placeCarried(a, c); }
-    },
     others() { let k = 0; for (const p of map.values()) if (p.pose) { const o = others[k++] ||= {}; o.n = p.n; o.x = p.pose.tractor.p.x; o.z = p.pose.tractor.p.z; o.yaw = p.yaw; o.speed = p.speed; o.held = p.mode !== 'drive'; } others.length = k; return others; },
   };
 }

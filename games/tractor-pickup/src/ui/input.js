@@ -13,6 +13,8 @@ export const HORN_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
 <rect x="36" y="41" width="10" height="18" rx="2" fill="#c98a1e" stroke="#4a2c14" stroke-width="4"/>
 <ellipse cx="22" cy="50" rx="17" ry="21" fill="#e04a3a" stroke="#4a2c14" stroke-width="4"/>
 <ellipse cx="16" cy="41" rx="5" ry="7" fill="#ff9a8a"/></svg>`;
+// lion-hawk 2g G7: createInput is no longer used by the game (the stick, keys, pad and horn are engine devices, src/devices.js);
+// HORN_SVG still is (devices.js, render/hornMarks.js). createInput and radial stay because input.test.mjs covers them.
 // One control (R-7): a floating thumb stick anywhere on the screen (A-4; not within EDGE px of the left edge, where Safari swipes back), W/A/S/D + arrows, gamepad left stick. Horn: button, H, pad A.
 // read() gives the stick on the screen: { x, y }, x right, y up, length 0..1 (C-1, C-4, C-5); the pilot (sim/pilot.js) turns it into driving.
 export function createInput(root) {

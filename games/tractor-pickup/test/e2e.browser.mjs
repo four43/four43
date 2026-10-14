@@ -5,7 +5,6 @@ import { launch, openGame, peers, expectScene, expectState, expectTappable, expe
 import { serveTractor } from './serve.mjs';
 import { PHRASES } from '../src/sim/words.js';
 
-const ENTRY = process.env.TRACTOR_ENTRY ?? 'src/entry.js'; // G7 switches the default to src/main.js
 const ARGS = { seed: 14, started: true };
 const IPAD = 'iPad Pro 11 landscape', PHONE = 'iPhone 15 Pro portrait'; // X-3 the main device, X-12
 const frames = game => game.page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -13,7 +12,7 @@ const untilRewarded = async game => { for (let i = 0; i < 100; i++) { if (await 
 let chrome, site, skip = false;
 before(async () => {
   try { chrome = await launch(); } catch (e) { if (/no chromium found/.test(e.message)) { skip = e.message; return; } throw e; }
-  site = await serveTractor({ entry: ENTRY });
+  site = await serveTractor();
 });
 after(async () => { await chrome?.close(); await site?.close(); });
 

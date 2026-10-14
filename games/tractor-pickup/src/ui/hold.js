@@ -1,5 +1,7 @@
 // U-3, F-8, F-13, E-5: a button that acts only after it is held for `ms` (a ring fills); a shorter press does nothing.
 // The ring is the button's <i> child, drawn from its --p custom property (0deg..360deg).
+// lion-hawk 2g G7: the game's holds are the engine's ui.hold controls now (farm.parent, show.skip, sleep.wake); this stays only for
+// ui/show.js's default skip button (no `skip` element passed), which show.test.mjs still covers.
 export function holdToFire(btn, ms, onFire) {
   const ring = btn.querySelector('i');
   let start = 0, raf = 0;

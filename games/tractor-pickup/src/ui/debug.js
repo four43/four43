@@ -1,5 +1,5 @@
 // Debug tools (D-5): the ?tune panel (feel constants as sliders) and the ?fps meter (X-4 stutter hunting).
-import { TUNE, TUNE_POWERS, tuneGet, tuneSet, tuneValues } from '../sim/tune.js';
+import { TUNE, TUNE_POWERS } from '../sim/tune.js';
 import { CAM } from '../render/camera.js';
 
 // The view's own rows: the chase camera (CAM) is the view's, so these sliders write it directly
@@ -45,16 +45,6 @@ export function buildTunePanel({ doc = document, read, send, reset, power, value
     },
     enable(yes) { if (on === yes) return; on = yes; el.hidden = !yes; if (!yes) body.hidden = true; }, // a guest cannot tune (game/commands.js)
   };
-}
-
-// The old browser path (main.js until G7): no engine and no commands, so the same table setters are applied here and shown at once
-export function buildTunePanelDirect(game) {
-  const panel = buildTunePanel({
-    read: id => tuneGet(game, id), power: () => game.tractor.power, values: () => tuneValues(game),
-    send(id, v) { const value = id === 'power' ? (TUNE_POWERS.includes(v) ? (game.tractor.setPower(v), v) : null) : tuneSet(game, id, v); if (value !== null) panel.shown(id, value); },
-    reset: game.trees ? () => { game.yardProps?.reset(); game.trees.reset(); } : null,
-  });
-  return panel;
 }
 
 // ?fps: a small corner readout of frames per second (now, and the lowest over the last 5 s), draw calls and triangles.
