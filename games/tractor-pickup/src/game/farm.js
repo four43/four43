@@ -70,9 +70,11 @@ export function makeFarm({ R, clock = null, bindings = null } = {}) { // clock, 
     e.emit('farm', { gen: s.gen, seed });
   }
   // P-8, M-1, M-19: the old farm goes (the Rapier world with the terrain, trees, props and vehicles) and a new one is built;
-  // started and the bedtime stay. D-3: a farm that fails to build is tried once more with a fresh seed
+  // started and the bedtime stay. The old farm's screens close with it, the paint screen and the book too (the old ui/menus.js
+  // closed its screen on a new farm); the parent menu stays for its own close. D-3: a farm that fails to build is tried once more
+  // with a fresh seed
   function rebuild(e, s, seed, player) {
-    for (const n of ['show', 'reward', 'start']) e.close(n);
+    for (const n of ['show', 'reward', 'start', 'paint', 'book']) e.close(n);
     s.game.phys.world.free(); s.game = null;
     s.trip = s.tripOn ? createTrip() : null; s.show = null; s.reward = null; s.showDone = s.rewardDone = false; setGuide(e, s, false);
     try { build(e, s, seed, s.power, player); }

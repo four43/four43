@@ -64,6 +64,15 @@ test('a new farm builds through ctx.load from farm.new and frees the old Rapier 
   assert.equal(h.events.of('farm').at(-1).seed, 99); assert.equal(s.started, true);
   h.command('farm.new', {}).command('farm.new', {}).step(1); h.untilLoaded(); h.untilLoaded(); assert.equal(s.gen, 4, 'the second request waited for the first');
 });
+test('a new farm from the parent menu closes the paint screen or the book under it, and the tractor drives (P-8)', () => {
+  for (const screen of ['paint', 'book']) {
+    const h = headless(tractorGame(), { args: { seed: 14, started: true, progress: { ...emptyProgress(), shows: 4 } } }), s = h.engine.scene.state;
+    h.tap('farm.' + screen); h.step(1); h.press('farm.parent'); h.seconds(2.1); h.unpress('farm.parent');
+    assert.deepEqual(h.scene.overlays, [screen, 'parent']); assert.equal(s.game.mode, 'menu');
+    h.command('farm.new', {}).step(1); h.tap('parent.close'); h.untilLoaded(); h.step(1);
+    assert.equal(s.gen, 2); assert.deepEqual(h.scene.overlays, [], `no ${screen} over the new farm`); assert.equal(s.game.mode, 'drive', screen);
+  }
+});
 test('a stale show ack from the farm before a new one does not end the new farm\'s show (#79, S-6)', () => {
   const h = headless(tractorGame(), { args: ARGS }), s = h.engine.scene.state;
   h.command('farm.new', {}).step(1); h.untilLoaded(); assert.equal(s.gen, 2);
