@@ -91,7 +91,7 @@ export function createMenus(root, { icons, art, tractorPic, onNewFarm, onSetting
     show(); return box;
   }
 
-  // F-11: only when there is a paint to choose; the main code starts driving at once otherwise
+  // F-11: only when there is a paint to choose (the farm sim opens the start overlay then; otherwise it starts in drive mode)
   function showStart(progress) {
     const s = open('start');
     paintPanel(s, progress);

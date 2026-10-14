@@ -1,6 +1,7 @@
 // The local commands (lion-hawk 2f T4–T5, [I-7], #84, #85): view → sim, game-wide, so a pausing overlay never drops them (#49).
 // The sim owns the player's records: each command validates or clamps its data, changes them and emits the record that
-// changed (`progress`, `settings`), which the view saves. Outside the farm (the sandbox) they do nothing.
+// changed (`progress`, `settings`), which the view saves. Outside the farm (the sandbox) they do nothing, except `tune` and
+// `tune.reset`, which run on the sandbox pad too (D-5, below).
 import { toggleHat, wornHats, placeSticker, unplaceSticker, seeBook, unlockedPaints, clampSettings } from '../sim/progress.js';
 import { setBedtime } from '../sim/bedtime.js';
 import { play, showDone, closeReward, open } from './flow.js';
