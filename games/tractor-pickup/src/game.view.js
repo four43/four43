@@ -142,11 +142,6 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       const myPaint = () => engine.scene.state.progress?.paint ?? engine.scene.args?.progress?.paint ?? START_PAINT, cov = coverageView(view.sync, view.materials);
       const paintOf = e => (e.netId && e.netId !== self() ? rowOf(e)?.paint : null) ?? myPaint(), awayOf = e => !!rowOf(e)?.away;
       offs.push(trainViews(view.sync, { materials: view.materials, paintOf, awayOf }), () => cov.off());
-      // INTERIM (engine request in the phase 3l notes, as Pig Pens' 3k): view sync clones a drawn entity's model on the first frame it
-      // sees it and throws while that model is still loading, so its frames wait for the preload
-      const sync = view.sync, syncFrame = sync.frame, loaded = () => MODELS.every(k => view.assets.has(k));
-      sync.frame = alpha => { if (loaded()) { sync.frame = syncFrame; syncFrame(alpha); } };
-      offs.push(() => { if (sync.frame !== syncFrame) sync.frame = syncFrame; });
       // the first farm draws once every baked model is loaded, compiled and warm (A-10); its HUD needs the portraits made from them
       view.wait(view.assets.preload(MODELS).then(() => {
         if (engine.scene.state !== s || w) return;

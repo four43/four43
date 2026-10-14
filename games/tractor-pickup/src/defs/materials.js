@@ -5,6 +5,8 @@
 // bed and tongue reproduce their setMass masses through `fill` (density × volume, M-6): 260 kg over 2.8 × 0.3 × 2 m, 5 kg over 1.8 × 0.12 × 0.16 m.
 import { defineMaterials } from 'lion-hawk/sim';
 
+// the tree gibs' bounce on the ground (the fx kit's particle bounce and ground friction, render/gibs.js): physical constants live here
+export const GIB_GROUND = Object.freeze({ bounce: 0.35, friction: 0.65 });
 export const SURFACE_IDS = Object.freeze(['route', 'meadow', 'mudhole']);
 // dirt per metre (coverage kit, spec §3.2): 1.8's per-second rates at Medium speeds (vmax 9 m/s; mud's top speed 4.5 m/s) (3l Task 13b)
 export const DIRT_RATES = Object.freeze({ route: 0.006 / 9, meadow: 0.004 / 9, mudhole: 0.6 / 4.5 });

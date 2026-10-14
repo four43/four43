@@ -2,12 +2,13 @@
 // bounces on the ground (bounce 0.35, ground friction 0.65), rests and shrinks away over the last half of its life. compiler: the
 // view's material compiler.
 import { createParticles } from 'lion-hawk/kits/fx/view';
+import { GIB_GROUND } from '../defs/materials.js';
 
 export const GIB = { cap: 600, perBurst: 40, gravity: 9.8, life: 5 };
 const WOOD = ['#8a6240', '#a47850', '#6e4c30'], LEAF = ['#29c9ab', '#3fd6b4', '#1fa88f']; // wood: oak trunk tones; leaves: the oak canopy greens
 
 export function createGibs(scene, { compiler, groundY = () => 0 } = {}) {
-  const parts = createParticles({ max: GIB.cap, gravity: GIB.gravity, drag: 0, bounce: 0.35, friction: 0.65, floor: groundY, material: compiler?.get('paper', { instanced: true }) ?? null });
+  const parts = createParticles({ max: GIB.cap, gravity: GIB.gravity, drag: 0, ...GIB_GROUND, floor: groundY, material: compiler?.get('paper', { instanced: true }) ?? null });
   scene.add(parts.mesh);
   const rnd = (a, b) => a + Math.random() * (b - a), pick = l => l[(Math.random() * l.length) | 0];
   return {

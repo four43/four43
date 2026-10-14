@@ -4,7 +4,11 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
 
 ## Outcome
 
-(in progress)
+Tractor Pickup 1.9.0 runs on lion-hawk 0.10.1: the World with injected Rapier, the terrain, vehicle and coverage kits, the material
+registry, `lion-hawk bake`/`build`, the engine renderer, light rig, assets, compiler paint, view sync, chase rig, audio service, the
+fx kit, and multiplayer on the World net part (NET_VERSION 4, solid driven trains that honk on contact). One done-test item is open on
+the engine: the hitch joint still names `JointData` (Integrator request 1). Not done (2g parked minors, plan Tasks 27 to 29): the #95,
+#100, #105, #108 workaround removals, the bind/session/book minors and the tune-label minors; the R1/R3 perf browser suite (Task 20).
 
 ## What landed
 
@@ -21,6 +25,12 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
   - Result (Task 1): e2e.browser.mjs on engine 0.8.0, unchanged game: 14 tests, 14 pass, 0 fail.
 
 ## Done-when evidence
+
+- Unit (`npm test`): see the final commit's message for the counts; e2e 13/14: the iPad 1 s-hold gesture test fails at load
+  average 13 to 22 (its own field note: at ~2 fps under SwiftShader a 150 ms tap spans a 1 s hold); it passed alone at load 13 after
+  Task 4. Playtest/re-run item on a quiet machine; `test:peers` 1/1; `lion-hawk bake --check` exit 0; `lion-hawk build --out <scratch>`: html 5941.5 KB (gzip 2318.3
+  KB), assets 875.5 KB (gzip 226.7 KB), total gzip 2720.0 KB (1.8 page gzip 2369.8 KB plus assets: within R3).
+- `games/test/phase3-done.test.mjs` with tractor-pickup in MIGRATED: one violation left, `src/sim/hitch.js` `JointData` (request 1).
 
 ## Vehicle kit (Task 13)
 
@@ -53,9 +63,13 @@ All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
 
 ## lh-allow lines
 
-- `src/sim/tractor.js:39` `massProps` (D3): the playtested 1400 kg and tuned inertia.
+- `src/sim/tractor.js:44` `massProps` (D3): the playtested 1400 kg and tuned inertia.
 
 ## Playtest list
+
+- Solid trains in a real WebRTC room: bump feel, one honk per bump; no shared clock between real devices (unprojected snapshots).
+- Solid tractors in the barn: a second train that comes to wait meets the first one's tractor head-on; the barn tests drive separate
+  lanes. Check whether the waiting train should stop before the barn.
 
 - Shading is the compiler's `standard` tier (roughness 1 looks for the vertex-coloured art) in place of 1.8's Lambert; gold keeps metalness.
 - Fx and gibs on the fx kit: a landed cube rests at floor + size/2 (1.8: + 0.03); a gib shrinks over the last half of its ~5 s life
@@ -71,15 +85,26 @@ All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
 
 ## Integrator requests
 
+5. **Net part (3i): a reused player number with a lower clock stays invisible (engine).** After `removed()` forgets an owner-kind id,
+   the REPEAT removal frames that follow (stamped `old time + 1`) are applied to the now-empty store entry and leave a tombstone
+   (`createStore.apply`'s removed branch sets `{ rec: null, t }` for an absent id), so a new player given the same number, whose wall
+   clock is lower, has every record rejected as older (M-26). 1.8's guest forgot by the roster's `join` counter. Wanted: a removal for
+   an id with no entry leaves none (or `world.net.forget(kind, netId)` for the game). Three mp tests are `todo` on this.
+
 4. **View sync draws a model only once it is loaded (engine).** `createViewSync` clones an entity's `model` on the first frame it sees
    it and throws `assets: '<key>' is not loaded` while `assets.preload` is still running. Wanted: sync skips (defers) an entity whose
-   `assets.has(model)` is false and draws it on the first frame after it loads. Interim in `src/game.view.js` (as Pig Pens 3k): the
-   farm's view half gates `view.sync.frame` until every baked model is loaded.
+   `assets.has(model)` is false and draws it on the first frame after it loads. Done in engine 0.10.1; the game's interim gate is gone.
 
 1. **`world.joint` without `JointData` (blocking at merge, not now).** `games/test/phase3-done.test.mjs` bans the `JointData` identifier in game code, but lion-hawk 0.8.0 `world.joint(a, b, data)` only takes raw Rapier joint data, so the trailer hitch writes `world.R.JointData.spherical(frontAnchor, TR.tongue)`. Wanted: `world.joint(a, b, { type: 'spherical', a: [x, y, z], b: [x, y, z] })` (the engine builds the JointData), or the done test waives `world.joint` lines.
 2. **`games/package-lock.json`** after `games/tractor-pickup/package.json` changes (plan request 1).
 3. **`games/test/**`** references to `build.py`, `src/assets.json`, `TP_MP` or the old mp world (plan request 2), if any.
 
 ## Removed or renamed tests
+
+- `test/golden-farm.test.mjs` (Task 9: the direct createGame path is gone; its engine-path runs moved into `golden.test.mjs`).
+- `test/matSplit.test.mjs`, `test/shadows.test.mjs`, `test/warm.test.mjs` (the engine's hygiene); `stepGib`'s test (gibs on the fx kit).
+- `test/interp.test.mjs`, `test/forecast.test.mjs`, `test/replica.test.mjs` (engine code behind game re-export shims; the shims went).
+- `test/mp.interop.test.mjs` (1.8-wire interop is impossible under NET_VERSION 4) and the custom-kinds "binding table" test (no bindings).
+- The M-50 frozen-frame test is rewritten for the engine path (wall held while steps run); the soft-bump feel test retired (solid trains).
 
 ## Field note candidates
