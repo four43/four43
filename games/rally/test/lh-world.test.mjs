@@ -10,6 +10,7 @@ import { generateTrack } from '../src/gen/track.js';
 import { TrackWorld } from '../src/world/trackWorld.js';
 import MATERIALS from '../src/defs/materials.js';
 import { CARS } from '../src/cars.js';
+import { heightAt } from '../src/gen/terrain.js';
 await R.init();
 
 test('rallyGame needs the initialised Rapier module (D9)', () => {
@@ -137,4 +138,14 @@ test('changing car despawns the old body; reset places the car stopped', () => {
   sim.car.reset({ x: 10, y: 1, z: 20 }, Math.PI / 2);
   const t = sim.car.body.translation(), v = sim.car.body.linvel();
   assert.deepEqual([t.x, t.y, t.z], [10, 1, 20]); assert.equal(Math.hypot(v.x, v.y, v.z), 0);
+});
+
+test('the track uses the terrain kit: materialAt, blendAt and heightAt agree with Rally\'s generator', () => {
+  const track = generateTrack('t2', { kind: 'loop' }), sim = benchSim({ world: new TrackWorld(track), car: 'awd' });
+  const w = sim.world, L = track.layout;
+  assert.equal(w.groundEntity, w.terrain.entity);
+  assert.equal(sim.lh.materialOf(w.groundCollider.handle), 'rally-ground');
+  assert.match(w.materialAt(L.x[40], L.z[40]), /^rally-(tarmac|hardpack|gravel|packed|ice)$/);
+  assert.match(w.materialAt(L.x[40] + 30 * Math.cos(L.heading[40]), L.z[40] - 30 * Math.sin(L.heading[40])), /^rally-(grass|snowbank|sand|mud)$/);
+  for (let i = 0; i < L.n; i += 97) assert.ok(Math.abs(w.terrain.heightAt(L.x[i] + 2, L.z[i]) - heightAt(track.terrain, L.x[i] + 2, L.z[i])) < 0.05);
 });

@@ -1,6 +1,7 @@
 // A generated Track as a World (spec tracks T-8, T-11): one heightfield ground collider, marker
 // posts as knock-over props, static gate posts, per-position surfaces from the locator.
-import { surfaceOfKey, blendSurface } from '../surface.js';
+import { createTerrain } from 'lion-hawk/kits/terrain';
+import { materialOf, surface, blendSurface } from '../surface.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
 
@@ -25,9 +26,12 @@ export class TrackWorld {
   build(lh) {
     const t = this.track, T = t.terrain;
     this.lh = lh;
-    // Row-major heights; the World reorders them for Rapier (heightfieldDesc moved into the engine, §4.5).
-    this.groundEntity = lh.heightfield({ nx: T.nx, nz: T.nz, cell: T.cell, x0: T.x0, z0: T.z0, heights: T.heights,
-      material: 'rally-ground', groups: { member: ['ground'] } });
+    // The terrain kit: the heightfield entity (row-major heights; the World reorders them for Rapier) plus the
+    // material and blend lookups the wheels read (M-10).
+    this.blendOut = { a: null, b: null, w: 0 };
+    this.terrain = createTerrain(lh, { nx: T.nx, nz: T.nz, cell: T.cell, x0: T.x0, z0: T.z0, heights: T.heights,
+      material: 'rally-ground', materials: (x, z) => this.materialAt(x, z), blend: (x, z, out) => this.blendTo(x, z, out) });
+    this.groundEntity = this.terrain.entity;
     this.groundCollider = this.groundEntity.colliders[0].collider;
     this.ground = new Set([this.groundCollider.handle]);
     this.props = [];
@@ -48,14 +52,23 @@ export class TrackWorld {
     this.gateEntity = lh.spawn({ tags: ['gate-post'], body: 'fixed', colliders: posts, groups: { member: ['prop'] } });
   }
 
-  // Road within 3.5 m of the centreline, else verge; section changes blend over 10 m. Blended
-  // entries are cached per (from, to, t in 0.1 steps) so this stays allocation-free per step.
-  surfaceAt(x, z) {
+  // Road within 3.5 m of the centreline, else verge (M-10: the section's own surface).
+  materialAt(x, z) {
+    const t = this.track, { s, d } = t.locator.locate(x, z), r = roadSurfaceAt(t.surfaces, s);
+    return materialOf(Math.abs(d) <= HALF_ROAD ? r.road : r.verge);
+  }
+  // The kit's blend: section a → the next section's b over the last 10 m, at weight w.
+  blendTo(x, z, out) {
     const t = this.track, { s, d } = t.locator.locate(x, z);
     const r = roadSurfaceAt(t.surfaces, s), road = Math.abs(d) <= HALF_ROAD;
     const a = road ? r.road : r.verge, b = r.next ? (road ? r.next.road : r.next.verge) : a;
-    const q = Math.round(r.t * 10);
-    return blendSurface(this.blends, surfaceOfKey(a), surfaceOfKey(b), q);
+    out.a = materialOf(a); out.b = materialOf(b); out.w = r.t;
+    return out;
+  }
+  // The tyre surface under a wheel: the blend quantised to tenths and cached (allocation-free per step).
+  surfaceAt(x, z) {
+    const o = this.terrain.blendAt(x, z, this.blendOut);
+    return blendSurface(this.blends, surface(o.a), surface(o.b), Math.round(o.w * 10));
   }
 
   // A thin post on a sloped shoulder isn't stable in Rapier once awake (most tip over within a few seconds), so posts
