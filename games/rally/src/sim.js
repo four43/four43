@@ -6,7 +6,7 @@ import { CARS } from './cars.js';
 import { SnowField } from './snow.js';
 import { PadWorld } from './world/padWorld.js';
 
-export { PAD, buildPad, coneLayout } from './world/padWorld.js';
+export { PAD, padColliders, coneLayout } from './world/padWorld.js';
 export const HZ = 240; // 1 / HZ === DT exactly, so the World's timestep is today's
 
 export class Sim {
@@ -34,7 +34,7 @@ export class Sim {
     if (this.world) this.lh.clear();
     this.car = null;
     this.world = world;
-    world.build(this.R, this.lh.rapier);
+    world.build(this.lh);
     this.setSurface(world.surfaceKey);
     this.setCar(this.carId, pos, yaw);
   }
@@ -60,14 +60,13 @@ export class Sim {
   }
 
   setCar(id, pos, yaw) {
-    if (this.car) this.lh.rapier.removeRigidBody(this.car.body);
-    const cfg = CARS[id], g = this.lh.groups;
-    this.car = new Vehicle(this.R, this.lh.rapier, cfg, {
+    if (this.car) this.lh.despawn(this.car.e);
+    const cfg = CARS[id];
+    this.car = new Vehicle(this.lh, cfg, {
       pos: pos || this.spawnPos(cfg), yaw: yaw ?? this.world.spawn.yaw, assist: this.assist,
       surfaceAt: (x, z, c) => this.surfaceAt(x, z, c), snow: () => this.snow,
-      rayGroups: g.mask(['ray'], ['ground']),
+      rayGroups: this.lh.groups.mask(['ray'], ['ground']),
     });
-    this.car.colliders.forEach((c) => c.setCollisionGroups(g.mask(['car'])));
     this.carId = id;
   }
 
@@ -80,7 +79,7 @@ export class Sim {
   }
 
   preStep() { this.car.step(); }
-  postStep() { this.world.afterStep?.(); this.time += DT; }
+  postStep() { this.time += DT; } // props sleep through the World (#2)
 
   // One engine step; only for a Sim made with opts.step (test/helpers/bench.mjs).
   step() {

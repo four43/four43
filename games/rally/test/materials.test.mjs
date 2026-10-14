@@ -28,8 +28,11 @@ test('every surface key has a rally-<key> material whose tire block is the old S
 test('collider materials keep today\'s friction and restitution', () => {
   const phys = id => ({ friction: MATERIALS.get(id).phys.friction, restitution: MATERIALS.get(id).phys.restitution });
   assert.deepEqual(phys('rally-ground'), { friction: 0.8, restitution: 0 });
-  assert.deepEqual(phys('car-hull'), { friction: 0.3, restitution: 0.1 });
-  assert.deepEqual(phys('car-cabin'), { friction: 0.45, restitution: 0.1 });
+  // The car's colliders are tuned so their contact with rally-ground (√f Multiply, Max) is today's Average pair.
+  const pair = (a, b) => Math.sqrt(MATERIALS.get(a).phys.friction) * Math.sqrt(MATERIALS.get(b).phys.friction);
+  assert.ok(Math.abs(pair('car-hull', 'rally-ground') - (0.3 + 0.8) / 2) < 1e-12);
+  assert.ok(Math.abs(pair('car-cabin', 'rally-ground') - (0.45 + 0.8) / 2) < 1e-12);
+  for (const id of ['car-hull', 'car-cabin']) assert.equal(MATERIALS.get(id).phys.restitution, (0.1 + 0) / 2, id);
   assert.deepEqual(phys('marker'), { friction: 0.9, restitution: 0 });
   assert.deepEqual(phys('gate-post'), { friction: 0.6, restitution: 0 });
   assert.deepEqual(phys('cone'), { friction: 0.6, restitution: 0 });

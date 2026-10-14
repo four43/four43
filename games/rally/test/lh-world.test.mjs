@@ -6,6 +6,10 @@ import R from '@dimforge/rapier3d-compat';
 import { benchSim, game } from './helpers/bench.mjs';
 import { headless } from 'lion-hawk/test';
 import { DT, HZ } from '../src/sim.js';
+import { generateTrack } from '../src/gen/track.js';
+import { TrackWorld } from '../src/world/trackWorld.js';
+import MATERIALS from '../src/defs/materials.js';
+import { CARS } from '../src/cars.js';
 await R.init();
 
 test('rallyGame needs the initialised Rapier module (D9)', () => {
@@ -52,4 +56,85 @@ test('during a track rebuild neither Rapier nor Rally\'s systems step (3c CI-16)
     assert.deepEqual([q.x, q.y, q.z], [p.x, p.y, p.z]); assert.deepEqual(car.wheels.map(x => x.omega), w);
   }
   assert.equal(e.loading.active, false, 'the load finished');
+});
+
+test('pad ground and features are one fixed ground entity with rally-ground colliders (√f, Multiply; M-9)', () => {
+  const sim = benchSim({ car: 'awd', cones: false });
+  const e = sim.world.groundEntity, c = e.colliders[0].collider;
+  assert.equal(sim.world.groundCollider, c);
+  assert.ok(e.colliders.length >= 1 + 2 + 8 + 1, 'ground, 2 ramps, 8 humps, slope');
+  for (const { material } of e.colliders) assert.equal(material, 'rally-ground');
+  assert.equal(c.friction(), Math.fround(MATERIALS.collider('rally-ground').friction));
+  assert.equal(c.frictionCombineRule(), R.CoefficientCombineRule.Multiply);
+  assert.equal(sim.lh.materialOf(c.handle), 'rally-ground');
+});
+test('a track\'s heightfield is the World\'s and its gate posts are prop-group cylinders', () => {
+  const sim = benchSim({ world: new TrackWorld(generateTrack('g1', { kind: 'stage' })), car: 'awd' });
+  const w = sim.world;
+  assert.equal(sim.lh.materialOf(w.groundCollider.handle), 'rally-ground');
+  assert.ok(w.ground.has(w.groundCollider.handle));
+  assert.equal(w.gateEntity.colliders.length, w.gatePosts.length);
+  for (const { collider, material } of w.gateEntity.colliders) {
+    assert.equal(material, 'gate-post');
+    assert.equal(collider.collisionGroups() >>> 16, sim.lh.groups.prop);
+  }
+});
+
+test('untouched marker posts stay asleep after spawn and after reset (Review Focus 4)', () => {
+  const sim = benchSim({ world: new TrackWorld(generateTrack('markers', { kind: 'loop', style: 'flowing' })), car: 'awd' });
+  const posts = sim.world.props.filter(p => p.kind === 'marker');
+  assert.ok(posts.length > 50);
+  for (const p of posts) { assert.equal(p.body, p.e.body); assert.ok(p.e.tags.has('marker')); }
+  sim.car.reset({ x: 1e4, y: 50, z: 1e4 }, 0); // far from every post
+  for (let i = 0; i < 2 * HZ; i++) sim.step();
+  const awake = () => posts.filter(p => !p.body.isSleeping()).length;
+  assert.equal(awake(), 0, 'posts asleep after spawn');
+  const ids = posts.map(p => p.e.id);
+  sim.world.resetProps();
+  assert.notDeepEqual(posts.map(p => p.e.id), ids, 'reset respawns each post');
+  for (let i = 0; i < 2; i++) sim.step();
+  assert.equal(awake(), 0, 'posts asleep after reset');
+  const p0 = posts[3], h = p0.home, t = p0.body.translation();
+  assert.ok(Math.hypot(t.x - h.x, t.y - h.y, t.z - h.z) < 1e-3, 'unmoved (one step of gravity before the re-sleep: ~1e-4 m)');
+});
+test('props weigh today\'s masses (body.mass, D3)', () => {
+  const pad = benchSim({ car: 'awd' }), cone = pad.world.props[0];
+  assert.ok(Math.abs(cone.body.mass() - 3) < 3e-3, `cone ${cone.body.mass()}`);
+  const track = benchSim({ world: new TrackWorld(generateTrack('g1', { kind: 'stage' })), car: 'awd' });
+  assert.ok(Math.abs(track.world.props[0].body.mass() - 5) < 5e-3);
+  assert.equal(pad.lh.materialOf(cone.e.colliders[0].collider.handle), 'cone');
+  assert.equal(track.lh.materialOf(track.world.props[0].e.colliders[0].collider.handle), 'marker');
+});
+test('pad reset puts cones home, stopped', () => {
+  const sim = benchSim({ car: 'awd' }), c = sim.world.props[0];
+  c.body.setLinvel({ x: 5, y: 0, z: 0 }, true);
+  for (let i = 0; i < 30; i++) sim.step();
+  sim.world.resetProps();
+  const t = c.body.translation(), v = c.body.linvel();
+  assert.deepEqual([t.x, t.y, t.z].map(Math.fround), [c.home.x, c.home.y, c.home.z].map(Math.fround));
+  assert.equal(Math.hypot(v.x, v.y, v.z), 0);
+});
+test('the car is a World entity with cars.js mass and inertia (massProps, D3) and car-group colliders', () => {
+  for (const id of ['awd', 'rwd']) {
+    const sim = benchSim({ car: id, cones: false }), car = sim.car, cfg = CARS[id];
+    assert.equal(car.body, car.e.body); assert.ok(car.e.tags.has('car')); assert.equal(car.e.draw, false);
+    assert.ok(Math.abs(car.body.mass() - cfg.mass) < 1e-6 * cfg.mass, `${id} mass ${car.body.mass()}`);
+    const I = car.body.principalInertia();
+    assert.deepEqual([I.x, I.y, I.z].map(Math.round).sort(), [cfg.inertia.x, cfg.inertia.y, cfg.inertia.z].sort()); // Rapier sorts the principal axes
+    assert.deepEqual(car.e.colliders.map(c => c.material), ['car-hull', 'car-cabin']);
+    for (const c of car.colliders) assert.equal(c.collisionGroups() >>> 16, sim.lh.groups.car);
+    assert.equal(car.colliders[0].friction(), Math.fround(MATERIALS.collider('car-hull').friction));
+    const hull = car.colliders[0], len = cfg.wheelbase / 2 + 0.85, he = hull.halfExtents(); // today's roundCuboid, exactly
+    assert.equal(hull.shapeType(), R.ShapeType.RoundCuboid); assert.equal(hull.roundRadius(), Math.fround(0.2));
+    assert.deepEqual([he.x, he.y, he.z], [0.86 - 0.2, 0.24 - 0.2, len - 0.2].map(Math.fround));
+  }
+});
+test('changing car despawns the old body; reset places the car stopped', () => {
+  const sim = benchSim({ car: 'awd', cones: false }), old = sim.car.e;
+  sim.setCar('rwd');
+  assert.equal(sim.lh.get(old.id), undefined);
+  sim.car.body.setLinvel({ x: 3, y: 0, z: 0 }, true);
+  sim.car.reset({ x: 10, y: 1, z: 20 }, Math.PI / 2);
+  const t = sim.car.body.translation(), v = sim.car.body.linvel();
+  assert.deepEqual([t.x, t.y, t.z], [10, 1, 20]); assert.equal(Math.hypot(v.x, v.y, v.z), 0);
 });

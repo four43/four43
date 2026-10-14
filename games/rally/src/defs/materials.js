@@ -21,9 +21,12 @@ export default defineMaterials({
   'rally-ground': { extends: 'dirt', phys: { friction: 0.8, restitution: 0 }, look: { roughness: 1, metalness: 0 } },
   'rally-road':   { extends: 'gravel', phys: { friction: 0.8, restitution: 0 }, look: { roughness: 0.92, metalness: 0 } },
   // The car: drawn shell, and the two inline colliders (low friction so a nose strike skids; mass comes from cars.js, D3).
+  // The hull and cabin keep today's car-ground contact: Rapier averaged the old raw colliders (hull 0.3 with ground 0.8
+  // gave 0.55, cabin 0.45 gave 0.625; restitution 0.1 with 0 gave 0.05), and the engine's √f Multiply gives √(f·0.8),
+  // so f = pair² / 0.8 and restitution (Max) is the old pair value.
   'car-body':  { extends: 'steel', phys: { friction: 0.3, restitution: 0.1 }, look: { roughness: 0.45, metalness: 0.15 } },
-  'car-hull':  { extends: 'steel', phys: { friction: 0.3, restitution: 0.1 } },
-  'car-cabin': { extends: 'steel', phys: { friction: 0.45, restitution: 0.1 } },
+  'car-hull':  { extends: 'steel', phys: { friction: 0.378125, restitution: 0.05 } },
+  'car-cabin': { extends: 'steel', phys: { friction: 0.48828125, restitution: 0.05 } },
   tyre:        { extends: 'rubber', phys: { friction: 0.9, restitution: 0 }, look: { roughness: 0.8, metalness: 0 } },
   // Props.
   cone:          { extends: 'plastic', phys: { friction: 0.6, restitution: 0 }, look: { roughness: 0.6, metalness: 0 } },
