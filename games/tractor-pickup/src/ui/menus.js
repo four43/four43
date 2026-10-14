@@ -54,8 +54,9 @@ const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${R
 // back are the engine's controls on game markup (data-lh-slot start.go, reward.go, paint.close, book.close, [U-1]): no listener of
 // their own, the engine taps them and its overlay's view half closes the screen. The parent menu's close and Multiplayer buttons
 // too (parent.close, parent.mp); a choice that ends the menu (bedtime, new farm, clear) removes it and calls onParentDone. onPlace(i, { page, x, y }), onUnplace(i): a sticker
-// was dragged onto a page or back to the tray (before onStickers).
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onPlace, onUnplace, onBookSeen, onParent, onMultiplayer, onBedtime, onParentDone, netlog = null, gear: withGear = true, slots = false }) {
+// was dragged onto a page or back to the tray (before onStickers). slots (G5): the Multiplayer panel's X is multiplayer.close markup;
+// onMpDraw() after each redraw (the new X is adopted), onMpDone() for M-33's close after "Connected!".
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onPlace, onUnplace, onBookSeen, onParent, onMultiplayer, onBedtime, onParentDone, onMpDraw, onMpDone, netlog = null, gear: withGear = true, slots = false }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
@@ -165,7 +166,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
   // U-3, E-7: the parent menu in the game's own button style. Every choice applies at once (no Apply button); the seed applies with the
   // next new farm. E-5: the bedtime row: Now, 3, 5 or 10 minutes; tap the lit one again to turn bedtime off.
   function openParent(settings, seed, { guest = false, bed = { choice: null, left: null, phase: 'awake' } } = {}) { // M-19: only the host makes a new farm in a room
-    root.querySelector('.parent')?.remove();
+    root.querySelector(slots ? '.parent:not(.mp)' : '.parent')?.remove(); // slots: the Multiplayer panel (also a .parent) is its own overlay's
     const p = el('parent', 'div', root), box = el('box', 'div', p);
     const seg = (name, opts, cur) => `<div class="seg" data-g="${name}">${opts.map(([v, label]) => `<button data-v="${v}" class="${String(v) === String(cur) ? 'on' : ''}">${label}</button>`).join('')}</div>`;
     const bedNote = bed.phase === 'last' ? 'Last drive to the barn' : bed.phase === 'asleep' ? 'Asleep' : bed.left === null ? 'Off' : bed.left === 0 ? 'Less than a minute' : `In ${bed.left} min`;
@@ -219,11 +220,11 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
 <div class="row"><button data-a="confirm" class="primary"${v.state === 'joining' ? ' disabled' : ''}>Join</button><button data-a="cancel">Cancel</button></div>${err}`; }
     else if (v.state === 'joined' && !v.connected) body = `<p>Joining <b>${esc(v.name)}</b>…</p><p class="wait"><span class="spin"></span> Connecting to the farm</p><div class="row"><button data-a="leave">Cancel</button></div>${err}`;
     else if (v.state === 'joined') body = `<p class="room">${esc(v.name)}</p>${waitJoin ? '<p class="ok">Connected!</p>' : ''}${playerRows(v, false)}<div class="row"><button data-a="leave">Leave</button></div>${err}`;
-    if (waitJoin && v.state === 'joined' && v.connected) { waitJoin = false; setTimeout(() => { if (mpSession?.view().connected) box.parentElement?.remove(); }, 900); } // M-33: success: a short "Connected!", then the panel goes
+    if (waitJoin && v.state === 'joined' && v.connected) { waitJoin = false; setTimeout(() => { if (!mpSession?.view().connected || !box.isConnected) return; if (slots) onMpDone?.(); else box.parentElement?.remove(); }, 900); } // M-33: success: a short "Connected!", then the panel goes (slots: its overlay closes)
     if (waitJoin && v.state !== 'joined' && v.state !== 'joining') waitJoin = false;
     const logView = showLog && netlog ? `<div class="logbox"><div class="row"><button data-a="copylog">Copy</button><button data-a="log">Hide log</button></div><pre class="netlog"></pre></div>` : '';
     const keep = box.querySelector('[name=room]')?.value ?? '';
-    box.innerHTML = `<button data-a="close" class="x" aria-label="Close">${xSvg()}</button>${netlog ? '<button data-a="log" class="help" aria-label="Debug log">?</button>' : ''}<h2>Multiplayer</h2>${body}${logView}`;
+    box.innerHTML = `<button ${slots ? 'type="button" data-lh-slot="multiplayer.close"' : 'data-a="close"'} class="x" aria-label="Close">${xSvg()}</button>${netlog ? '<button data-a="log" class="help" aria-label="Debug log">?</button>' : ''}<h2>Multiplayer</h2>${body}${logView}`;
     const pre = box.querySelector('pre.netlog'); if (pre) { pre.textContent = netlog.text(); pre.scrollTop = pre.scrollHeight; }
     const input = box.querySelector('[name=room]'); if (input) { input.value = keep; input.addEventListener('keydown', e => { if (e.key === 'Enter') mpSession.submitCode(input.value); }); input.addEventListener('input', () => { input.value = input.value.replace(/^\s*tractor-pickup-/i, ''); }); } // the prefix is fixed text: a pasted full name keeps only its code
     box.onclick = e => {
@@ -235,7 +236,9 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
         copylog: () => { const txt = netlog.text(); (navigator.clipboard?.writeText(txt) ?? Promise.reject(new Error('no clipboard'))).then(() => { t.textContent = 'Copied'; }, e => { console.warn('copy log', e); const pre = box.querySelector('pre.netlog'); const r = document.createRange(); r.selectNodeContents(pre); getSelection().removeAllRanges(); getSelection().addRange(r); t.textContent = 'Selected: copy it'; }); },
         remove: () => mpSession.remove(Number(t.dataset.n)), lock: () => mpSession.lock(t.checked) })[a]?.();
     };
+    if (slots) onMpDraw?.(); // [U-1]: the new X is the multiplayer.close control's markup again
   }
+  const closeMultiplayer = () => { root.querySelector('.parent.mp')?.remove(); mpSession = null; waitJoin = false; };
   const closeParent = () => root.querySelector('.parent:not(.mp)')?.remove();
-  return { showStart, showReward, showBook, openPaint, openParent, closeParent, openMultiplayer, refreshMultiplayer, hide: close, get open() { return !!screen; } };
+  return { showStart, showReward, showBook, openPaint, openParent, closeParent, openMultiplayer, refreshMultiplayer, closeMultiplayer, hide: close, get open() { return !!screen; } };
 }

@@ -82,3 +82,25 @@ test('dirt replicates: the guest shows the host train as dirty as it is, and the
   near(onGuest[0], H.dirt.tractor, 0.006, 'tractor'); near(onGuest[1], H.train.cars[0].dirt, 0.006, 'trailer'); near(onGuest[2], H.train.cars[1].dirt, 0.006, 'wagon');
   near(onHost[0], G.dirt.tractor, 0.006, 'guest tractor on the host');
 });
+// #102 (lion-hawk 2g G5): the view draws other trains at its frame time from poseAt, which never moves the forecast the sim's step reads
+test('poseAt draws other trains at the frame time and leaves the players and their forecasts unchanged (#102, M-65)', () => {
+  const make = () => { const pl = createPlayers(); pl.ensure(2); return pl; };
+  const sim = make(), twin = make(), out = new Map(); // twin: the same history with no poseAt calls
+  const snap = pl => { const p = pl.map.get(2); return JSON.stringify({ pose: p.pose, yaw: p.yaw, speed: p.speed, ahead: p.ahead, dirt: p.dirt, carried: p.carried, mode: p.mode, full: p.full, latest: p.latest, offset: p.interp.offset }); };
+  const both = f => { f(sim); f(twin); };
+  const r = (x, vx, ride) => rec(x, vx, { riders: [{ id: 5, slot: 7, flying: false, x: x - 5.5, y: 1.3, z: 0.4, yaw: 0 }, { id: 6, slot: 1, flying: true, x: ride, y: 2, z: 0, yaw: 0 }] });
+  both(pl => { pl.push(2, 1000, r(10, 6, 1), 1000, []); pl.sample(1000); pl.sample(1016); });
+  for (const now of [1020, 1030]) {
+    const before = snap(sim), o = sim.poseAt(now, out).get(2);
+    assert.equal(snap(sim), before, `poseAt(${now}) changed no player state`);
+    near(o.pose.cars[1].p.x, 4 + 6 * (now - 1000) / 1000, 1e-6, `the wagon where the forecast has it at ${now}`);
+    near(o.carried[0].x - o.pose.cars[1].p.x, 0.5, 1e-6, 'the rider sits in the drawn wagon'); assert.equal(o.carried[0].riding, true);
+    assert.equal(o.carried[1].flying, true); assert.equal(o.paint, sim.map.get(2).paint);
+  }
+  both(pl => pl.push(2, 1040, r(10.4, 8, 2), 1045, [])); // a record not yet taken by a sample: poseAt must leave it for the step
+  sim.poseAt(1050, out); sim.poseAt(1060, out);
+  both(pl => { pl.sample(1050); pl.sample(1066); pl.sample(1083); });
+  assert.equal(snap(sim), snap(twin), 'the steps after poseAt sample exactly as with none (the fade, the next record)');
+  assert.equal(sim.poseAt(1090, out).size, 1);
+  sim.map.delete(2); assert.equal(sim.poseAt(1100, out).size, 0, 'a player who left is dropped from the view map');
+});

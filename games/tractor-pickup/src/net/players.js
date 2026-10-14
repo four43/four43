@@ -18,6 +18,20 @@ const yawOfQuat = q => { const { f } = quatAxes(q); return Math.atan2(f.x, f.z);
 const yawQ = q => Math.atan2(1 - 2 * (q.y * q.y + q.z * q.z), 2 * (q.x * q.z - q.w * q.y)); // yawOfQuat with no allocation
 const local = { x: 0, y: 0, z: 0 };
 const flier = (list, id) => { for (const r of list) if (r.id === id) return r.flying ? r : null; return null; };
+// M-65..M-68: yaw, speed, dirt and carried riders of player p's newest record N for the drawn bodies `poses`, into t (p itself for
+// the sim's sample, a view record for poseAt). Reads p's interpolation buffer for animals in flight; writes only t
+function derive(p, N, poses, now, t) {
+  let s = null; // s: the played-back pair, only for animals in flight (no allocation otherwise)
+  const q = poses[0].q, v = N.bodies[0].v; t.yaw = yawQ(q); t.mode = N.mode; t.full = N.full;
+  if (v) { t.speed = Math.hypot(v.x, v.z); t.ahead = v.x * (1 - 2 * (q.y * q.y + q.z * q.z)) + v.y * 2 * (q.x * q.y + q.w * q.z) + v.z * 2 * (q.x * q.z - q.w * q.y); } // ahead: speed along the tractor's nose (reversing: below 0)
+  for (let i = 0; i < 3; i++) t.dirt[i] = N.bodies[i].dirt ?? 0; // M-68
+  const RN = N.riders, out = t.carried; out.length = RN.length; // the rider objects are reused frame to frame
+  for (let i = 0; i < RN.length; i++) { const c = RN[i], r = out[i] ||= {}; r.id = c.id; r.slot = c.slot; r.flying = c.flying; r.riding = !c.flying; r.x = c.x; r.y = c.y; r.z = c.z; r.yaw = c.yaw; r.hat = c.hat;
+    if (c.flying) { s ||= p.interp.sample(now); const o = flier(s.a.riders, c.id), b = flier(s.b.riders, c.id); if (o && b) { r.x = lerp(o.x, b.x, s.k); r.y = lerp(o.y, b.y, s.k); r.z = lerp(o.z, b.z, s.k); r.yaw = lerpAngle(o.yaw, b.yaw, s.k); } continue; } // in flight: played back
+    const k = c.slot >= CAR_SLOTS ? 2 : 1, at = N.bodies[k], car = poses[k]; // in its slot: where it sat in the sender's car, in the drawn car
+    local.x = c.x - at.p.x; local.y = c.y - at.p.y; local.z = c.z - at.p.z; rotate(car.q, rotate(at.q, local, local, true), local);
+    r.x = car.p.x + local.x; r.y = car.p.y + local.y; r.z = car.p.z + local.z; r.yaw = yawQ(car.q); }
+}
 
 export function createPlayers() {
   const map = new Map(), others = []; // others: reused each frame (the herd and the bumper read it)
@@ -33,21 +47,30 @@ export function createPlayers() {
     // M-65: the bodies where the forecast has them now; M-66: speed and wheels from the sent velocity; M-67: riders sit in their drawn car
     sample(now) {
       for (const p of map.values()) {
-        const N = p.latest; if (!N) continue; let s = null; // s: the played-back pair, only for animals in flight (no allocation otherwise)
+        const N = p.latest; if (!N) continue;
         if (!p.pose) { p.fc.restart(); p.pose = { tractor: p.fc.poses[0], cars: [p.fc.poses[1], p.fc.poses[2]] }; } // new farm or first record: no fade from the old place
-        p.fc.sample(now - p.interp.offset, now);
-        const q = p.pose.tractor.q, v = N.bodies[0].v; p.yaw = yawQ(q); p.mode = N.mode; p.full = N.full;
-        if (v) { p.speed = Math.hypot(v.x, v.z); p.ahead = v.x * (1 - 2 * (q.y * q.y + q.z * q.z)) + v.y * 2 * (q.x * q.y + q.w * q.z) + v.z * 2 * (q.x * q.z - q.w * q.y); } // ahead: speed along the tractor's nose (reversing: below 0)
-        for (let i = 0; i < 3; i++) p.dirt[i] = N.bodies[i].dirt ?? 0; // M-68
-        const RN = N.riders, out = p.carried; out.length = RN.length; // the rider objects are reused frame to frame
-        for (let i = 0; i < RN.length; i++) { const c = RN[i], r = out[i] ||= {}; r.id = c.id; r.slot = c.slot; r.flying = c.flying; r.riding = !c.flying; r.x = c.x; r.y = c.y; r.z = c.z; r.yaw = c.yaw; r.hat = c.hat;
-          if (c.flying) { s ||= p.interp.sample(now); const o = flier(s.a.riders, c.id), b = flier(s.b.riders, c.id); if (o && b) { r.x = lerp(o.x, b.x, s.k); r.y = lerp(o.y, b.y, s.k); r.z = lerp(o.z, b.z, s.k); r.yaw = lerpAngle(o.yaw, b.yaw, s.k); } continue; } // in flight: played back
-          const k = c.slot >= CAR_SLOTS ? 2 : 1, at = N.bodies[k], car = p.fc.poses[k]; // in its slot: where it sat in the sender's car, in the drawn car
-          local.x = c.x - at.p.x; local.y = c.y - at.p.y; local.z = c.z - at.p.z; rotate(car.q, rotate(at.q, local, local, true), local);
-          r.x = car.p.x + local.x; r.y = car.p.y + local.y; r.z = car.p.z + local.z; r.yaw = yawQ(car.q); }
+        p.fc.sample(now - p.interp.offset, now); derive(p, N, p.fc.poses, now, p);
       }
     },
-    // each drawn frame (M-65): sample again at the frame's time and put the animals in other trains on their drawn cars
+    // #102 (lion-hawk 2g G5): the view's read-only draw at its frame time. out: the view's Map of player number -> { n, paint, away,
+    // pose, yaw, speed, ahead, dirt, mode, full, carried } (what others3d and the riders read), each with its own forecast fed the
+    // same records, so nothing here moves the forecast, the interpolation or the poses the sim's step reads. Only players the
+    // sim has sampled (p.pose) are drawn; a sim restart (a new pose object) restarts the view's forecast too.
+    poseAt(now, out) {
+      for (const [n, o] of out) if (!map.get(n)?.pose || !map.get(n).latest) out.delete(n);
+      for (const p of map.values()) {
+        const N = p.latest; if (!N || !p.pose) continue;
+        let o = out.get(p.n);
+        if (!o) { const fc = createForecast(); out.set(p.n, o = { n: p.n, paint: p.paint, away: false, fc, of: null, rec: null, pose: { tractor: fc.poses[0], cars: [fc.poses[1], fc.poses[2]] }, yaw: 0, speed: 0, ahead: 0, dirt: [0, 0, 0], mode: 'drive', full: false, carried: [] }); }
+        if (o.of !== p.pose) { o.of = p.pose; o.rec = null; o.fc.restart(); }
+        if (o.rec !== N) { o.rec = N; o.fc.push(N.time, N.bodies); }
+        o.paint = p.paint; o.away = p.away;
+        o.fc.sample(now - p.interp.offset, now); derive(p, N, o.fc.poses, now, o);
+      }
+      return out;
+    },
+    // the old browser path (main.js, until G7): each drawn frame (M-65) samples again at the frame's time and puts the animals in
+    // other trains on their drawn cars, which writes the sim (#102); the engine view uses poseAt
     drawAt(now, herd) {
       this.sample(now); if (!herd) return;
       for (const p of map.values()) if (p.pose && !p.away) for (const c of p.carried) { const a = herd.animals[c.id]; if (a?.state === 'carried' && a.owner === p.n) placeCarried(a, c); }

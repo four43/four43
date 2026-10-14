@@ -2,8 +2,15 @@
 // then boot the sim half with the view half and the devices. The stored records are the farm's args (#84), and the sim's
 // `progress`, `settings` and `bed` events are saved back. #35: a random engine seed per visit; ?seed= and ?lh-test win inside boot.
 // G4: the 1 Hz wall date for bedtime (#85), audio unlock and page hide (X-13, D-1), the back guard (X-14, D-2).
+// G5: the Multiplayer panel's session binds a joined Handshake room to the engine through a port (#75); ?lag=, ?signal= and ?r=
+// as main.js; the netlog; ?lh-bridge=host|guest (tests, with ?lh-test) binds lion-hawk/playwright's Node bridge instead.
 import R from '@dimforge/rapier3d-compat';
 import { boot } from 'lion-hawk/view';
+import { createPort, bridgeTransport, parseLag } from 'lion-hawk/net';
+import { Handshake } from './net/handshake.js';
+import { createNetLog, loggedTransports } from './net/netlog.js';
+import { createSession, parseRoomInput, signalServer } from './net/session.js';
+import { START_PAINT } from './net/players.js';
 import { tractorGame } from './game.sim.js';
 import { tractorView, audioOf } from './game.view.js';
 import { devices } from './devices.js';
@@ -17,6 +24,33 @@ import { clampBedtime } from './sim/bedtime.js';
 // X-15: no storage content may stop the game starting (main.js's safe)
 const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('saved data ignored', e); return fallback(); } };
 
+// N-1, #75: a joined room's transport bound to the engine. The port is made once the farm is the main scene (2f delta: a net.open
+// before that is warned and dropped), so its net.open starts the sim's host or guest sync. close(then) ends that sync (net.close:
+// a guest's leave and a host's leave go out through the outbox) and lets go of the transport after the step that drained them
+// (2f delta), then calls then(); a room that closes by itself (the host left, kicked) lets go the same way. A page that does not
+// step (hidden) gives up waiting after 1 s: the outbox is dropped at the next step with no port, and then() leaves the room.
+// transport: a net, or a function that makes it when the port is made (the test bridge replays its early events to the first listener)
+function bindPort(engine, { role, transport, clock }) {
+  let port = null, done = false, waiting = null;
+  const ready = () => engine.scene.name === 'farm' && !!engine.scene.state?.game;
+  const release = then => {
+    waiting?.(); waiting = null; const p = port; port = null;
+    if (!p) { then?.(); return; }
+    let t = 0; const off = engine.onStep(() => { off(); clearTimeout(t); p.close(); then?.(); });
+    t = setTimeout(() => { off(); p.close(); then?.(); }, 1000);
+  };
+  const open = () => { const t = typeof transport === 'function' ? transport() : transport; port = createPort(engine, { transport: t, role, clock }); t.on('closed', () => { done = true; release(); }); };
+  if (ready()) open(); else waiting = engine.onStep(() => { if (!done && ready()) { waiting(); waiting = null; open(); } });
+  return {
+    sync: () => done ? null : engine.scene.state?.net?.sync ?? null, // 2f delta: null until the step after the bind
+    close(then) {
+      if (done) { then?.(); return; } done = true;
+      if (port) try { engine.command('net.close', {}); } catch (e) { console.warn('net close', e); }
+      release(then);
+    },
+  };
+}
+
 async function start() {
   await R.init();
   const q = new URLSearchParams(location.search), sandbox = q.has('sandbox');
@@ -24,7 +58,10 @@ async function start() {
   const bed = safe(() => clampBedtime(load('tp-bedtime', null)), () => clampBedtime(null));
   const { sound, voice } = audioOf();
   if (!sandbox) hudMarkup(document); // the drive buttons, the gear and the red X: game markup, adopted at boot's first UI sync
-  const { engine } = boot(tractorGame(), tractorView({ tune: q.has('tune'), fps: q.has('fps'), sandbox }), {
+  // M-53: the multiplayer debug log (the "?" in the Multiplayer panel); Handshake's, the port's and the syncs' warnings go into it too
+  const net = sandbox ? null : { session: null, netlog: createNetLog(), refresh: null }, netlog = net?.netlog;
+  if (netlog) { netlog.log('device', navigator.userAgent); for (const k of ['warn', 'error']) { const orig = console[k].bind(console); console[k] = (...a) => { if (typeof a[0] === 'string' && /^(handshake|multiplayer|net[ :])/.test(a[0])) netlog.log(k, ...a.map(x => x instanceof Error ? x.message : typeof x === 'string' ? x : String(x))); orig(...a); }; } }
+  const { engine } = boot(tractorGame(), tractorView({ tune: q.has('tune'), fps: q.has('fps'), sandbox, net }), {
     seed: (Math.random() * 2 ** 32) >>> 0, scene: sandbox ? 'sandbox' : 'farm',
     args: { seed: seedParam(q.get('seed')) ?? undefined, power: powerParam(q.get('power'), settings.power), progress, settings, bed },
     devices: devices(document, { rig }),
@@ -53,6 +90,21 @@ async function start() {
   addEventListener('pageshow', () => { if (sound.ctx && sound.ctx.state !== 'running') relisten(); });
   // D-1: Siri, a call or an alarm can interrupt the context with no page hide: listen for the next gesture again
   const watchCtx = () => { if (sound.ctx && !sound.ctx.onstatechange) sound.ctx.onstatechange = () => { if (sound.ctx.state !== 'running' && document.visibilityState === 'visible') relisten(); }; };
+  // M-29..M-36: the Multiplayer panel's session. A joined room's link is bound to the engine (bindPort); the session keeps the
+  // panel's states, errors, the M-31 retry and the M-33 close. Real rooms stamp on performance.now(); the test bridge on the
+  // engine's wall time, as the tests step it by hand (real time would trip the rate limits)
+  if (net) {
+    const role = q.has('lh-test') ? q.get('lh-bridge') : null, bridged = role === 'host' || role === 'guest';
+    const clock = bridged ? () => engine.time.wall : () => performance.now();
+    const log = netlog.log, lag = bridged ? null : parseLag(q.get('lag')), signal = signalServer(q.get('signal'), location.origin); // M-28; M-48: only a local server or this origin
+    net.session = createSession({ Handshake, server: signal, lag, log, transports: loggedTransports(log), getPaint: () => engine.scene.state?.progress?.paint ?? START_PAINT,
+      bind: ({ role: r, transport }) => bindPort(engine, { role: r, transport, clock }), onChange: () => net.refresh?.() });
+    engine.onStep(() => net.session.poll()); // the welcome's log line; a late welcome clears the panel's text
+    if (bridged) bindPort(engine, { role, transport: () => bridgeTransport(), clock }); // tests: the page is in the Node hub's room from the start
+    const linkCode = parseRoomInput(q.get('r')); // M-34: a QR link opens the join prompt
+    if (q.has('r')) { const u = new URL(location.href); u.searchParams.delete('r'); history.replaceState(null, '', u); } // a reload does not ask again
+    if (linkCode) { engine.command('multiplayer.open', {}); net.session.openJoin(); net.session.submitCode(linkCode); }
+  }
   // D-2: a swipe from the left edge (Safari, not installed) or a stray back press must not leave the game: back stays on this page
   if (!sandbox) { history.pushState({ tp: 1 }, '', location.href); addEventListener('popstate', () => history.pushState({ tp: 1 }, '', location.href)); }
   // F-11, A-7: with no start screen the first touch or key starts the trip (the farm also starts on the first stick move)

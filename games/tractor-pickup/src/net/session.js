@@ -29,9 +29,14 @@ export const ERRORS = {
 };
 ERRORS.bad_key = ERRORS.not_found; // a private room without its key looks like no room (tractor rooms are public; peek(code) sends no key)
 const errText = e => ERRORS[e?.code] || ERRORS.other, joinText = e => e?.code === 'network' ? ERRORS.joinNetwork : errText(e); // only Host retries by itself
-// log (M-53): the debug log's log(...), or nothing; transports: the logged WebSocket, RTCPeerConnection and fetch for Handshake
-export function createSession({ Handshake, server = SERVER, lag = null, getGame, onFarm, getPaint, onChange = () => {}, retryMs = 10000, welcomeMs = 10000, log = () => {}, transports = {} }) {
-  let welcomed = false, hs = null, room = null, sync = null, state = 'idle', error = null, code = null, info = null, retry = 0, stuck = false, waitT = 0; // stuck: joined, no welcome after welcomeMs
+// log (M-53): the debug log's log(...), or nothing; transports: the logged WebSocket, RTCPeerConnection and fetch for Handshake.
+// bind (lion-hawk 2g G5, the engine path): bind({ role, transport }) → { sync: () => the sim's sync or null, close(then) }. With it, a
+// joined room's link goes to the engine (a port) instead of a sync made here: `sync` reads the getter (null until the step after
+// the bind), and Stop or Leave call close, which ends the sim's sync (net.close) and calls then() once its leave has gone out.
+// Without it (the old main.js, session.test.mjs) the session makes and steps the sync itself, as before.
+export function createSession({ Handshake, server = SERVER, lag = null, getGame, onFarm, getPaint, onChange = () => {}, retryMs = 10000, welcomeMs = 10000, log = () => {}, transports = {}, bind = null }) {
+  let welcomed = false, hs = null, room = null, sync = null, bound = null, state = 'idle', error = null, code = null, info = null, retry = 0, stuck = false, waitT = 0; // stuck: joined, no welcome after welcomeMs
+  const cur = () => bound ? bound.sync() : sync; // the sync the panel reads: the sim's on the engine path
   const unstick = () => { clearTimeout(waitT); stuck = false; };
   let said = '';
   const changed = () => { const k = `${state}${error ? ' error: ' + error : ''}`; if (k !== said) { said = k; log('panel', k); } try { onChange(); } catch (e) { console.warn(e); } };
@@ -39,20 +44,23 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
   const client = () => { if (!hs) log('client', server, 'app', APP, 'version', NET_VERSION); return (hs ||= new Handshake({ server, app: APP, version: NET_VERSION, relayUnlessNearby: true, ...transports })); };
   const link = r => { const n = roomLink(r); return lag ? withLag(n, lag) : n; };
   const drop = () => { sync?.close(); sync = null; room = null; code = null; info = null; };
+  // the engine path: the sim ends its sync and leaves the room through the port; the session leaves too once that has gone out
+  // (a room that is closed already is not left twice), and closes an idle client
+  const unbind = r => { const b = bound; bound = null; if (!b) return false; b.close(() => { if (r && !r.closed) r.leave(); if (state === 'idle') idleClient(); }); return true; };
   const idleClient = () => { if (!room) { hs?.close(); hs = null; } }; // a Handshake that has peeked keeps its socket open until close()
   // any closed reason ('kicked', 'left', 'replaced', 'lost', host gone) ends the room; the guest sync has already gone alone (M-41)
-  const watch = r => r.on('closed', why => { if (room !== r) return; unstick(); error = why === 'lost' || why === 'kicked' ? ERRORS[why] : null; if (state === 'joined') { room = null; sync = null; code = null; state = 'idle'; } else if (state === 'hosting') { drop(); state = 'idle'; } idleClient(); changed(); });
+  const watch = r => r.on('closed', why => { if (room !== r) return; unstick(); error = why === 'lost' || why === 'kicked' ? ERRORS[why] : null; if (state === 'joined') { room = null; sync = null; code = null; state = 'idle'; } else if (state === 'hosting') { drop(); state = 'idle'; } unbind(null); idleClient(); changed(); });
   const warn = createWarnOnce(), refused = (r, e) => { if (room !== r) return; warn('multiplayer control', e); error = ERRORS.control; }; // M-44: panel text; a room that is gone needs none
   const statusOf = p => { if (p.away) return 'away'; const id = p.peer || (state === 'joined' && p.n === 1 ? room?.hostId : null), peer = id && room?.peers.get(id); return peer?.connectionType || 'connecting'; }; // a guest's store has no peer ids: its host row uses room.hostId
   const s = {
-    get sync() { return sync; }, get isGuest() { return state === 'joined'; }, get inRoom() { return !!sync; },
+    get sync() { return cur(); }, get isGuest() { return state === 'joined'; }, get inRoom() { return !!(bound || sync); },
     view() {
-      const players = [];
-      if (sync) { const me = sync.you || 1;
+      const players = [], y = cur(); // the engine path: no sync until the step after the bind (a host shows itself)
+      if (y || (bound && state === 'hosting')) { const me = y?.you || 1;
         players.push({ n: me, paint: getPaint(), you: true, host: me === 1, status: '' });
-        for (const p of sync.players.list()) players.push({ n: p.n, paint: p.paint, you: false, host: p.n === 1, status: state === 'joined' && p.n !== 1 ? (p.away ? 'away' : '') : statusOf(p) });
+        if (y) for (const p of y.players.list()) players.push({ n: p.n, paint: p.paint, you: false, host: p.n === 1, status: state === 'joined' && p.n !== 1 ? (p.away ? 'away' : '') : statusOf(p) });
         players.sort((a, b) => a.n - b.n); }
-      return { state, code, name: code && roomName(code), url: code && (typeof location === 'undefined' ? '?r=' + code : joinUrl(code)), locked: !!room?.locked, players, info, connected: state === 'hosting' || (state === 'joined' && !!sync?.you), error: state === 'joined' && stuck && !sync?.you ? ERRORS.noFarm : error };
+      return { state, code, name: code && roomName(code), url: code && (typeof location === 'undefined' ? '?r=' + code : joinUrl(code)), locked: !!room?.locked, players, info, connected: state === 'hosting' || (state === 'joined' && !!y?.you), error: state === 'joined' && stuck && !y?.you ? ERRORS.noFarm : error };
     },
     // after every await: a result for a client that was closed (Cancel, Back, Stop) or a state that moved on is stale and changes nothing
     async host() {
@@ -62,8 +70,8 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
         r = await h.createRoom({ public: true, maxPlayers: MAX_PLAYERS, meta: {} });
         if (stale()) { if (!r.closed) r.leave(); return; }
         if (!CODE.test(r.code)) throw { code: 'other' }; // the code goes into the QR link
-        const y = createHostSync({ game: getGame(), net: link(r), paint: getPaint(), clock: () => performance.now() });
-        room = r; code = r.code; sync = y; watch(r); state = 'hosting';
+        if (bind) bound = bind({ role: 'host', transport: link(r) }); else sync = createHostSync({ game: getGame(), net: link(r), paint: getPaint(), clock: () => performance.now() });
+        room = r; code = r.code; watch(r); state = 'hosting';
         r.on('members', changed); r.on('meta', changed); r.on('peerAway', changed); r.on('peerBack', changed); r.on('peerLeft', changed); r.on('peer', p => { p.on?.('type', changed); changed(); });
       } catch (e) {
         fail('host', e); if (r && room !== r && !r.closed) r.leave(); if (stale()) return;
@@ -71,7 +79,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
       }
       changed();
     },
-    stopHosting() { clearTimeout(retry); const r = room; drop(); if (r && !r.closed) r.leave(); idleClient(); state = 'idle'; error = null; changed(); },
+    stopHosting() { clearTimeout(retry); const r = room; drop(); state = 'idle'; error = null; if (!unbind(r)) { if (r && !r.closed) r.leave(); idleClient(); } changed(); },
     openJoin() { state = 'join'; error = null; info = null; changed(); },
     async submitCode(text) {
       const c = parseRoomInput(text); if (!c) { error = ERRORS.badCode; changed(); return; }
@@ -85,17 +93,20 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
       if (state !== 'prompt') return; state = 'joining'; welcomed = false; changed();
       const h = client(), stale = () => hs !== h || state !== 'joining'; let r = null;
       try { r = await h.joinRoom(code); if (stale()) { if (!r.closed) r.leave(); return; }
-        const y = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm, clock: () => performance.now() }); room = r; sync = y; watch(r); state = 'joined';
-        unstick(); waitT = setTimeout(() => { if (sync === y && !y.you) { stuck = true; log('no welcome from the host after', welcomeMs / 1000, 's: no peer connection?'); changed(); } }, welcomeMs); waitT?.unref?.(); // the panel says so; Leave still works
+        let b = null; if (bind) b = bound = bind({ role: 'guest', transport: link(r) }); else sync = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm, clock: () => performance.now() });
+        const y = sync; room = r; watch(r); state = 'joined';
+        unstick(); waitT = setTimeout(() => { if (bound === b && sync === y && room === r && !cur()?.you) { stuck = true; log('no welcome from the host after', welcomeMs / 1000, 's: no peer connection?'); changed(); } }, welcomeMs); waitT?.unref?.(); // the panel says so; Leave still works
         r.on('members', changed); r.on('hostAway', changed); r.on('hostBack', changed); r.on('peer', p => { p.on?.('type', changed); changed(); }); } // the host row follows the real connection
       catch (e) { fail('join', e); if (r && room !== r && !r.closed) r.leave(); if (stale()) return; state = 'join'; error = joinText(e); code = null; info = null; idleClient(); }
       changed();
     },
     cancel() { if (state === 'prompt' || state === 'join' || state === 'checking') { state = 'idle'; code = null; info = null; error = null; idleClient(); changed(); } },
-    leave() { unstick(); const r = room; room = null; state = 'idle'; sync?.close(); sync = null; code = null; if (!r?.closed) r?.leave(); idleClient(); changed(); }, // M-41: the guest goes on alone
+    leave() { unstick(); const r = room; room = null; state = 'idle'; sync?.close(); sync = null; code = null; if (!unbind(r)) { if (!r?.closed) r?.leave(); idleClient(); } changed(); }, // M-41: the guest goes on alone
     lock(on) { const r = room; if (!r) return; error = null; r.lock(on).catch(e => refused(r, e)).finally(changed); changed(); }, // the switch follows room.locked (the meta event)
-    remove(n) { const p = sync?.players.map.get(n), r = room; if (!p?.peer || !r) return; error = null; r.kick(p.peer).catch(e => refused(r, e)).finally(changed); },
-    before(now) { const e = sync ? sync.before(now) : []; if (state === 'joined' && sync?.you && !welcomed) { welcomed = true; log('welcome: this device is player', sync.you); changed(); } if (stuck && sync?.you) { stuck = false; changed(); } return e; }, // a late welcome clears the panel text
+    remove(n) { const p = cur()?.players.map.get(n), r = room; if (!p?.peer || !r) return; error = null; r.kick(p.peer).catch(e => refused(r, e)).finally(changed); },
+    before(now) { const e = sync ? sync.before(now) : []; s.poll(); return e; },
+    // the welcome's log line and a late welcome's cleared panel text (M-33). The engine path calls it after each step (the sim steps the sync)
+    poll() { const y = cur(); if (state === 'joined' && y?.you && !welcomed) { welcomed = true; log('welcome: this device is player', y.you); changed(); } if (stuck && y?.you) { stuck = false; changed(); } },
     after(events, now) { sync?.after(events, now); },
     showStarted() { sync?.showStarted(); }, delivered(r) { sync?.delivered(r); }, requestHelp: () => !!(sync && state === 'joined' && sync.requestHelp()),
     setGame(g) { sync?.setGame(g); }, setPaint(p) { sync?.setPaint(p); },

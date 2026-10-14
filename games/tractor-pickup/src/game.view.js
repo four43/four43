@@ -4,7 +4,7 @@
 // effects main.js's frame loop played from game.step's events and stepSounds (#87). G2: the farm's HUD (view/hud.js). G3: the
 // show cutscene (ui/show.js on copies of the riders, #79), the sticker card, the start screen and the paint and book screens
 // (view/menus.js). G4: the parent menu and the sleep screen (view/menus.js), the sleep and wake voice lines, ?tune and ?fps.
-// Multiplayer comes in G5.
+// G5: the Multiplayer panel (view/menus.js) and other players' trains and riders from read-only poses (#102).
 import { defineView, createWarnOnce, bindGesture } from 'lion-hawk/view';
 import { createScene } from './render/scene.js';
 import { Sound } from './audio/sound.js';
@@ -20,6 +20,7 @@ import { menuHalves } from './view/menus.js';
 import { createShow, skipSvg, CHEER } from './ui/show.js';
 import { renderIcons, tractorPicture } from './ui/icons.js';
 import { PAINTS } from './render/vehicles3d.js';
+import { placeCarried } from './net/players.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 
 let audio = null; // the page's sound and voice: the view halves play them; the entry unlocks them and applies the settings (X-13)
@@ -71,12 +72,29 @@ function onEvent(e, w, s) {
 // the show half takes it. menus: the overlays' screens (view/menus.js), whose book needs the seen mark from the farm's frames.
 const link = { w: null, hud: null, show: null, poses: null, pending: null, kick: null, menus: null };
 
+// #102 (as #79): the animals other players carry, drawn where their drawn train has them this frame. A pose copy per animal id
+// (pooled), only for an animal the sim has as carried by that player; the show's copies (#79) win. Returns the map animals3d
+// draws in place of the sim's animals (or the show's own map, or null, when no train carries anything)
+const carriedPoses = new Map(), posePool = new Map();
+function posesOf(herd, others, show) {
+  if (!others?.size || !herd) return show;
+  carriedPoses.clear();
+  for (const o of others.values()) if (!o.away) for (const c of o.carried) {
+    const a = herd.animals[c.id]; if (a?.state !== 'carried' || a.owner !== o.n) continue;
+    let p = posePool.get(c.id); if (!p) posePool.set(c.id, p = { id: c.id });
+    p.state = 'carried'; p.hidden = false; p.dirt = a.dirt; placeCarried(p, c); carriedPoses.set(c.id, p);
+  }
+  if (!carriedPoses.size) return show;
+  if (show) for (const [id, p] of show) carriedPoses.set(id, p);
+  return carriedPoses;
+}
+
 // The drive half for the farm and the sandbox (main.js build/startFarm/frame, view side): one world per farm generation.
 // withHud: the farm's slot bar, arrows, roster and drive controls (the sandbox has none, as main.js's ?sandbox). tune: the ?tune
 // panel on each farm build (D-5); fps: the ?fps meter (X-4, B-1)
 function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
   let w = null, gen = -1, offs = [], hud = null, pageDoc = null;
-  const bodies = createBodies(), warnOnce = createWarnOnce();
+  const bodies = createBodies(), warnOnce = createWarnOnce(), netView = new Map(); // netView: players.poseAt's (#102)
   const animView = { cars: null, alpha: 0, poses: null }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every frame
   // paint (W-3): the farm's progress; the sandbox keeps none, so the stored one from the scene args (main.js setPaint)
   const build = (s, args) => {
@@ -124,7 +142,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
     },
     exit(engine, view) {
       for (const f of offs) f(); offs = [];
-      hud?.dispose(); hud = null;
+      hud?.dispose(); hud = null; netView.clear();
       if (withHud) Object.assign(link, { w: null, hud: null, pending: null, poses: null });
       drop(); if (tune) view.doc.getElementById('tune')?.remove();
       if (view.project === rig.project) view.project = undefined;
@@ -135,10 +153,12 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       const dt = view.dt, sound = page.sound, players = s.net?.sync?.players ?? null;
       bodies.alpha(alpha);
       if (dt > 0) { w.stepFx(sound, dt); w.fx.update(dt); } // a hook render (dt 0) only redraws: no gravel or water spawns
-      // M-65: the other trains (and their riders) where the forecast has them this frame: the step's wall stamp plus the alpha (#76)
-      if (players) try { players.drawAt(engine.time.wall + alpha * 1000 / engine.game.sim.hz, g.herd); } catch (e) { warnOnce('net draw', e); }
-      w.gibs.update(dt); w.farm3d?.update(bodies.view[0].p); animView.alpha = alpha; animView.poses = withHud ? link.poses : null; w.animals3d?.update(dt, g, animView);
-      try { w.others3d.update(dt, players); } catch (e) { warnOnce('others3d', e); } // M-44
+      // M-65, #102: the other trains (and their riders) where the forecast has them this frame (the step's wall stamp plus the alpha,
+      // #76), from the view's own read-only poses: the sim's players, forecasts and herd are never touched here
+      let others = null;
+      if (players) try { others = players.poseAt(engine.time.wall + alpha * 1000 / engine.game.sim.hz, netView); } catch (e) { warnOnce('net draw', e); }
+      w.gibs.update(dt); w.farm3d?.update(bodies.view[0].p); animView.alpha = alpha; animView.poses = posesOf(g.herd, others, withHud ? link.poses : null); w.animals3d?.update(dt, g, animView);
+      try { w.others3d.update(dt, others); } catch (e) { warnOnce('others3d', e); } // M-44
       vehSnap.dirt = g.dirt?.tractor; w.vehicles.update(vehSnap);
       const t = g.tractor, lv = t.body.linvel(), v0 = bodies.view[0].p, show = withHud ? link.show : null;
       if (show?.active) show.update(view.rawDt); // F-5: the show has the camera; its waits on the uncapped frame time (#56, #83): a slow device does not stretch them, a hidden tab gives 0
@@ -220,9 +240,11 @@ function showHalf() {
   };
 }
 
-// tune, fps: ?tune and ?fps (D-5, kept); sandbox: the ?sandbox page (its scene has no HUD or menus)
-export function tractorView({ tune = false, fps = false, sandbox = false } = {}) {
-  const menus = link.menus = menuHalves(doc => picturesOf(pageOf(doc)));
+// tune, fps: ?tune and ?fps (D-5, kept); sandbox: the ?sandbox page (its scene has no HUD or menus). net: { session, netlog } for
+// the Multiplayer panel (G5; the entry sets net.session after boot), or null
+export function tractorView({ tune = false, fps = false, sandbox = false, net = null } = {}) {
+  const menus = link.menus = menuHalves(doc => picturesOf(pageOf(doc)), net);
+  if (net) net.refresh = () => menus.refreshMultiplayer(); // the session's onChange
   return defineView({ scenes: { farm: driveHalf({ withHud: true, tune, fps }), sandbox: driveHalf({ tune, fps }), show: showHalf(),
-    start: menus.start, reward: menus.reward, paint: menus.paint, book: menus.book, parent: menus.parent, sleep: menus.sleep } });
+    start: menus.start, reward: menus.reward, paint: menus.paint, book: menus.book, parent: menus.parent, sleep: menus.sleep, multiplayer: menus.multiplayer } });
 }

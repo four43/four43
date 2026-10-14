@@ -1,7 +1,7 @@
 // Real-Chromium flows on Tractor Pickup's engine browser half (lion-hawk 2g). Run: npm run test:e2e
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, openGame, expectScene, expectState } from 'lion-hawk/playwright';
+import { launch, openGame, peers, expectScene, expectState } from 'lion-hawk/playwright';
 import { serveTractor } from './serve.mjs';
 
 const ENTRY = process.env.TRACTOR_ENTRY ?? 'src/entry.js'; // G7 switches the default to src/main.js
@@ -139,4 +139,39 @@ test('desktop: a reload while asleep wakes into the night at once (N-7); ?tune a
     assert.match(await game.page.locator('#fps').textContent(), /fps/);
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
+});
+
+test('desktop: the parent menu opens the Multiplayer panel; its X is the multiplayer.close control (M-29, M-30)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS });
+  try {
+    await game.press('farm.parent'); await game.step(130); await game.unpress('farm.parent');
+    await game.tap('parent.mp'); await game.step(1);
+    assert.deepEqual((await game.scene()).overlays, ['multiplayer']);
+    assert.equal(await game.page.locator('.parent.mp').isVisible(), true);
+    assert.equal(await game.page.locator('.parent.mp [data-a=host]').count(), 1, 'Host and Join while idle');
+    await game.page.locator('.parent.mp [data-a=join]').click(); await game.step(1);
+    assert.equal(await game.page.locator('.parent.mp [name=room]').count(), 1, 'the panel redraws on a session change');
+    await game.tap('multiplayer.close'); await game.step(1);
+    assert.deepEqual((await game.scene()).overlays, []); assert.equal(await game.page.locator('.parent.mp').count(), 0);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+// G5 (2f delta): the guest opens with other args than the host, so its seed 21 can only be the host's farm
+test('two pages: the guest gets the host farm, both see each other, a horn reaches the other, leaving goes alone (M-1, M-8, M-41)', async t => {
+  if (skip) return t.skip(skip);
+  const room = await peers(chrome.browser, site.url, 2, { render: 'manual', argsOf: i => i ? { seed: 5, started: true } : { seed: 21, started: true } });
+  try {
+    const [host, guest] = room.games;
+    await room.step(60);
+    assert.equal((await guest.state()).seed, 21); assert.equal((await guest.state()).net.you, 2);
+    assert.deepEqual((await host.state()).others.map(o => o[0]), [2], 'the host sees player 2');
+    assert.deepEqual((await guest.state()).others.map(o => o[0]), [1], 'the guest sees the host');
+    await host.page.keyboard.press('h'); await frames(host); await room.step(30);
+    assert.ok(await guest.page.evaluate(() => window.engine.events.since(0).some(e => e.type === 'remoteHorn')));
+    await host.close(); await room.step(30);
+    assert.equal((await guest.state()).net.role, 'solo');
+    assert.deepEqual(await guest.errors(), []);
+  } finally { await room.close(); }
 });

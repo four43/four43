@@ -3,7 +3,7 @@
 // changed (`progress`, `settings`), which the view saves. Outside the farm (the sandbox) they do nothing.
 import { toggleHat, wornHats, placeSticker, unplaceSticker, seeBook, unlockedPaints, clampSettings } from '../sim/progress.js';
 import { setBedtime } from '../sim/bedtime.js';
-import { play, showDone, closeReward } from './flow.js';
+import { play, showDone, closeReward, open } from './flow.js';
 
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v < hi;
 const progress = (e, s) => e.emit('progress', { progress: structuredClone(s.progress) }); // a copy: the event log never sees later changes
@@ -58,5 +58,7 @@ export const makeCommands = api => ({
     if (!Number.isFinite(d.date)) return;
     setBedtime(s.bed, d.minutes ?? null, d.date); s.date = d.date; e.emit('bed', { bed: { ...s.bed } });
   }),
+  // M-34: a join link (?r=) opens the Multiplayer panel over the farm (the panel itself is the view's)
+  'multiplayer.open': farm(e => open(e, 'multiplayer')),
   'farm.new': (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) api.newFarm(e, ctx); }, // P-8, M-19, [S-6]
 });

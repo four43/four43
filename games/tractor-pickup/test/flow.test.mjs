@@ -72,3 +72,9 @@ test('a stale show ack from the farm before a new one does not end the new farm\
   h.command('show.done', { gen: 1, spots: [] }).step(3); assert.equal(s.show.done, false); assert.equal(s.game.mode, 'show');
   h.command('show.done', { gen: 2, spots: [] }); h.untilEvent('reward', { maxSteps: 5 }); assert.equal(s.game.mode, 'reward');
 });
+test('a join link opens the Multiplayer panel through a command; its close closes it (M-34, lion-hawk 2g G5)', () => {
+  const h = headless(tractorGame(), { args: ARGS });
+  h.command('multiplayer.open', {}).step(1); assert.deepEqual(h.scene.overlays, ['multiplayer']);
+  h.command('multiplayer.open', {}).step(1); assert.deepEqual(h.scene.overlays, ['multiplayer'], 'never twice');
+  h.tap('multiplayer.close'); h.step(1); assert.deepEqual(h.scene.overlays, []);
+});

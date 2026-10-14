@@ -7,8 +7,9 @@ import { createMenus, sunSvg } from '../ui/menus.js';
 import { createStickerArt } from '../ui/stickerArt.js';
 import { BED, minutesLeft } from '../sim/bedtime.js';
 
-// pics(doc): the page's { renderer, icons, tractorPic, sound, voice } (game.view.js)
-export function menuHalves(pics) {
+// pics(doc): the page's { renderer, icons, tractorPic, sound, voice } (game.view.js). net (G5): { session, netlog } from the entry
+// (the session is set after boot, as it binds rooms to the engine), or null (no multiplayer panel)
+export function menuHalves(pics, net = null) {
   let menus = null, engine = null, seen = null; // seen: the book's last seen mark before it opened (the new stickers bounce, F-3)
   const command = (type, data) => { try { engine?.command(type, data); } catch (e) { console.warn('command ' + type, e); } };
   const menusOf = doc => {
@@ -27,6 +28,10 @@ export function menuHalves(pics) {
       onNewFarm() { command('farm.new', {}); },
       onClearStickers() { command('stickers.clear', {}); }, // P-6 (it also closes the parent menu)
       onParentDone() { try { engine?.ui.tryTap('parent.close'); } catch (e) { console.warn('parent close', e); } }, // a choice that ends the menu closes its overlay as the X does
+      // M-29..M-36, M-53: the Multiplayer panel. Each redraw makes its X again (multiplayer.close, adopted at once); M-33's
+      // "Connected!" closes the overlay as the X does
+      netlog: net?.netlog ?? null, onMpDraw() { ui?.adopt(); },
+      onMpDone() { try { engine?.ui.tryTap('multiplayer.close'); } catch (e) { console.warn('multiplayer close', e); } },
     }));
   };
   const progressOf = e => structuredClone(e.scene.state.progress); // the screens change their copy as the player taps
@@ -72,6 +77,14 @@ export function menuHalves(pics) {
       exit() { menus?.closeParent(); },
     },
     sleep: sleepHalf(pics),
+    // M-29..M-36 (parity #23–#25): the Multiplayer panel over the farm, drawn from the session (net/session.js). Closing it ends a
+    // code check or a join prompt (its client closes); a room goes on
+    multiplayer: {
+      enter(e, view) { engine = e; ui = view.ui; const session = net?.session; if (!session) return; menusOf(view.doc).openMultiplayer(session); },
+      exit() { try { net?.session?.cancel(); } catch (err) { console.warn('multiplayer cancel', err); } menus?.closeMultiplayer(); },
+    },
+    // the session changed (net/session.js onChange): the open panel redraws
+    refreshMultiplayer() { menus?.refreshMultiplayer(); },
     // the farm's frame, while the book is shut: its seen mark (the book overlay marks every sticker seen as it opens)
     noteSeen(s) { seen = s.progress?.bookSeen ?? null; },
   };
