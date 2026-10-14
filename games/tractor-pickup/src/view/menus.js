@@ -8,14 +8,15 @@ import { createStickerArt } from '../ui/stickerArt.js';
 import { BED, minutesLeft } from '../sim/bedtime.js';
 
 // pics(doc): the page's { renderer, icons, tractorPic, sound, voice } (game.view.js). net (G5): { session, netlog } from the entry
-// (the session is set after boot, as it binds rooms to the engine), or null (no multiplayer panel)
-export function menuHalves(pics, net = null) {
+// (the session is set after boot, as it binds rooms to the engine), or null (no multiplayer panel). make: ui/menus.js's
+// createMenus (a test passes a stand-in)
+export function menuHalves(pics, net = null, { make = createMenus } = {}) {
   let menus = null, engine = null, seen = null; // seen: the book's last seen mark before it opened (the new stickers bounce, F-3)
   const command = (type, data) => { try { engine?.command(type, data); } catch (e) { console.warn('command ' + type, e); } };
   const menusOf = doc => {
     if (menus) return menus;
     const p = pics(doc);
-    return (menus = createMenus(doc.getElementById('ui'), {
+    return (menus = make(doc.getElementById('ui'), {
       icons: p.icons, art: createStickerArt(p.renderer), tractorPic: p.tractorPic,
       onPaint(paint) { p.sound.plop(); command('paint', { body: paint.body, trim: paint.trim }); }, // W-3
       onHats(_, id) { p.sound.plop(); command('hat', { id }); }, // W-4
@@ -35,12 +36,19 @@ export function menuHalves(pics, net = null) {
     }));
   };
   const progressOf = e => structuredClone(e.scene.state.progress); // the screens change their copy as the player taps
-  // one screen per overlay: show(menus, engine, progress, view) builds it; its go or close control is adopted at once
+  // one screen per overlay: show(menus, engine, progress, view) builds it; its go or close control (done) is adopted at once.
+  // R-1 (the old main.js's guard on the card): a screen that fails to open is hidden and its control tapped, as the child would,
+  // so the overlay closes and the train is not held by a screen nobody can see (the engine's fallback button is unstyled, under #c)
   let ui = null; // the view's UI (adopt)
-  const half = (show, more = {}) => ({
+  const half = (show, done, more = {}) => ({
     enter(e, view) {
       engine = e; ui = view.ui; if (!e.scene.state.progress) return;
-      show(menusOf(view.doc), e, progressOf(e), view); view.ui.adopt();
+      try { show(menusOf(view.doc), e, progressOf(e), view); view.ui.adopt(); }
+      catch (err) {
+        console.warn(`screen ${done} failed to open`, err); try { menus?.hide(); } catch (e2) { console.warn('screen hide', e2); }
+        try { e.ui.tryTap(done); } catch (e2) { console.warn(done, e2); }
+        return;
+      }
       more.enter?.(e, view);
     },
     exit(e, view) { more.exit?.(e, view); menus?.hide(); },
@@ -49,7 +57,7 @@ export function menuHalves(pics, net = null) {
   return {
     // F-11: paint and go (start.go). A clear of the stickers from the parent menu (P-6) brings the start screen back, as main.js
     // did, so a sticker book opened from it never shows stickers that are gone
-    start: half((m, e, p) => m.showStart(p), {
+    start: half((m, e, p) => m.showStart(p), 'start.go', {
       enter(e) {
         let n = e.scene.state.progress.stickers.length;
         off = e.events.on(ev => { if (ev.type !== 'progress') return; const k = ev.progress.stickers.length; if (k < n) { menus.showStart(structuredClone(ev.progress)); ui?.adopt(); } n = k; });
@@ -63,9 +71,9 @@ export function menuHalves(pics, net = null) {
       const { sound, voice } = pics(view.doc);
       if (r.newPaint || r.newHat) sound.bells();
       voice.say(['you-did-it', 'new-sticker']);
-    }),
-    paint: half((m, e, p) => m.openPaint(p)), // U-6, W-3 (paint.close)
-    book: half((m, e, p) => { if (seen !== null) p.bookSeen = seen; m.showBook(p); }), // W-2 (book.close)
+    }, 'reward.go'),
+    paint: half((m, e, p) => m.openPaint(p), 'paint.close'), // U-6, W-3 (paint.close)
+    book: half((m, e, p) => { if (seen !== null) p.bookSeen = seen; m.showBook(p); }, 'book.close'), // W-2 (book.close)
     // P-1, U-3, E-7: the grown-ups' menu over the farm (its X and Multiplayer are parent.close and parent.mp). Not a `half`: closing
     // it must not hide the screen under it (the start screen)
     parent: {
