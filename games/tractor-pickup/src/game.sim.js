@@ -12,6 +12,8 @@ import PHYS from '../baked/phys.json' with { type: 'json' };
 import { PHYSICS } from './sim/ground.js';
 
 export { FARM_EVENTS };
+// the entry initialises Rapier through here (#6, D9: the defineGame file is the one that holds Rapier)
+export const initPhysics = () => R.init();
 
 // #81: goX/goZ are the wanted direction in the world frame (length = stick distance), merged across devices as one vector
 // (I-1); goBack: the stick is in the reverse cone on the screen (C-8). The device map hook writes them (2g).

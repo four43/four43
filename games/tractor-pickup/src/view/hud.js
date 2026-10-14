@@ -7,7 +7,7 @@ import { createHud } from '../ui/hud.js';
 import { createRoster, createFinder, placeArrow } from '../ui/roster.js';
 import { createHornMarks } from '../render/hornMarks.js';
 import { paintBtnSvg, bookSvg, gearSvg } from '../ui/menus.js';
-import { VIEW } from '../render/scene.js';
+import { VIEW } from './size.js';
 import { slotIndex } from '../sim/slots.js';
 import { TYPES } from '../sim/herd.js';
 import { newStickers } from '../sim/progress.js';

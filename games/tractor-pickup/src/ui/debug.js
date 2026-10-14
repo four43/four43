@@ -1,9 +1,9 @@
 // Debug tools (D-5): the ?tune panel (feel constants as sliders) and the ?fps meter (X-4 stutter hunting).
 import { TUNE, TUNE_POWERS } from '../sim/tune.js';
-import { CAM } from '../render/camera.js';
+import { CAM } from '../view/rig.js';
 
 // The view's own rows: the chase camera (CAM) is the view's, so these sliders write it directly
-const VIEW_ROWS = [['cam dist', 'D', 4, 20, 0.5], ['cam height', 'H', 4, 22, 0.5], ['cam ahead', 'AHEAD', 2, 24, 0.5]];
+const VIEW_ROWS = [['cam dist', 'distance', 4, 20, 0.5], ['cam height', 'height', 4, 22, 0.5], ['cam ahead', 'lookAhead', 2, 24, 0.5]]; // the engine chase rig's opts
 
 // ?tune (lion-hawk 2g G4b): the sim rows (sim/tune.js) only ask: a slider calls send(id, value) and the power picker send('power',
 // name); the reset button calls reset(). What a sim row shows comes back through shown(key, value) (the `tune` event: the value the

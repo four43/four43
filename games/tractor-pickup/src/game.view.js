@@ -6,7 +6,7 @@
 // (view/menus.js). G4: the parent menu and the sleep screen (view/menus.js), the sleep and wake voice lines, ?tune and ?fps.
 // G5: the Multiplayer panel (view/menus.js) and other players' trains and riders from read-only poses (#102).
 import { defineView, createWarnOnce, bindGesture } from 'lion-hawk/view';
-import { createScene } from './render/scene.js';
+import { VIEW } from './view/size.js';
 import { Sound } from './audio/sound.js';
 import { createVoice } from './audio/voice.js';
 import { BURST } from './sim/scenery.js';
@@ -26,15 +26,28 @@ import { tuneGet, tuneValues } from './sim/tune.js';
 
 let audio = null; // the page's sound and voice: the view halves play them; the entry unlocks them and applies the settings (X-13)
 export const audioOf = () => audio ??= (sound => ({ sound, voice: createVoice(sound) }))(new Sound());
-let page = null; // one WebGL renderer, scene, camera and audio per page, made on the first enter on #c (main.js's createScene)
-function pageOf(doc) {
+// The engine render pipeline (3l, overview §4.6, D5): the 1.8 renderer, camera and light rig as data. shading 'standard': golden
+// animals keep their metal look and vertex-coloured art at roughness 1 reads like the old Lambert. Night (E-5): day -> dusk -> night,
+// colours and intensities only (no shader change).
+export const RENDER = Object.freeze({
+  shading: 'standard', dpr: { touch: 1.5, desktop: 2 }, antialias: true, shadows: 'pcf', toneMapping: 'none', exposure: 1,
+  camera: { fov: 60, fovPortrait: 64, near: 0.3, far: 500 },
+  lights: { sky: '#bfe6f5', hemiSky: '#eef7ff', ground: '#b9a27c', hemi: 1.3, sun: { color: '#fff3dc', intensity: 2.1, map: 2048, box: 30, offset: [-26, 46, 22] }, fog: [90, 220],
+    presets: { dusk: { sky: '#f4a76b', hemi: 0.8, sun: { color: '#ffa860', intensity: 1.125 } },
+      night: { sky: '#1b2440', hemi: 0.3, sun: { color: '#9fb4ff', intensity: 0.15 } } } },
+});
+// k 0 = day, 0.5 = sunset, 1 = night: two lerps through dusk
+export const setNight = (lights, k) => k < 0.5 ? lights.lerp('day', 'dusk', k * 2) : lights.lerp('dusk', 'night', k * 2 - 1);
+let page = null; // the page's renderer, scene, camera and lights (boot's view.gfx) and audio, on the first enter
+function pageOf(view) {
   if (page) return page;
-  const canvas = doc.getElementById('c'), { renderer, scene, camera, follow, setNight } = createScene(canvas);
-  page = { canvas, renderer, scene, camera, follow, setNight, aniso: renderer.capabilities.getMaxAnisotropy(), ...audioOf(), nightK: 0, perf: null };
+  if (!view.gfx) return audioOf(); // no WebGL (or a DOM test): sounds and voice only
+  const { renderer, scene, camera, lights } = view.gfx;
+  page = { canvas: renderer.domElement, renderer, scene, camera, lights, view, aniso: renderer.capabilities.getMaxAnisotropy(), ...audioOf(), nightK: 0, perf: null };
   return page;
 }
 // the slot pictures and the bubble's tractor (E-3, M-72): rendered once per page, on the first farm with a HUD
-const picturesOf = p => { p.icons ??= renderIcons(p.renderer); p.tractorPic ??= tractorPicture(p.renderer); return p; };
+const picturesOf = p => { if (p.renderer) { p.icons ??= renderIcons(p.renderer); p.tractorPic ??= tractorPicture(p.renderer); } return p; };
 
 // main.js's per-step event handling, minus the HUD (view/hud.js): sounds, the voice, fx and the camera shake. M-44: a bad event (a
 // remote animal, a poof) never stops the frame
@@ -111,10 +124,11 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
   const drop = () => { w?.dispose(page.sound); w = null; };
   // ?fps: a rAF callback asked for during this frame runs before the driver's next tick, so it stamps the start of the next frame
   // (before its steps): the meter gets that frame's gap, its sim time and its draw time, as main.js's frame did
-  const meter = { t0: 0, last: 0, gap: 0, mark(ts) { page.perf.begin(ts); meter.gap = meter.last ? ts - meter.last : 0; meter.last = ts; meter.t0 = performance.now(); } };
+  const meter = { t0: 0, last: 0, gap: 0, drawn: 0, end: 0, mark(ts) { meter.drawn = meter.end ? performance.now() - meter.end : 0; page.perf.begin(ts); meter.gap = meter.last ? ts - meter.last : 0; meter.last = ts; meter.t0 = performance.now(); } };
   return {
     enter(engine, view) {
-      pageOf(view.doc); pageDoc = view.doc;
+      if (!view.gfx) return; // no WebGL: the page runs without 3D (render: ... is reported)
+      pageOf(view); pageDoc = view.doc;
       const s = engine.scene.state; if (!s.game) return;
       if (fps) page.perf ??= createFpsMeter(page.renderer);
       build(s, engine.scene.args); view.project = rig.project;
@@ -154,7 +168,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       drop(); build(s, engine.scene.args); hud?.reset(s, engine.scene.id); // 2f delta: the slot bar from state on built
       if (withHud) { link.show?.end(); Object.assign(link, { w, pending: null, poses: null }); } // a farm.new during the show ends it: no show.done for the old farm
       const t = s.game.tractor, p = t.body.translation();
-      Object.assign(chaseIn, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); rig.follow(1, chaseIn);
+      Object.assign(chaseIn, { x: p.x, y: p.y, z: p.z, yaw: t.yaw, fwd: t.fwd, speed: t.speed, velYaw: t.yaw }); rig.snap(chaseIn);
     },
     exit(engine, view) {
       for (const f of offs) f(); offs = [];
@@ -166,6 +180,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
     // view.dt is the driver's frame time (capped at maxFrame); 0 for hook renders (#19), which only redraw
     frame(engine, alpha, view) {
       const s = engine.scene.state, g = s.game; if (!w || g !== w.game) return; // no WebGL, or a build not yet seen by built()
+      VIEW.w = view.gfx.size.w; VIEW.h = view.gfx.size.h;
       const dt = view.dt, sound = page.sound, players = s.net?.sync?.players ?? null;
       bodies.alpha(alpha);
       panel?.enable(s.net?.role !== 'guest'); // a guest's tune would be dropped (game/commands.js)
@@ -179,18 +194,18 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       vehSnap.dirt = g.dirt?.tractor; w.vehicles.update(vehSnap);
       const t = g.tractor, lv = t.body.linvel(), v0 = bodies.view[0].p, show = withHud ? link.show : null;
       if (show?.active) show.update(view.rawDt); // F-5: the show has the camera; its waits on the uncapped frame time (#56, #83): a slow device does not stretch them, a hidden tab gives 0
-      else { chaseIn.x = v0.x; chaseIn.y = v0.y; chaseIn.z = v0.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); rig.follow(dt, chaseIn); }
+      else { chaseIn.x = v0.x; chaseIn.y = v0.y; chaseIn.z = v0.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); rig.follow(chaseIn, dt); }
       if (withHud && !engine.scene.overlays.includes('book')) link.menus?.noteSeen(s);
       sound.engine(t.engine, t.speed / t.P.vmax, t.surface); sound.skid(Math.max(0, Math.min(1, (Math.abs(t.slip) - 0.2) * 2)));
       hud?.frame(engine, dt); // after the camera: the arrows project through this frame's view
-      page.follow(v0.x, v0.z);
+      page.lights.follow(v0.x, v0.z);
       const nightTo = s.bed?.phase === 'asleep' ? 1 : 0; // E-5
-      if (page.nightK !== nightTo) { page.nightK = nightTo > page.nightK ? Math.min(nightTo, page.nightK + dt / BED.dusk) : Math.max(nightTo, page.nightK - dt / BED.wakeFade); page.setNight(page.nightK); }
+      if (page.nightK !== nightTo) { page.nightK = nightTo > page.nightK ? Math.min(nightTo, page.nightK + dt / BED.dusk) : Math.max(nightTo, page.nightK - dt / BED.wakeFade); setNight(page.lights, page.nightK); }
       const perf = page.perf, t1 = perf ? performance.now() : 0, progs = perf ? perf.programs() : 0;
-      page.renderer.render(page.scene, page.camera);
+      // boot draws once after every half's frame (overview §4.6): the meter's draw time is the previous frame's (meter.drawn)
       if (perf && view.rawDt > 0) { // a hook render (rawDt 0) is no frame
-        const y = g.farm?.yard.barn; perf.tick(view.rawDt, meter.gap, meter.t0 ? t1 - meter.t0 : 0, performance.now() - t1, y ? Math.hypot(t.x - y.x, t.z - y.z) : 0, progs);
-        requestAnimationFrame(meter.mark);
+        const y = g.farm?.yard.barn; perf.tick(view.rawDt, meter.gap, meter.t0 ? t1 - meter.t0 : 0, meter.drawn, y ? Math.hypot(t.x - y.x, t.z - y.z) : 0, progs);
+        requestAnimationFrame(meter.mark); meter.end = performance.now(); // 'draw' then spans boot's draw and the wait for the next rAF
       }
     },
   };
@@ -260,8 +275,8 @@ function showHalf() {
 // tune, fps: ?tune and ?fps (D-5); sandbox: the ?sandbox page (its scene has no HUD or menus). net: { session, netlog } for
 // the Multiplayer panel (G5; the entry sets net.session after boot), or null
 export function tractorView({ tune = false, fps = false, sandbox = false, net = null } = {}) {
-  const menus = link.menus = menuHalves(doc => picturesOf(pageOf(doc)), net);
+  const menus = link.menus = menuHalves(view => picturesOf(pageOf(view)), net);
   if (net) net.refresh = () => menus.refreshMultiplayer(); // the session's onChange
   return defineView({ scenes: { farm: driveHalf({ withHud: true, tune, fps }), sandbox: driveHalf({ tune, fps }), show: showHalf(),
-    start: menus.start, reward: menus.reward, paint: menus.paint, book: menus.book, parent: menus.parent, sleep: menus.sleep, multiplayer: menus.multiplayer } });
+    start: menus.start, reward: menus.reward, paint: menus.paint, book: menus.book, parent: menus.parent, sleep: menus.sleep, multiplayer: menus.multiplayer }, render: RENDER });
 }
