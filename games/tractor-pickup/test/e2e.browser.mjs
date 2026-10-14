@@ -170,6 +170,12 @@ test('two pages: the guest gets the host farm, both see each other, a horn reach
     assert.deepEqual((await guest.state()).others.map(o => o[0]), [1], 'the guest sees the host');
     await host.page.keyboard.press('h'); await frames(host); await room.step(30);
     assert.ok(await guest.page.evaluate(() => window.engine.events.since(0).some(e => e.type === 'remoteHorn')));
+    // #102: a rider in the host's train is drawn on the guest from the view's pose map (the riders preset's landing, between steps)
+    const landed = await host.page.evaluate(() => { window.engine.debug.riders(1); return window.engine.debug.game.load.slots.find(s => s.landed)?.animal.id ?? null; });
+    assert.notEqual(landed, null, 'the host loaded an animal');
+    await room.step(30);
+    assert.ok(await guest.page.evaluate(id => { const a = window.engine.debug.game.herd.animals[id]; return a?.state === 'carried' && a.owner === 1; }, landed), 'the guest has it in the host train');
+    assert.deepEqual(await guest.errors(), [], 'the guest draws the host rider with no error');
     await host.close(); await room.step(30);
     assert.equal((await guest.state()).net.role, 'solo');
     assert.deepEqual(await guest.errors(), []);

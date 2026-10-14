@@ -82,7 +82,8 @@ function posesOf(herd, others, show) {
   for (const o of others.values()) if (!o.away) for (const c of o.carried) {
     const a = herd.animals[c.id]; if (a?.state !== 'carried' || a.owner !== o.n) continue;
     let p = posePool.get(c.id); if (!p) posePool.set(c.id, p = { id: c.id });
-    p.state = 'carried'; p.hidden = false; p.dirt = a.dirt; placeCarried(p, c); carriedPoses.set(c.id, p);
+    // every field animals3d reads off an animal: its kind (type, golden) and dirt from the sim animal, the place from the train
+    p.type = a.type; p.golden = !!a.golden; p.state = 'carried'; p.ride = null; p.hidden = false; p.dirt = a.dirt; placeCarried(p, c); carriedPoses.set(c.id, p);
   }
   if (!carriedPoses.size) return show;
   if (show) for (const [id, p] of show) carriedPoses.set(id, p);
