@@ -1,12 +1,13 @@
 // Tractor Pickup's browser half (lion-hawk 2g, [S-1]): view halves over the sim half's scenes (game.sim.js). They read
 // engine.scene.state (the farm's ctx.state, #28) and engine events, and never write the sim. G1: the 3D farm and the sandbox
-// pad (view/world.js), the chase camera (view/rig.js), the interpolated bodies (view/bodies.js), and the sounds, voice and
+// pad (view/world.js), the chase camera (view/rig.js), the train drawn by view sync (view/vehicles.js), and the sounds, voice and
 // effects main.js's frame loop played from game.step's events and stepSounds (#87). G2: the farm's HUD (view/hud.js). G3: the
 // show cutscene (ui/show.js on copies of the riders, #79), the sticker card, the start screen and the paint and book screens
 // (view/menus.js). G4: the parent menu and the sleep screen (view/menus.js), the sleep and wake voice lines, ?tune and ?fps.
 // G5: the Multiplayer panel (view/menus.js) and other players' trains and riders from read-only poses (#102).
 import { defineView, createWarnOnce, bindGesture } from 'lion-hawk/view';
 import { VIEW } from './view/size.js';
+import MANIFEST from '../baked/manifest.json' with { type: 'json' };
 import { Sound } from './audio/sound.js';
 import { createVoice } from './audio/voice.js';
 import { BURST } from './sim/scenery.js';
@@ -14,13 +15,13 @@ import { singOrder } from './sim/sing.js';
 import { BED } from './sim/bedtime.js';
 import { buildWorld } from './view/world.js';
 import { rig } from './view/rig.js';
-import { createBodies } from './view/bodies.js';
+import { coverageView } from 'lion-hawk/kits/coverage/view';
 import { createTractorHud } from './view/hud.js';
 import { menuHalves } from './view/menus.js';
 import { createShow, skipSvg, CHEER } from './ui/show.js';
 import { renderIcons, tractorPicture } from './ui/icons.js';
-import { PAINTS } from './render/vehicles3d.js';
-import { placeCarried } from './net/players.js';
+import { PAINTS, PAINT_LOOK, trainViews } from './view/vehicles.js';
+import { placeCarried, START_PAINT } from './net/players.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 import { tuneGet, tuneValues } from './sim/tune.js';
 
@@ -29,7 +30,9 @@ export const audioOf = () => audio ??= (sound => ({ sound, voice: createVoice(so
 // The engine render pipeline (3l, overview §4.6, D5): the 1.8 renderer, camera and light rig as data. shading 'standard': golden
 // animals keep their metal look and vertex-coloured art at roughness 1 reads like the old Lambert. Night (E-5): day -> dusk -> night,
 // colours and intensities only (no shader change).
+export const MODELS = Object.freeze(Object.keys(MANIFEST.models)); // every baked model: the first farm draws once all are loaded and warm (A-10)
 export const RENDER = Object.freeze({
+  assets: { manifest: MANIFEST, base: './assets/' }, paint: PAINT_LOOK,
   shading: 'standard', dpr: { touch: 1.5, desktop: 2 }, antialias: true, shadows: 'pcf', toneMapping: 'none', exposure: 1,
   camera: { fov: 60, fovPortrait: 64, near: 0.3, far: 500 },
   lights: { sky: '#bfe6f5', hemiSky: '#eef7ff', ground: '#b9a27c', hemi: 1.3, sun: { color: '#fff3dc', intensity: 2.1, map: 2048, box: 30, offset: [-26, 46, 22] }, fog: [90, 220],
@@ -47,7 +50,7 @@ function pageOf(view) {
   return page;
 }
 // the slot pictures and the bubble's tractor (E-3, M-72): rendered once per page, on the first farm with a HUD
-const picturesOf = p => { if (p.renderer) { p.icons ??= renderIcons(p.renderer); p.tractorPic ??= tractorPicture(p.renderer); } return p; };
+const picturesOf = p => { if (p.renderer) { const v = p.view; p.icons ??= renderIcons(p.renderer, v.assets, v.materials); p.tractorPic ??= tractorPicture(p.renderer, v.assets, v.materials); } return p; };
 
 // main.js's per-step event handling, minus the HUD (view/hud.js): sounds, the voice, fx and the camera shake. M-44: a bad event (a
 // remote animal, a poof) never stops the frame
@@ -75,7 +78,6 @@ function onEvent(e, w, s) {
     case 'cheer': sound.cheer(); break;
     case 'squelch': sound.squelch(); break; // T-13: the sandbox's mud
     case 'say': voice.say(e.ids, e.low ? { low: true } : undefined); break; // the trip's lines (spec 3.1)
-    case 'progress': w.vehicles.setPaint(e.progress.paint); break; // W-3
     case 'sleep': if (!e.quiet) voice.say(['sleepy', 'goodnight']); break; // E-5 (the night and the lullaby: the frame and the sleep half)
     case 'wake': voice.say(['wake-up']); break;
   }
@@ -110,14 +112,16 @@ function posesOf(herd, others, show) {
 // fps: the ?fps meter (X-4, B-1)
 function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
   let w = null, gen = -1, offs = [], hud = null, pageDoc = null, panel = null;
-  const bodies = createBodies(), warnOnce = createWarnOnce(), netView = new Map(); // netView: players.poseAt's (#102)
-  const animView = { cars: null, alpha: 0, poses: null }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every frame
+  const warnOnce = createWarnOnce(), netView = new Map(); // netView: players.poseAt's (#102)
+  const carPose = [{ p: null, q: null }, { p: null, q: null }], animView = { cars: carPose, alpha: 0, poses: null }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every frame
+  let view0 = null; // the view the drive half entered with (sync, assets, materials)
+  // the drawn train (view sync's objects, interpolated): the tractor's position, and each car's { p, q } for the riders (X-1)
+  const drawn = e => view0?.sync?.objectOf(e);
   // paint (W-3): the farm's progress; the sandbox keeps none, so the stored one from the scene args (main.js setPaint)
   const build = (s, args) => {
     const g = s.game;
-    w = buildWorld({ renderer: page.renderer, scene: page.scene, camera: page.camera, game: g, paint: (s.progress ?? args?.progress)?.paint, aniso: page.aniso }); gen = s.gen;
+    w = buildWorld({ view: view0, game: g, aniso: page.aniso }); gen = s.gen;
     page.canvas.dataset.tpGen = gen; // the farm generation the 3D shows (a debug read for the browser tests)
-    bodies.rebind(g); animView.cars = vehSnap.cars = bodies.cars; vehSnap.tractor = bodies.view[0];
     rig.attach(page.camera, { canvas: page.canvas, tractor: g.tractor });
     panel?.refresh(); // a new farm: the picker shows its tractor's preset
   };
@@ -128,20 +132,34 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
   return {
     enter(engine, view) {
       if (!view.gfx) return; // no WebGL: the page runs without 3D (render: ... is reported)
-      pageOf(view); pageDoc = view.doc;
+      pageOf(view); pageDoc = view.doc; view0 = view;
       const s = engine.scene.state; if (!s.game) return;
       if (fps) page.perf ??= createFpsMeter(page.renderer);
-      build(s, engine.scene.args); view.project = rig.project;
+      view.project = rig.project;
+      // the train's hooks before any train is drawn (sync measures the wheel hubs after the create hooks): paint (W-3) from the player's
+      // records (the sandbox keeps none: the stored ones from the scene args), coverage for the dirt (T-16)
+      const paintOf = () => engine.scene.state.progress?.paint ?? engine.scene.args?.progress?.paint ?? START_PAINT, cov = coverageView(view.sync, view.materials);
+      offs.push(trainViews(view.sync, { materials: view.materials, paintOf }), () => cov.off());
+      // INTERIM (engine request in the phase 3l notes, as Pig Pens' 3k): view sync clones a drawn entity's model on the first frame it
+      // sees it and throws while that model is still loading, so its frames wait for the preload
+      const sync = view.sync, syncFrame = sync.frame, loaded = () => MODELS.every(k => view.assets.has(k));
+      sync.frame = alpha => { if (loaded()) { sync.frame = syncFrame; syncFrame(alpha); } };
+      offs.push(() => { if (sync.frame !== syncFrame) sync.frame = syncFrame; });
+      // the first farm draws once every baked model is loaded, compiled and warm (A-10); its HUD needs the portraits made from them
+      view.wait(view.assets.preload(MODELS).then(() => {
+        if (engine.scene.state !== s || w) return;
+        build(s, engine.scene.args);
+        if (withHud) {
+          const { icons, tractorPic, voice, sound } = picturesOf(page);
+          hud = createTractorHud(view.doc.getElementById('ui'), { icons, tractorPic, voice, sound, rig, paints: PAINTS, scene: page.scene, world: () => w, tractorAt: () => drawn(engine.scene.state.game.tractor.e)?.position ?? engine.scene.state.game.tractor.body.translation() });
+          hud.reset(s, engine.scene.id); // 2f delta: the slot bar from state on enter
+          Object.assign(link, { w, hud, pending: null });
+        }
+      }));
       if (tune) {
         pageDoc.getElementById('tune')?.remove(); const game = () => engine.scene.state.game;
         panel = buildTunePanel({ doc: pageDoc, read: id => tuneGet(game(), id), power: () => game().tractor.power, values: () => tuneValues(game()),
           send: (key, value) => engine.command('tune', { key, value }), reset: s.game.trees ? () => engine.command('tune.reset', {}) : null });
-      }
-      if (withHud) {
-        const { icons, tractorPic, voice, sound } = picturesOf(page);
-        hud = createTractorHud(view.doc.getElementById('ui'), { icons, tractorPic, voice, sound, rig, paints: PAINTS, scene: page.scene, world: () => w, tractorAt: () => bodies.view[0].p });
-        hud.reset(s, engine.scene.id); // 2f delta: the slot bar from state on enter
-        Object.assign(link, { w, hud, pending: null });
       }
       if (page.perf) { // B-1, #106: Rapier's share, from the World's running total (the entry gave boot the timer under ?fps)
         let last = null, ms = 0;
@@ -150,7 +168,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
           if (w.serial === last) page.perf.worldMs(w.stats.stepMsTotal - ms); last = w.serial; ms = w.stats.stepMsTotal; // #106: the engine times Rapier
         }));
       }
-      offs.push(bodies.watch(engine), engine.events.on(e => {
+      offs.push(engine.events.on(e => {
         page.perf?.event(e.type);
         if (e.type === 'tune' && panel) try { panel.shown(e.key, e.value); } catch (err) { warnOnce('tune', err); }
         if (!w) return;
@@ -182,17 +200,17 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       const s = engine.scene.state, g = s.game; if (!w || g !== w.game) return; // no WebGL, or a build not yet seen by built()
       VIEW.w = view.gfx.size.w; VIEW.h = view.gfx.size.h;
       const dt = view.dt, sound = page.sound, players = s.net?.sync?.players ?? null;
-      bodies.alpha(alpha);
       panel?.enable(s.net?.role !== 'guest'); // a guest's tune would be dropped (game/commands.js)
       if (dt > 0) { w.stepFx(sound, dt); w.fx.update(dt); } // a hook render (dt 0) only redraws: no gravel or water spawns
       // M-65, #102: the other trains (and their riders) where the forecast has them this frame (the step's wall stamp plus the alpha,
       // #76), from the view's own read-only poses: the sim's players, forecasts and herd are never touched here
       let others = null;
       if (players) try { others = players.poseAt(engine.time.wall + alpha * 1000 / engine.game.sim.hz, netView); } catch (e) { warnOnce('net draw', e); }
-      w.gibs.update(dt); w.farm3d?.update(bodies.view[0].p); animView.alpha = alpha; animView.poses = posesOf(g.herd, others, withHud ? link.poses : null); w.animals3d?.update(dt, g, animView);
+      const t = g.tractor, to = drawn(t.e), v0 = to?.position ?? t.body.translation(); // the drawn (interpolated) tractor
+      g.train.cars.forEach((c, k) => { const o = drawn(c.e); carPose[k].p = o?.position ?? c.body.translation(); carPose[k].q = o?.quaternion ?? c.body.rotation(); });
+      w.gibs.update(dt); w.farm3d?.update(v0); animView.alpha = alpha; animView.poses = posesOf(g.herd, others, withHud ? link.poses : null); w.animals3d?.update(dt, g, animView);
       try { w.others3d.update(dt, others); } catch (e) { warnOnce('others3d', e); } // M-44
-      vehSnap.dirt = g.dirt?.tractor; w.vehicles.update(vehSnap);
-      const t = g.tractor, lv = t.body.linvel(), v0 = bodies.view[0].p, show = withHud ? link.show : null;
+      const lv = t.body.linvel(), show = withHud ? link.show : null;
       if (show?.active) show.update(view.rawDt); // F-5: the show has the camera; its waits on the uncapped frame time (#56, #83): a slow device does not stretch them, a hidden tab gives 0
       else { chaseIn.x = v0.x; chaseIn.y = v0.y; chaseIn.z = v0.z; chaseIn.yaw = t.yaw; chaseIn.fwd = t.fwd; chaseIn.speed = t.speed; chaseIn.velYaw = Math.atan2(lv.x, lv.z); rig.follow(chaseIn, dt); }
       if (withHud && !engine.scene.overlays.includes('book')) link.menus?.noteSeen(s);

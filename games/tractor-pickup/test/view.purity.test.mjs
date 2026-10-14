@@ -25,3 +25,9 @@ test('the view declares the engine render pipeline', async () => {
   createLightRig(new THREE.Scene(), RENDER.lights).dispose(); // 3e's names (CI-8): a flat sun colour or sunIntensity throws
   assert.equal(RENDER.lights.hemiSky, '#eef7ff'); assert.equal(RENDER.lights.presets.night.sun.color, '#9fb4ff');
 });
+test('the per-game GPU hygiene and geometry helpers are gone; the farm builds on the engine\'s', () => {
+  for (const f of ['render/matSplit.js', 'render/shadows.js', 'render/warm.js', 'render/dispose.js', 'render/gfx.js', 'render/scene.js', 'render/camera.js', 'render/vehicles3d.js', 'render/dirtMat.js', 'view/bodies.js']) assert.equal(existsSync(join(src, f)), false, f);
+  const farm = readFileSync(join(src, 'render/farm3d.js'), 'utf8');
+  assert.match(farm, /createInstances/); assert.doesNotMatch(farm, /new THREE\.Mesh(Lambert|Phong|Standard)Material\(/);
+  for (const f of ['render/fx.js', 'render/gibs.js']) assert.match(readFileSync(join(src, f), 'utf8'), /lion-hawk\/kits\/fx\/view/, f);
+});

@@ -17,7 +17,7 @@ export default defineMaterials({
   // colliders
   ground:  { extends: 'dirt', phys: { friction: 0.6, restitution: 0 } },
   pad:     { extends: 'gravel', phys: { friction: 0.9, restitution: 0 } },
-  ramp:    { extends: 'wood', phys: { friction: 0.9, restitution: 0 } },
+  ramp:    { extends: 'wood', phys: { friction: 0.9, restitution: 0 }, look: { color: '#c9ad7f', roughness: 1 } },
   chassis: { extends: 'steel', phys: { friction: 0.2, restitution: 0 }, ...dirty },
   bed:     { extends: 'wood', phys: { friction: 0.2, restitution: 0, sg: 1, fill: 260 / 1.68 / 1000 }, ...dirty },
   tongue:  { extends: 'steel', phys: { friction: 0.5, restitution: 0, sg: 1, fill: 5 / 0.03456 / 1000 } },
@@ -31,4 +31,9 @@ export default defineMaterials({
   petal:   { extends: 'grass', look: { roughness: 1 } },
   crop:    { extends: 'grass', look: { roughness: 1 } },
   stone:   { extends: 'gravel', look: { roughness: 1 } },
+  // view looks (3l: the farm's 3D on the compiler; vertex colours or a texture give the colour, 1.8's Lambert as roughness 1)
+  scenery: { extends: 'plastic', look: { roughness: 1, metalness: 0 } },          // vertex-coloured statics (trees, fences, rocks, props)
+  paper:   { extends: 'plastic', look: { color: '#ffffff', roughness: 1, metalness: 0 } }, // textured ground and barn, fx and gib cubes
+  pond:    { extends: 'water', look: { color: '#5fb4e0', roughness: 0.15, opacity: 1, transparent: false } },
+  sand:    { extends: 'gravel', look: { color: '#d9c79c', roughness: 1 } },
 });

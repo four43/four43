@@ -5,7 +5,7 @@ import { MAX_PLAYERS } from '../net/protocol.js';
 
 export const FIND = { secs: 4, inset: 44, lift: 3.4, fadeSecs: 0.5 }; // M-76: arrows for 4 s, inset from the screen edge (px), on-screen marker height (m)
 export const RAINBOW = 'conic-gradient(#e53935,#fb8c00,#fdd835,#43a047,#1e88e5,#8e24aa,#e53935)';
-// a paint name (W-3) as a CSS background; paints: PAINTS from render/vehicles3d.js (rainbow is null there: the hues run along the tractor)
+// a paint name (W-3) as a CSS background; paints: PAINTS from view/vehicles.js (rainbow is null there: the hues run along the tractor)
 export const paintCss = (name, paints) => name === 'rainbow' ? RAINBOW : paints[name] ?? paints.red;
 
 // M-77: where an arrow goes for a point given in normalized device coordinates (nx, ny in -1..1 on screen; behind: behind the camera) on a

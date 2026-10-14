@@ -57,6 +57,12 @@ All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
 
 ## Playtest list
 
+- Shading is the compiler's `standard` tier (roughness 1 looks for the vertex-coloured art) in place of 1.8's Lambert; gold keeps metalness.
+- Fx and gibs on the fx kit: a landed cube rests at floor + size/2 (1.8: + 0.03); a gib shrinks over the last half of its ~5 s life
+  (1.8: rests 3 s, then shrinks over 1 s); gibs land on the terrain height (1.8: y = 0).
+- Other players' trains (until Part E): drawn from the baked models without turning wheels.
+- Animal animation phases start from the animal id (1.8: Math.random in the view).
+
 - Dirt per metre (Task 13b, coverage kit): `route` 0.006/9, `meadow` 0.004/9, `mudhole` 0.6/4.5 per metre, equal to 1.8 at Medium speeds and at mud
   top speed. Low power now dirties 1.5x faster and High 0.75x as fast on gravel and grass; a tractor standing in mud no longer gets dirtier;
   slow driving in mud dirties less. Check the look of a muddy run.
@@ -64,6 +70,11 @@ All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
 ## Contract issues
 
 ## Integrator requests
+
+4. **View sync draws a model only once it is loaded (engine).** `createViewSync` clones an entity's `model` on the first frame it sees
+   it and throws `assets: '<key>' is not loaded` while `assets.preload` is still running. Wanted: sync skips (defers) an entity whose
+   `assets.has(model)` is false and draws it on the first frame after it loads. Interim in `src/game.view.js` (as Pig Pens 3k): the
+   farm's view half gates `view.sync.frame` until every baked model is loaded.
 
 1. **`world.joint` without `JointData` (blocking at merge, not now).** `games/test/phase3-done.test.mjs` bans the `JointData` identifier in game code, but lion-hawk 0.8.0 `world.joint(a, b, data)` only takes raw Rapier joint data, so the trailer hitch writes `world.R.JointData.spherical(frontAnchor, TR.tongue)`. Wanted: `world.joint(a, b, { type: 'spherical', a: [x, y, z], b: [x, y, z] })` (the engine builds the JointData), or the done test waives `world.joint` lines.
 2. **`games/package-lock.json`** after `games/tractor-pickup/package.json` changes (plan request 1).

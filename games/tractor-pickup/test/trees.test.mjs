@@ -9,7 +9,6 @@ import { buildRoad } from '../src/sim/road.js';
 import { roadside, curveCenters, ROADSIDE } from '../src/sim/scenery.js';
 import { makeRng } from '../src/sim/rng.js';
 import { createTrees, TREE } from '../src/sim/trees.js';
-import { stepGib } from '../src/render/gibs.js';
 
 const oneTree = (x = 0, z = 0, young = false) => [{ kind: 'tree', x, z, r: young ? TREE_R.young : TREE_R.single, young, scale: young ? 0.62 : 1 }];
 const oneBush = (x = 0, z = 0) => [{ kind: 'bush', x, z, r: TREE_R.bush, scale: 1 }];
@@ -112,13 +111,6 @@ test('reset() grows broken trees back with their colliders (T-32)', () => {
   trees.reset(); assert.equal(tree.state, 'growing'); assert.ok(tree.solid);
   for (let i = 0; i < Math.ceil(TREE.regrowTime * 60) + 2; i++) trees.step(DT, [{ translation: () => ({ x: 99, y: 0, z: 99 }), rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }), linvel: () => ({ x: 0, y: 0, z: 0 }) }]);
   assert.equal(tree.state, 'standing'); assert.equal(tree.grow, 1);
-});
-
-test('stepGib: bounces, never goes below the ground, comes to rest and dies (gibs)', () => {
-  const g = { x: 0, y: 1, z: 0, vx: 3, vy: 6, vz: 1, size: 0.3, ax: 0, ay: 0, az: 0, wx: 5, wy: 3, wz: 4, rest: 0, scale: 1, alive: true };
-  let t = 0, bounced = false, restedAt = null, prevVy = g.vy;
-  while (g.alive && t < 20) { stepGib(g, DT); t += DT; assert.ok(g.y >= g.size / 2 - 1e-9, `below ground ${g.y}`); if (g.vy > 0 && prevVy < 0) bounced = true; prevVy = g.vy; if (g.rest > 0 && restedAt === null) restedAt = t; }
-  assert.ok(bounced); assert.ok(restedAt !== null && restedAt < 8, 'never came to rest'); assert.ok(!g.alive, 'never removed'); assert.ok(t - restedAt > 3 && t - restedAt < 5.5, `life after rest ${t - restedAt}`);
 });
 
 test('a tree or bush can be broken by id (M-17)', () => {

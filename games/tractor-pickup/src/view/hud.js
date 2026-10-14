@@ -44,7 +44,7 @@ function edgeArrow(rig, p) {
 }
 
 // root: #ui. world(): the farm's 3D (its fx), tractorAt(): the drawn tractor position (interpolated). icons, tractorPic: the
-// slot pictures and the bubble's tractor (ui/icons.js); paints: PAINTS (render/vehicles3d.js); scene: the page's three.js scene.
+// slot pictures and the bubble's tractor (ui/icons.js); paints: PAINTS (view/vehicles.js); scene: the page's three.js scene.
 export function createTractorHud(root, { icons, voice, sound, rig, paints, tractorPic, scene, world, tractorAt }) {
   const doc = root.ownerDocument, before = new Set(root.children);
   const hud = createHud(root, { icons, onWordTap: ids => voice.say(ids), onSlotTap: (type, golden) => { sound.animal(type); voice.say(golden ? ['golden', type] : [type]); } }); // E-3

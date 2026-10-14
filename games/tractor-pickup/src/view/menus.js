@@ -17,7 +17,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
     if (menus) return menus;
     const p = pics(view);
     return (menus = make(view.doc.getElementById('ui'), {
-      icons: p.icons, art: createStickerArt(p.renderer), tractorPic: p.tractorPic,
+      icons: p.icons, art: p.renderer ? createStickerArt(p.renderer, p.view.assets, p.view.materials) : null, tractorPic: p.tractorPic,
       onPaint(paint) { p.sound.plop(); command('paint', { body: paint.body, trim: paint.trim }); }, // W-3
       onHats(_, id) { p.sound.plop(); command('hat', { id }); }, // W-4
       onPlace(i, at) { command('sticker.place', { i, page: at.page, x: at.x, y: at.y }); }, // W-2

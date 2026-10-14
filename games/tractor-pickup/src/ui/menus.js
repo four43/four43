@@ -1,7 +1,7 @@
 // Start screen (F-11), sticker card (F-3, F-9), paint screen (W-3), sticker book (W-2) and the parent menu (U-3, P-3..P-8).
 // Everything a child sees is a picture (R-2, U-4); only the parent panel has text. Buttons use `click` so iOS counts the tap as a gesture for audio.
 import { clampSettings, unlockedPaints, unlockedHats, wornHats, toggleHat, placeSticker, unplaceSticker, bookPages, newStickers, seeBook } from '../sim/progress.js';
-import { PAINTS } from '../render/vehicles3d.js';
+import { PAINTS } from '../view/vehicles.js';
 import { SCALE } from '../render/petScale.js';
 import { qrSvg } from './qr.js';
 
