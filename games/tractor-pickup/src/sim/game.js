@@ -13,7 +13,7 @@ import { createLoad, slotPoint, newRider, stepRider } from './slots.js';
 import { launchLocal, FLIGHT, SPLIT } from './launch.js';
 import { spawnPoint } from './spawn.js';
 import { makeRng } from './rng.js';
-import { stepDirt, stepRiderDirt, WASH_RATE } from './dirt.js';
+import { stepRiderDirt, WASH_RATE } from './dirt.js';
 
 export const CAPACITY = 12;                            // G-1: 6 in the trailer + 6 in the wagon
 export const CATCH = { x0: 1.6, x1: 4.0, half: 1.6 }; // B-1: box in front of the nose, 1.5 x tractor width
@@ -51,7 +51,7 @@ export function createGame(world, { seed, power = 'medium', player = 1 }) {
 
   const game = {
     farm, road, terrain, ground, items, world, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
-    load: createLoad(CAPACITY), mode: 'drive', dirt: { tractor: 0 }, // T-16: dirt levels 0..1 (cars and animals carry their own)
+    load: createLoad(CAPACITY), mode: 'drive', dirt: { get tractor() { return tractor.e.coverage.dirt; }, set tractor(v) { tractor.e.coverage.dirt = v; } }, // T-16: the coverage kit's levels 0..1 (cars and animals carry their own)
     others: [], claims: false, boopsPaused: false, // multiplayer: other tractors for the herd (M-12), boops wait for the host (M-14), host away (M-40)
     hats: [], // W-4, M-60: the hats this player wears; a boop puts one on the animal (a.hat), and its train record tells the others
     wearHats(ids) { game.hats = ids; for (const f of flights) putHat(f.animal); for (const s of game.load.slots) if (s.landed) putHat(s.animal); }, // the riders change hats at once
@@ -122,13 +122,13 @@ export function createGame(world, { seed, power = 'medium', player = 1 }) {
       if (pendingPass && flights.length === 0) game.barnWait = load.landed() > 0 && game.barnGate ? game.barnGate() : 0; // M-71, M-72: one show at a time: held in the barn until the host gives it
       if (pendingPass && flights.length === 0 && !game.barnWait) { pendingPass = false; if (load.landed() > 0 || game.lastDrive) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
       if (game.mode === 'arrive' || game.mode === 'show') for (const b of bodies) { const v = b.linvel(); if (Math.hypot(v.x, v.z) > 0.05) b.setLinvel({ x: v.x * STOP, y: v.y, z: v.z * STOP }, true); }
-      // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler and the farmyard wash (T-36) clean
-      const M = world.materials, sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;
-      game.dirt.tractor = stepDirt(game.dirt.tractor, { ground: M.get(tractor.ground).game, speedFrac: sf, washing }, DT);
+      // dirt (T-15, T-16): the coverage kit (run before this system) added dirtRate × metres to the tractor and cars and did the sprinkler and
+      // yard-wash cleaning (the wash at its own washTime). Riders get the splash from a car in mud (animals are not entities: game rule).
+      const M = world.materials, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0; let anyWash = washAt(tractor.x, tractor.z) > 0;
       for (const c of train.cars) {
-        const p = c.body.translation(), w = washAt(p.x, p.z), ground = M.get(road.materialAt(p.x, p.z)).game;
-        anyWash ||= w > 0; c.dirt = stepDirt(c.dirt, { ground, speedFrac: sf, washing: w }, DT);
-        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: ground.surface === 'mud', speed: tractor.speed, washing: w }, DT);
+        const p = c.body.translation(), w = washAt(p.x, p.z), under = M.get(ground.materialAt(p.x, p.z)).game;
+        anyWash ||= w > 0;
+        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: under.surface === 'mud', speed: tractor.speed, washing: w }, DT);
       }
       if (tractor.surface === 'mud' && lastSurface !== 'mud') events.push({ type: 'mud-enter' });
       lastSurface = tractor.surface;

@@ -18,7 +18,7 @@ export const CAR_WHEELS = ['wheel-left', 'wheel-right']; // the kit's wheel part
 function createCar(world, frontE, frontAnchor, index) {
   const front = frontE.body, h = local2world(front, frontAnchor), q = front.rotation(), { f } = quatAxes(q);
   const cx = h.x - f.x * TR.tongue.x, cz = h.z - f.z * TR.tongue.x;
-  const e = world.spawn({ tags: ['car'], at: [cx, h.y - TR.tongue.y, cz], q: [q.x, q.y, q.z, q.w],
+  const e = world.spawn({ tags: ['car'], coverage: { dirt: 0 }, at: [cx, h.y - TR.tongue.y, cz], q: [q.x, q.y, q.z, q.w],
     body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.6 },
     colliders: [ // bed: 260 kg and tongue: 5 kg through their materials' densities (src/defs/materials.js), as setMass gave
       { shape: 'box', half: [TR.half.x, TR.half.y, TR.half.z], p: [0, 0, 0], q: Q0, part: 'bed', material: 'bed' },
@@ -30,7 +30,8 @@ function createCar(world, frontE, frontAnchor, index) {
       suspension: { rest: TR.suspRest, stiffness: 22, compression: 2.2, relaxation: 2.8, travel: 0.4, maxForce: 1e5 } })) }), vc = car.controller;
   const joint = world.joint(frontE, e, world.R.JointData.spherical(frontAnchor, TR.tongue)); // engine request: world.joint without JointData (notes, Integrator request 1)
   joint.setContactsEnabled(false);
-  return { e, body, car, vc, index, joint, front, frontAnchor, dirt: 0 };
+  return { e, body, car, vc, index, joint, front, frontAnchor,
+    get dirt() { return e.coverage.dirt; }, set dirt(v) { e.coverage.dirt = v; } }; // the coverage kit's level (T-16)
 }
 
 export function createTrain(world, tractor) {

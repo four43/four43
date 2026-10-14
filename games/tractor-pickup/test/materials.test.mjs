@@ -4,12 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import MATERIALS, { SURFACE_IDS } from '../src/defs/materials.js';
 
-test('surfaces keep the old grip, vmul and dirt rates, and name their legacy surface', () => {
+test('surfaces keep the old grip and vmul, and carry per-metre dirt rates, and name their legacy surface', () => {
   const g = id => MATERIALS.get(id).game;
   assert.deepEqual(SURFACE_IDS, ['route', 'meadow', 'mudhole']);
-  assert.deepEqual(g('route'), { surface: 'gravel', grip: 1, vmul: 1, dirt: 0.006, scaled: true });
-  assert.deepEqual(g('meadow'), { surface: 'grass', grip: 0.8, vmul: 0.7, dirt: 0.004, scaled: true });
-  assert.deepEqual(g('mudhole'), { surface: 'mud', grip: 0.55, vmul: 0.5, dirt: 0.6, scaled: false });
+  assert.deepEqual(g('route'), { surface: 'gravel', grip: 1, vmul: 1 });
+  assert.deepEqual(g('meadow'), { surface: 'grass', grip: 0.8, vmul: 0.7 });
+  assert.deepEqual(g('mudhole'), { surface: 'mud', grip: 0.55, vmul: 0.5 });
+  for (const [id, r] of [['route', 0.006 / 9], ['meadow', 0.004 / 9], ['mudhole', 0.6 / 4.5]]) assert.equal(MATERIALS.get(id).dirtRate, r, id); // per metre (Task 13b)
   for (const id of SURFACE_IDS) assert.ok(MATERIALS.index(id) < 255);
 });
 test('collider frictions and restitutions are today\'s literals', () => {

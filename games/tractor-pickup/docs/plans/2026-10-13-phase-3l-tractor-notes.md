@@ -22,6 +22,11 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
 
 ## Done-when evidence
 
+## Vehicle kit (Task 13)
+
+No re-bless 2: the slide help, turn help, yaw clamp, self-righting and jackknife impulses run in one system after `VEHICLE_SYSTEM`
+and before `lh.physics.step` (`src/sim/wheels.js`), as they ran after each `updateVehicle` before, and both goldens stayed bit-exact.
+
 ## Re-bless 1 (World)
 
 Causes (Task 11): every body and collider through `world.spawn` in the old creation order (ground, ramps, walls, props, trees, tractor,
@@ -51,6 +56,10 @@ All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
 - `src/sim/tractor.js:39` `massProps` (D3): the playtested 1400 kg and tuned inertia.
 
 ## Playtest list
+
+- Dirt per metre (Task 13b, coverage kit): `route` 0.006/9, `meadow` 0.004/9, `mudhole` 0.6/4.5 per metre, equal to 1.8 at Medium speeds and at mud
+  top speed. Low power now dirties 1.5x faster and High 0.75x as fast on gravel and grass; a tractor standing in mud no longer gets dirtier;
+  slow driving in mud dirties less. Check the look of a muddy run.
 
 ## Contract issues
 

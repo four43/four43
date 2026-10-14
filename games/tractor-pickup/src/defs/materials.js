@@ -1,17 +1,19 @@
 // Tractor Pickup's materials (lion-hawk 3l, M-2, D6). Sim-pure data: the sim reads surfaces and colliders, the bake checks the renamed
 // glTF materials, the view compiles the looks. Surfaces: the old SURFACE grip/vmul (sim/tractor.js) and DIRT per-second rates
-// (sim/dirt.js) moved into each surface's game block; `surface` keeps the legacy name the view, the sounds and the events use;
-// `scaled`: the rate grows with the speed fraction (gravel, grass) or not (mud). Colliders: today's literal frictions. The trailer's
+// (sim/dirt.js) moved into the registry: grip/vmul in each surface's game block, dirt as a per-metre dirtRate (coverage kit); `surface` keeps the legacy name the view, the sounds and the events use;
+// Colliders: today's literal frictions. The trailer's
 // bed and tongue reproduce their setMass masses through `fill` (density × volume, M-6): 260 kg over 2.8 × 0.3 × 2 m, 5 kg over 1.8 × 0.12 × 0.16 m.
 import { defineMaterials } from 'lion-hawk/sim';
 
 export const SURFACE_IDS = Object.freeze(['route', 'meadow', 'mudhole']);
+// dirt per metre (coverage kit, spec §3.2): 1.8's per-second rates at Medium speeds (vmax 9 m/s; mud's top speed 4.5 m/s) (3l Task 13b)
+export const DIRT_RATES = Object.freeze({ route: 0.006 / 9, meadow: 0.004 / 9, mudhole: 0.6 / 4.5 });
 const dirty = { coverage: { dirt: 1 } };
 export default defineMaterials({
   // surfaces (materialAt)
-  route:   { extends: 'gravel', game: { surface: 'gravel', grip: 1, vmul: 1, dirt: 0.006, scaled: true } },
-  meadow:  { extends: 'grass', game: { surface: 'grass', grip: 0.8, vmul: 0.7, dirt: 0.004, scaled: true } },
-  mudhole: { extends: 'mud', game: { surface: 'mud', grip: 0.55, vmul: 0.5, dirt: 0.6, scaled: false } },
+  route:   { extends: 'gravel', dirtRate: DIRT_RATES.route, game: { surface: 'gravel', grip: 1, vmul: 1 } },
+  meadow:  { extends: 'grass', dirtRate: DIRT_RATES.meadow, game: { surface: 'grass', grip: 0.8, vmul: 0.7 } },
+  mudhole: { extends: 'mud', dirtRate: DIRT_RATES.mudhole, game: { surface: 'mud', grip: 0.55, vmul: 0.5 } },
   // colliders
   ground:  { extends: 'dirt', phys: { friction: 0.6, restitution: 0 } },
   pad:     { extends: 'gravel', phys: { friction: 0.9, restitution: 0 } },

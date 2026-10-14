@@ -16,6 +16,9 @@ import { TYPES } from '../sim/herd.js';
 import { clampBedtime, sleepNow } from '../sim/bedtime.js';
 import { clampProgress, clampSettings, wornHats, hasPaintChoice, seedParam, powerParam } from '../sim/progress.js';
 import { createWarnOnce } from 'lion-hawk/sim';
+import { coverageKit, COVERAGE_SYSTEM } from 'lion-hawk/kits/coverage';
+import { DIRT, WASH_RATE } from '../sim/dirt.js';
+import { inWash } from '../sim/track.js';
 import { play, stepFlow, stepBed, lastDrive, goSleep, wake, open, setGuide } from './flow.js';
 
 // The farm's own event types (never a game.step type), so the engine-path goldens can filter them out
@@ -159,7 +162,11 @@ export function makeFarm({ clock = null, bindings = null } = {}) { // clock, bin
         net: { role: 'solo', sync: null, facade: null, at: null, registry: null }, // game/net.js (net.open)
       });
       build(e, s, seed, power, player);
-      ctx.system('tp.farm.post', en => post(en, ctx), { stage: 'post' });
+      coverageKit(ctx, { layer: () => 'dirt', washTime: DIRT.washTime, // one dirt level per thing (T-16); every ground dirties it
+        materialAt: (x, z) => ctx.state.game?.ground.materialAt(x, z) ?? 'route',
+        washes: [(x, z) => !!ctx.state.game?.road.inSprinkler(x, z), // the sprinkler: clean in DIRT.washTime
+          { at: (x, z) => { const g = ctx.state.game; return !!g && inWash(g.farm.yard, x, z); }, washTime: DIRT.washTime / WASH_RATE }] }); // the yard wash: 3x
+      ctx.system('tp.farm.post', en => post(en, ctx), { stage: 'post', after: [COVERAGE_SYSTEM] });
       if (s.started && s.bed.phase === 'asleep') goSleep(e, s, { quiet: true }); // N-7: a reload while asleep
       enterStart(e, s);
     },

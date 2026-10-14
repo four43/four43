@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import MATERIALS from '../src/defs/materials.js';
 import { generateFarm } from '../src/sim/track.js';
 import { buildRoad, ROAD_HALF } from '../src/sim/road.js';
-import { stepDirt } from '../src/sim/dirt.js';
 import { testWorld } from './helpers/world.mjs';
 import { addGround, DT } from '../src/sim/ground.js';
 import { createTractor, POWER } from '../src/sim/tractor.js';
@@ -16,11 +15,6 @@ test('road.materialAt: route in the yard and on the road, meadow off it, mudhole
   const p = road.routes[0].pts[40]; assert.equal(road.materialAt(p.x, p.z), farm.routes[p.r].tiles[p.k].type === 'mud' && Math.abs(p.u - 0.5) < 0.35 ? 'mudhole' : 'route');
   assert.equal(road.materialAt(p.x - p.tz * (ROAD_HALF + 3), p.z + p.tx * (ROAD_HALF + 3)), 'meadow');
   assert.equal(road.surfaceAt, undefined, 'one lookup, the material one');
-});
-test('dirt: per-second rates from the material; mud does not scale with speed', () => {
-  const g = id => MATERIALS.get(id).game;
-  assert.ok(Math.abs(stepDirt(0, { ground: g('route'), speedFrac: 0.5, washing: 0 }, 1) - 0.003) < 1e-12);
-  assert.ok(Math.abs(stepDirt(0, { ground: g('mudhole'), speedFrac: 0, washing: 0 }, 1) - 0.6) < 1e-12);
 });
 test('the tractor reads grip and vmul through materialAt (mud from the registry halves the top speed)', () => {
   const { world, step } = testWorld(); addGround(world);
