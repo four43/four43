@@ -1,6 +1,6 @@
 {
   "name": "rally",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Rally sim test pad (Milestone 1)",
   "scripts": {
     "dev": "lion-hawk dev",
