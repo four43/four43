@@ -1,11 +1,11 @@
-// Tiny WebAudio synth for farm noises. Everything is generated; no audio files.
+// Tiny WebAudio synth for farm noises, on the engine's audio service (lion-hawk #67: view.audio makes, unlocks, suspends
+// and resumes the context, and limits the master bus). Everything is generated; no audio files.
 export class Sound {
-  constructor() { this.ctx = null; this.muted = false; this.lastOink = 0; this.oinks = 0; }
-  unlock() {
-    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); this.master = this.ctx.createGain(); this.master.gain.value = 0.55; this.master.connect(this.ctx.destination); } catch (e) { return; } }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
-  }
-  get ok() { return this.ctx && !this.muted && this.ctx.state === 'running'; }
+  constructor(audio) { this.audio = audio; this.lastOink = 0; this.oinks = 0; }
+  get ctx() { return this.audio?.ctx ?? null; }
+  get master() { return this.audio?.master ?? null; }
+  get muted() { return !!this.audio?.muted; }
+  get ok() { return !!this.ctx && !this.muted && this.ctx.state === 'running'; }
   // voiced grunt: sawtooth through two formant filters with a pitch glide
   voice(f0, f1, dur, vol, formants = [600, 1300], when = 0) {
     const c = this.ctx, t = c.currentTime + when;
@@ -90,11 +90,11 @@ export class Sound {
     this.eng.g.gain.setTargetAtTime(on && !this.muted ? 0.13 : 0, c.currentTime, 0.2);
   }
   engineLevel(load, speed) { if (!this.eng || !this.ctx) return; const t = this.ctx.currentTime, f = 34 + speed * 7 + load * 14; this.eng.o.frequency.setTargetAtTime(f, t, 0.1); this.eng.o2.frequency.setTargetAtTime(f / 2, t, 0.1); this.eng.f.frequency.setTargetAtTime(300 + load * 500, t, 0.1); if (this.muted) this.eng.g.gain.setTargetAtTime(0, t, 0.05); }
-  event(ev, camera) {
+  // events placed in the world are quieter far from the camera (audio.listen(camera): 18 / (d + 10), 0.05..0.6)
+  event(ev) {
     if (!this.ok) return;
     const now = performance.now();
-    const d = ev.x !== undefined ? Math.hypot(ev.x - camera.position.x, ev.z - camera.position.z) : 0;
-    const vol = Math.max(0.05, Math.min(0.6, 18 / (d + 10)));
+    const vol = ev.x !== undefined ? this.audio.distanceGain(ev.x, 0, ev.z) : 0.6;
     if (ev.type === 'squeal') this.squeal();
     else if (ev.type === 'cluck') { if (now - (this.lastCluck || 0) < 300) return; this.lastCluck = now; this.cluck(vol * 0.7, ev.worried); }
     else if (ev.type === 'peep') { if (now - (this.lastPeep || 0) < 250) return; this.lastPeep = now; this.peep(vol * 0.6); }

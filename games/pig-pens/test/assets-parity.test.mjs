@@ -10,7 +10,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 const root = new URL('../', import.meta.url);
-const OLD = JSON.parse(readFileSync(new URL('src/assets.json', root), 'utf8'));
+const OLD = JSON.parse(readFileSync(new URL('test/fixtures/assets-v2.1.0.json', root), 'utf8'));
 const MAN = JSON.parse(readFileSync(new URL('baked/manifest.json', root), 'utf8'));
 await MeshoptDecoder.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder });

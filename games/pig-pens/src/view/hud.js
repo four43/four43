@@ -84,7 +84,7 @@ export function createHud(doc, { world }) {
       if (sim.clock.night !== night) { night = sim.clock.night; dn.setAttribute('aria-label', night ? 'Night. Switch to day' : 'Day. Switch to night'); } // aria-pressed is the engine's (farm.night)
       if (s.driving !== driving) { driving = s.driving; doc.body.classList.toggle('driving', driving); }
       // the hold ring on the tractor, where the finger went down, until it drives, lifts or turns into an orbit
-      const on = pressing(s) && !rig.orbiting && !!rig.pressAt;
+      const on = pressing(s) && !rig.orbit?.orbiting && !!rig.pressAt;
       if (on !== pressOn) {
         pressOn = on;
         if (on) { press.style.left = rig.pressAt.x + 'px'; press.style.top = rig.pressAt.y + 'px'; press.classList.remove('go'); void press.offsetWidth; press.classList.add('go'); press.hidden = false; }

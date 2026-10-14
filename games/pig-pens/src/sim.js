@@ -87,7 +87,7 @@ export function createSim(world, opts = {}) {
       [x, z] = freeSpot(m.spawnX - 1.8, m.spawnZ - 1.8, m.spawnX + 1.8, m.spawnZ + 1.8, r);
     }
     const fields = { // built before the spawn, in 2.1.0's order of rng() calls (the body takes none)
-      tags: ['pig'], model: 'pig',
+      tags: ['pig'], model: 'pig', draw: false, // the pig crowd draws pigs (view/pigs3d.js), not view sync
       i, r, piglet, mom, spawnX: x, spawnZ: z, name: PIG_NAMES[i % PIG_NAMES.length],
       scale: (piglet ? P.pigletScale : P.adultScale) * (0.93 + 0.14 * rng()),
       mass: piglet ? P.pigletMass : P.adultMass,
@@ -103,7 +103,7 @@ export function createSim(world, opts = {}) {
 
   // ---- dog ------------------------------------------------------------------
   const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'pig', 'food', 'chick', 'tractor', 'fox'] }, 'pet',
-    { tags: ['dog'], model: 'dog', r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0 });
+    { tags: ['dog'], model: 'dog', draw: false, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0 });
 
   // ---- food -------------------------------------------------------------------
   const foods = []; let foodSeq = 0;

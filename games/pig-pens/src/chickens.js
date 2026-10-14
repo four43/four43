@@ -52,7 +52,7 @@ export function createFlock(ctx) {
     const b = world.spawn({
       body: { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, ccd: true, canSleep: false, mass },
       colliders: [{ shape: 'sphere', r, material: 'bird' }], groups: { member: ['chick'], filter: ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'tractor'] },
-      at: [x, r, z], tags: ['bird'], model: 'chick', ...fields,
+      at: [x, r, z], tags: ['bird'], model: 'chick', draw: false, ...fields, // drawn by the flock crowds (view/flock3d.js)
     });
     b.yaw = yaw;
     birds.push(b); return b;
@@ -73,7 +73,7 @@ export function createFlock(ctx) {
   // ---- fox ------------------------------------------------------------------------
   const fox = world.spawn({
     body: { type: 'dynamic', lock: { rot: true }, canSleep: false, mass: 7 }, colliders: [{ shape: 'sphere', r: 0.26, material: 'foxPelt' }],
-    groups: { member: ['fox'], filter: ['ground', 'pig', 'dog', 'tractor'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox',
+    groups: { member: ['fox'], filter: ['ground', 'pig', 'dog', 'tractor'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox', draw: false,
     state: FST.AWAY, wa: 0, x: 0, z: -50, vx: 0, vz: 0, speed: 0, target: null, carrying: null, fear: 0, cooldown: 30, timer: 0, hop: 0, raids: 0, steals: 0, ex: 0, ez: 0,
   });
   fox.yaw = 0; // a game field (`yaw` in a desc is the spawn pose)

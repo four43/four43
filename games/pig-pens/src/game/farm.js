@@ -86,7 +86,7 @@ export function makeFarm() {
         return down(e, s, g, d);
       }
       const g = s.gesture; if (!g || g.pointer !== d.pointer) return;
-      if (ph === 'move') { if (g.down) move(e, s, g, d); }
+      if (ph === 'move') { if (g.tool === 'hand' && d.orbit) g.target = null; else if (g.down) move(e, s, g, d); } // the view turned the Hand into an orbit: nothing to press
       else if (ph === 'up' || ph === 'cancel') { if (g.down) { g.down = false; lift(e, s, g); } }
       else if (ph === 'press') { if (g.tool === 'hand' && g.down && g.target?.kind === 'tractor' && !s.driving) { g.target = null; api.enterDrive(e); } }
       else if (ph === 'tap') {

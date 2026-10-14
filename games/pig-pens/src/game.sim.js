@@ -31,6 +31,9 @@ function state(e) {
   };
 }
 
+// The page's Rapier start (#6): main.js awaits this before boot, so only this defineGame file imports Rapier.
+export const initPhysics = () => R.init();
+
 export function pigPensGame() {
   const { scene: farm, api } = makeFarm();
   // → window.engine.debug
