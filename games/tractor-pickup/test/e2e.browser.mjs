@@ -82,3 +82,61 @@ test('desktop: the show plays and acks; the riders walk in from their show spots
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
+
+const NOW = '.parent [data-g="bed"] [data-v="0"]'; // the parent menu's bedtime "Now" (ui/menus.js openParent)
+const openParent = async game => { await game.press('farm.parent'); await game.step(130); await game.unpress('farm.parent'); await game.page.locator(NOW).waitFor({ state: 'visible', timeout: 5000 }); };
+
+test('desktop: bedtime from the parent menu, the last drive, sleep and a 5 s wake hold; storage keeps it (N-1..N-7)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS });
+  try {
+    await openParent(game);
+    await game.page.locator(NOW).click(); await game.step(2);
+    assert.deepEqual((await game.scene()).overlays, [], 'a bedtime choice closes the parent menu');
+    assert.equal(await game.page.locator('.parent').count(), 0);
+    await game.page.evaluate(() => window.engine.command('clock', { date: Date.now() + 1000 })); await game.step(1);
+    await expectState(game, 'bed.phase', 'last');
+    assert.equal(JSON.parse(await game.page.evaluate(() => localStorage.getItem('tp-bedtime'))).phase, 'last');
+    await game.jump('farm', 'asleep', {}, ARGS); await game.step(2);
+    assert.equal(await game.page.locator('#sleep [data-testid="sleep.wake"]').isVisible(), true);
+    await game.press('sleep.wake'); await game.step(290); await expectState(game, 'mode', 'sleep'); await game.step(20); await game.unpress('sleep.wake');
+    await expectState(game, 'mode', 'drive');
+    assert.equal(await game.page.locator('#sleep').count(), 0, 'the night layer goes with the wake');
+    assert.equal(JSON.parse(await game.page.evaluate(() => localStorage.getItem('tp-bedtime'))).phase, 'awake');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop: an empty last drive ends at the barn; the wake button comes after the dusk; settings are saved (E-5, P-3..P-5)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS });
+  try {
+    await game.jump('farm', 'barn', { n: 0 }, ARGS); await game.step(190);
+    await openParent(game);
+    await game.page.locator('.parent [data-g="music"] [data-v="0"]').click(); await game.step(1);
+    assert.equal(JSON.parse(await game.page.evaluate(() => localStorage.getItem('tp-settings'))).music, false);
+    await game.page.locator(NOW).click(); await game.step(2); await expectState(game, 'bed.phase', 'last');
+    await game.page.evaluate(() => { window.engine.debug.drive({ thr: 1, steer: 0, horn: false }); });
+    await game.untilEvent('sleep', { maxSteps: 900 }); await game.page.evaluate(() => window.engine.debug.drive(null)); await game.step(1);
+    await expectState(game, 'mode', 'sleep');
+    assert.equal(await game.page.locator('#sleep [data-testid="sleep.wake"]').isVisible(), false, 'the night falls before the wake button shows');
+    await game.step(250);
+    assert.equal(await game.page.locator('#sleep [data-testid="sleep.wake"]').isVisible(), true);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop: a reload while asleep wakes into the night at once (N-7); ?tune and ?fps', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 14, query: { tune: '', fps: '' }, settings: { 'tp-bedtime': { phase: 'asleep', at: null, choice: null } } });
+  try {
+    await expectState(game, 'bed.phase', 'asleep');
+    await game.page.keyboard.press('h'); await game.step(2); // the first key starts the trip, which goes straight to sleep
+    await expectState(game, 'mode', 'sleep');
+    assert.equal(await game.page.locator('#sleep [data-testid="sleep.wake"]').isVisible(), true, 'a quiet sleep shows the wake button at once');
+    assert.equal(await game.page.locator('#tune').count(), 1);
+    await game.page.evaluate(() => new Promise(r => setTimeout(r, 700))); // the meter redraws its text every 0.5 s of frames
+    assert.match(await game.page.locator('#fps').textContent(), /fps/);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});

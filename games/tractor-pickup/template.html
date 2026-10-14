@@ -176,6 +176,7 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .gear i{position:absolute;inset:-3px;border-radius:50%;--p:0deg;background:conic-gradient(#f5c84c var(--p),transparent 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));mask:radial-gradient(farthest-side,transparent calc(100% - 5px),#000 calc(100% - 4px));pointer-events:none}
 .gear[data-lh-slot] i{--p:calc(var(--lh-progress,0) * 360deg)} /* lion-hawk: the farm.parent hold's progress fills the ring */
 #show .skip[data-lh-slot] i{--p:calc(var(--lh-progress,0) * 360deg)} /* lion-hawk: the show.skip hold's progress fills the ring */
+.pic.wake[data-lh-slot] i{--p:calc(var(--lh-progress,0) * 360deg)} /* lion-hawk: the sleep.wake hold's progress fills the ring */
 #ui [data-lh-slot]:not([data-testid]){display:none} /* an adopted control out of the engine's registry (before boot, or its screen closed) */
 .parent{position:absolute;inset:0;z-index:30;background:rgba(40,25,15,.55);display:grid;place-items:center;pointer-events:auto;touch-action:pan-y}
 .parent .box{position:relative;background:#fffcf8;color:#3a2412;border-radius:18px;padding:18px 22px;width:min(520px,92vw);max-height:92vh;overflow:auto;font:16px/1.4 Andika,system-ui,sans-serif;user-select:auto;-webkit-user-select:auto}

@@ -3,7 +3,8 @@
 // pad (view/world.js), the chase camera (view/rig.js), the interpolated bodies (view/bodies.js), and the sounds, voice and
 // effects main.js's frame loop played from game.step's events and stepSounds (#87). G2: the farm's HUD (view/hud.js). G3: the
 // show cutscene (ui/show.js on copies of the riders, #79), the sticker card, the start screen and the paint and book screens
-// (view/menus.js). The parent menu, the sleep screen and multiplayer come in G4–G5.
+// (view/menus.js). G4: the parent menu and the sleep screen (view/menus.js), the sleep and wake voice lines, ?tune and ?fps.
+// Multiplayer comes in G5.
 import { defineView, createWarnOnce, bindGesture } from 'lion-hawk/view';
 import { createScene } from './render/scene.js';
 import { Sound } from './audio/sound.js';
@@ -19,12 +20,15 @@ import { menuHalves } from './view/menus.js';
 import { createShow, skipSvg, CHEER } from './ui/show.js';
 import { renderIcons, tractorPicture } from './ui/icons.js';
 import { PAINTS } from './render/vehicles3d.js';
+import { buildTunePanel, createFpsMeter } from './ui/debug.js';
 
+let audio = null; // the page's sound and voice: the view halves play them; the entry unlocks them and applies the settings (X-13)
+export const audioOf = () => audio ??= (sound => ({ sound, voice: createVoice(sound) }))(new Sound());
 let page = null; // one WebGL renderer, scene, camera and audio per page, made on the first enter on #c (main.js's createScene)
 function pageOf(doc) {
   if (page) return page;
-  const canvas = doc.getElementById('c'), { renderer, scene, camera, follow, setNight } = createScene(canvas), sound = new Sound();
-  page = { canvas, renderer, scene, camera, follow, setNight, aniso: renderer.capabilities.getMaxAnisotropy(), sound, voice: createVoice(sound), nightK: 0 };
+  const canvas = doc.getElementById('c'), { renderer, scene, camera, follow, setNight } = createScene(canvas);
+  page = { canvas, renderer, scene, camera, follow, setNight, aniso: renderer.capabilities.getMaxAnisotropy(), ...audioOf(), nightK: 0, perf: null };
   return page;
 }
 // the slot pictures and the bubble's tractor (E-3, M-72): rendered once per page, on the first farm with a HUD
@@ -57,6 +61,8 @@ function onEvent(e, w, s) {
     case 'squelch': sound.squelch(); break; // T-13: the sandbox's mud
     case 'say': voice.say(e.ids, e.low ? { low: true } : undefined); break; // the trip's lines (spec 3.1)
     case 'progress': w.vehicles.setPaint(e.progress.paint); break; // W-3
+    case 'sleep': if (!e.quiet) voice.say(['sleepy', 'goodnight']); break; // E-5 (the night and the lullaby: the frame and the sleep half)
+    case 'wake': voice.say(['wake-up']); break;
   }
 }
 
@@ -66,9 +72,10 @@ function onEvent(e, w, s) {
 const link = { w: null, hud: null, show: null, poses: null, pending: null, kick: null, menus: null };
 
 // The drive half for the farm and the sandbox (main.js build/startFarm/frame, view side): one world per farm generation.
-// withHud: the farm's slot bar, arrows, roster and drive controls (the sandbox has none, as main.js's ?sandbox)
-function driveHalf({ withHud = false } = {}) {
-  let w = null, gen = -1, offs = [], hud = null;
+// withHud: the farm's slot bar, arrows, roster and drive controls (the sandbox has none, as main.js's ?sandbox). tune: the ?tune
+// panel on each farm build (D-5); fps: the ?fps meter (X-4, B-1)
+function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
+  let w = null, gen = -1, offs = [], hud = null, pageDoc = null;
   const bodies = createBodies(), warnOnce = createWarnOnce();
   const animView = { cars: null, alpha: 0, poses: null }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every frame
   // paint (W-3): the farm's progress; the sandbox keeps none, so the stored one from the scene args (main.js setPaint)
@@ -78,13 +85,18 @@ function driveHalf({ withHud = false } = {}) {
     page.canvas.dataset.tpGen = gen; // the farm generation the 3D shows (a debug read for the browser tests)
     bodies.rebind(g); animView.cars = vehSnap.cars = bodies.cars; vehSnap.tractor = bodies.view[0];
     rig.attach(page.camera, { canvas: page.canvas, tractor: g.tractor });
+    if (tune) { pageDoc.getElementById('tune')?.remove(); buildTunePanel(g); } // D-5: its sliders write this farm's feel constants
+    if (page.perf) { const pw = g.phys.world, st = pw.step; pw.step = (...a) => { const t = performance.now(); st.apply(pw, a); page.perf.worldMs(performance.now() - t); }; } // B-1: Rapier's share (?fps only: timing, no state)
   };
   const drop = () => { w?.dispose(page.sound); w = null; };
+  // ?fps: a rAF callback asked for during this frame runs before the driver's next tick, so it stamps the start of the next frame
+  // (before its steps): the meter gets that frame's gap, its sim time and its draw time, as main.js's frame did
+  const meter = { t0: 0, last: 0, gap: 0, mark(ts) { page.perf.begin(ts); meter.gap = meter.last ? ts - meter.last : 0; meter.last = ts; meter.t0 = performance.now(); } };
   return {
     enter(engine, view) {
-      pageOf(view.doc);
+      pageOf(view.doc); pageDoc = view.doc;
       const s = engine.scene.state; if (!s.game) return;
-      page.voice.enabled = s.settings?.voice ?? true;
+      if (fps) page.perf ??= createFpsMeter(page.renderer);
       build(s, engine.scene.args); view.project = rig.project;
       if (withHud) {
         const { icons, tractorPic, voice, sound } = picturesOf(page);
@@ -92,12 +104,14 @@ function driveHalf({ withHud = false } = {}) {
         hud.reset(s, engine.scene.id); // 2f delta: the slot bar from state on enter
         Object.assign(link, { w, hud, pending: null });
       }
-      offs = [bodies.watch(engine), engine.events.on(e => {
+      if (page.perf) offs.push(engine.onStep(() => page.perf.step()));
+      offs.push(bodies.watch(engine), engine.events.on(e => {
+        page.perf?.event(e.type);
         if (!w) return;
         try { onEvent(e, w, engine.scene.state); } catch (err) { warnOnce('event ' + e.type, err); }
         try { hud?.event(e, engine); } catch (err) { warnOnce('hud ' + e.type, err); }
         if (withHud && e.type === 'show') try { showCopies(e, engine.scene.state); } catch (err) { warnOnce('show', err); }
-      })];
+      }));
     },
     // [S-6] a farm.new or a guest's welcome rebuilt the sim farm (its Rapier world is already freed): drop the old 3D farm,
     // build the new one, and the camera starts behind the new tractor (main.js startFarm)
@@ -112,7 +126,7 @@ function driveHalf({ withHud = false } = {}) {
       for (const f of offs) f(); offs = [];
       hud?.dispose(); hud = null;
       if (withHud) Object.assign(link, { w: null, hud: null, pending: null, poses: null });
-      drop();
+      drop(); if (tune) view.doc.getElementById('tune')?.remove();
       if (view.project === rig.project) view.project = undefined;
     },
     // view.dt is the driver's frame time (capped at maxFrame); 0 for hook renders (#19), which only redraw
@@ -135,7 +149,12 @@ function driveHalf({ withHud = false } = {}) {
       page.follow(v0.x, v0.z);
       const nightTo = s.bed?.phase === 'asleep' ? 1 : 0; // E-5
       if (page.nightK !== nightTo) { page.nightK = nightTo > page.nightK ? Math.min(nightTo, page.nightK + dt / BED.dusk) : Math.max(nightTo, page.nightK - dt / BED.wakeFade); page.setNight(page.nightK); }
+      const perf = page.perf, t1 = perf ? performance.now() : 0, progs = perf ? perf.programs() : 0;
       page.renderer.render(page.scene, page.camera);
+      if (perf && view.rawDt > 0) { // a hook render (rawDt 0) is no frame
+        const y = g.farm?.yard.barn; perf.tick(view.rawDt, meter.gap, meter.t0 ? t1 - meter.t0 : 0, performance.now() - t1, y ? Math.hypot(t.x - y.x, t.z - y.z) : 0, progs);
+        requestAnimationFrame(meter.mark);
+      }
     },
   };
 }
@@ -201,9 +220,9 @@ function showHalf() {
   };
 }
 
-// tune, fps: ?tune and ?fps (G4); sandbox: the ?sandbox page (its scene has no HUD or menus)
+// tune, fps: ?tune and ?fps (D-5, kept); sandbox: the ?sandbox page (its scene has no HUD or menus)
 export function tractorView({ tune = false, fps = false, sandbox = false } = {}) {
   const menus = link.menus = menuHalves(doc => picturesOf(pageOf(doc)));
-  return defineView({ scenes: { farm: driveHalf({ withHud: true }), sandbox: driveHalf(), show: showHalf(),
-    start: menus.start, reward: menus.reward, paint: menus.paint, book: menus.book } });
+  return defineView({ scenes: { farm: driveHalf({ withHud: true, tune, fps }), sandbox: driveHalf({ tune, fps }), show: showHalf(),
+    start: menus.start, reward: menus.reward, paint: menus.paint, book: menus.book, parent: menus.parent, sleep: menus.sleep } });
 }

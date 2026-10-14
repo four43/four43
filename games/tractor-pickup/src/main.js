@@ -26,7 +26,7 @@ import { buildShowSteps } from './sim/showSteps.js';
 import { createShow } from './ui/show.js';
 import { Sound } from './audio/sound.js';
 import { createVoice } from './audio/voice.js';
-import { createMenus, paintBtnSvg, bookSvg } from './ui/menus.js';
+import { createMenus, paintBtnSvg, bookSvg, sunSvg } from './ui/menus.js';
 import { disposeTree } from './render/dispose.js';
 import { load, save } from './ui/store.js';
 import { Handshake } from './net/handshake.js';
@@ -48,8 +48,6 @@ import { createHornMarks } from './render/hornMarks.js';
 import { DEFAULT_SETTINGS, seedParam, powerParam, clampSettings, clampProgress, completeShow, wornHats, emptyProgress, hasPaintChoice, newStickers } from './sim/progress.js';
 
 const MAX_STEPS = 3; // B-5
-// E-5: the wake button's sun
-const SUN_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><g stroke="#f08a1c" stroke-width="7" stroke-linecap="round">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<line x1="${50 + Math.cos(a) * 33}" y1="${50 + Math.sin(a) * 33}" x2="${50 + Math.cos(a) * 45}" y2="${50 + Math.sin(a) * 45}"/>`; }).join('')}</g><circle cx="50" cy="50" r="24" fill="#ffd24a" stroke="#f08a1c" stroke-width="5"/><circle cx="42" cy="46" r="3" fill="#6b4428"/><circle cx="58" cy="46" r="3" fill="#6b4428"/><path d="M41 56 Q50 64 59 56" stroke="#6b4428" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`;
 // M-72: the hourglass in the bubble of a train that waits for the barn
 const HOURGLASS_SVG = `<svg viewBox="0 0 60 76" aria-hidden="true"><path d="M12 10h36c0 14-12 20-12 28s12 14 12 28H12c0-14 12-20 12-28S12 24 12 10z" fill="#e8f4ff" stroke="#6b4428" stroke-width="3" stroke-linejoin="round"/><path d="M18 17h24c-3 8-9 11-12 15-3-4-9-7-12-15z" fill="#f5c84c"/><path d="M30 50c-5 3-11 8-12 14h24c-1-6-7-11-12-14z" fill="#f5c84c"/><rect x="6" y="3" width="48" height="8" rx="4" fill="#a0673a"/><rect x="6" y="65" width="48" height="8" rx="4" fill="#a0673a"/></svg>`;
 const snapOf = b => ({ p: new THREE.Vector3().copy(b.translation()), q: new THREE.Quaternion().copy(b.rotation()) });
@@ -155,7 +153,7 @@ async function main() {
     sleepNow(bed); saveBed(); sleepAfter = false; game.lastDrive = false; guideToBarn = false; helpTarget = null; fx.sparkleTrail([]); hud?.arrowTo(null);
     game.mode = 'sleep'; nightTo = 1; sound.lullaby(true); if (!quiet) voice.say(['sleepy', 'goodnight']);
     sleepEl?.remove(); sleepEl = document.createElement('div'); sleepEl.id = 'sleep'; sleepEl.hidden = !quiet; ui.appendChild(sleepEl);
-    sleepEl.innerHTML = `<button class="pic wake" aria-label="Wake up">${SUN_SVG}<span>Wake Up!</span><i></i></button>`;
+    sleepEl.innerHTML = `<button class="pic wake" aria-label="Wake up">${sunSvg()}<span>Wake Up!</span><i></i></button>`;
     holdToFire(sleepEl.querySelector('button'), BED.wakeHold, wake);
     sleepEl.addEventListener('pointerdown', e => e.stopPropagation());
     if (!quiet) setTimeout(() => { if (sleepEl) sleepEl.hidden = false; }, BED.dusk * 1000);

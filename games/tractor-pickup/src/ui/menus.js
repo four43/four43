@@ -28,6 +28,7 @@ const goSvg = () => '<svg viewBox="0 0 60 60" aria-hidden="true"><path d="M20 12
 export { paintBtnSvg };
 export const bookSvg = () => `<svg viewBox="0 0 100 80" aria-hidden="true"><path d="M50 14 C36 6 18 8 8 14 V68 C18 62 36 60 50 68 C64 60 82 62 92 68 V14 C82 8 64 6 50 14 Z" fill="#fff6dc" stroke="#6b4428" stroke-width="4" stroke-linejoin="round"/><path d="M50 14 V68" stroke="#6b4428" stroke-width="3"/><circle cx="29" cy="38" r="10" fill="#f6a9bd" stroke="#6b4428" stroke-width="2"/><path d="M62 46 l8 -14 l8 14 z" fill="#f5c84c" stroke="#6b4428" stroke-width="2"/></svg>`;
 export const xSvg = () => '<svg viewBox="0 0 40 40"><path d="M8 8 L32 32 M32 8 L8 32" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>'; // the red close button
+export const sunSvg = () => `<svg viewBox="0 0 100 100" aria-hidden="true"><g stroke="#f08a1c" stroke-width="7" stroke-linecap="round">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<line x1="${50 + Math.cos(a) * 33}" y1="${50 + Math.sin(a) * 33}" x2="${50 + Math.cos(a) * 45}" y2="${50 + Math.sin(a) * 45}"/>`; }).join('')}</g><circle cx="50" cy="50" r="24" fill="#ffd24a" stroke="#f08a1c" stroke-width="5"/><circle cx="42" cy="46" r="3" fill="#6b4428"/><circle cx="58" cy="46" r="3" fill="#6b4428"/><path d="M41 56 Q50 64 59 56" stroke="#6b4428" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`; // E-5: the wake button's sun
 export const gearSvg = () => `<svg viewBox="0 0 24 24" aria-hidden="true"><g stroke="#5a3820" stroke-width="2.6" stroke-linecap="round"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></g></svg>`; // U-3: the parent menu button: a classic three-line menu icon
 export const hatSvg = id => ({
   straw: '<svg viewBox="0 0 60 36"><ellipse cx="30" cy="28" rx="28" ry="7" fill="#f2c85a" stroke="#6b4428" stroke-width="2"/><path d="M16 28 C16 8 44 8 44 28 Z" fill="#e0b040" stroke="#6b4428" stroke-width="2"/><rect x="16" y="22" width="28" height="5" fill="#c0392b"/></svg>',
@@ -51,9 +52,10 @@ const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${R
 
 // gear: false makes no gear (lion-hawk 2g: the engine path adopts its own, farm.parent). slots: the go buttons and a close button with no
 // back are the engine's controls on game markup (data-lh-slot start.go, reward.go, paint.close, book.close, [U-1]): no listener of
-// their own, the engine taps them and its overlay's view half closes the screen. onPlace(i, { page, x, y }), onUnplace(i): a sticker
+// their own, the engine taps them and its overlay's view half closes the screen. The parent menu's close and Multiplayer buttons
+// too (parent.close, parent.mp); a choice that ends the menu (bedtime, new farm, clear) removes it and calls onParentDone. onPlace(i, { page, x, y }), onUnplace(i): a sticker
 // was dragged onto a page or back to the tray (before onStickers).
-export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onPlace, onUnplace, onBookSeen, onParent, onMultiplayer, onBedtime, netlog = null, gear: withGear = true, slots = false }) {
+export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDriving, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onPlace, onUnplace, onBookSeen, onParent, onMultiplayer, onBedtime, onParentDone, netlog = null, gear: withGear = true, slots = false }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
   const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
@@ -167,8 +169,9 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     const p = el('parent', 'div', root), box = el('box', 'div', p);
     const seg = (name, opts, cur) => `<div class="seg" data-g="${name}">${opts.map(([v, label]) => `<button data-v="${v}" class="${String(v) === String(cur) ? 'on' : ''}">${label}</button>`).join('')}</div>`;
     const bedNote = bed.phase === 'last' ? 'Last drive to the barn' : bed.phase === 'asleep' ? 'Asleep' : bed.left === null ? 'Off' : bed.left === 0 ? 'Less than a minute' : `In ${bed.left} min`;
-    box.innerHTML = `<button data-a="close" class="pic x" aria-label="Close">${xSvg()}</button><h2>Parent menu</h2>
-<section class="mprow"><button data-a="mp" class="act mpbtn">Multiplayer</button></section>
+    const own = (a, id) => slots ? `type="button" data-lh-slot="${id}"` : `data-a="${a}"`; // [U-1]: the engine's controls on this markup
+    box.innerHTML = `<button ${own('close', 'parent.close')} class="pic x" aria-label="Close">${xSvg()}</button><h2>Parent menu</h2>
+<section class="mprow"><button ${own('mp', 'parent.mp')} class="act mpbtn">Multiplayer</button></section>
 <section><h3>Bedtime <small>${bedNote}</small></h3>${seg('bed', [[0, 'Now'], [3, '3 min'], [5, '5 min'], [10, '10 min']], bed.choice)}</section>
 <section><h3>Power</h3>${seg('power', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], settings.power)}</section>
 <section class="pair"><div><h3>Voice</h3>${seg('voice', [[1, 'On'], [0, 'Off']], settings.voice ? 1 : 0)}</div><div><h3>Music</h3>${seg('music', [[1, 'On'], [0, 'Off']], settings.music ? 1 : 0)}</div></section>
@@ -178,7 +181,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
     const q = n => box.querySelector(`[name=${n}]`); q('seed').value = settings.seed ?? seed;
     const cur = g => box.querySelector(`[data-g=${g}] .on`)?.dataset.v;
     const values = () => { const raw = q('seed').value.trim(); return clampSettings({ power: cur('power'), voice: cur('voice') === '1', music: cur('music') === '1', seed: cur('useSeed') === '1' && raw !== '' ? Number(raw) : null }); };
-    const done = () => p.remove();
+    const done = () => { p.remove(); onParentDone?.(); };
     q('seed').addEventListener('change', () => onSettings(values()));
     box.addEventListener('click', e => {
       const b = e.target.closest?.('button'); if (!b || b.disabled) return; // (a button can hold an svg: the tap can land on it)
@@ -188,7 +191,7 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
       const a = b.dataset.a;
       if (a === 'close') done();
       else if (a === 'mp') { done(); onMultiplayer(); }
-      else if (a === 'new') { onSettings(values()); done(); close(); onNewFarm(); } // a screen left open would hide the new farm; onNewFarm itself brings back the start screen when play has not begun
+      else if (a === 'new') { onSettings(values()); done(); if (!slots) close(); onNewFarm(); } // a screen left open would hide the new farm; onNewFarm itself brings back the start screen when play has not begun (slots: the sim's new farm closes and reopens the screens)
       else if (a === 'clear' && confirm('Clear all stickers? This cannot be undone.')) { onClearStickers(); done(); }
     });
     p.addEventListener('pointerdown', e => e.stopPropagation());
@@ -233,5 +236,6 @@ export function createMenus(root, { icons, art, tractorPic, onPlay, onKeepDrivin
         remove: () => mpSession.remove(Number(t.dataset.n)), lock: () => mpSession.lock(t.checked) })[a]?.();
     };
   }
-  return { showStart, showReward, showBook, openPaint, openParent, openMultiplayer, refreshMultiplayer, hide: close, get open() { return !!screen; } };
+  const closeParent = () => root.querySelector('.parent:not(.mp)')?.remove();
+  return { showStart, showReward, showBook, openPaint, openParent, closeParent, openMultiplayer, refreshMultiplayer, hide: close, get open() { return !!screen; } };
 }
