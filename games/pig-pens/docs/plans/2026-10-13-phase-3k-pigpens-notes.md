@@ -1,12 +1,12 @@
 # Phase 3k notes: Pig Pens on the lion-hawk phase 3 engine
 
-Branch `feat/lion-hawk-3-pigpens`, engine `phase-3` (lion-hawk 0.10.0). Pig Pens 2.2.0.
+Branch `feat/lion-hawk-3-pigpens`, engine `phase-3` (lion-hawk 0.10.1). Pig Pens 2.2.0.
 
 ## Bake
 
 - 33 models baked by `lion-hawk bake` into `baked/` (committed). `test/bake.test.mjs` runs `bake --check`; `test/assets-parity.test.mjs` holds them to the 2.1.0 `assets.json` (triangles, vertices, bounds, palette, pig and chick anim frames): all pass.
-- **Engine bug (bake, 0.8.0):** `tools/bake/hull.js` never finishes on `car-kit/tractor.glb`'s `wheel-back-right` (672 points; the incremental hull grows until the heap runs out). The tractor is baked with `colliders: false`, which costs nothing: the game spawns its chassis boxes inline.
-- **Engine gap (bake):** `palette: 'vertex'` bakes only textured primitives. The Nature Kit's factor-only materials keep their base colour factor and get no `COLOR_0`, and the compiler then replaces the glTF material, so the factor is lost at runtime. Pig Pens renames each Kenney material to its own registry id whose `look.color` is the factor (`src/defs/materials.js`), and `view/models.js` fills a missing colour attribute from the compiled material. The parity test reads those colours from the factor, which matches 2.1.0 (it used the factor as sRGB bytes). Engine request: `palette: 'vertex'` should also write `COLOR_0` from the base colour factor of untextured primitives (what Tractor's and Pig Pens' old bakes did); the look ids can then go.
+- The 0.8.0 bake's hull never finished on the tractor's `wheel-back-right`; fixed in 0.10.1, and the tractor bakes with its default hulls again (the game still spawns its chassis boxes inline, so the goldens did not move).
+- `palette: 'vertex'` writes `COLOR_0` for the Nature Kit's factor-only materials since 0.10.1 (the interim per-material look colours are gone); the parity test requires `COLOR_0` on every model again.
 - `corn`: all four cobs now drawn (the old bake kept only the last of four same-named nodes).
 
 ## Sim on the World
@@ -27,7 +27,7 @@ Branch `feat/lion-hawk-3-pigpens`, engine `phase-3` (lion-hawk 0.10.0). Pig Pens
 - Scenery: baked geometry on one `scenery` material (plain and instanced). Pigs: `view/pigs3d.js`, anim tables, `pigHide` with `COVERAGE_INSTANCED` mud (lane w of `instanceCoverage`), eyelids through `mc.extend` (injected before `emissivemap_fragment`, so after the mud). Chickens: compiler fur (`mc.furGeometry`, `plumage`); the dog and fox: `assets.clone` on `AnimationMixer`. Feathers: `createParticles` (lion-hawk/kits/fx). Tractor and snacks: view sync, with `view/tractor3d.js` hooks (model frame, paint, headlight, snack pivot and shrink); the wheels follow the vehicle kit's part poses.
 - Pigs, birds, the dog and the fox carry `draw: false` (the game's crowds draw them).
 - Camera: `createOrbitRig` with Pig Pens' options (`test/rig.test.mjs` pins it to 2.1.0's rig.js, kept as `test/fixtures/rig-v2.1.0.js`). `cameraMode` takes the tool and the drive state at the finger's down, so the Hand press that became a drive moves no camera. An orbit sends one Hand `move` with `orbit: true`, which clears the press (`test/flow-orbit.test.mjs`). `bindPointer({ uncapped: true })` (#56).
-- **Engine request (view sync):** sync clones a drawn entity's model on the first frame it sees it and throws while that model is still loading. Pig Pens holds `view.sync.frame` until its preload resolves (`src/game.view.js`, marked INTERIM). Wanted: sync skips (and retries next frame) entities whose `assets.has(model)` is false, or boot runs sync only after a declared preload.
+- View sync skips drawn entities until their model is loaded (0.10.1); the interim hold on `view.sync.frame` is gone.
 - **Engine note (bake, minor):** `bake --check` is stale on every engine minor, so each engine minor bump needs a re-bake commit.
 
 ## Re-bless 1 (World)

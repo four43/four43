@@ -38,12 +38,8 @@ async function baked(id) {
       const P = prim.getAttribute('POSITION'), C = prim.getAttribute('COLOR_0'), I = prim.getIndices();
       part.verts += P.getCount(); part.tris += (I ? I.getCount() : P.getCount()) / 3;
       for (let i = 0; i < P.getCount(); i++) { P.getElement(i, e); part.pos.push([e[0], e[1], e[2]]); }
-      if (C) for (let i = 0; i < C.getCount(); i++) { C.getElement(i, e); part.col.push([l2s(e[0]), l2s(e[1]), l2s(e[2])]); }
-      else { // a factor-only material (the Nature Kit has no palette texture): 2.1.0 used the factor as it stands, as sRGB bytes
-        assert.ok(!prim.getMaterial().getBaseColorTexture(), `${id}/${part.name}: a palette texture was left (palette: 'vertex' must bake it)`);
-        const f = prim.getMaterial().getBaseColorFactor(), c = [0, 1, 2].map(k => Math.round(Math.max(0, Math.min(1, f[k])) * 255));
-        for (let i = 0; i < P.getCount(); i++) part.col.push(c);
-      }
+      assert.ok(C, `${id}/${part.name}: no COLOR_0 (palette: 'vertex' must bake the palette and the factor-only colours)`);
+      for (let i = 0; i < C.getCount(); i++) { C.getElement(i, e); part.col.push([l2s(e[0]), l2s(e[1]), l2s(e[2])]); }
     }
     parts.push(part);
   }

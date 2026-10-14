@@ -10,10 +10,9 @@ export default {
     src: 'assets/models', out: 'baked',
     materials: './src/defs/materials.js',
     // Kenney's Nature Kit names → registry ids (A-2: renames apply before the checks)
-    // (each keeps its own colour: the Nature Kit's materials are factor-only, and the ids carry the factors as look colours)
-    rename: { materials: { wood: 'woodLight', woodDark: 'woodDark', woodBark: 'bark', woodBirch: 'birch', leafsGreen: 'leaf', leafsFall: 'leafFall',
-      grass: 'blade', colorYellow: 'petal', colorRed: 'petalRed', corn: 'crop', _defaultMat: 'signFace', dirt: 'soil', stone: 'stone' } },
-    palette: 'vertex',          // palette texels × base factors → COLOR_0, as bake.mjs did (Tractor's tools/glb.mjs logic)
+    rename: { materials: { woodDark: 'wood', woodBark: 'wood', woodBirch: 'wood', leafsGreen: 'leaf', leafsFall: 'leaf',
+      colorYellow: 'petal', colorRed: 'petal', corn: 'crop', _defaultMat: 'wood' } },
+    palette: 'vertex',          // palette texels × base factors (or the factor alone) → COLOR_0, as bake.mjs did (Tractor's tools/glb.mjs logic)
     models: {
       fence: nature('fence_simple'), gate: nature('fence_gate'), planks: nature('fence_planks'), post: nature('fence_corner'),
       oak: nature('tree_oak'), tree: nature('tree_default'), treeFat: nature('tree_fat'), treeFall: nature('tree_default_fall'),
@@ -24,9 +23,7 @@ export default {
       apple: kit('food-kit', 'apple', 'produce'), carrot: kit('food-kit', 'carrot', 'produce'), cabbage: kit('food-kit', 'cabbage', 'produce'),
       cob: kit('food-kit', 'corn', 'produce'), egg: kit('food-kit', 'egg', 'produce'), barrel: kit('food-kit', 'barrel', 'wood'),
       sack: kit('food-kit', 'bag', 'fabric'),
-      // the tractor's colliders are the game's inline chassis boxes; and the default hull of wheel-back-right never finishes
-      // in lion-hawk 0.8.0's bake (tools/bake/hull.js, 672 points: runs out of heap), so the bake makes none
-      tractor: { ...kit('car-kit', 'tractor', 'paintwork'), colliders: false },
+      tractor: kit('car-kit', 'tractor', 'paintwork'),
       pig: { ...kit('cube-pets', 'animal-pig', 'pet'), animTable: { fps: 30, clips: PET_CLIPS } },
       chick: { ...kit('cube-pets', 'animal-chick', 'plumage'), animTable: { fps: 30, clips: PET_CLIPS } },
       dog: kit('cube-pets', 'animal-dog', 'pet'), fox: kit('cube-pets', 'animal-fox', 'pet'),

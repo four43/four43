@@ -1,7 +1,6 @@
 // Geometry from baked models (phase 3k; replaces gfx.js over assets.json): a model's mesh nodes in model space merged into
 // one geometry (position, normal, color) so one instanced draw covers it, or one part in its node-local space for the
-// anim-table crowds. A primitive without vertex colours (the Nature Kit's factor-only materials) takes its compiled
-// material's colour, which the registry's look carries. Plus the small box/colour/merge helpers the farm builds props with.
+// anim-table crowds (the bake writes every model's colours into COLOR_0). Plus the small box/colour/merge helpers the farm builds props with.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -9,19 +8,18 @@ const KEEP = ['position', 'normal', 'color'];
 // a float copy of the attributes the farm draws with (baked attributes may be interleaved or normalised); one geometry
 // per material group, so a multi-material mesh keeps each group's colour
 function plain(mesh) {
-  const g = mesh.geometry, mats = [mesh.material].flat(), groups = g.groups.length ? g.groups : [{ start: 0, count: g.index ? g.index.count : g.attributes.position.count, materialIndex: 0 }];
+  const g = mesh.geometry, groups = g.groups.length ? g.groups : [{ start: 0, count: g.index ? g.index.count : g.attributes.position.count, materialIndex: 0 }];
   const idx = g.index ? g.index.array : null, out = [];
   for (const gr of groups) {
     const ids = idx ? idx.subarray(gr.start, gr.start + gr.count) : Uint32Array.from({ length: gr.count }, (_, i) => gr.start + i);
     const remap = new Map(), order = [];
     const index = new Uint32Array(ids.length);
     for (let i = 0; i < ids.length; i++) { let k = remap.get(ids[i]); if (k === undefined) { k = order.length; remap.set(ids[i], k); order.push(ids[i]); } index[i] = k; }
-    const o = new THREE.BufferGeometry(), c = mats[gr.materialIndex ?? 0]?.color ?? new THREE.Color(1, 1, 1);
+    const o = new THREE.BufferGeometry();
     for (const key of KEEP) {
       const a = g.attributes[key], f = new Float32Array(order.length * 3);
-      if (a) for (let i = 0; i < order.length; i++) { f[i * 3] = a.getX(order[i]); f[i * 3 + 1] = a.getY(order[i]); f[i * 3 + 2] = a.getZ(order[i]); }
-      else if (key === 'color') for (let i = 0; i < order.length; i++) { f[i * 3] = c.r; f[i * 3 + 1] = c.g; f[i * 3 + 2] = c.b; }
-      else continue;
+      if (!a) throw new Error(`pig-pens: mesh '${mesh.name}' has no ${key} attribute`);
+      for (let i = 0; i < order.length; i++) { f[i * 3] = a.getX(order[i]); f[i * 3 + 1] = a.getY(order[i]); f[i * 3 + 2] = a.getZ(order[i]); }
       o.setAttribute(key, new THREE.BufferAttribute(f, 3));
     }
     o.setIndex(new THREE.BufferAttribute(index, 1));

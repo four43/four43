@@ -26,7 +26,7 @@ test('modelGeometry: model space, the 2.1.0 triangle count, position + normal + 
   assert.equal(tris(modelGeometry(assets, 'fence', null, { parts: ['fence_simple'] })), OLD.fence.fence_simple.idx.length / 3);
   assert.equal(tris(modelGeometry(assets, 'tractor', null, { parts: ['body'] })), OLD.tractor.body.idx.length / 3);
 });
-test('factor-only Nature Kit materials draw in their 2.1.0 colours (the registry looks)', () => {
+test('factor-only Nature Kit materials draw in their 2.1.0 colours (baked COLOR_0)', () => {
   const g = modelGeometry(assets, 'fence'), c = g.attributes.color, want = new Set(), got = new Set();
   for (let i = 0; i < OLD.fence.fence_simple.col.length; i += 3) want.add(OLD.fence.fence_simple.col.slice(i, i + 3).map(s2l).map(v => v.toFixed(3)).join());
   for (let i = 0; i < c.count; i++) got.add([c.getX(i), c.getY(i), c.getZ(i)].map(v => v.toFixed(3)).join());

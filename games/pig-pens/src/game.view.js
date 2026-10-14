@@ -32,15 +32,9 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
       // R1 measurement: draw calls and programs of the last drawn frame (read with ?tilt=0: one render per frame)
       view.perf = () => { const i = gfx.info(); return { calls: i.calls, triangles: i.triangles, programs: i.programs }; };
       offs.push(bindTractorAndSnacks(view.sync, { sim: s.sim, night: () => world?.night ?? 0 })); // before the tractor's first draw
-      // INTERIM (engine request in the phase 3k notes): view sync clones a drawn entity's model on the first frame it sees it,
-      // and throws while that model is still loading, so its frames wait for the preload
-      const sync = view.sync, syncFrame = sync.frame; let loaded = false;
-      sync.frame = alpha => { if (loaded) syncFrame(alpha); };
-      offs.push(() => { sync.frame = syncFrame; });
       let pending = null; // a hint that came before the models (the start hint): shown once the HUD exists
       const build = () => {
         if (engine.scene.state !== s) return; // left the farm while loading
-        loaded = true;
         world = buildWorld({ gfx, assets: view.assets, mc: view.materials, sim: s.sim, world: engine.world }); frame = 0;
         hud = createHud(doc, { world }); if (pending) hud.hint(pending[0], pending[1], engine.time.sim);
         doc.getElementById('loading')?.remove();
