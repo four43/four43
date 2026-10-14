@@ -1,7 +1,5 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim } from '../src/sim.js';
-await RAPIER.init();
-const sim = createSim(RAPIER, { pigs: 30, seed: 4, hour: 9 });
+import { farmSim } from './farmSim.mjs';
+const sim = farmSim({ pigs: 30, seed: 4, hour: 9 });
 for (let s = 0; s < 120; s++) sim.step();
 const F = sim.flock, r = sim.lay.run;
 F.scatterGrain(-5, 1.6, -18, -5, -21);
@@ -15,7 +13,7 @@ const left = F.grainLeft();
 console.log('grain: peak birds pecking', peak, 'of', F.birds.length, 'grains eaten', before - left, 'of', before, 'in 40 s; handfuls left', F.handfuls.length);
 // pecking order: over several handfuls, do higher-ranked hens eat more?
 {
-  const sim2 = createSim(RAPIER, { pigs: 10, seed: 5, hour: 8 });
+  const sim2 = farmSim({ pigs: 10, seed: 5, hour: 8 });
   const F2 = sim2.flock;
   for (let k = 0; k < 6; k++) { F2.scatterGrain(-5, 1.6, -18, -5 + (k % 3) - 1, -21.5); for (let s = 0; s < 60 * 25; s++) sim2.step(); }
   const hens = F2.birds.filter(b => b.kind === 'hen').sort((a, b) => a.rank - b.rank);

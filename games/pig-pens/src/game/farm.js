@@ -1,8 +1,8 @@
 // The farm scene (lion-hawk 2e, [S-1]…[S-5], field notes #4, #28, #57, #58): one main scene owns the createSim world
 // (pigs, dog, chickens, fox, tractor, gates, coop, day/night) for the life of the page. The flow state main.js kept
 // in its closure lives in ctx.state ([S-4], #4): the tool, the selection, drive mode and the per-gesture state.
-// Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.sim → farm.events → events.flush.
-// With no input nothing here touches the sim, so the scene steps exactly the createSim the phase-0 golden drives.
+// Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.physics.step → read →
+// events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
 import { createSim } from '../sim.js';
 import { planeHit, classify, grabTarget } from './pick.js';
 
@@ -24,7 +24,7 @@ export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 't
 // The Hand is held down on the tractor (the view shows the filling ring).
 export const pressing = s => s.gesture?.tool === 'hand' && s.gesture.down && s.gesture.target?.kind === 'tractor' && !s.driving;
 
-export function makeFarm({ R }) {
+export function makeFarm() {
   const S = e => { if (e.scene.name !== 'farm') throw new Error('pig-pens: the farm scene is not the main scene'); return e.scene.state; };
   // --- the API (UI controls, keys, presets and debug call these; each takes the engine first) -------------------
   const api = {
@@ -202,14 +202,16 @@ export function makeFarm({ R }) {
     enter(e, ctx) {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
-        sim: createSim(R, { pigs: a.pigs ?? 48, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
+        sim: createSim(ctx.world, { pigs: a.pigs ?? 48, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
         tool: 'hand', selected: null, driving: false, gesture: null, grab: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });
       // grab lift and hose nozzle easing, before the step's commands (#60)
       ctx.system('farm.ease', (e, dt) => ease(s, dt), { stage: 'input.apply', after: ['lh.input'], before: ['lh.commands'] });
       ctx.system('farm.keys', () => keys(e, s), { stage: 'input.apply', after: ['lh.commands'] });
-      ctx.system('farm.sim', () => s.sim.step(), { stage: 'physics.world' });
+      // the farm step around the engine's Rapier step (overview §4.4): think before lh.physics.step, settle after the events
+      ctx.system('farm.think', () => s.sim.think(), { stage: 'physics.world', before: ['lh.physics.step'] });
+      ctx.system('farm.settle', () => s.sim.settle(), { stage: 'physics.world', after: ['lh.physics.events'] });
       // #57: the sim's own queue, bridged in order, unfiltered, once per step
       ctx.system('farm.events', () => {
         const q = s.sim.events;
@@ -219,7 +221,6 @@ export function makeFarm({ R }) {
       ctx.command('tool', (e, d) => api.pointer(e, d));
       api.hint(e, START_HINT, 5);
     },
-    exit(e, ctx) { ctx.state.sim.world.free(); }, // [S-3]
     // #69: the controls close over this scene's ctx.state, not e.scene.state (the main scene's)
     ui(u, e, ctx) {
       const s = ctx.state;

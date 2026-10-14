@@ -1,19 +1,17 @@
-// Facts the v2 spec's §13.1 reports, asserted (lion-hawk 2e P5, #62): createSim directly, like the phase-0 golden.
+// Facts the v2 spec's §13.1 reports, asserted (lion-hawk 2e P5, #62): on the engine path (farmSim) since phase 3k.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim } from '../src/sim.js';
-await RAPIER.init();
+import { farmSim } from './farmSim.mjs';
 const steps = (sim, n, f) => { for (let s = 0; s < n; s++) { f?.(s); sim.step(); } };
 
 test('snacks: ten quick tosses land five; none while five are out', () => {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 6 }); steps(sim, 300);
+  const sim = farmSim({ pigs: 48, seed: 6 }); steps(sim, 300);
   const pen = sim.lay.pens[5]; let ok = 0;
   for (let k = 0; k < 10; k++) if (sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx + (k % 5) - 2, pen.cz)) ok++;
   assert.equal(ok, 5); assert.equal(sim.foods.length, 5); assert.equal(sim.tossFood(26, 4, 22, 27, 23), null);
 });
 test('tractor: 0 to 5.2–5.6 m/s in 4 s; full steer turns 1.8–2.0 rad in 2 s; stops in 1.2–1.4 s', () => {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 2 }), T = sim.tractor; steps(sim, 120);
+  const sim = farmSim({ pigs: 48, seed: 2 }), T = sim.tractor; steps(sim, 120);
   T.driven = true; T.setInput(1, 0); steps(sim, 240);
   assert.ok(T.speed > 5.2 && T.speed < 5.6, `${T.speed}`);
   T.setInput(1, 1); const y0 = T.yaw; steps(sim, 120);
@@ -22,10 +20,10 @@ test('tractor: 0 to 5.2–5.6 m/s in 4 s; full steer turns 1.8–2.0 rad in 2 s;
   assert.ok(stop > 1.2 && stop < 1.4, `${stop}`);
 });
 test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 20–24 s, a tap makes the fox spit, nobody is lost by morning', () => {
-  const sim = createSim(RAPIER, { pigs: 30, seed: 9 }), F = sim.flock; steps(sim, 300); sim.setNight(true);
+  const sim = farmSim({ pigs: 30, seed: 9 }), F = sim.flock; steps(sim, 300); sim.setNight(true);
   let bed = -1, gulp = -1, spit = null;
   steps(sim, 60 * 40, s => {
-    for (const e of sim.events.splice(0)) { if (e.type === 'gulp' && gulp < 0) gulp = s / 60; if (e.type === 'spit' && !spit) spit = { t: s / 60, reason: e.reason }; }
+    for (const e of sim.log.splice(0)) { if (e.type === 'gulp' && gulp < 0) gulp = s / 60; if (e.type === 'spit' && !spit) spit = { t: s / 60, reason: e.reason }; }
     if (bed < 0 && F.birds.every(b => b.state === 10)) bed = s / 60;
     if (gulp >= 0 && !spit && s / 60 > gulp + 2 && F.fox.carrying) F.tapFox();
   });
@@ -35,7 +33,7 @@ test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 20–24
   assert.equal(F.birds.length, 11); assert.equal(F.birds.filter(b => b.state === 12).length, 0); assert.equal(F.fox.carrying, null);
 });
 test('gates: with every gate shut for 120 s no pig changes area', () => {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 3 }); steps(sim, 120);
+  const sim = farmSim({ pigs: 48, seed: 3 }); steps(sim, 120);
   for (const g of sim.lay.gates) sim.setGate(g.id, false);
   const start = sim.pigs.map(p => p.region); steps(sim, 60 * 120);
   assert.equal(sim.pigs.filter((p, i) => p.region !== start[i]).length, 0);

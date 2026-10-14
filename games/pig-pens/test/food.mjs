@@ -1,7 +1,6 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim, ST } from '../src/sim.js';
-await RAPIER.init();
-const sim = createSim(RAPIER, { pigs: 48, seed: 6 });
+import { farmSim } from './farmSim.mjs';
+import { ST } from '../src/sim.js';
+const sim = farmSim({ pigs: 48, seed: 6 });
 for (let s = 0; s < 300; s++) sim.step();
 const pen = sim.lay.pens[5];
 // spam 10 taps: only 5 should land

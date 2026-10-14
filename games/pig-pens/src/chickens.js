@@ -20,7 +20,7 @@ const HEN_NAMES = ['Clementine', 'Marigold', 'Pecky', 'Dolly', 'Butterscotch', '
 const CHICK_NAMES = ['Peep', 'Fluff', 'Bean', 'Dot', 'Puff', 'Sunny', 'Tiny', 'Crumb', 'Pea', 'Button', 'Sprout', 'Twig', 'Wisp', 'Fuzz'];
 
 export function createFlock(ctx) {
-  const { RAPIER, world, lay, rng, grid, emit, grp, G, DT, feelers, turnToward } = ctx;
+  const { world, lay, rng, grid, emit, DT, feelers, turnToward } = ctx;
   const { coop, nests, dust, run, field } = lay;
   const birds = [], eggs = [], handfuls = [];
   let eggSeq = 0, grainSeq = 0, basket = 0;
@@ -39,11 +39,8 @@ export function createFlock(ctx) {
   function makeBird(kind, x, z, mom = -1) {
     const r = kind === 'hen' ? CP.henR : kind === 'rooster' ? CP.roosterR : CP.chickR;
     const mass = kind === 'hen' ? CP.henMass : kind === 'rooster' ? CP.roosterMass : CP.chickMass;
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, r, z).lockRotations().setLinearDamping(0.05).setCcdEnabled(true).setCanSleep(false));
-    const col = world.createCollider(RAPIER.ColliderDesc.ball(r).setDensity(mass / ((4 / 3) * Math.PI * r ** 3)).setFriction(0)
-      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setRestitution(0.1).setCollisionGroups(grp(G.CHICK, 0xffff & ~G.FOX)), body);
-    const b = {
-      i: birds.length, kind, body, col, r, mass, mom,
+    const { yaw, ...fields } = { // the game fields, in 2.1.0's order of rng() calls; `yaw` is a desc key, so it is set after the spawn
+      i: birds.length, kind, r, mass, mom,
       scale: (kind === 'hen' ? CP.henScale : kind === 'rooster' ? CP.roosterScale : CP.chickScale) * (0.94 + 0.12 * rng()),
       tint: kind === 'rooster' ? [1, 0.52, 0.32] : kind === 'chick' ? [1, 0.84, 0.36] : [[1, 1, 1], [1, 0.97, 0.9], [0.95, 0.95, 0.95], [1, 0.98, 0.94]][Math.floor(rng() * 4)], // white laying hens, copper rooster, yellow chicks
       name: kind === 'chick' ? CHICK_NAMES[birds.filter(b => b.kind === 'chick').length % CHICK_NAMES.length] : kind === 'rooster' ? 'Sir Reginald' : HEN_NAMES[birds.filter(b => b.kind === 'hen').length % HEN_NAMES.length],
@@ -52,6 +49,12 @@ export function createFlock(ctx) {
       nest: -1, grain: null, egg: -1, eggsToday: 0, eggsTotal: 0, layAt: 20 + rng() * 100,
       flapCd: 0, airT: 0, hidden: false, tween: 0, displaced: 0, enabled: true, cluck: rng() * 5, dustT: 20 + rng() * 60,
     };
+    const b = world.spawn({
+      body: { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, ccd: true, canSleep: false, mass },
+      colliders: [{ shape: 'sphere', r, material: 'bird' }], groups: { member: ['chick'], filter: ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'tractor'] },
+      at: [x, r, z], tags: ['bird'], model: 'chick', ...fields,
+    });
+    b.yaw = yaw;
     birds.push(b); return b;
   }
   // starting flock inside the run
@@ -62,16 +65,19 @@ export function createFlock(ctx) {
   { const hens = birds.filter(b => b.kind === 'hen').sort(() => rng() - 0.5); hens.forEach((h, k) => h.rank = k + 1); }
 
   function setEnabled(b, on) { if (b.enabled === on) return; b.enabled = on; b.body.setEnabled(on); }
-  function place(b, x, y, z) { b.body.setTranslation({ x, y, z }, true); b.body.setLinvel({ x: 0, y: 0, z: 0 }, true); b.px = x; b.py = y; b.pz = z; }
+  function place(b, x, y, z) { world.place(b, { at: [x, y, z] }); b.px = x; b.py = y; b.pz = z; } // E-8; velocities zeroed
   function setState(b, s, timer = 0) { b.state = s; b.timer = timer; }
   function releaseClaims(b) { if (b.grain) { b.grain.claim = -1; b.grain = null; } b.nest = -1; }
   const outside = b => b.enabled && !b.hidden && b.state !== CST.CARRIED && b.state !== CST.LOST;
 
   // ---- fox ------------------------------------------------------------------------
-  const foxB = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0, -50, 0).lockRotations().setCanSleep(false).setEnabled(false));
-  world.createCollider(RAPIER.ColliderDesc.ball(0.26).setDensity(7 / ((4 / 3) * Math.PI * 0.26 ** 3)).setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
-    .setCollisionGroups(grp(G.FOX, G.GROUND | G.PIG | G.DOG | G.TRACTOR)), foxB);
-  const fox = { body: foxB, state: FST.AWAY, wa: 0, x: 0, z: -50, vx: 0, vz: 0, speed: 0, yaw: 0, target: null, carrying: null, fear: 0, cooldown: 30, timer: 0, hop: 0, raids: 0, steals: 0, ex: 0, ez: 0 };
+  const fox = world.spawn({
+    body: { type: 'dynamic', lock: { rot: true }, canSleep: false, mass: 7 }, colliders: [{ shape: 'sphere', r: 0.26, material: 'foxPelt' }],
+    groups: { member: ['fox'], filter: ['ground', 'pig', 'dog', 'tractor'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox',
+    state: FST.AWAY, wa: 0, x: 0, z: -50, vx: 0, vz: 0, speed: 0, target: null, carrying: null, fear: 0, cooldown: 30, timer: 0, hop: 0, raids: 0, steals: 0, ex: 0, ez: 0,
+  });
+  fox.yaw = 0; // a game field (`yaw` in a desc is the spawn pose)
+  fox.body.setEnabled(false); // away until night (2.1.0 created it disabled)
   // escape points around the inside of the boundary, away from the coop
   const exits = [];
   for (let x = field.x0 + 1; x < field.x1; x += 6) { exits.push([x, field.z0 + 0.8]); exits.push([x, field.z1 - 0.8]); }
@@ -82,7 +88,7 @@ export function createFlock(ctx) {
     // comes in from the north-west woods, somewhere along that corner of the boundary
     const along = rng();
     const [x, z] = along < 0.5 ? [field.x0 + 0.8, field.z0 + 2 + along * 2 * 16] : [field.x0 + 2 + (along - 0.5) * 2 * 26, field.z0 + 0.8];
-    fox.body.setEnabled(true); fox.body.setTranslation({ x, y: 0.26, z }, true); fox.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    fox.body.setEnabled(true); world.place(fox, { at: [x, 0.26, z] });
     fox.x = x; fox.z = z; fox.state = FST.PROWL; fox.fear = 0; fox.timer = 45; fox.raids++; emit('fox', { x, z });
   }
   const feathers = (b, n, x, y, z) => emit('feathers', { x: x ?? b.px, y: y ?? b.py + 0.15, z: z ?? b.pz, n, tint: b.tint });

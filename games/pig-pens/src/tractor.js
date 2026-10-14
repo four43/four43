@@ -1,24 +1,27 @@
-// Drivable tractor on Rapier's ray-cast vehicle controller.
+// Drivable tractor: a World entity (two paintwork boxes, massProps) on Rapier's ray-cast vehicle controller.
 // Chassis frame: +x forward, +y up, +z to the right-hand side (model +x maps to chassis -z).
 export const TP = {
   scale: 1.6, mass: 1400, maxForce: 5200, revForce: 3000, vmax: 6.5, vrev: 3.0, brake: 28, handbrake: 60, roll: 2.5,
   steerMax: 0.6, steerRate: 2.4, inputRate: 4, suspRest: 0.22, stiffness: 24, compression: 2.6, relaxation: 3.2, slip: 6,
 };
 
-export function createTractor(RAPIER, world, spawn, grp, G) {
+export function createTractor(world, spawn) {
   const S = TP.scale;
   const yaw = spawn.yaw - Math.PI / 2; // model faces +z, chassis faces +x
-  const desc = RAPIER.RigidBodyDesc.dynamic().setTranslation(spawn.x, 0.05, spawn.z)
-    .setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) })
-    .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.6)
-    .setAdditionalMassProperties(TP.mass, { x: 0.15, y: 0.55, z: 0 }, { x: 900, y: 2200, z: 2000 }, { x: 0, y: 0, z: 0, w: 1 });
-  const body = world.createRigidBody(desc);
-  const groups = grp(G.TRACTOR, G.GROUND | G.STATIC | G.PIG | G.CHICK | G.FOOD | G.DOG | G.FOX);
-  const cols = [
-    world.createCollider(RAPIER.ColliderDesc.cuboid(1.55, 0.5, 1.0).setTranslation(0.27, 0.95, 0).setDensity(5).setFriction(0.4).setCollisionGroups(groups), body),
-    world.createCollider(RAPIER.ColliderDesc.cuboid(0.55, 0.55, 0.62).setTranslation(-0.55, 1.95, 0).setDensity(5).setFriction(0.4).setCollisionGroups(groups), body),
-  ];
-  const vc = world.createVehicleController(body);
+  const e = world.spawn({
+    body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.6,
+      // D3: 2.1.0's body as Rapier summed it: the tuned 1400 kg (com 0.15, 0.55; inertia 900, 2200, 2000) plus the two
+      // chassis boxes at density 5 (38.5 kg), about the joint centre of mass (the 0.3° tilt of its principal frame dropped)
+      massProps: { mass: 1438.5, com: [0.1489, 0.5659, 0], inertia: [933.9, 2241.0, 2052.3] } }, // lh-allow: massProps, the playtested 2.1.0 tractor
+    colliders: [{ shape: 'box', half: [1.55, 0.5, 1.0], p: [0.27, 0.95, 0], material: 'paintwork' },
+                { shape: 'box', half: [0.55, 0.55, 0.62], p: [-0.55, 1.95, 0], material: 'paintwork' }],
+    groups: { member: ['tractor'], filter: ['ground', 'static', 'pig', 'chick', 'food', 'dog', 'fox'] },
+    at: [spawn.x, 0.05, spawn.z], q: [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)], tags: ['tractor'], model: 'tractor',
+  });
+  const body = e.body;
+  // INTERIM until lion-hawk/kits/vehicle reaches phase-3 (3h): Rapier's ray-cast vehicle controller, freed with the entity
+  const vc = world.rapier.createVehicleController(body);
+  world.own(e, () => world.rapier?.removeVehicleController(vc));
   // model-space wheel centres and radii (from the Kenney tractor), scaled into the chassis frame
   const W = [
     { name: 'wheel-front-left', mx: 0.415, my: 0.325, mz: 0.735, r: 0.325, front: true },
@@ -35,11 +38,11 @@ export function createTractor(RAPIER, world, spawn, grp, G) {
     vc.setWheelSuspensionRelaxation(i, TP.relaxation); vc.setWheelFrictionSlip(i, TP.slip);
     vc.setWheelMaxSuspensionForce(i, 1e6); vc.setWheelMaxSuspensionTravel(i, 0.3);
   }
-  const rayGroups = grp(0xffff, G.GROUND | G.STATIC);
-  const own = new Set(cols.map(c => c.handle));
+  const rayGroups = world.groups.mask(['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox', 'tractor'], ['ground', 'static']);
+  const own = new Set(e.colliders.map(c => c.collider.handle));
 
   const t = {
-    body, vc, W, cols, driven: false, steer: 0, thr: 0, inThr: 0, inSteer: 0, speed: 0, fwd: 0, x: spawn.x, z: spawn.z, yaw: spawn.yaw,
+    e, body, vc, W, driven: false, steer: 0, thr: 0, inThr: 0, inSteer: 0, speed: 0, fwd: 0, x: spawn.x, z: spawn.z, yaw: spawn.yaw,
     engine: 0, horn: 0,
     setInput(throttle, steer) { this.inThr = Math.max(-1, Math.min(1, throttle)); this.inSteer = Math.max(-1, Math.min(1, steer)); },
     step(DT) {
@@ -62,14 +65,14 @@ export function createTractor(RAPIER, world, spawn, grp, G) {
         vc.setWheelEngineForce(i, W[i].front ? 0 : force / 2);
         vc.setWheelBrake(i, brake);
       }
-      vc.updateVehicle(DT, undefined, rayGroups, c => !own.has(c.handle));
+      vc.updateVehicle(DT, undefined, rayGroups, c => !own.has(c.handle)); // the wheel rays: Rapier's controller (moves to the vehicle kit)
       if (this.horn > 0) this.horn -= DT;
       const p = body.translation(); this.x = p.x; this.z = p.z; this.yaw = Math.atan2(fx, fz);
     },
     // upright again if it ever ends up on its side or roof
     rightIfTipped() {
       const q = body.rotation(); const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
-      if (upY < 0.3) { const y = this.yaw - Math.PI / 2; body.setRotation({ x: 0, y: Math.sin(y / 2), z: 0, w: Math.cos(y / 2) }, true); const p = body.translation(); body.setTranslation({ x: p.x, y: 0.6, z: p.z }, true); body.setAngvel({ x: 0, y: 0, z: 0 }, true); return true; }
+      if (upY < 0.3) { const p = body.translation(); world.place(e, { at: [p.x, 0.6, p.z] }, { yaw: this.yaw - Math.PI / 2 }); return true; }
       return false;
     },
   };

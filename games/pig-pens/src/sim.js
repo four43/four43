@@ -7,10 +7,12 @@ import { createFlock } from './chickens.js';
 export const DT = 1 / 60;
 export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10 };
 export const ST_NAME = Object.keys(ST);
-const G_GROUND = 1, G_STATIC = 2, G_PIG = 4, G_FOOD = 8, G_DOG = 16, G_CHICK = 32, G_FOX = 64, G_TRACTOR = 128;
-export const G = { GROUND: G_GROUND, STATIC: G_STATIC, PIG: G_PIG, FOOD: G_FOOD, DOG: G_DOG, CHICK: G_CHICK, FOX: G_FOX, TRACTOR: G_TRACTOR };
+// Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64, tractor 128.
+export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox', 'tractor'];
+const not = (...xs) => GROUPS.filter(g => !xs.includes(g));
+const G_STATIC = { member: ['static'], filter: not('dog', 'fox') }; // the dog and the fox hop fences
+const PET_BODY = { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, angularDamping: 1.2, ccd: true, canSleep: false };
 export const DAY_LEN = 300; // seconds for 24 game hours
-const grp = (member, filter) => ((member & 0xffff) << 16) | (filter & 0xffff);
 const PIG_NAMES = ['Truffle', 'Pudding', 'Hamlet', 'Peaches', 'Rosie', 'Bacon Bits', 'Clover', 'Mudpie', 'Biscuit Jr', 'Snuffles', 'Petunia', 'Porkchop', 'Bramble', 'Toffee', 'Wiggles', 'Daisy', 'Turnip', 'Pickles', 'Gus', 'Hazelnut', 'Marshmallow', 'Oinkers', 'Parsnip', 'Squiggle', 'Bluebell', 'Chestnut', 'Dumpling', 'Fudge', 'Ginger Snap', 'Honey', 'Jellybean', 'Kipper', 'Lulu', 'Muffin', 'Nutmeg', 'Olive', 'Pepper', 'Quince', 'Rhubarb', 'Sprout', 'Tater', 'Ulla', 'Violet', 'Waddles', 'Yam', 'Ziggy', 'Bun', 'Pip', 'Sage', 'Tulip', 'Mabel', 'Otis', 'Noodle', 'Beetroot', 'Crumpet', 'Plum', 'Radish', 'Scone', 'Trotters', 'Wilma'];
 export const FOOD_KINDS = ['apple', 'carrot', 'cabbage', 'cob'];
 const FOOD_R = { apple: 0.17, carrot: 0.14, cabbage: 0.26, cob: 0.15 };
@@ -28,33 +30,24 @@ export const P = {
   foodCap: 5, foodEatTime: 2.5, foodPursuers: 3, foodLife: 20, foodFade: 1.5,
 };
 
-export function createSim(RAPIER, opts = {}) {
+// The farm on the scene's World (lion-hawk S-3, E-1…E-8): every body is an entity spawned from a desc, on registry
+// materials and named groups. think() runs before the engine's Rapier step, settle() after its read-back and events.
+export function createSim(world, opts = {}) {
   const N = opts.pigs ?? 48;
   const rng = mulberry32(opts.seed ?? 1);
   const lay = buildLayout();
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
-  world.timestep = DT;
   const { field } = lay;
 
-  // ---- static world ---------------------------------------------------------
-  world.createCollider(RAPIER.ColliderDesc.cuboid(120, 0.5, 120).setTranslation(0, -0.5, 0).setFriction(0.8)
-    .setCollisionGroups(grp(G_GROUND, 0xffff)));
-  const STATIC_GROUPS = grp(G_STATIC, 0xffff & ~G_DOG & ~G_FOX);
-  function staticCollider(o) {
-    const h = o.h / 2;
-    const d = o.type === 'circle' ? RAPIER.ColliderDesc.cylinder(h, o.r) : RAPIER.ColliderDesc.cuboid(o.hx, h, o.hz);
-    d.setTranslation(o.x, h, o.z).setFriction(0.2).setCollisionGroups(STATIC_GROUPS);
-    if (o.rot) d.setRotation({ x: 0, y: Math.sin(o.rot / 2), z: 0, w: Math.cos(o.rot / 2) });
-    return world.createCollider(d);
-  }
-  for (const o of lay.obstacles) {
-    if (o.active === false) continue;
-    const h = o.h / 2;
-    const d = o.type === 'circle' ? RAPIER.ColliderDesc.cylinder(h, o.r) : RAPIER.ColliderDesc.cuboid(o.hx, h, o.hz);
-    d.setTranslation(o.x, h, o.z).setFriction(0.2).setCollisionGroups(STATIC_GROUPS);
-    if (o.rot) d.setRotation({ x: 0, y: Math.sin(o.rot / 2), z: 0, w: Math.cos(o.rot / 2) });
-    world.createCollider(d);
-  }
+  // ---- static world (ground first, then every active obstacle in layout order, as 2.1.0 created them) -----------
+  world.spawn({ body: 'fixed', tags: ['ground'], groups: { member: ['ground'], filter: GROUPS },
+    colliders: [{ shape: 'box', half: [120, 0.5, 120], p: [0, -0.5, 0], material: 'pasture' }] });
+  const obstacleCollider = o => {
+    const h = o.h / 2, q = o.rot ? [0, Math.sin(o.rot / 2), 0, Math.cos(o.rot / 2)] : [0, 0, 0, 1];
+    return o.type === 'circle' ? { shape: 'cylinder', halfHeight: h, r: o.r, p: [o.x, h, o.z], q, material: 'fencing' }
+      : { shape: 'box', half: [o.hx, h, o.hz], p: [o.x, h, o.z], q, material: 'fencing' };
+  };
+  world.spawn({ body: 'fixed', tags: ['obstacles'], groups: G_STATIC, colliders: lay.obstacles.filter(o => o.active !== false).map(obstacleCollider) });
+  const staticEntity = o => world.spawn({ body: 'fixed', tags: ['gate'], groups: G_STATIC, colliders: [obstacleCollider(o)] });
   const grid = new FlowGrid(field, 0.4, lay.obstacles, 0.48);
   const cgrid = new FlowGrid(field, 0.4, lay.obstacles, 0.24); // chickens are small: narrower margins
   const fenceObs = lay.obstacles.filter(o => o.fence);
@@ -76,14 +69,10 @@ export function createSim(RAPIER, opts = {}) {
     }
     return [x0, z0];
   };
-  function makeBody(x, z, r, mass, group) {
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, r, z).lockRotations()
-      .setLinearDamping(0.05).setAngularDamping(1.2).setCcdEnabled(true).setCanSleep(false));
-    const vol = (4 / 3) * Math.PI * r ** 3;
-    const col = world.createCollider(RAPIER.ColliderDesc.ball(r).setDensity(mass / vol).setFriction(0)
-      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setRestitution(0.15).setCollisionGroups(group), body);
-    return { body, col };
-  }
+  // one animal: a rotation-locked ball whose density the engine scales to `mass` (D3); its game fields ride on the entity (E-4)
+  // (`yaw` is a desc key, the spawn pose; the herd's heading is a game field, so it is set after the spawn)
+  const animal = (x, z, r, mass, groups, material, { yaw, ...fields }) => Object.assign(
+    world.spawn({ body: { ...PET_BODY, mass }, colliders: [{ shape: 'sphere', r, material }], groups, at: [x, r, z], ...fields }), { yaw });
   const nAdults = Math.round(N * 0.72);
   for (let i = 0; i < N; i++) {
     const piglet = i >= nAdults;
@@ -97,9 +86,9 @@ export function createSim(RAPIER, opts = {}) {
       const m = pigs[mom];
       [x, z] = freeSpot(m.spawnX - 1.8, m.spawnZ - 1.8, m.spawnX + 1.8, m.spawnZ + 1.8, r);
     }
-    const { body, col } = makeBody(x, z, r, piglet ? P.pigletMass : P.adultMass, grp(G_PIG, 0xffff));
-    pigs.push({
-      i, body, col, r, piglet, mom, spawnX: x, spawnZ: z, name: PIG_NAMES[i % PIG_NAMES.length],
+    const fields = { // built before the spawn, in 2.1.0's order of rng() calls (the body takes none)
+      tags: ['pig'], model: 'pig',
+      i, r, piglet, mom, spawnX: x, spawnZ: z, name: PIG_NAMES[i % PIG_NAMES.length],
       scale: (piglet ? P.pigletScale : P.adultScale) * (0.93 + 0.14 * rng()),
       mass: piglet ? P.pigletMass : P.adultMass,
       state: ST.GRAZE, timer: 1 + rng() * 5, yaw: rng() * Math.PI * 2, wa: rng() * Math.PI * 2,
@@ -108,12 +97,13 @@ export function createSim(RAPIER, opts = {}) {
       px: x, py: r, pz: z, vx: 0, vy: 0, vz: 0, speed: 0, dvx: 0, dvz: 0,
       region: lay.region(x, z), getUp: 0, tumbleQ: [0, 0, 0, 1], airT: 0, settleT: 0, rot: [0, 0, 0, 1],
       oink: 0, mud: rng() < 0.35 ? 0.45 + 0.55 * rng() : 0, seed: rng(), washed: 0,
-    });
+    };
+    pigs.push(animal(x, z, r, fields.mass, { member: ['pig'], filter: GROUPS }, 'pet', fields));
   }
 
   // ---- dog ------------------------------------------------------------------
-  const dogB = makeBody(22, -9, 0.36, 25, grp(G_DOG, G_GROUND | G_PIG | G_FOOD | G_CHICK | G_TRACTOR | G_FOX));
-  const dog = { ...dogB, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0 };
+  const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'pig', 'food', 'chick', 'tractor', 'fox'] }, 'pet',
+    { tags: ['dog'], model: 'dog', r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0 });
 
   // ---- food -------------------------------------------------------------------
   const foods = []; let foodSeq = 0;
@@ -134,7 +124,7 @@ export function createSim(RAPIER, opts = {}) {
     emit('daynight', { night: n });
   }
   // ---- tractor ----
-  const tractor = createTractor(RAPIER, world, lay.tractorSpawn, grp, G);
+  const tractor = createTractor(world, lay.tractorSpawn);
   function horn() { tractor.horn = 1.6; emit('horn', { x: tractor.x, z: tractor.z }); }
   const tmp = [0, 0];
 
@@ -151,15 +141,15 @@ export function createSim(RAPIER, opts = {}) {
   readState();
 
   // ---- raycast feelers --------------------------------------------------------
-  const ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
-  const RAY_GROUPS = grp(0xffff, G_STATIC);
+  const ray = new world.R.Ray({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
+  const RAY_GROUPS = world.groups.mask(GROUPS, ['static']);
   // ---- gates ----
   const gateCols = new Map();
   function setGate(id, open) {
     const g = lay.gates[id]; if (!g || g.open === open) return;
     g.open = open; g.barrier.active = !open;
-    if (open) { const c = gateCols.get(id); if (c) world.removeCollider(c, true); gateCols.delete(id); }
-    else gateCols.set(id, staticCollider(g.barrier));
+    if (open) { const e = gateCols.get(id); if (e) world.despawn(e); gateCols.delete(id); }
+    else gateCols.set(id, staticEntity(g.barrier));
     const pad = 1.5;
     grid.refresh(lay.obstacles, 0.48, g.x0 - pad, g.z0 - pad, g.x1 + pad, g.z1 + pad);
     cgrid.refresh(lay.obstacles, 0.24, g.x0 - pad, g.z0 - pad, g.x1 + pad, g.z1 + pad);
@@ -180,7 +170,7 @@ export function createSim(RAPIER, opts = {}) {
       const rx = dx * c - dz * s, rz = dx * s + dz * c;
       ray.origin.x = p.px; ray.origin.y = 0.3; ray.origin.z = p.pz;
       ray.dir.x = rx; ray.dir.y = 0; ray.dir.z = rz;
-      const h = world.castRayAndGetNormal(ray, len, true, undefined, RAY_GROUPS);
+      const h = world.rapier.castRayAndGetNormal(ray, len, true, undefined, RAY_GROUPS); // lh-allow: raw Rapier query (the pig feelers, L-1)
       if (!h) continue;
       const k = (1 - h.timeOfImpact / len) * w;
       let nx = h.normal.x, nz = h.normal.z; const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
@@ -216,7 +206,7 @@ export function createSim(RAPIER, opts = {}) {
     return along < tr.len / 2 + 0.25 && out > 0.2 && out < 1.25 + p.r;
   }
 
-  const flock = createFlock({ RAPIER, world, lay, rng, grid: cgrid, emit, grp, G, DT, feelers, turnToward });
+  const flock = createFlock({ world, lay, rng, grid: cgrid, emit, DT, feelers, turnToward });
 
   // things that frighten animals this step
   const threats = [];
@@ -245,7 +235,7 @@ export function createSim(RAPIER, opts = {}) {
     if (i < 0) return; const p = pigs[i]; dropClaims(p);
     grabbed = i; setState(p, ST.GRAB); p.panic = 1; p.threatX = p.px; p.threatZ = p.pz;
     p.body.lockRotations(false, true); p.body.setAngularDamping(3);
-    p.col.setFriction(0.7); p.col.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Average);
+    world.setMaterial(p, '*', 'petGrip');
     grabT.x = p.px; grabT.y = p.py + 1.2; grabT.z = p.pz;
     emit('squeal', { i, x: p.px, z: p.pz });
   }
@@ -269,22 +259,23 @@ export function createSim(RAPIER, opts = {}) {
     if (!kind) kind = FOOD_KINDS[foodSeq % FOOD_KINDS.length];
     if (foods.length >= P.foodCap) return null; // hard cap: no new snacks until some are eaten
     const r = FOOD_R[kind];
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(fx, fy, fz).setCcdEnabled(true)
-      .setLinearDamping(0.1).setAngularDamping(0.6));
-    const col = world.createCollider(RAPIER.ColliderDesc.ball(r).setDensity(500).setFriction(0.9).setRestitution(0.35)
-      .setCollisionGroups(grp(G_FOOD, 0xffff)), body);
+    const f = world.spawn({
+      body: { type: 'dynamic', ccd: true, linearDamping: 0.1, angularDamping: 0.6 },
+      colliders: [{ shape: 'sphere', r, material: 'snack' }], groups: { member: ['food'], filter: GROUPS }, at: [fx, fy, fz],
+      tags: ['food'], model: kind, kind, r, x: tx, y: r, z: tz, rot: [0, 0, 0, 1], fx: tx, fz: tz,
+      field: grid.field(tx, tz, 0.9), claims: 0, bites: 0, age: 0, ground: 0, life: 1,
+    });
+    foodSeq++;
     const T = 0.85, dx = tx - fx, dz = tz - fz, dy = r - fy;
-    body.setLinvel({ x: dx / T, y: (dy + 0.5 * 9.81 * T * T) / T, z: dz / T }, true);
-    body.setAngvel({ x: (rng() - 0.5) * 12, y: (rng() - 0.5) * 6, z: (rng() - 0.5) * 12 }, true);
-    const f = { id: foodSeq++, kind, body, col, r, x: tx, y: r, z: tz, rot: [0, 0, 0, 1], fx: tx, fz: tz,
-      field: grid.field(tx, tz, 0.9), claims: 0, bites: 0, age: 0, ground: 0, life: 1 };
+    f.body.setLinvel({ x: dx / T, y: (dy + 0.5 * 9.81 * T * T) / T, z: dz / T }, true);
+    f.body.setAngvel({ x: (rng() - 0.5) * 12, y: (rng() - 0.5) * 6, z: (rng() - 0.5) * 12 }, true);
     foods.push(f);
     return f;
   }
   function removeFood(f) {
     const k = foods.indexOf(f); if (k < 0) return;
     for (const p of pigs) if (p.snack === f.id) { p.snack = -1; if (p.state === ST.SNACK) setState(p, ST.GRAZE, 1 + rng()); }
-    world.removeRigidBody(f.body); foods.splice(k, 1);
+    world.despawn(f); foods.splice(k, 1);
   }
   function bell() {
     for (const tr of troughs) tr.level = 1;
@@ -294,7 +285,7 @@ export function createSim(RAPIER, opts = {}) {
 
   // ---- main step -----------------------------------------------------------------
   const counts = new Array(8).fill(0);
-  function step() {
+  function think() {
     t += DT; clock.t = t;
     updateThreats();
     // farmer tops up one trough at a time, which keeps the herd moving between pens
@@ -365,7 +356,7 @@ export function createSim(RAPIER, opts = {}) {
           p.tumbleQ = [...p.rot]; p.getUp = 1;
           p.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
           p.body.lockRotations(true, true); p.body.setAngularDamping(1.2);
-          p.col.setFriction(0); p.col.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
+          world.setMaterial(p, '*', 'pet');
           p.panic = 0.45; p.threatX = p.px - Math.sin(p.yaw); p.threatZ = p.pz - Math.cos(p.yaw);
           setState(p, ST.GRAZE, 1.5);
           if (p.py > 2 || p.px < field.x0 || p.px > field.x1 || p.pz < field.z0 || p.pz > field.z1) respawn(p);
@@ -578,7 +569,9 @@ export function createSim(RAPIER, opts = {}) {
 
     tractor.step(DT);
     flock.step(clock, threats, pigs, hose, dog, t);
-    world.step();
+  }
+  // after the engine's Rapier step (lh.physics.step → read → events): read back, rinse, count
+  function settle() {
     readState();
 
     // hose: rinse every pig in the spray; once clean, off they go
@@ -612,15 +605,14 @@ export function createSim(RAPIER, opts = {}) {
   }
   function respawn(p) {
     const lane = lay.lane; const x = (lane.x0 + lane.x1) / 2 + (rng() - 0.5) * 6, z = (lane.z0 + lane.z1) / 2;
-    p.body.setTranslation({ x, y: p.r + 0.6, z }, true); p.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-    p.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    p.body.lockRotations(true, true); p.col.setFriction(0); p.col.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
+    world.place(p, { at: [x, p.r + 0.6, z] }, { q: [0, 0, 0, 1] }); // E-8: pose and velocities together, no smear
+    p.body.lockRotations(true, true); world.setMaterial(p, '*', 'pet');
     dropClaims(p); setState(p, ST.GRAZE, 1); p.panic = 0; p.respawns = (p.respawns || 0) + 1;
   }
 
   return {
     world, lay, grid, pigs, dog, foods, troughs, events, counts,
-    step, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, tractor, horn, flock, setGate, threats,
+    think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, tractor, horn, flock, setGate, threats,
     get time() { return t; }, get foodCap() { return P.foodCap; }, get transitions() { return transitions; }, get grabbed() { return grabbed; },
   };
 }

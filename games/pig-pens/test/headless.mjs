@@ -1,9 +1,8 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim, ST, ST_NAME } from '../src/sim.js';
+import { farmSim } from './farmSim.mjs';
+import { ST, ST_NAME } from '../src/sim.js';
 import { hit } from '../src/flow.js';
-await RAPIER.init();
 const t0 = performance.now();
-const sim = createSim(RAPIER, { pigs: +(process.argv[2] || 48), seed: 3 });
+const sim = farmSim({ pigs: +(process.argv[2] || 48), seed: 3 });
 console.log('init ms', (performance.now() - t0).toFixed(0));
 const fence = sim.lay.obstacles.filter(o => o.fence);
 let pen = 0, maxSpeed = 0, minSep = 9, stepMs = 0;

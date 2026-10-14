@@ -2,11 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim } from '../src/sim.js';
+import { farmSim } from './farmSim.mjs';
 import { planeHit, rayDist, classify, grabTarget, pickGate, pickDoor } from '../src/game/pick.js';
 import { rayTo } from './rays.mjs';
-await RAPIER.init();
 
 test('rayDist matches three.js Ray.distanceToPoint, behind-the-origin included', () => {
   let seed = 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 40 - 20;
@@ -21,7 +19,7 @@ test('planeHit: a hit, a parallel ray and a plane behind the eye', () => {
   assert.equal(planeHit([0, 1, 0, 1, 0, 0], 0), null); assert.equal(planeHit([0, 1, 0, 0, 1, 0], 0), null);
 });
 test('classify: an egg wins over everything; a pig is a pig; empty ground is null; gates and the coop door', () => {
-  const sim = createSim(RAPIER, { pigs: 24, seed: 3 }); for (let i = 0; i < 30; i++) sim.step();
+  const sim = farmSim({ pigs: 24, seed: 3 }); for (let i = 0; i < 30; i++) sim.step();
   const n = sim.lay.nests[1]; sim.flock.eggs.push({ id: 999, nest: 1, x: n.x, y: 0.06, z: n.z, age: 0, layer: 1, hatch: 0, brooder: -1 });
   assert.deepEqual(classify(sim, rayTo([n.x, 0.12, n.z], 20, 0.01)), { kind: 'egg', id: 999 });
   const p = sim.pigs.find(q => { const c = classify(sim, rayTo([q.px, q.py, q.pz])); return c?.kind === 'pig' && c.i === q.i; });

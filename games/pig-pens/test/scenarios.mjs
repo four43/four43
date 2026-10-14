@@ -1,12 +1,11 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim, ST, ST_NAME } from '../src/sim.js';
+import { farmSim } from './farmSim.mjs';
+import { ST, ST_NAME } from '../src/sim.js';
 import { hit } from '../src/flow.js';
-await RAPIER.init();
 const run = (sim, sec, f) => { for (let s = 0; s < sec * 60; s++) { f && f(s / 60); sim.step(); } };
 
 // 1. Dog sweeps through pen 1 (top middle) from the north wall toward the lane gate
 {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 5 });
+  const sim = farmSim({ pigs: 48, seed: 5 });
   run(sim, 5);
   const pen = sim.lay.pens[1];
   const before = sim.counts[1];
@@ -19,7 +18,7 @@ const run = (sim, sec, f) => { for (let s = 0; s < sec * 60; s++) { f && f(s / 6
 }
 // 2. Food tossed into pen 5 — how many pigs come and how quickly it's eaten
 {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 6 });
+  const sim = farmSim({ pigs: 48, seed: 6 });
   run(sim, 5);
   const pen = sim.lay.pens[5];
   const foods = [];
@@ -30,7 +29,7 @@ const run = (sim, sec, f) => { for (let s = 0; s < sec * 60; s++) { f && f(s / 6
 }
 // 3. Grab a pig and throw it over the fence into the neighbouring pen
 {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 7 });
+  const sim = farmSim({ pigs: 48, seed: 7 });
   run(sim, 2);
   const p = sim.pigs.find(p => p.region === 0 && !p.piglet);
   sim.grab(p.i);
@@ -46,7 +45,7 @@ const run = (sim, sec, f) => { for (let s = 0; s < sec * 60; s++) { f && f(s / 6
 }
 // 4. Bell: everyone rushes to troughs
 {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 8 });
+  const sim = farmSim({ pigs: 48, seed: 8 });
   run(sim, 5); sim.bell();
   let peakEat = 0; run(sim, 40, () => { peakEat = Math.max(peakEat, sim.pigs.filter(p => p.state === ST.EAT).length); });
   console.log('[bell] peak eating', peakEat, 'of', sim.pigs.length, 'troughs', sim.troughs.map(t => t.level.toFixed(2)).join(' '));
