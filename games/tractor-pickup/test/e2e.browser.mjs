@@ -242,7 +242,8 @@ test('iPhone portrait: the horn, drive buttons, gear and slot bar are tappable a
 // every line to the voice's safety timeout (audio/voice.js: 1.2 s + 0.15 s a letter, from when the line starts), and notes when each
 // line starts, so a step that ends before its line could have is one a hold finished (F-8).
 const SILENT = () => {
-  window.__spoken = [];
+  window.__spoken = []; window.__downs = []; // when each line starts; when each touch goes down (capturing, before the game sees it)
+  addEventListener('pointerdown', () => window.__downs.push(performance.now()), true);
   Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speak(u) { window.__spoken.push({ text: u.text, at: performance.now() }); }, cancel() {}, pause() {}, resume() {}, getVoices: () => [], paused: false, speaking: false, pending: false, addEventListener() {}, removeEventListener() {} } });
 };
 const LETS_COUNT = PHRASES['lets-count'], LINE_MS = 1200 + 150 * LETS_COUNT.length; // the show's intro line (sim/showSteps.js)
@@ -250,7 +251,7 @@ const LETS_COUNT = PHRASES['lets-count'], LINE_MS = 1200 + 150 * LETS_COUNT.leng
 // Field note (G6): SwiftShader draws the iPad's 1.5x canvas at ~2 fps; at 1x (the same CSS layout and touch points) a frame takes
 // ~0.4 s. bindGesture counts whole frames (update(rawDt)) and a lift arrives only after the frame it fell in, so at 2 fps a 150 ms
 // tap already spans 1.1 s of frames and fires the 1 s hold: the gesture test runs the iPad layout at 1x.
-test('iPad: the wake button needs its full 5 s hold by touch; on the show a short tap is a cheer, a 1 s hold finishes the step (N-5, F-8, A-3)', async t => {
+test('iPad: the wake button needs its full 5 s hold by touch; on the show a short tap does not hurry, a 1 s hold finishes the step (N-5, F-8, A-3)', async t => {
   if (skip) return t.skip(skip);
   const game = await openGame(chrome.browser, site.url, { preset: { ...presets[IPAD], deviceScaleFactor: 1 }, args: ARGS, initScript: SILENT });
   const step = () => game.page.evaluate(() => Number(document.querySelector('#show').dataset.step));
@@ -268,12 +269,17 @@ test('iPad: the wake button needs its full 5 s hold by touch; on the show a shor
     await game.untilEvent('show', { maxSteps: 900 }); await game.page.evaluate(() => window.engine.debug.drive(null));
     assert.equal((await after(-1)).k, 0, 'the show starts with its intro');
     // both gestures in the intro, which cannot end before its line has been spoken (queued behind the voice's earlier lines) and timed out
-    await game.touch.start(1, { x: 600, y: 500 }); await game.touch.end(1); await game.page.waitForTimeout(100);
+    await game.touch.start(1, { x: 600, y: 500 }); await game.touch.end(1); await frames(game); await frames(game); // a hurry fires in a frame's gesture update and shows in the next
     assert.equal(await step(), 0, 'a tap does not change the pace (A-3)');
     await game.touch.start(1, { x: 600, y: 500 });
     const next = await after(0); await game.touch.end(1);
-    const line = await game.page.evaluate(text => window.__spoken.find(s => s.text === text) ?? null, LETS_COUNT);
-    assert.ok(!line || next.at - line.at < LINE_MS, `the hold ended the intro (step ${next.k}) before its line could (F-8, #56): ${line ? Math.round(next.at - line.at) + ' ms after it started' : 'never spoken'}`);
+    const { line, down, spoken } = await game.page.evaluate(text => ({ line: window.__spoken.find(s => s.text === text) ?? null, down: window.__downs.at(-1), spoken: window.__spoken.length }), LETS_COUNT);
+    assert.ok(spoken > 0, 'the voice speaks through the stub (else the line bound below says nothing)');
+    // the hold itself: 1 s of frames (the first frame's dt may begin before the touch, ~0.4 s here) then one frame to show the step
+    const held = next.at - down;
+    assert.ok(held > 600 && held < 2500, `the hold ended the intro ${Math.round(held)} ms after the touch went down (F-8, #56)`);
+    // and not its own pace: the intro cannot end before its line has started and timed out
+    assert.ok(!line || next.at - line.at < LINE_MS, `the intro (step ${next.k}) ended before its line could: ${line ? Math.round(next.at - line.at) + ' ms after it started' : 'never spoken'}`);
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
