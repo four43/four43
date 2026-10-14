@@ -37,3 +37,4 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
 ## Removed or renamed tests
 
 ## Field note candidates
+  - Result (Task 1): e2e.browser.mjs on engine 0.8.0, unchanged game: 14 tests, 14 pass, 0 fail.

@@ -1,0 +1,2 @@
+{ "tolerance": { "seconds": 0.03, "boops": 1, "bumps": 1, "separation": 0.5 },
+  "rows": [ { "at": "pre-swap (e03ed71 game, engine 0.8.0)", "course": { "seconds": 45.28333333333333, "boops": 2 }, "bump": { "bumps": [3, 3], "separation": 4.9384727480093575 } } ] }
