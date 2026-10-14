@@ -1,6 +1,6 @@
 // A generated Track as a World (spec tracks T-8, T-11): one heightfield ground collider, marker
 // posts as knock-over props, static gate posts, per-position surfaces from the locator.
-import { SURFACES } from '../tire.js';
+import { surfaceOfKey, blendSurface } from '../surface.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
 import { GROUP_GROUND, GROUP_PROP, groups } from './padWorld.js';
@@ -12,7 +12,6 @@ const HALF_ROAD = 3.5;
 const MARKER = { h: 1.2, r: 0.06, half: [0.06, 0.6, 0.045], mass: 5, angDamp: 6, linDamp: 1.0, friction: 0.9 };
 const GATE_POST = { off: 6, h: 4, r: 0.15 };   // posts ~6 m either side, outside the verge
 const RECOVER_BACK = 5, RECOVER_Y = 0.6;       // m back along the road; CoM above the road
-const BLEND_KEYS = ['mu', 'C', 'kp', 'ap', 'crr', 'drag'];
 
 // Rapier heightfield from terrain heights (row-major, heights[iz * nx + ix] at (x0 + ix, z0 + iz)).
 // rapier3d-compat 0.14–0.21: heightfield(nrows, ncols, ...) takes SUBDIVISION counts (rows along z,
@@ -67,18 +66,7 @@ export class TrackWorld {
     const r = roadSurfaceAt(t.surfaces, s), road = Math.abs(d) <= HALF_ROAD;
     const a = road ? r.road : r.verge, b = r.next ? (road ? r.next.road : r.next.verge) : a;
     const q = Math.round(r.t * 10);
-    if (a === b || q === 0) return SURFACES[a];
-    if (q === 10) return SURFACES[b];
-    const key = `${a}|${b}|${q}`;
-    let e = this.blends.get(key);
-    if (!e) {
-      const A = SURFACES[a], B = SURFACES[b], w = q / 10;
-      e = { name: `${A.name}→${B.name}` };
-      for (const k of BLEND_KEYS) e[k] = A[k] + (B[k] - A[k]) * w;
-      e.B = Math.tan(Math.PI / (2 * e.C));
-      this.blends.set(key, e);
-    }
-    return e;
+    return blendSurface(this.blends, surfaceOfKey(a), surfaceOfKey(b), q);
   }
 
   // A thin post on a sloped shoulder isn't stable in Rapier once awake (most tip over within a

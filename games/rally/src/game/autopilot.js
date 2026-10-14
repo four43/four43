@@ -1,6 +1,6 @@
 // Test driver for generated tracks (spec tracks T-12): pure pursuit on the centreline, target speed
 // from upcoming curvature (v ≤ sqrt(0.55·μ·g/|κ|)), slowing for obstacles, P throttle/brake.
-import { SURFACES } from '../tire.js';
+import { surfaceOfKey } from '../surface.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { pointAt } from '../world/trackWorld.js';
 import { qrot } from '../vehicle.js';
@@ -23,7 +23,7 @@ export function autopilot(sim, track, opts = {}) {
   // Pure pursuit (steer +1 = left) plus a yaw-rate loop: the arc asks for yaw rate v·κ, and the
   // error to the actual yaw rate is fed back, which trims understeer and catches slides. The
   // look-ahead grows on low grip, where the car answers the wheel more slowly.
-  const mu = SURFACES[roadSurfaceAt(track.surfaces, s).road].mu;
+  const mu = surfaceOfKey(roadSurfaceAt(track.surfaces, s).road).mu;
   const look = Math.max(6, v * 0.6 * Math.max(1, Math.sqrt(0.8 / mu)));
   const tp = pointAt(L, s + look);
   const dx = tp.x - p.x, dz = tp.z - p.z;

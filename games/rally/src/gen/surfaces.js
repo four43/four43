@@ -1,6 +1,6 @@
 // Road surface sections along a layout (spec tracks T-5). A weighted random walk over a per-theme
 // transition table: each section is 200–700 m (a stage's last may be 100+), loops also close the
-// walk (last → first is a legal transition). Keys are SURFACES entries in src/tire.js; "dirt" is
+// walk (last → first is a legal transition). Keys are surface keys (src/surface.js: material 'rally-<key>'); "dirt" is
 // `hardpack`, and winter snow sections use `packed` in Phase 1.
 
 // Allowed next road surface → weight. Same → same is never listed (no invisible boundaries).

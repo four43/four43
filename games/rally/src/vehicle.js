@@ -1,7 +1,8 @@
 // Raycast rally car on a single Rapier rigid body. Each wheel casts its own ray,
 // runs its own suspension and tire model, and integrates its own spin.
 // Pure JS (no three.js) so it runs headless in Node.
-import { SURFACES, tireStep } from './tire.js';
+import { tireStep } from './tire.js';
+import { surfaceOfKey } from './surface.js';
 import { makeDrivetrain, driveStep, shift, rpmOf, gearRatio } from './drivetrain.js';
 import { SNOW } from './snow.js';
 
@@ -40,7 +41,7 @@ export const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'];
 export class Vehicle {
   constructor(R, world, cfg, opts = {}) {
     this.R = R; this.world = world; this.cfg = cfg;
-    this.surfaceAt = opts.surfaceAt || (() => SURFACES.gravel);
+    this.surfaceAt = opts.surfaceAt || (() => surfaceOfKey('gravel'));
     this.snow = opts.snow || (() => null);   // current SnowField, if the pad is snow-covered
     this.assist = opts.assist ?? true;     // Assisted mode (ABS, TCS, slide control)
     this.autoShift = opts.autoShift ?? true;
@@ -64,7 +65,7 @@ export class Vehicle {
         rc: front ? c.rcF : c.rcR,
         omega: 0, st: { dx: 0, dy: 0 }, x: 0, xPrev: 0, contact: false, wasContact: false,
         fz: 0, fs: 0, fx: 0, fy: 0, kappa: 0, alpha: 0, rho: 0, steer: 0, spin: 0,
-        surf: SURFACES.gravel, center: v3(), point: v3(), normal: v3(0, 1, 0), drive: 0,
+        surf: surfaceOfKey('gravel'), center: v3(), point: v3(), normal: v3(0, 1, 0), drive: 0,
       });
     }
     this.staticComp = xs;

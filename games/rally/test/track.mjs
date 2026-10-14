@@ -7,7 +7,7 @@ import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
 import { rng } from '../src/gen/rng.js';
 import { TrackWorld, pointAt } from '../src/world/trackWorld.js';
-import { SURFACES } from '../src/tire.js';
+import { surfaceOfKey } from '../src/surface.js';
 import { runUntil } from './autopilot.js';
 await R.init();
 
@@ -107,13 +107,13 @@ for (const kind of ['loop', 'stage']) test(`t1 ${kind} world api`, () => {
   const world = new TrackWorld(track);
   const sim = new Sim(R, { world, car: 'awd', assist: true });
   const sec = track.surfaces.sections[0], nxt = track.surfaces.sections[1];
-  const p = pointAt(L, sec.s1 - 5), a = SURFACES[sec.road], b = SURFACES[nxt.road];
+  const p = pointAt(L, sec.s1 - 5), a = surfaceOfKey(sec.road), b = surfaceOfKey(nxt.road);
   const m = world.surfaceAt(p.x, p.z);
   check(`blend mu mid-way ${a.name}→${b.name}`, m.mu, (a.mu + b.mu) / 2 - 0.01, (a.mu + b.mu) / 2 + 0.01);
   check('blend B = tan(pi / 2C)', Math.abs(m.B - Math.tan(Math.PI / (2 * m.C))), 0, 1e-9);
   check('blend cached (same object)', world.surfaceAt(p.x, p.z) === m ? 1 : 0, 1, 1);
   const off = pointAt(L, 300), h = off.yaw;
-  check('verge 5 m off the road', world.surfaceAt(off.x + 5 * Math.cos(h), off.z - 5 * Math.sin(h)) === SURFACES.grass ? 1 : 0, 1, 1);
+  check('verge 5 m off the road', world.surfaceAt(off.x + 5 * Math.cos(h), off.z - 5 * Math.sin(h)) === surfaceOfKey('grass') ? 1 : 0, 1, 1);
   let calls = 0; const t0 = performance.now();
   for (let k = 0; k < 20000; k++) { const q = pointAt(L, k % L.length); world.surfaceAt(q.x + 2, q.z); calls++; }
   check('surfaceAt cost (µs/call)', (performance.now() - t0) * 1000 / calls, 0, 5);

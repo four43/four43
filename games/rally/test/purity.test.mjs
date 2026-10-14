@@ -10,7 +10,7 @@ import { rng } from 'lion-hawk/sim';
 import { normalizeSettings, newSeed } from '../src/game/settings.js';
 
 const src = fileURLToPath(new URL('../src/', import.meta.url));
-const SIM = ['game.sim.js', 'sim.js', 'vehicle.js', 'drivetrain.js', 'tire.js', 'snow.js', 'cars.js', 'gen', 'world', 'game'].map(p => join(src, p));
+const SIM = ['game.sim.js', 'sim.js', 'vehicle.js', 'drivetrain.js', 'tire.js', 'snow.js', 'cars.js', 'surface.js', 'defs', 'gen', 'world', 'game'].map(p => join(src, p));
 const files = p => !existsSync(p) ? [] : statSync(p).isDirectory() ? readdirSync(p).flatMap(n => files(join(p, n))) : p.endsWith('.js') ? [p] : [];
 const RALLY = [/\blocalStorage\b/, /\bset(Timeout|Interval)\s*\(/, /\brequestAnimationFrame\b/,
   /from\s*['"][^'"]*\/(render|snowView|ui|menus|devices|game\.view|main)(\.js)?['"]/];

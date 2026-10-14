@@ -3,7 +3,7 @@
 import R from '@dimforge/rapier3d-compat';
 import { Sim, DT, PAD } from '../src/sim.js';
 import { qrot } from '../src/vehicle.js';
-import { SURFACES } from '../src/tire.js';
+import { surfaceOfKey } from '../src/surface.js';
 import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
 import { TrackWorld } from '../src/world/trackWorld.js';
@@ -47,9 +47,9 @@ const coast = (surface) => {
 };
 
 test('surface drag table', () => {
-  for (const k of ['tarmac', 'hardpack', 'gravel', 'packed', 'ice']) check(`${k} drag`, SURFACES[k].drag, 0, 0);
-  check('grass drag', SURFACES.grass.drag, 0.05, 0.3);
-  check('snowbank drag', SURFACES.snowbank.drag, 0.05, 0.3);
+  for (const k of ['tarmac', 'hardpack', 'gravel', 'packed', 'ice']) check(`${k} drag`, surfaceOfKey(k).drag, 0, 0);
+  check('grass drag', surfaceOfKey('grass').drag, 0.05, 0.3);
+  check('snowbank drag', surfaceOfKey('snowbank').drag, 0.05, 0.3);
 });
 
 test('awd flat out on grass', () => {

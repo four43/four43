@@ -1,6 +1,6 @@
 // The Milestone 1 test pad as a World (spec T-1): flat ground with ramps, humps, a slope and
 // cones. One surface covers the whole pad and is chosen in the settings sheet.
-import { SURFACES } from '../tire.js';
+import { surfaceOfKey } from '../surface.js';
 
 export const GROUP_GROUND = 0x0001, GROUP_PROP = 0x0002, GROUP_CAR = 0x0004;
 export const groups = (member, filter) => (member << 16) | filter;
@@ -103,7 +103,7 @@ export class PadWorld {
   // 'snow' is deformable fresh snow over the flat ground (spec R2-6); the features poking
   // through it (ramps, humps, slope) are packed snow.
   setSurface(key) { this.surfaceKey = key; }
-  surfaceAt() { return this.surfaceKey === 'snow' ? SURFACES.packed : SURFACES[this.surfaceKey]; }
+  surfaceAt() { return surfaceOfKey(this.surfaceKey === 'snow' ? 'packed' : this.surfaceKey); }
 
   resetProps() {
     for (const p of this.props) {
