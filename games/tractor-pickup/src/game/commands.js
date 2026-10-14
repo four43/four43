@@ -4,6 +4,8 @@
 import { toggleHat, wornHats, placeSticker, unplaceSticker, seeBook, unlockedPaints, clampSettings } from '../sim/progress.js';
 import { setBedtime } from '../sim/bedtime.js';
 import { play, showDone, closeReward, open } from './flow.js';
+import { createWarnOnce } from 'lion-hawk/sim';
+import { tuneSet, TUNE_POWERS } from '../sim/tune.js';
 
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v < hi;
 const progress = (e, s) => e.emit('progress', { progress: structuredClone(s.progress) }); // a copy: the event log never sees later changes
@@ -11,8 +13,16 @@ const progress = (e, s) => e.emit('progress', { progress: structuredClone(s.prog
 // handler(engine, farm state, data) → a game-wide command that runs only while the farm is the main scene
 const farm = fn => (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) fn(e, ctx.state, d ?? {}); };
 
+// D-5, G4b: ?tune's commands run on the farm and on the sandbox pad, for a solo player or the host. A guest's are dropped: the feel
+// constants are module-level, so a guest tuning its own copy would only drive differently from the host's farm (its panel is hidden)
+const tuner = (warn, fn) => (e, d, ctx) => {
+  if ((ctx?.name !== 'farm' && ctx?.name !== 'sandbox') || !ctx.state.game) return;
+  if (ctx.state.net?.role === 'guest') return warn('tune: a guest cannot tune', new Error('tune is the host\'s (or a solo player\'s)'));
+  fn(e, ctx.state, d ?? {});
+};
+
 // api: the farm's (newFarm)
-export const makeCommands = api => ({
+export const makeCommands = (api, warn = createWarnOnce()) => ({
   play: farm((e, s) => play(e, s)), // F-11, A-7: the view's first gesture
   // W-3: a pot on the paint screen; both paints must be unlocked
   paint: farm((e, s, d) => {
@@ -60,5 +70,17 @@ export const makeCommands = api => ({
   }),
   // M-34: a join link (?r=) opens the Multiplayer panel over the farm (the panel itself is the view's)
   'multiplayer.open': farm(e => open(e, 'multiplayer')),
+  // D-5, G4b: a ?tune slider. key: a sim/tune.js row id (value clamped to its range and written where the sim reads it), or 'power'
+  // (the tractor's preset, not the parent's saved setting). Unknown keys and bad values are warned and dropped; the tune event
+  // carries what was written (the panel shows it and logs it)
+  tune: tuner(warn, (e, s, d) => {
+    let value = null;
+    if (d.key === 'power') { if (TUNE_POWERS.includes(d.value)) s.game.tractor.setPower(value = d.value); }
+    else value = tuneSet(s.game, d.key, d.value);
+    if (value === null) return warn(`tune: dropped ${JSON.stringify(d.key)}`, new Error(`tune: unknown key or bad value ${JSON.stringify(d)}`));
+    e.emit('tune', { key: d.key, value });
+  }),
+  // D-5: the panel's reset button: knocked props and broken trees stand again
+  'tune.reset': tuner(warn, (e, s) => { s.game.yardProps?.reset(); s.game.trees?.reset(); e.emit('tune.reset', {}); }),
   'farm.new': (e, d, ctx) => { if (ctx?.name === 'farm' && ctx.state.game) api.newFarm(e, ctx); }, // P-8, M-19, [S-6]
 });

@@ -1,36 +1,60 @@
 // Debug tools (D-5): the ?tune panel (feel constants as sliders) and the ?fps meter (X-4 stutter hunting).
-import { POWER, TP } from '../sim/tractor.js';
-import { TR } from '../sim/hitch.js';
-import { TREE } from '../sim/trees.js';
+import { TUNE, TUNE_POWERS, tuneGet, tuneSet, tuneValues } from '../sim/tune.js';
 import { CAM } from '../render/camera.js';
-import { PILOT } from '../sim/pilot.js';
 
-export function buildTunePanel(game) {
-  const el = document.createElement('div'); el.id = 'tune'; document.body.appendChild(el);
-  const head = document.createElement('button'); head.textContent = 'tune'; head.id = 'tuneToggle'; el.appendChild(head);
-  const body = document.createElement('div'); body.hidden = true; el.appendChild(body);
+// The view's own rows: the chase camera (CAM) is the view's, so these sliders write it directly
+const VIEW_ROWS = [['cam dist', 'D', 4, 20, 0.5], ['cam height', 'H', 4, 22, 0.5], ['cam ahead', 'AHEAD', 2, 24, 0.5]];
+
+// ?tune (lion-hawk 2g G4b): the sim rows (sim/tune.js) only ask: a slider calls send(id, value) and the power picker send('power',
+// name); the reset button calls reset(). What a sim row shows comes back through shown(key, value) (the `tune` event: the value the
+// sim wrote, after clamping) or refresh() (read(id): the table's getter). power() → the tractor's preset name for the picker; values()
+// → every sim row, for the console line the values are copied out of. Returns { el, shown, refresh, enable }.
+export function buildTunePanel({ doc = document, read, send, reset, power, values }) {
+  const el = doc.createElement('div'); el.id = 'tune'; doc.body.appendChild(el);
+  const head = doc.createElement('button'); head.textContent = 'tune'; head.id = 'tuneToggle'; el.appendChild(head);
+  const body = doc.createElement('div'); body.hidden = true; el.appendChild(body);
   head.onclick = () => { body.hidden = !body.hidden; };
-  const t = game.tractor, rows = [
-    ['vmax', () => t.P.vmax, v => t.P.vmax = v, 3, 15, 0.5], ['force', () => t.P.force, v => t.P.force = v, 2000, 15000, 100],
-    ['rearSide', () => t.P.rearSide, v => t.P.rearSide = v, 0.2, 1.2, 0.01], ['slideMax', () => t.P.slideMax, v => t.P.slideMax = v, 0.2, 1.2, 0.01],
-    ['loose', () => t.P.loose, v => t.P.loose = v, 0, 0.3, 0.005],
-    ['cam dist', () => CAM.D, v => CAM.D = v, 4, 20, 0.5], ['cam height', () => CAM.H, v => CAM.H = v, 4, 22, 0.5], ['cam ahead', () => CAM.AHEAD, v => CAM.AHEAD = v, 2, 24, 0.5],
-    ['reverse cone deg', () => PILOT.revCone * 180 / Math.PI, v => PILOT.revCone = v * Math.PI / 180, 0, 80, 1],
-    ['full speed err deg', () => PILOT.fullErr * 180 / Math.PI, v => PILOT.fullErr = v * Math.PI / 180, 5, 80, 1], ['crawl err deg', () => PILOT.crawlErr * 180 / Math.PI, v => PILOT.crawlErr = v * Math.PI / 180, 30, 180, 1],
-    ['crawl', () => PILOT.crawl, v => PILOT.crawl = v, 0, 1, 0.05], ['pilot gain', () => PILOT.gain, v => PILOT.gain = v, 0.5, 6, 0.1], ['reverse force', () => TP.revForce, v => TP.revForce = v, 2000, 15000, 100], ['turn help', () => TP.turnHelp, v => TP.turnHelp = v, 0, 12, 0.5], ['help below m/s', () => PILOT.helpSpeed, v => PILOT.helpSpeed = v, 0, 8, 0.5],
-    ['slip', () => TP.slip, v => TP.slip = v, 0.5, 6, 0.1], ['steerMax', () => TP.steerMax, v => TP.steerMax = v, 0.3, 0.9, 0.01],
-    ['tree break speed', () => TREE.breakSpeed, v => TREE.breakSpeed = v, 1, 10, 0.5],
-    ['stiffness (reload)', () => TP.stiffness, v => TP.stiffness = v, 8, 40, 1], ['trailer limitBeta', () => TR.limitBeta, v => TR.limitBeta = v, 0.1, 2, 0.05],
-  ];
-  for (const [name, get, set, min, max, step] of rows) {
-    const l = document.createElement('label'); l.innerHTML = `<span>${name}</span><input type=range min=${min} max=${max} step=${step} value=${get()}><output>${get()}</output>`;
-    const i = l.querySelector('input'), o = l.querySelector('output');
-    i.oninput = () => { set(+i.value); o.textContent = i.value; console.log('tune', JSON.stringify({ P: t.P, TP: { slip: TP.slip, steerMax: TP.steerMax, stiffness: TP.stiffness }, limitBeta: TR.limitBeta })); };
-    body.appendChild(l);
+  const section = text => { const h = doc.createElement('h4'); h.textContent = text; h.style.margin = '8px 0 2px'; body.appendChild(h); };
+  const slider = (name, id, min, max, step, value) => {
+    const l = doc.createElement('label'); l.innerHTML = `<span></span><input type=range min=${min} max=${max} step=${step}><output></output>`;
+    l.querySelector('span').textContent = name; const i = l.querySelector('input'), o = l.querySelector('output');
+    i.dataset.tune = id; i.value = value; o.textContent = value; body.appendChild(l); return { i, o };
+  };
+  const show = (row, v) => { row.i.value = v; row.o.textContent = +v.toFixed(4); };
+  section('sim (a tune command)');
+  const rows = new Map(TUNE.map(r => {
+    const row = slider(r.label, r.id, r.min, r.max, r.step, read(r.id));
+    row.i.oninput = () => send(r.id, +row.i.value); // the sim writes it; shown() puts back what it wrote
+    return [r.id, row];
+  }));
+  const sel = doc.createElement('select'); sel.innerHTML = TUNE_POWERS.map(k => `<option>${k}</option>`).join(''); sel.value = power();
+  sel.onchange = () => send('power', sel.value); body.appendChild(sel);
+  if (reset) { const r = doc.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = reset; body.appendChild(r); }
+  section('view (camera)');
+  for (const [name, key, min, max, step] of VIEW_ROWS) {
+    const row = slider(name, 'CAM.' + key, min, max, step, CAM[key]);
+    row.i.oninput = () => { CAM[key] = +row.i.value; show(row, CAM[key]); console.log('tune', JSON.stringify({ key: 'CAM.' + key, value: CAM[key], CAM })); };
   }
-  const sel = document.createElement('select'); sel.innerHTML = Object.keys(POWER).map(k => `<option ${k === t.power ? 'selected' : ''}>${k}</option>`).join('');
-  sel.onchange = () => t.setPower(sel.value); body.appendChild(sel);
-  if (game.trees) { const r = document.createElement('button'); r.textContent = 'reset props and trees'; r.onclick = () => { game.yardProps.reset(); game.trees.reset(); }; body.appendChild(r); }
+  const refresh = () => { for (const [id, row] of rows) show(row, read(id)); sel.value = power(); };
+  let on = true;
+  return {
+    el, refresh,
+    shown(key, value) {
+      if (key === 'power') refresh(); else if (rows.has(key)) show(rows.get(key), value); // another preset: its rows read again
+      console.log('tune', JSON.stringify({ key, value, power: power(), values: values() }));
+    },
+    enable(yes) { if (on === yes) return; on = yes; el.hidden = !yes; if (!yes) body.hidden = true; }, // a guest cannot tune (game/commands.js)
+  };
+}
+
+// The old browser path (main.js until G7): no engine and no commands, so the same table setters are applied here and shown at once
+export function buildTunePanelDirect(game) {
+  const panel = buildTunePanel({
+    read: id => tuneGet(game, id), power: () => game.tractor.power, values: () => tuneValues(game),
+    send(id, v) { const value = id === 'power' ? (TUNE_POWERS.includes(v) ? (game.tractor.setPower(v), v) : null) : tuneSet(game, id, v); if (value !== null) panel.shown(id, value); },
+    reset: game.trees ? () => { game.yardProps?.reset(); game.trees.reset(); } : null,
+  });
+  return panel;
 }
 
 // ?fps: a small corner readout of frames per second (now, and the lowest over the last 5 s), draw calls and triangles.

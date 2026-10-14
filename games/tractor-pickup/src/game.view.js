@@ -22,6 +22,7 @@ import { renderIcons, tractorPicture } from './ui/icons.js';
 import { PAINTS } from './render/vehicles3d.js';
 import { placeCarried } from './net/players.js';
 import { buildTunePanel, createFpsMeter } from './ui/debug.js';
+import { tuneGet, tuneValues } from './sim/tune.js';
 
 let audio = null; // the page's sound and voice: the view halves play them; the entry unlocks them and applies the settings (X-13)
 export const audioOf = () => audio ??= (sound => ({ sound, voice: createVoice(sound) }))(new Sound());
@@ -92,9 +93,10 @@ function posesOf(herd, others, show) {
 
 // The drive half for the farm and the sandbox (main.js build/startFarm/frame, view side): one world per farm generation.
 // withHud: the farm's slot bar, arrows, roster and drive controls (the sandbox has none, as main.js's ?sandbox). tune: the ?tune
-// panel on each farm build (D-5); fps: the ?fps meter (X-4, B-1)
+// panel (D-5, G4b: its sim sliders issue `tune` commands and show what the `tune` event says was written; hidden for a guest);
+// fps: the ?fps meter (X-4, B-1)
 function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
-  let w = null, gen = -1, offs = [], hud = null, pageDoc = null;
+  let w = null, gen = -1, offs = [], hud = null, pageDoc = null, panel = null;
   const bodies = createBodies(), warnOnce = createWarnOnce(), netView = new Map(); // netView: players.poseAt's (#102)
   const animView = { cars: null, alpha: 0, poses: null }, vehSnap = { tractor: null, cars: null, dirt: 0 }, chaseIn = { x: 0, y: 0, z: 0, yaw: 0, fwd: 0, speed: 0, velYaw: 0 }; // reused every frame
   // paint (W-3): the farm's progress; the sandbox keeps none, so the stored one from the scene args (main.js setPaint)
@@ -104,7 +106,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
     page.canvas.dataset.tpGen = gen; // the farm generation the 3D shows (a debug read for the browser tests)
     bodies.rebind(g); animView.cars = vehSnap.cars = bodies.cars; vehSnap.tractor = bodies.view[0];
     rig.attach(page.camera, { canvas: page.canvas, tractor: g.tractor });
-    if (tune) { pageDoc.getElementById('tune')?.remove(); buildTunePanel(g); } // D-5: its sliders write this farm's feel constants
+    panel?.refresh(); // a new farm: the picker shows its tractor's preset
     if (page.perf) { const pw = g.phys.world, st = pw.step; pw.step = (...a) => { const t = performance.now(); st.apply(pw, a); page.perf.worldMs(performance.now() - t); }; } // B-1: Rapier's share (?fps only: timing, no state)
   };
   const drop = () => { w?.dispose(page.sound); w = null; };
@@ -117,6 +119,11 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       const s = engine.scene.state; if (!s.game) return;
       if (fps) page.perf ??= createFpsMeter(page.renderer);
       build(s, engine.scene.args); view.project = rig.project;
+      if (tune) {
+        pageDoc.getElementById('tune')?.remove(); const game = () => engine.scene.state.game;
+        panel = buildTunePanel({ doc: pageDoc, read: id => tuneGet(game(), id), power: () => game().tractor.power, values: () => tuneValues(game()),
+          send: (key, value) => engine.command('tune', { key, value }), reset: s.game.trees ? () => engine.command('tune.reset', {}) : null });
+      }
       if (withHud) {
         const { icons, tractorPic, voice, sound } = picturesOf(page);
         hud = createTractorHud(view.doc.getElementById('ui'), { icons, tractorPic, voice, sound, rig, paints: PAINTS, scene: page.scene, world: () => w, tractorAt: () => bodies.view[0].p });
@@ -126,6 +133,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       if (page.perf) offs.push(engine.onStep(() => page.perf.step()));
       offs.push(bodies.watch(engine), engine.events.on(e => {
         page.perf?.event(e.type);
+        if (e.type === 'tune' && panel) try { panel.shown(e.key, e.value); } catch (err) { warnOnce('tune', err); }
         if (!w) return;
         try { onEvent(e, w, engine.scene.state); } catch (err) { warnOnce('event ' + e.type, err); }
         try { hud?.event(e, engine); } catch (err) { warnOnce('hud ' + e.type, err); }
@@ -145,7 +153,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       for (const f of offs) f(); offs = [];
       hud?.dispose(); hud = null; netView.clear();
       if (withHud) Object.assign(link, { w: null, hud: null, pending: null, poses: null });
-      drop(); if (tune) view.doc.getElementById('tune')?.remove();
+      drop(); panel?.el.remove(); panel = null;
       if (view.project === rig.project) view.project = undefined;
     },
     // view.dt is the driver's frame time (capped at maxFrame); 0 for hook renders (#19), which only redraw
@@ -153,6 +161,7 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       const s = engine.scene.state, g = s.game; if (!w || g !== w.game) return; // no WebGL, or a build not yet seen by built()
       const dt = view.dt, sound = page.sound, players = s.net?.sync?.players ?? null;
       bodies.alpha(alpha);
+      panel?.enable(s.net?.role !== 'guest'); // a guest's tune would be dropped (game/commands.js)
       if (dt > 0) { w.stepFx(sound, dt); w.fx.update(dt); } // a hook render (dt 0) only redraws: no gravel or water spawns
       // M-65, #102: the other trains (and their riders) where the forecast has them this frame (the step's wall stamp plus the alpha,
       // #76), from the view's own read-only poses: the sim's players, forecasts and herd are never touched here
@@ -241,7 +250,7 @@ function showHalf() {
   };
 }
 
-// tune, fps: ?tune and ?fps (D-5, kept); sandbox: the ?sandbox page (its scene has no HUD or menus). net: { session, netlog } for
+// tune, fps: ?tune and ?fps (D-5); sandbox: the ?sandbox page (its scene has no HUD or menus). net: { session, netlog } for
 // the Multiplayer panel (G5; the entry sets net.session after boot), or null
 export function tractorView({ tune = false, fps = false, sandbox = false, net = null } = {}) {
   const menus = link.menus = menuHalves(doc => picturesOf(pageOf(doc)), net);

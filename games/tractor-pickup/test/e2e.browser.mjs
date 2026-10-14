@@ -161,13 +161,16 @@ test('desktop: the parent menu opens the Multiplayer panel; its X is the multipl
 // G5 (2f delta): the guest opens with other args than the host, so its seed 21 can only be the host's farm
 test('two pages: the guest gets the host farm, both see each other, a horn reaches the other, leaving goes alone (M-1, M-8, M-41)', async t => {
   if (skip) return t.skip(skip);
-  const room = await peers(chrome.browser, site.url, 2, { render: 'manual', argsOf: i => i ? { seed: 5, started: true } : { seed: 21, started: true } });
+  const room = await peers(chrome.browser, site.url, 2, { render: 'manual', query: { tune: '' }, argsOf: i => i ? { seed: 5, started: true } : { seed: 21, started: true } });
   try {
     const [host, guest] = room.games;
     await room.step(60);
     assert.equal((await guest.state()).seed, 21); assert.equal((await guest.state()).net.you, 2);
     assert.deepEqual((await host.state()).others.map(o => o[0]), [2], 'the host sees player 2');
     assert.deepEqual((await guest.state()).others.map(o => o[0]), [1], 'the guest sees the host');
+    await frames(host); await frames(guest);
+    assert.equal(await host.page.locator('#tune').isVisible(), true, 'the host tunes (G4b)');
+    assert.equal(await guest.page.locator('#tune').isVisible(), false, 'a guest\'s ?tune panel is hidden in a room');
     await host.page.keyboard.press('h'); await frames(host); await room.step(30);
     assert.ok(await guest.page.evaluate(() => window.engine.events.since(0).some(e => e.type === 'remoteHorn')));
     // #102: a rider in the host's train is drawn on the guest from the view's pose map (the riders preset's landing, between steps)
@@ -180,4 +183,25 @@ test('two pages: the guest gets the host farm, both see each other, a horn reach
     assert.equal((await guest.state()).net.role, 'solo');
     assert.deepEqual(await guest.errors(), []);
   } finally { await room.close(); }
+});
+
+// G4b: ?tune's sim sliders issue a tune command; the sim writes its own constant and the panel shows what the event says
+test('desktop: a ?tune slider issues a tune command; the sim\'s preset changes and the panel shows the clamped value', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS, query: { tune: '' } });
+  try {
+    await expectScene(game, 'farm'); await game.step(2);
+    const vmax0 = await game.page.evaluate(() => window.engine.debug.game.tractor.P.vmax);
+    await game.page.evaluate(() => { document.getElementById('tuneToggle').click(); const i = document.querySelector('#tune input[data-tune="P.vmax"]'); i.value = '5'; i.dispatchEvent(new Event('input', { bubbles: true })); });
+    assert.equal(await game.page.evaluate(() => window.engine.debug.game.tractor.P.vmax), vmax0, 'the view wrote nothing: the command waits for the next step');
+    await game.step(1);
+    const ev = await game.page.evaluate(() => window.engine.events.since(0).filter(e => e.type === 'tune').map(e => ({ key: e.key, value: e.value })));
+    assert.deepEqual(ev, [{ key: 'P.vmax', value: 5 }]);
+    assert.equal(await game.page.evaluate(() => window.engine.debug.game.tractor.P.vmax), 5);
+    assert.equal(await game.page.locator('#tune input[data-tune="P.vmax"] + output').textContent(), '5');
+    await game.page.evaluate(() => { const i = document.querySelector('#tune input[data-tune="TP.slip"]'); i.max = '99'; i.value = '50'; i.dispatchEvent(new Event('input', { bubbles: true })); });
+    await game.step(1);
+    assert.equal(await game.page.locator('#tune input[data-tune="TP.slip"] + output').textContent(), '6', 'the sim clamps; the panel shows what it wrote');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
 });

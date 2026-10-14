@@ -19,7 +19,7 @@ import { play, stepFlow, stepBed, lastDrive, goSleep, wake, open, setGuide } fro
 
 // The farm's own event types (never a game.step type), so the engine-path goldens can filter them out
 export const FARM_EVENTS = new Set(['play', 'say', 'guide', 'help', 'show', 'showSkip', 'reward', 'progress', 'settings', 'bed', 'sleep', 'wake',
-  'whee', 'cheer', 'squelch', 'farm']);
+  'whee', 'cheer', 'squelch', 'farm', 'tune', 'tune.reset']);
 const NONE = [];
 
 // Move the whole (straight, parked) train so the tractor stands at (x, z) facing yaw; the cars keep their offsets in the tractor's frame.
