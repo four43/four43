@@ -53,7 +53,7 @@ import { addGround, DT } from '../src/sim/ground.js';
 import { testWorld } from './helpers/world.mjs';
 import { createTractor, TP } from '../src/sim/tractor.js';
 const drive = () => {
-  const { world, step } = testWorld(); addGround(world); const t = createTractor(world, { x: 0, z: 0, yaw: 0, surfaceAt: () => 'gravel' }), p = createPilot();
+  const { world, step } = testWorld(); addGround(world); const t = createTractor(world, { x: 0, z: 0, yaw: 0, materialAt: () => 'route' }), p = createPilot();
   let cam = null;
   const run = (sec, stick, each) => { for (let i = 0; i < sec * 60; i++) {
     const lv = t.body.linvel(), want = t.fwd > 2 ? Math.atan2(lv.x, lv.z) : t.yaw; if (cam === null) cam = want; cam += wrap(want - cam) * Math.min(1, DT * 3);

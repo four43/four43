@@ -28,7 +28,7 @@ export function createGame(world, { seed, power = 'medium', player = 1 }) {
   addGround(world, { terrain }); addFarmColliders(world, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
   const yardProps = addYardProps(world, farm), s = spawnPoint(farm, player); // M-10
   const trees = createTrees(world, [...farm.yard.obstacles.filter(o => o.kind === 'tree' || o.kind === 'bush'), ...roadside(farm, road, makeRng(seed ^ 0x70adc0de))]); // T-34, T-35
-  const tractor = createTractor(world, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
+  const tractor = createTractor(world, { x: s.x, z: s.z, yaw: s.yaw, power, materialAt: road.materialAt });
   const train = createTrain(world, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
   const flights = [], barnPass = makeBarnPass(farm.yard.barn);
   const mudSpots = farm.routes.flatMap((R, r) => R.tiles.flatMap((t, k) => t.type === 'mud' ? [road.featureCenter(r, k)] : []));
@@ -123,12 +123,12 @@ export function createGame(world, { seed, power = 'medium', player = 1 }) {
       if (pendingPass && flights.length === 0 && !game.barnWait) { pendingPass = false; if (load.landed() > 0 || game.lastDrive) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
       if (game.mode === 'arrive' || game.mode === 'show') for (const b of bodies) { const v = b.linvel(); if (Math.hypot(v.x, v.z) > 0.05) b.setLinvel({ x: v.x * STOP, y: v.y, z: v.z * STOP }, true); }
       // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler and the farmyard wash (T-36) clean
-      const sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;
-      game.dirt.tractor = stepDirt(game.dirt.tractor, { surface: tractor.surface, speedFrac: sf, washing }, DT);
+      const M = world.materials, sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;
+      game.dirt.tractor = stepDirt(game.dirt.tractor, { ground: M.get(tractor.ground).game, speedFrac: sf, washing }, DT);
       for (const c of train.cars) {
-        const p = c.body.translation(), w = washAt(p.x, p.z), surf = road.surfaceAt(p.x, p.z);
-        anyWash ||= w > 0; c.dirt = stepDirt(c.dirt, { surface: surf, speedFrac: sf, washing: w }, DT);
-        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: surf === 'mud', speed: tractor.speed, washing: w }, DT);
+        const p = c.body.translation(), w = washAt(p.x, p.z), ground = M.get(road.materialAt(p.x, p.z)).game;
+        anyWash ||= w > 0; c.dirt = stepDirt(c.dirt, { ground, speedFrac: sf, washing: w }, DT);
+        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: ground.surface === 'mud', speed: tractor.speed, washing: w }, DT);
       }
       if (tractor.surface === 'mud' && lastSurface !== 'mud') events.push({ type: 'mud-enter' });
       lastSurface = tractor.surface;

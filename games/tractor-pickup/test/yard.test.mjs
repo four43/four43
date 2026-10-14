@@ -21,7 +21,7 @@ test('the tractor cannot drive through the yard fence or up a barn wall', async 
   const { addFarmColliders } = await import('../src/sim/scenery.js'), { buildRoad } = await import('../src/sim/road.js'), { createTractor } = await import('../src/sim/tractor.js');
   const { createTerrain } = await import('../src/sim/terrain.js'), { makeRng } = await import('../src/sim/rng.js');
   const farm = generateFarm(5), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(5)), { world: w, step: run } = testWorld(); addGround(w, { terrain }); addFarmColliders(w, farm, road, terrain);
-  const t = createTractor(w, { x: -22, z: -44, yaw: Math.PI, power: 'medium', surfaceAt: () => 'gravel' });
+  const t = createTractor(w, { x: -22, z: -44, yaw: Math.PI, power: 'medium', materialAt: () => 'route' });
   run(60 * 8, () => { t.setInput(1, 0); t.step(DT); });
   assert.ok(t.z > -54, `drove through the fence to z=${t.z}`);
 });

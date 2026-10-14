@@ -8,7 +8,6 @@ export const POWER = {
   medium: { vmax: 9,  force: 7600,  rearSide: 0.62, slideMax: 0.6, loose: 0.03 },
   high:   { vmax: 12, force: 10000, rearSide: 0.48, slideMax: 0.78, loose: 0.02 },
 };
-export const SURFACE = { gravel: { grip: 1, vmul: 1 }, grass: { grip: 0.8, vmul: 0.7 }, mud: { grip: 0.55, vmul: 0.5 } };
 export const TP = {
   scale: 1.6, mass: 1400, revForce: 7600, vrev: 3, // revForce: as strong as Medium forward, so reverse can push jackknifed wagons back (review 3)
   brake: 30, handbrake: 60, roll: 1.5,
@@ -33,7 +32,7 @@ export function quatAxes(q) {
 }
 const ease = (cur, tgt, rate, dt) => cur + Math.max(-rate * dt, Math.min(rate * dt, tgt - cur));
 
-export function createTractor(world, { x, z, yaw, power = 'medium', surfaceAt = () => 'gravel' }) {
+export function createTractor(world, { x, z, yaw, power = 'medium', materialAt = () => 'route' }) { // materialAt: the ground's material id (M-10)
   const a = yaw - Math.PI / 2; // the chassis +x is the heading
   const e = world.spawn({ tags: ['tractor'], at: [x, 0.3, z], q: [0, Math.sin(a / 2), 0, Math.cos(a / 2)],
     body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.8,
@@ -55,7 +54,7 @@ export function createTractor(world, { x, z, yaw, power = 'medium', surfaceAt = 
 
   const t = {
     e, body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, inTurn: 0, assist: 0,
-    x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, surface: 'gravel',
+    x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, ground: 'route', surface: 'gravel', // ground: material id; surface: its game.surface
     setPower(name) { this.power = name; this.P = POWER[name]; },
     setInput(thr, steer, turn = 0) { this.inThr = Math.max(-1, Math.min(1, thr)); this.inSteer = Math.max(-1, Math.min(1, steer)); this.inTurn = Math.max(-1, Math.min(1, turn)); },
     setAssist(bias) { this.assist = bias; },
@@ -63,7 +62,7 @@ export function createTractor(world, { x, z, yaw, power = 'medium', surfaceAt = 
       const P = this.P, q = body.rotation(), { f, u, r } = quatAxes(q), lv = body.linvel(), p = body.translation();
       this.fwd = lv.x * f.x + lv.z * f.z; const side = lv.x * r.x + lv.z * r.z; this.speed = Math.hypot(lv.x, lv.z);
       this.slip = this.speed > 1 ? Math.atan2(side, Math.abs(this.fwd)) : 0;
-      this.surface = surfaceAt(p.x, p.z); const SF = SURFACE[this.surface];
+      this.ground = materialAt(p.x, p.z); const SF = world.materials.get(this.ground).game; this.surface = SF.surface; // grip, vmul from the registry
       this.thr = ease(this.thr, this.inThr, TP.inputRate, dt);
       const v = this.fwd, maxSteer = TP.steerMax / (1 + Math.abs(v) * 0.06);
       const want = Math.max(-1, Math.min(1, this.inSteer + this.assist));

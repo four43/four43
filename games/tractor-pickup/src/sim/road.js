@@ -16,6 +16,7 @@ function tilePts(t, N) {
   return out;
 }
 
+const SURFACE_ID = { gravel: 'route', grass: 'meadow', mud: 'mudhole' }; // the ground's registry materials (D6)
 export function buildRoad(farm, step = 1) {
   const N = Math.round(TILE / step), pts = [];
   const routes = farm.routes.map((R, r) => {
@@ -47,13 +48,14 @@ export function buildRoad(farm, step = 1) {
     return { d: Math.sqrt(best), pt };
   };
   const inYard = (x, z) => Math.abs(x) <= YARD_HALF && Math.abs(z) <= YARD_HALF;
+  const surface = (x, z) => {
+    if (inYard(x, z)) return 'gravel';
+    const n = nearest(x, z); if (n.d > ROAD_HALF) return 'grass';
+    return tileOf(n.pt).type === 'mud' && Math.abs(n.pt.u - 0.5) < MUD_HALF ? 'mud' : 'gravel';
+  };
   return {
     routes, pts, nearest, inYard,
-    surfaceAt(x, z) {
-      if (inYard(x, z)) return 'gravel';
-      const n = nearest(x, z); if (n.d > ROAD_HALF) return 'grass';
-      return tileOf(n.pt).type === 'mud' && Math.abs(n.pt.u - 0.5) < MUD_HALF ? 'mud' : 'gravel';
-    },
+    materialAt(x, z) { return SURFACE_ID[surface(x, z)]; }, // M-10, D6: a registry material id (src/defs/materials.js)
     inSprinkler(x, z) { if (inYard(x, z)) return false; const n = nearest(x, z); return tileOf(n.pt).type === 'sprinkler' && n.d < ROAD_HALF + 1 && Math.abs(n.pt.u - 0.5) * TILE < SPRINKLER_HALF; }, // T-15: the zone is 18 m long, so driving through at full speed still washes for about 1.5 s
     featureCenter(r, k) { const t = farm.routes[r].tiles[k], c = tileCenter(t.i, t.j); return { x: c.x, z: c.z, yaw: Math.atan2(DIRS[t.outDir][0], DIRS[t.outDir][1]) }; },
     ahead(pt, dist) { const P = routes[pt.r].pts; return P[Math.max(0, Math.min(P.length - 1, pt.n + Math.round(dist / step)))]; },

@@ -1,20 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { stepDirt, stepRiderDirt, DIRT } from '../src/sim/dirt.js';
+import MATERIALS from '../src/defs/materials.js';
+const G = id => MATERIALS.get(id).game;
 const run = (fn, sec, l = 0) => { for (let i = 0; i < sec * 60; i++) l = fn(l); return l; };
 
 test('gravel dirties slowly, a few trips to full', () => {
-  const l = run(l => stepDirt(l, { surface: 'gravel', speedFrac: 1, washing: false }, 1 / 60), 60);
+  const l = run(l => stepDirt(l, { ground: G('route'), speedFrac: 1, washing: false }, 1 / 60), 60);
   assert.ok(l > 0.25 && l < 0.5, `${l}`);
 });
 test('mud dirties fast', () => {
-  assert.ok(run(l => stepDirt(l, { surface: 'mud', speedFrac: 0.3, washing: false }, 1 / 60), 2) > 0.95);
+  assert.ok(run(l => stepDirt(l, { ground: G('mudhole'), speedFrac: 0.3, washing: false }, 1 / 60), 2) > 0.95);
 });
 test('parked tractor does not get dirtier on gravel', () => {
-  assert.equal(run(l => stepDirt(l, { surface: 'gravel', speedFrac: 0, washing: false }, 1 / 60), 10, 0.2), 0.2);
+  assert.equal(run(l => stepDirt(l, { ground: G('route'), speedFrac: 0, washing: false }, 1 / 60), 10, 0.2), 0.2);
 });
 test('the sprinkler cleans from full to zero in 1.5 s', () => {
-  const l = run(l => stepDirt(l, { surface: 'gravel', speedFrac: 1, washing: true }, 1 / 60), DIRT.washTime + 0.02, 1);
+  const l = run(l => stepDirt(l, { ground: G('route'), speedFrac: 1, washing: true }, 1 / 60), DIRT.washTime + 0.02, 1);
   assert.equal(l, 0);
 });
 test('riders get splashed in mud only while moving, and washed too', () => {

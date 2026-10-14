@@ -5,7 +5,7 @@ import { testWorld } from './helpers/world.mjs';
 
 test('sandbox surfaces: mud patch is mud, elsewhere gravel', () => {
   const sb = createSandbox(testWorld().world, { power: 'medium' });
-  const m = sb.mud[0]; assert.equal(sb.surfaceAt(m.x, m.z), 'mud'); assert.equal(sb.surfaceAt(0, 0), 'gravel');
+  const m = sb.mud[0]; assert.equal(sb.materialAt(m.x, m.z), 'mudhole'); assert.equal(sb.materialAt(0, 0), 'route');
 });
 test('sandbox steps and drives forward', () => {
   const { world, step } = testWorld(), sb = createSandbox(world, { power: 'medium' });

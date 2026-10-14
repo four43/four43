@@ -6,7 +6,7 @@ import { createTractor, POWER, quatAxes } from '../src/sim/tractor.js';
 
 const make = (power = 'medium', surface = 'gravel') => {
   const { world, step } = testWorld(); addGround(world);
-  const t = createTractor(world, { x: 0, z: 0, yaw: 0, power, surfaceAt: () => surface });
+  const t = createTractor(world, { x: 0, z: 0, yaw: 0, power, materialAt: () => ({ gravel: 'route', grass: 'meadow', mud: 'mudhole' })[surface] });
   const run = (sec, thr, steer, each) => { for (let i = 0; i < sec * 60; i++) { step(1, () => { t.setInput(thr, steer); t.step(DT); }); each?.(); } };
   return { world, t, run };
 };

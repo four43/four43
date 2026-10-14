@@ -15,11 +15,11 @@ export function createSandbox(world, { power = 'medium' } = {}) {
   addGround(world);
   const ramps = [{ x: 0, z: 40, yaw: 0 }], mud = [{ x: 25, z: 20, r: 8 }];
   ramps.forEach(r => addRamp(world, r));
-  const surfaceAt = (x, z) => mud.some(m => Math.hypot(x - m.x, z - m.z) < m.r) ? 'mud' : 'gravel';
-  const tractor = createTractor(world, { x: 0, z: 0, yaw: 0, power, surfaceAt });
+  const materialAt = (x, z) => mud.some(m => Math.hypot(x - m.x, z - m.z) < m.r) ? 'mudhole' : 'route';
+  const tractor = createTractor(world, { x: 0, z: 0, yaw: 0, power, materialAt });
   const train = createTrain(world, tractor);
   return {
-    world, tractor, train, surfaceAt, ramps, mud,
+    world, tractor, train, materialAt, ramps, mud,
     pre(input) { // before lh.physics.step
       tractor.setInput(input.thr, input.steer, input.turn || 0); tractor.step(DT);
       train.step(DT, { parked: Math.abs(input.thr) < 0.05 && tractor.speed < 0.3 });

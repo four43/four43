@@ -76,7 +76,7 @@ for (const seed of [1, 2, 3]) test(`terrain ${seed}: the heightfield collider ma
 // A tractor (and optionally its trailer and wagon) on the seed's farm with the terrain and every static collider.
 function farmDrive(seed, { x, z, yaw, power = 'high', train = false }) {
   const { farm, road, terrain } = world(seed), { world: w, step } = testWorld(); addGround(w, { terrain }); addFarmColliders(w, farm, road, terrain);
-  const t = createTractor(w, { x, z, yaw, power, surfaceAt: road.surfaceAt }), tr = train ? createTrain(w, t) : null;
+  const t = createTractor(w, { x, z, yaw, power, materialAt: road.materialAt }), tr = train ? createTrain(w, t) : null;
   const bodies = () => [t.body, ...(tr ? tr.cars.map(c => c.body) : [])];
   const s = { maxD: 0 };
   const run = (sec, thr, steer = 0) => { for (let i = 0; i < sec * 60; i++) {
