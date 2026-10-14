@@ -25,10 +25,10 @@ const STOP = 0.88; // F-5: speed kept per step while the train stops in the barn
 export function createGame(world, { seed, power = 'medium', player = 1 }) {
   const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1)), rng = makeRng(seed ^ 0x51ed);
   const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
-  addGround(world, { terrain }); addFarmColliders(world, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
+  const ground = addGround(world, { terrain, materialAt: road.materialAt }); addFarmColliders(world, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
   const yardProps = addYardProps(world, farm), s = spawnPoint(farm, player); // M-10
   const trees = createTrees(world, [...farm.yard.obstacles.filter(o => o.kind === 'tree' || o.kind === 'bush'), ...roadside(farm, road, makeRng(seed ^ 0x70adc0de))]); // T-34, T-35
-  const tractor = createTractor(world, { x: s.x, z: s.z, yaw: s.yaw, power, materialAt: road.materialAt });
+  const tractor = createTractor(world, { x: s.x, z: s.z, yaw: s.yaw, power, materialAt: ground.materialAt });
   const train = createTrain(world, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
   const flights = [], barnPass = makeBarnPass(farm.yard.barn);
   const mudSpots = farm.routes.flatMap((R, r) => R.tiles.flatMap((t, k) => t.type === 'mud' ? [road.featureCenter(r, k)] : []));
@@ -50,7 +50,7 @@ export function createGame(world, { seed, power = 'medium', player = 1 }) {
   let pendingPass = false, lastSurface = 'gravel', wasClean = true, cur = null, curLoad = null; // cur, curLoad: the step's events and load, from pre to post
 
   const game = {
-    farm, road, terrain, items, world, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
+    farm, road, terrain, ground, items, world, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
     load: createLoad(CAPACITY), mode: 'drive', dirt: { tractor: 0 }, // T-16: dirt levels 0..1 (cars and animals carry their own)
     others: [], claims: false, boopsPaused: false, // multiplayer: other tractors for the herd (M-12), boops wait for the host (M-14), host away (M-40)
     hats: [], // W-4, M-60: the hats this player wears; a boop puts one on the animal (a.hat), and its train record tells the others

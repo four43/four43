@@ -1,6 +1,7 @@
 // The farm's physics on the scene's World (lion-hawk 3l; was sim/physics.js, which made its own RAPIER.World). The engine owns the
 // world (S-3), steps it in 'physics.world' (60 Hz, the game's sim.hz) and frees it; this module names the collision groups and lays
-// the ground: the farm's height grid as a heightfield (0.8.0; the terrain kit later) or the sandbox's flat slab. Top is y = 0.
+// the ground: the farm's height grid on the terrain kit (heightfield and materialAt) or the sandbox's flat slab. Top is y = 0.
+import { createTerrain as terrainKit } from 'lion-hawk/kits/terrain';
 export const DT = 1 / 60;
 // wall: fences and barn walls. Bodies hit them, but wheel rays (ground | static) do not: a wheel that pokes over a wall beside its body
 // would otherwise start its ray inside the wall and jack that side up.
@@ -12,10 +13,12 @@ export function rowMajor({ n, heights }) {
   for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out[j * n + i] = heights[i * n + j];
   return out;
 }
-export function addGround(world, { terrain = null } = {}) {
-  if (terrain) {
+// the farm: the terrain kit object (heightAt, normalAt, materialAt); the sandbox: the slab entity
+export function addGround(world, { terrain = null, materialAt = null } = {}) {
+  if (terrain) { // the terrain kit (M-10): the heightfield (groups: ground) and materialAt over the road's surfaces
     const { n, size, step } = terrain.grid;
-    return world.heightfield({ nx: n, nz: n, cell: step, x0: -size / 2, z0: -size / 2, heights: rowMajor(terrain.grid), material: 'ground', groups: { member: ['ground'] }, fixInternalEdges: true });
+    return terrainKit(world, { nx: n, nz: n, cell: step, x0: -size / 2, z0: -size / 2, heights: rowMajor(terrain.grid), materials: materialAt ?? (() => 'route'),
+      material: 'ground', groups: { member: ['ground'] }, fixInternalEdges: true });
   }
   return world.spawn({ tags: ['ground'], body: 'fixed', groups: { member: ['ground'] },
     colliders: [{ shape: 'box', half: [200, 0.5, 200], p: [0, -0.5, 0], q: [0, 0, 0, 1], material: 'pad' }] });
