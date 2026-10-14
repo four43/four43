@@ -1,6 +1,6 @@
 // M-7 soft bump: each device pushes only its own tractor gently away from an other tractor (about 2 m/s, away from the other's center
 // line), with a "boing" and a short horn, then waits 0.6 s. Tractors are capsules along their heading: no colliders for other players.
-import { DT } from './physics.js';
+import { DT } from './ground.js';
 export const BUMP = { push: 2, front: 1.8, back: 1.3, r: 1.1, cool: 0.6 }; // m/s, m, m, m, s (sim time)
 const seg = t => { const fx = Math.sin(t.yaw), fz = Math.cos(t.yaw); return [t.x - fx * BUMP.back, t.z - fz * BUMP.back, t.x + fx * BUMP.front, t.z + fz * BUMP.front]; };
 const clamp01 = v => Math.max(0, Math.min(1, v));

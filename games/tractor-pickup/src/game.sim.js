@@ -7,6 +7,9 @@ import { makeFarm, makeSandbox, moveTrain, FARM_EVENTS } from './game/farm.js';
 import { makeOverlays } from './game/overlays.js';
 import { makeCommands } from './game/commands.js';
 import { netCommands, netConfig } from './game/net.js';
+import MATERIALS from './defs/materials.js';
+import PHYS from '../baked/phys.json' with { type: 'json' };
+import { PHYSICS } from './sim/ground.js';
 
 export { FARM_EVENTS };
 
@@ -36,10 +39,10 @@ function state(e) {
   };
 }
 
-// clock overrides the syncs' wall clock, bindings the replicated kinds and the port's (tests only, T6). timer: ?fps only, the
-// entry's performance.now: the sim times its own Rapier steps into game.phys.worldMs for the meter (sim/physics.js, #106)
-export function tractorGame({ clock, bindings, timer } = {}) {
-  const { scene: farm, api } = makeFarm({ R, clock, bindings, timer }), { scene: sandbox } = makeSandbox({ R, timer });
+// clock overrides the syncs' wall clock, bindings the replicated kinds and the port's (tests only, T6). ?fps: the entry passes
+// performance.now as boot's timer; world.stats.stepMsTotal is Rapier's running total (#106). R is handed to the engine here (D9).
+export function tractorGame({ clock, bindings } = {}) {
+  const { scene: farm, api } = makeFarm({ clock, bindings }), { scene: sandbox } = makeSandbox();
   // → window.engine.debug
   const debug = e => ({
     get game() { return e.scene.state.game; }, get farm() { return e.scene.state; }, get sync() { return e.scene.state.net?.sync ?? null; },
@@ -50,6 +53,7 @@ export function tractorGame({ clock, bindings, timer } = {}) {
   });
   return defineGame({
     id: 'tractor-pickup', sim: { hz: 60, maxCatchUp: 3, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm', // hz: the physics step (DT)
+    defs: { materials: MATERIALS, models: PHYS }, physics: { rapier: R, ...PHYSICS },
     scenes: { farm, sandbox, ...makeOverlays() }, commands: { ...makeCommands(api), ...netCommands(api) }, net: netConfig(bindings ?? undefined), state, debug,
   });
 }

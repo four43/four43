@@ -7,7 +7,7 @@ import { quatAxes } from '../sim/tractor.js';
 import { slotIndex, CAR_SLOTS } from '../sim/slots.js';
 import { LIMIT } from './kinds.js';
 import { MAX_ID } from './protocol.js';
-import { DT } from '../sim/physics.js';
+import { DT } from '../sim/ground.js';
 
 export const SEND = { train: 45, world: 66, key: 2000 }; // ms: train diffs about 20 (every third 60 Hz step, M-65) and host diffs about 15 each second, a keyframe every 2 s (M-23)
 // M-69: the time stamp of the state a fixed step makes, in the frame clock: the frame's time less the time still owed to later steps. Steps then

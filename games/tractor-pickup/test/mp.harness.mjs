@@ -1,7 +1,7 @@
 // test/mp.harness.mjs — two (or more) games in one process over the in-memory hub (M-52). No tests here.
 import RAPIER from '@dimforge/rapier3d-compat';
 import { createGame } from '../src/sim/game.js';
-import { DT } from '../src/sim/physics.js';
+import { DT } from '../src/sim/ground.js';
 import { createMemoryHub } from '../src/net/link.js';
 import { createHostSync } from '../src/net/host.js';
 import { createGuestSync } from '../src/net/guest.js';

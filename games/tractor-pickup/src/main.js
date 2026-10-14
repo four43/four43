@@ -35,8 +35,9 @@ async function start() {
   // M-53: the multiplayer debug log (the "?" in the Multiplayer panel); Handshake's, the port's and the syncs' warnings go into it too
   const net = sandbox ? null : { session: null, netlog: createNetLog(), refresh: null }, netlog = net?.netlog;
   if (netlog) { netlog.log('device', navigator.userAgent); for (const k of ['warn', 'error']) { const orig = console[k].bind(console); console[k] = (...a) => { if (typeof a[0] === 'string' && /^(handshake|multiplayer|net[ :])/.test(a[0])) netlog.log(k, ...a.map(x => x instanceof Error ? x.message : typeof x === 'string' ? x : String(x))); orig(...a); }; } }
-  const fps = q.has('fps'); // B-1: the sim times its Rapier steps only under ?fps
-  const { engine } = boot(tractorGame({ timer: fps ? () => performance.now() : undefined }), tractorView({ tune: q.has('tune'), fps, sandbox, net }), {
+  const fps = q.has('fps'); // B-1, #106: the engine times its Rapier steps (world.stats) only under ?fps
+  const { engine } = boot(tractorGame(), tractorView({ tune: q.has('tune'), fps, sandbox, net }), {
+    timer: fps ? () => performance.now() : undefined,
     seed: (Math.random() * 2 ** 32) >>> 0, scene: sandbox ? 'sandbox' : 'farm',
     args: { seed: seedParam(q.get('seed')) ?? undefined, power: powerParam(q.get('power'), settings.power), progress, settings, bed },
     devices: devices(document, { rig }),

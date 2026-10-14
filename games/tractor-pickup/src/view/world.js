@@ -1,6 +1,6 @@
 // The 3D farm (lion-hawk 2g G1): main.js's build and dispose (their 3D parts), stepFx, barnPath, buildSandbox3D and addMarkers,
 // moved. buildWorld makes one farm's group in the page's scene from the sim game it is given and only reads it; the sim
-// half owns the Rapier world (game.phys) and frees it itself ([S-3]).
+// half's scene World holds the bodies; the engine frees it ([S-3]).
 import * as THREE from 'three';
 import { createGibs } from '../render/gibs.js';
 import { createFx } from '../render/fx.js';

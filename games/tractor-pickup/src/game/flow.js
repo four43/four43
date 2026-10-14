@@ -6,7 +6,7 @@ import { stepTrip, modeAfterDrive } from '../sim/trip.js';
 import { buildShowSteps } from '../sim/showSteps.js';
 import { completeShow, wornHats } from '../sim/progress.js';
 import { sleepNow, wakeUp, stepBedtime } from '../sim/bedtime.js';
-import { DT } from '../sim/physics.js';
+import { DT } from '../sim/ground.js';
 
 const say = (e, ids) => e.emit('say', { ids });
 // F-2, N-2: the barn path and arrow; the view draws them while on

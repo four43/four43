@@ -129,11 +129,11 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
         hud.reset(s, engine.scene.id); // 2f delta: the slot bar from state on enter
         Object.assign(link, { w, hud, pending: null });
       }
-      if (page.perf) { // B-1, #106: Rapier's share, read from the sim's own running total (the entry gave it the timer under ?fps)
+      if (page.perf) { // B-1, #106: Rapier's share, from the World's running total (the entry gave boot the timer under ?fps)
         let last = null, ms = 0;
         offs.push(engine.onStep(() => {
-          page.perf.step(); const p = engine.scene.state.game?.phys; if (!p) return;
-          if (p === last) page.perf.worldMs(p.worldMs - ms); last = p; ms = p.worldMs;
+          page.perf.step(); const w = engine.world; if (!w) return;
+          if (w.serial === last) page.perf.worldMs(w.stats.stepMsTotal - ms); last = w.serial; ms = w.stats.stepMsTotal; // #106: the engine times Rapier
         }));
       }
       offs.push(bodies.watch(engine), engine.events.on(e => {

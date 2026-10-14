@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createForecast, extrapolate, newPose, FORECAST } from '../src/net/forecast.js';
 import { createPlayers, stepStamp, SEND } from '../src/net/players.js';
-import { DT } from '../src/sim/physics.js';
+import { DT } from '../src/sim/ground.js';
 import { makeRng } from '../src/sim/rng.js';
 import { mpWorld } from './mp.harness.mjs';
 

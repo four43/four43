@@ -1,7 +1,8 @@
-// The farm scene (lion-hawk 2f, [S-1]…[S-6], field notes #4, #28, #81, #87, #90): one main scene owns the createGame world
-// (farm, terrain, Rapier, tractor, train, herd) and the player's records. The flow main.js kept in its frame closure moves
-// into ctx.state ([S-4], #4). The whole pipeline is the scene's step hook (#90), so a load suspends all of it:
-// net before → input → game.step → bridge → net after → sounds → bedtime → the trip (flow.js). A new farm builds through ctx.load;
+// The farm scene (lion-hawk 2f, [S-1]…[S-6], field notes #4, #28, #81, #87, #90; 3l): one main scene owns the createGame farm
+// (terrain, tractor, train, herd) on the scene's World, and the player's records. The flow main.js kept in its frame closure moves
+// into ctx.state ([S-4], #4). The step is split around the engine's Rapier step (lh.physics.step, stage physics.world): the scene's
+// step hook runs net before → input → game.pre; a 'post' stage system runs game.post → bridge → net after → sounds → bedtime → the
+// trip (flow.js), only after a stepped pre, so a load suspends all of it. A new farm builds through ctx.load (world.clear() first);
 // a guest's farm too (#80: the welcome waits for it, game/net.js).
 // While `raw` drives it nothing here touches the game, so the scene steps exactly the createGame the phase-0 goldens drive.
 import { createGame } from '../sim/game.js';
@@ -10,7 +11,7 @@ import { createPilot } from '../sim/pilot.js';
 import { createTrip } from '../sim/trip.js';
 import { newRider } from '../sim/slots.js';
 import { quatAxes } from '../sim/tractor.js';
-import { DT } from '../sim/physics.js';
+import { DT } from '../sim/ground.js';
 import { TYPES } from '../sim/herd.js';
 import { clampBedtime, sleepNow } from '../sim/bedtime.js';
 import { clampProgress, clampSettings, wornHats, hasPaintChoice, seedParam, powerParam } from '../sim/progress.js';
@@ -28,11 +29,8 @@ const NONE = [];
 export const moveTrain = (g, x, z, yaw, { ground = false } = {}) => {
   const tb = g.tractor.body, p0 = tb.translation(), a = yaw - Math.PI / 2, q = { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }, { f, u, r } = quatAxes(q);
   const dy = ground ? g.terrain.height(x, z) - g.terrain.height(p0.x, p0.z) + 0.3 : 0;
-  const list = [tb, ...g.train.cars.map(c => c.body)].map(b => { const t = b.translation(); return [b, g.tractorLocal(t.x, t.y, t.z, {})]; });
-  for (const [b, l] of list) {
-    b.setTranslation({ x: x + f.x * l.x + u.x * l.y + r.x * l.z, y: p0.y + dy + f.y * l.x + u.y * l.y + r.y * l.z, z: z + f.z * l.x + u.z * l.y + r.z * l.z }, true);
-    b.setRotation(q, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
-  }
+  const list = [g.tractor.e, ...g.train.cars.map(c => c.e)].map(e => { const t = e.body.translation(); return [e, g.tractorLocal(t.x, t.y, t.z, {})]; });
+  for (const [e, l] of list) g.world.place(e, { at: [x + f.x * l.x + u.x * l.y + r.x * l.z, p0.y + dy + f.y * l.x + u.y * l.y + r.y * l.z, z + f.z * l.x + u.z * l.y + r.z * l.z] }, { q: [q.x, q.y, q.z, q.w] });
 };
 
 // Input (C-1, C-2, C-8, #81): `raw` (goldens, the mp harness) or the world-frame stick through the pilot, into the reused stepIn.
@@ -58,27 +56,37 @@ function sounds(e, s) {
 }
 const freshSfx = () => ({ surface: 'gravel', air: 0, whee: false });
 
-export function makeFarm({ R, clock = null, bindings = null, timer = null } = {}) { // clock, bindings: the syncs' (game/net.js reads them from the api); timer: ?fps (sim/physics.js)
+export function makeFarm({ clock = null, bindings = null } = {}) { // clock, bindings: the syncs' (game/net.js reads them from the api)
   const S = e => { if (e.scene.name !== 'farm') throw new Error('tractor: the farm scene is not the main scene'); return e.scene.state; };
   const warn = createWarnOnce(); // M-44: a sync error never stops the step
   // Builds this scene's farm (main.js build, sim half): hats (W-4), the bedtime phase (E-5) and the start mode (F-11).
   function build(e, s, seed, power, player) {
-    s.game = createGame(R, { seed, power, player, timer }); s.seed = seed; s.gen++; s.sfx = freshSfx();
+    s.game = createGame(e.world, { seed, power, player }); s.stepped = false; s.seed = seed; s.gen++; s.sfx = freshSfx();
     s.game.wearHats(wornHats(s.progress));
     s.game.lastDrive = s.bed.phase === 'last';
     s.game.mode = s.started ? (s.bed.phase === 'asleep' ? 'sleep' : 'drive') : hasPaintChoice(s.progress) ? 'start' : 'drive';
     e.emit('farm', { gen: s.gen, seed });
   }
-  // P-8, M-1, M-19: the old farm goes (the Rapier world with the terrain, trees, props and vehicles) and a new one is built;
+  // P-8, M-1, M-19: the old farm goes (world.clear(): the terrain, trees, props and vehicles) and a new one is built;
   // started and the bedtime stay. The old farm's screens close with it, the paint screen and the book too (the old ui/menus.js
   // closed its screen on a new farm); the parent menu stays for its own close. D-3: a farm that fails to build is tried once more
   // with a fresh seed
   function rebuild(e, s, seed, player) {
     for (const n of ['show', 'reward', 'start', 'paint', 'book']) e.close(n);
-    s.game.phys.world.free(); s.game = null;
+    s.game = null; e.world.clear();
     s.trip = s.tripOn ? createTrip() : null; s.show = null; s.reward = null; s.showDone = s.rewardDone = false; setGuide(e, s, false);
     try { build(e, s, seed, s.power, player); }
-    catch (err) { console.error('new farm failed, retrying with a fresh seed', err); s.game?.phys.world.free(); s.game = null; build(e, s, e.rng('seeds').int(0, 0xffffffff), s.power, player); }
+    catch (err) { console.error('new farm failed, retrying with a fresh seed', err); s.game = null; e.world.clear(); build(e, s, e.rng('seeds').int(0, 0xffffffff), s.power, player); }
+  }
+  // the farm step's second half (3l): after the engine's Rapier step, in the same step; never without a pre (a load, #90)
+  function post(e, ctx) {
+    const s = ctx.state; if (!s.stepped || !s.game) return; s.stepped = false;
+    const ev = s.game.post(), net = s.net;
+    bridge(e, ev);
+    if (net.sync) try { net.sync.after(ev, e.time.wall); } catch (err) { warn('net after', err); } // N-4: the step's wall stamp is the frame clock (M-69)
+    sounds(e, s);
+    if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepBed(e, s); // E-5, #85
+    if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepFlow(e, s, ev); // spec 3.1 (not after bedtime put the farm to sleep)
   }
   // a load's then: the next farm asked for while it ran (a guest's welcome first: it is the host's)
   const next = (e, ctx) => { const s = ctx.state; if (s.netFarm) api.guestFarm(e, ctx, s.netFarm.seed, s.netFarm.player); else if (s.nextFarm) { s.nextFarm = false; api.newFarm(e, ctx); } };
@@ -151,22 +159,17 @@ export function makeFarm({ R, clock = null, bindings = null, timer = null } = {}
         net: { role: 'solo', sync: null, facade: null, at: null, registry: null }, // game/net.js (net.open)
       });
       build(e, s, seed, power, player);
+      ctx.system('tp.farm.post', en => post(en, ctx), { stage: 'post' });
       if (s.started && s.bed.phase === 'asleep') goSleep(e, s, { quiet: true }); // N-7: a reload while asleep
       enterStart(e, s);
     },
-    exit(e, ctx) { ctx.state.game?.phys.world.free(); }, // [S-3], main.js dispose: the Rapier world with the terrain, trees, props and vehicles
+    exit() {}, // [S-3]: the engine disposes the scene's World (the terrain, trees, props and vehicles) after exit
     step(e, dt, ctx) {
       const s = ctx.state, I = e.input.snapshot, net = s.net; // #88: the sync is looked up here each step and called by name (tests replace its methods)
       if (net.sync) { let nev = NONE; try { nev = net.sync.before(e.time.wall); } catch (err) { warn('net before', err); } bridge(e, nev); } // M-44: net events first
       if (e.loading.active) return; // #80: the welcome asked for the host's farm: the old one steps no more (the load suspends this hook)
-      const g = s.game;
-      if (!s.started && g.mode === 'drive' && (I.goX || I.goZ)) api.play(e); // A-7: the first stick move starts the trip
-      const ev = g.step(readInput(e, s));
-      bridge(e, ev);
-      if (net.sync) try { net.sync.after(ev, e.time.wall); } catch (err) { warn('net after', err); } // N-4: the step's wall stamp is the frame clock (M-69)
-      sounds(e, s);
-      if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepBed(e, s); // E-5, #85
-      if (s.tripOn && s.started && s.bed.phase !== 'asleep') stepFlow(e, s, ev); // spec 3.1 (not after bedtime put the farm to sleep)
+      if (!s.started && s.game.mode === 'drive' && (I.goX || I.goZ)) api.play(e); // A-7: the first stick move starts the trip
+      s.game.pre(readInput(e, s)); s.stepped = true; // the rest runs in post, after lh.physics.step
     },
     // #69: the controls close over this scene's ctx.state
     ui(u, e, ctx) {
@@ -180,17 +183,18 @@ export function makeFarm({ R, clock = null, bindings = null, timer = null } = {}
 }
 
 // ?sandbox (T-13, T-14): a flat test pad with a ramp and mud, driven like the farm (no trip, no net)
-export function makeSandbox({ R, timer = null }) {
+export function makeSandbox() {
   const scene = {
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = clampSettings(a.settings);
       Object.assign(ctx.state, {
-        game: createSandbox(R, { power: powerParam(a.power, settings.power), timer }), gen: 1, seed: null, started: true, raw: null,
+        game: createSandbox(e.world, { power: powerParam(a.power, settings.power) }), gen: 1, seed: null, started: true, raw: null, stepped: false,
         pilot: createPilot(), stepIn: { thr: 0, steer: 0, turn: 0, onTarget: true, horn: false }, settings, sfx: freshSfx(),
       });
+      ctx.system('tp.sandbox.post', en => { const s = ctx.state; if (!s.stepped) return; s.stepped = false; bridge(en, s.game.post()); sounds(en, s); }, { stage: 'post' });
     },
-    exit(e, ctx) { ctx.state.game?.phys.world.free(); },
-    step(e, dt, ctx) { const s = ctx.state; bridge(e, s.game.step(readInput(e, s)) ?? NONE); sounds(e, s); },
+    exit() {},
+    step(e, dt, ctx) { const s = ctx.state; s.game.pre(readInput(e, s)); s.stepped = true; },
   };
   return { scene };
 }
