@@ -18,7 +18,7 @@ async function start() {
   await R.init();
   const q = new URLSearchParams(location.search);
   // #35: a random engine seed so first visits get different tracks; ?seed= and ?lh-test still win inside boot.
-  const { engine } = boot(rallyGame({ bests: makeBests(storage ?? memoryStore()) }), rallyView({ save }), {
+  const { engine } = boot(rallyGame({ rapier: R, bests: makeBests(storage ?? memoryStore()) }), rallyView({ save }), {
     args: { settings: normalizeSettings(load()), pad: q.has('pad') },
     seed: (Math.random() * 2 ** 32) >>> 0,
     devices: devices(document),

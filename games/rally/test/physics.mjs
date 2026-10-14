@@ -1,6 +1,7 @@
 // Headless validation of the vehicle core (Milestone 1). Run: node test/physics.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT } from '../src/sim.js';
+import { benchSim } from './helpers/bench.mjs';
+import { DT } from '../src/sim.js';
 import { shift } from '../src/drivetrain.js';
 await R.init();
 
@@ -12,7 +13,7 @@ function check(name, val, lo, hi, unit = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}: ${val.toFixed(3)}${unit}  [${lo}..${hi}]`);
   return ok;
 }
-const mk = (car, surface, extra = {}) => new Sim(R, { car, surface, cones: false, assist: false, ...extra });
+const mk = (car, surface, extra = {}) => benchSim({ car, surface, cones: false, assist: false, ...extra });
 const run = (sim, secs, fn) => { const n = Math.round(secs / DT); for (let i = 0; i < n; i++) { fn && fn(sim, i * DT); sim.step(); } };
 const test = (name, f) => { if (!only || name.includes(only)) { console.log(`\n# ${name}`); f(); } };
 const latAcc = (sim) => { // lateral acceleration from velocity x yaw rate (steady state)

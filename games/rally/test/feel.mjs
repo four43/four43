@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import R from '@dimforge/rapier3d-compat';
 import { headless } from 'lion-hawk/test';
-import { Sim, DT, PAD } from '../src/sim.js';
-import { rallyGame } from '../src/game.sim.js';
+import { DT, PAD } from '../src/sim.js';
+import { benchSim, game } from './helpers/bench.mjs';
 import { qrot } from '../src/vehicle.js';
 import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
@@ -14,7 +14,7 @@ import { TrackWorld } from '../src/world/trackWorld.js';
 await R.init();
 
 function stageTime(seed) {
-  const h = headless(rallyGame(), { seed: 7, args: { settings: { mode: 'stage', world: 'stage', seed, theme: 'summer', assist: true } } });
+  const h = headless(game(), { seed: 7, args: { settings: { mode: 'stage', world: 'stage', seed, theme: 'summer', assist: true } } });
   h.tap('title.drive');
   let fin = null;
   const off = h.engine.events.on(e => { if (e.type === 'finish') fin = e.time; });
@@ -24,7 +24,7 @@ function stageTime(seed) {
   return fin;
 }
 const run = (sim, secs, fn) => { const n = Math.round(secs / DT); for (let i = 0; i < n; i++) { fn?.(sim, i * DT); sim.step(); } };
-const pad = surface => new Sim(R, { car: 'awd', surface, cones: false, assist: true, pad: { ...PAD, size: 4000 }, pos: { x: 300, y: 0.6, z: -900 } });
+const pad = surface => benchSim({ car: 'awd', surface, cones: false, assist: true, pad: { ...PAD, size: 4000 }, pos: { x: 300, y: 0.6, z: -900 } });
 const roll = (sim, v) => { // as test/verge.mjs: rolling at v m/s in the lowest gear under 75 % of the redline
   const c = sim.car, f = qrot(c.body.rotation(), { x: 0, y: 0, z: 1 }), dc = c.cfg.drive, wo = v / c.cfg.radius;
   c.body.setLinvel({ x: f.x * v, y: 0, z: f.z * v }, true);
@@ -38,7 +38,7 @@ const coast = surface => { const sim = pad(surface); run(sim, 1); roll(sim, 80 /
 function offRoad() { // test/verge.mjs 'off the road into the grass', half throttle: km/h after 4 s per spot
   const track = generateTrack('v1', { kind: 'loop', theme: 'summer' });
   const world = new TrackWorld(track), L = track.layout, loc = track.locator, T = track.terrain;
-  const sim = new Sim(R, { world, car: 'awd', assist: true }), spots = [];
+  const sim = benchSim({ world, car: 'awd', assist: true }), spots = [];
   for (let i = 0; i < L.n && spots.length < 4; i += 37) {
     const h = L.heading[i], ux = Math.cos(h), uz = -Math.sin(h);
     let ok = true;

@@ -1,7 +1,8 @@
 // Off-road verge (spec tracks T-3, T-5): tall-grass drag and the bumpy ground away from the road.
 // Run: node test/verge.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT, PAD } from '../src/sim.js';
+import { benchSim } from './helpers/bench.mjs';
+import { DT, PAD } from '../src/sim.js';
 import { qrot } from '../src/vehicle.js';
 import { surfaceOfKey } from '../src/surface.js';
 import { generateTrack } from '../src/gen/track.js';
@@ -19,7 +20,7 @@ function check(name, val, lo, hi, unit = '') {
 }
 const test = (name, f) => { if (!only || name.includes(only)) { console.log(`\n# ${name}`); f(); } };
 const run = (sim, secs, fn) => { const n = Math.round(secs / DT); for (let i = 0; i < n; i++) { fn && fn(sim, i * DT); sim.step(); } };
-const pad = (surface) => new Sim(R, { car: 'awd', surface, cones: false, assist: true, pad: { ...PAD, size: 4000 }, pos: { x: 300, y: 0.6, z: -900 } });
+const pad = (surface) => benchSim({ car: 'awd', surface, cones: false, assist: true, pad: { ...PAD, size: 4000 }, pos: { x: 300, y: 0.6, z: -900 } });
 // Roll the car at v m/s along its heading (wheels spinning to match), in the lowest gear that
 // keeps the engine under 75 % of the redline (as if it had driven up to v).
 const roll = (sim, v) => {
@@ -81,7 +82,7 @@ test('awd parked on grass does not creep', () => {
 test('off the road into the grass', () => {
   const track = generateTrack('v1', { kind: 'loop', theme: 'summer' });
   const world = new TrackWorld(track), L = track.layout, loc = track.locator, T = track.terrain;
-  const sim = new Sim(R, { world, car: 'awd', assist: true });
+  const sim = benchSim({ world, car: 'awd', assist: true });
   // Spots where the 80 m run to the left is all verge (no other road) and roughly level.
   const spots = [];
   for (let i = 0; i < L.n && spots.length < 4; i += 37) {

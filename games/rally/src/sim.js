@@ -1,33 +1,40 @@
-// Simulation: Rapier setup, a World (test pad or generated track), fixed-step loop.
+// Simulation: a World (test pad or generated track) and the car, on the scene's lion-hawk World, which owns the Rapier
+// world and steps it (overview §4.4). Rally's vehicle runs before Rapier's step (system rally.vehicle, preStep) and the
+// clock after it (rally.after, postStep).
 import { Vehicle, DT } from './vehicle.js';
 import { CARS } from './cars.js';
 import { SnowField } from './snow.js';
-import { PadWorld, GROUP_GROUND, GROUP_CAR, groups } from './world/padWorld.js';
+import { PadWorld } from './world/padWorld.js';
 
-export { GROUP_GROUND, GROUP_PROP, GROUP_CAR, groups, PAD, buildPad, coneLayout } from './world/padWorld.js';
+export { PAD, buildPad, coneLayout } from './world/padWorld.js';
+export const HZ = 240; // 1 / HZ === DT exactly, so the World's timestep is today's
 
 export class Sim {
-  // opts: { world, car, assist, pos, yaw } plus, when no world is given, the pad options
-  // { surface, cones, pad } used to make a PadWorld (keeps every pre-World call working).
-  constructor(R, opts = {}) {
-    this.R = R;
+  // lh: the scene's World. opts: { world, car, assist, pos, yaw, step } plus, when no world is given, the pad options
+  // { surface, cones, pad }. opts.step advances one engine step (test/helpers/bench.mjs); the stage never calls step().
+  constructor(lh, opts = {}) {
+    this.lh = lh;
+    this.R = lh.R;
     this.assist = opts.assist ?? true;
     this.time = 0;
     this.carId = opts.car || 'awd';
+    this.stepper = opts.step ?? null;
+    this.world = null;
     this.setWorld(opts.world || new PadWorld({ pad: opts.pad, cones: opts.cones, surface: opts.surface }), opts.pos, opts.yaw);
   }
 
-  // Frees the Rapier world; idempotent.
-  dispose() { if (this.phys) this.phys.free(); this.phys = null; this.car = null; }
+  get phys() { return this.lh ? this.lh.rapier : null; }
 
-  // Swaps worlds by rebuilding the Rapier world from scratch (simplest way to drop every old
-  // collider and prop) and re-creating the car at the new world's spawn (or pos/yaw).
+  // The engine disposes the World after the stage's exit ([S-3]); this only drops the references. Idempotent.
+  dispose() { this.lh = null; this.car = null; }
+
+  // Swaps worlds: world.clear() drops every body and collider (a new Rapier world, overview §4.4), then the new world
+  // and the car at its spawn (or pos/yaw). The first build uses the fresh World as it is.
   setWorld(world, pos, yaw) {
-    if (this.phys) { this.phys.free(); this.car = null; }
+    if (this.world) this.lh.clear();
+    this.car = null;
     this.world = world;
-    this.phys = new this.R.World({ x: 0, y: -9.81, z: 0 });
-    this.phys.timestep = DT;
-    world.build(this.R, this.phys);
+    world.build(this.R, this.lh.rapier);
     this.setSurface(world.surfaceKey);
     this.setCar(this.carId, pos, yaw);
   }
@@ -53,14 +60,14 @@ export class Sim {
   }
 
   setCar(id, pos, yaw) {
-    if (this.car) this.phys.removeRigidBody(this.car.body);
-    const cfg = CARS[id];
-    this.car = new Vehicle(this.R, this.phys, cfg, {
+    if (this.car) this.lh.rapier.removeRigidBody(this.car.body);
+    const cfg = CARS[id], g = this.lh.groups;
+    this.car = new Vehicle(this.R, this.lh.rapier, cfg, {
       pos: pos || this.spawnPos(cfg), yaw: yaw ?? this.world.spawn.yaw, assist: this.assist,
       surfaceAt: (x, z, c) => this.surfaceAt(x, z, c), snow: () => this.snow,
-      rayGroups: groups(0x0008, GROUP_GROUND),
+      rayGroups: g.mask(['ray'], ['ground']),
     });
-    this.car.colliders.forEach((c) => c.setCollisionGroups(groups(GROUP_CAR, 0xffff)));
+    this.car.colliders.forEach((c) => c.setCollisionGroups(g.mask(['car'])));
     this.carId = id;
   }
 
@@ -72,11 +79,13 @@ export class Sim {
     this.world.resetProps();
   }
 
+  preStep() { this.car.step(); }
+  postStep() { this.world.afterStep?.(); this.time += DT; }
+
+  // One engine step; only for a Sim made with opts.step (test/helpers/bench.mjs).
   step() {
-    this.car.step();
-    this.phys.step();
-    this.world.afterStep?.();
-    this.time += DT;
+    if (!this.stepper) throw new Error('Sim.step: this Sim is stepped by its engine; build it with benchSim() to step it alone');
+    this.stepper();
   }
 }
 

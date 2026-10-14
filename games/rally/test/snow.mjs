@@ -1,6 +1,7 @@
 // Fresh snow (spec R2-6): the snow field and how the car drives on it. Run: node test/snow.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT, PAD } from '../src/sim.js';
+import { benchSim } from './helpers/bench.mjs';
+import { DT, PAD } from '../src/sim.js';
 import { SnowField, SNOW } from '../src/snow.js';
 import { surfaceOfKey } from '../src/surface.js';
 await R.init();
@@ -13,7 +14,7 @@ function check(name, val, lo, hi, unit = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}: ${val.toFixed(3)}${unit}  [${lo}..${hi}]`);
   return ok;
 }
-const mk = (car, surface, extra = {}) => new Sim(R, { car, surface, cones: false, assist: false, ...extra });
+const mk = (car, surface, extra = {}) => benchSim({ car, surface, cones: false, assist: false, ...extra });
 const run = (sim, secs, fn) => { const n = Math.round(secs / DT); for (let i = 0; i < n; i++) { fn && fn(sim, i * DT); sim.step(); } };
 const test = (name, f) => { if (!only || name.includes(only)) { console.log(`\n# ${name}`); f(); } };
 const roll = (sim, vx, vz) => {

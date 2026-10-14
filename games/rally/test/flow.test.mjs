@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
 import { headless, canonical } from 'lion-hawk/test';
-import { rallyGame } from '../src/game.sim.js';
+import { game } from './helpers/bench.mjs';
 import { DT } from '../src/sim.js';
 await R.init();
 
@@ -11,10 +11,10 @@ const STAGE = { settings: { mode: 'stage', seed: 'flow1' } };
 const FREE = { settings: { mode: 'freeDrive', world: 'loop', seed: 'p1' } };
 const running = h => h.until(x => x.state().phase === 'running', { maxSeconds: 5, message: 'running' });
 
-test('the sim rate is the vehicle step', () => { assert.equal(1 / rallyGame().sim.hz, DT); });
+test('the sim rate is the vehicle step', () => { assert.equal(1 / game().sim.hz, DT); });
 
 test('flow: title → drive → countdown → finish → results (car rolling) → retry', () => {
-  const h = headless(rallyGame(), { seed: 3, args: STAGE });
+  const h = headless(game(), { seed: 3, args: STAGE });
   assert.equal(h.scene.name, 'stage'); assert.deepEqual(h.scene.overlays, ['title']); assert.equal(h.state().phase, 'title');
   assert.equal(h.state().hold, true);
   h.tap('title.drive');
@@ -34,7 +34,7 @@ test('flow: title → drive → countdown → finish → results (car rolling) �
 });
 
 test('pause freezes the stage and physics; the pause key or Resume closes it; covered controls throw', () => {
-  const h = headless(rallyGame(), { args: FREE });
+  const h = headless(game(), { args: FREE });
   h.tap('title.drive'); assert.equal(h.state().phase, 'running');
   h.step(240, { throttle: 1 });
   h.step(1, { pause: true }); assert.deepEqual(h.scene.overlays, ['pause']);
@@ -48,7 +48,7 @@ test('pause freezes the stage and physics; the pause key or Resume closes it; co
 
 test('the engine path is deterministic: same seed and inputs, bit-identical state', () => {
   const run = () => {
-    const h = headless(rallyGame(), { seed: 9, args: { settings: { mode: 'stage', seed: 'det1' } } });
+    const h = headless(game(), { seed: 9, args: { settings: { mode: 'stage', seed: 'det1' } } });
     h.tap('title.drive'); running(h); h.seconds(5, 'autopilot');
     return canonical(h.state(), { digits: 15 });
   };
@@ -56,7 +56,7 @@ test('the engine path is deterministic: same seed and inputs, bit-identical stat
 });
 
 test('title choices rebuild the preview after a short loading hold; car and seed choices', () => {
-  const h = headless(rallyGame(), { args: { settings: { mode: 'stage', seed: 'c1' } } });
+  const h = headless(game(), { args: { settings: { mode: 'stage', seed: 'c1' } } });
   const S = () => h.engine.scene.state, rev = S().worldRev;
   h.tap('title.theme.winter');
   assert.equal(h.state().phase, 'loading');
@@ -71,7 +71,7 @@ test('title choices rebuild the preview after a short loading hold; car and seed
 });
 
 test('settings overlay: options apply at once; Esc closes the sheet before the pause menu', () => {
-  const h = headless(rallyGame(), { args: { settings: { mode: 'freeDrive', world: 'loop', seed: 's1', assist: false } } });
+  const h = headless(game(), { args: { settings: { mode: 'freeDrive', world: 'loop', seed: 's1', assist: false } } });
   const S = () => h.engine.scene.state;
   h.tap('title.settings'); assert.deepEqual(h.scene.overlays, ['title', 'settings']);
   h.tap('settings.assist.true'); assert.equal(S().sim.car.assist, true);
@@ -85,7 +85,7 @@ test('settings overlay: options apply at once; Esc closes the sheet before the p
 });
 
 test('Reset: a tap puts the car back on the road, a 0.6 s hold restarts; a shift in Auto switches to Manual', () => {
-  const h = headless(rallyGame(), { args: { settings: { mode: 'stage', seed: 'r1' } } });
+  const h = headless(game(), { args: { settings: { mode: 'stage', seed: 'r1' } } });
   h.tap('title.drive'); running(h);
   h.seconds(3, { throttle: 1 }); assert.ok(h.state().speed > 5);
   h.step(1, { resetHold: true }); h.step(1);
@@ -97,7 +97,7 @@ test('Reset: a tap puts the car back on the road, a 0.6 s hold restarts; a shift
 });
 
 test('presets put the stage in a known state without stepping (S-5)', () => {
-  const args = { settings: { mode: 'stage', seed: 'p2' } }, h = headless(rallyGame(), { args });
+  const args = { settings: { mode: 'stage', seed: 'p2' } }, h = headless(game(), { args });
   h.jump('stage', 'countdown', { n: 2 }, args);
   assert.deepEqual([h.state().phase, h.state().countN, h.scene.overlays.length], ['countdown', 2, 0]);
   const m = h.mark(); h.step(1);
@@ -110,7 +110,7 @@ test('presets put the stage in a known state without stepping (S-5)', () => {
 });
 
 test('results: New seed builds another stage and starts a run; Menu and Quit return to the title', () => {
-  const args = { settings: { mode: 'stage', seed: 'n1' } }, h = headless(rallyGame(), { seed: 4, args });
+  const args = { settings: { mode: 'stage', seed: 'n1' } }, h = headless(game(), { seed: 4, args });
   h.jump('stage', 'results', {}, args);
   h.tap('results.newSeed'); assert.equal(h.state().phase, 'loading'); assert.deepEqual(h.scene.overlays, []);
   h.until(x => x.state().phase === 'ready', { maxSteps: 60 }); assert.notEqual(h.state().seed, 'n1');
@@ -121,7 +121,7 @@ test('results: New seed builds another stage and starts a run; Menu and Quit ret
 });
 
 test('a Reset chip held through the countdown does not restart on the first running step', () => {
-  const h = headless(rallyGame(), { args: STAGE });
+  const h = headless(game(), { args: STAGE });
   h.tap('title.drive'); h.hold({ resetHold: true });
   running(h); h.step(5);
   assert.equal(h.state().phase, 'running');
@@ -129,7 +129,7 @@ test('a Reset chip held through the countdown does not restart on the first runn
 });
 
 test('the pause key and the Pause chip in one frame open pause once', () => {
-  const h = headless(rallyGame(), { args: FREE });
+  const h = headless(game(), { args: FREE });
   h.tap('title.drive'); h.step(5);
   h.tap('stage.pause'); h.step(1, { pause: true });
   assert.deepEqual(h.scene.overlays, ['pause']);
@@ -137,7 +137,7 @@ test('the pause key and the Pause chip in one frame open pause once', () => {
 });
 
 test('seed edit then Drive in the same step: the tap queues behind the load and the run begins', () => {
-  const h = headless(rallyGame(), { args: { settings: { mode: 'stage', seed: 'q1' } } });
+  const h = headless(game(), { args: { settings: { mode: 'stage', seed: 'q1' } } });
   h.fill('title.seed', 'queued'); assert.equal(h.state().phase, 'loading');
   h.tap('title.drive'); assert.deepEqual(h.scene.overlays, []);
   assert.equal(h.state().phase, 'loading');
@@ -147,7 +147,7 @@ test('seed edit then Drive in the same step: the tap queues behind the load and 
 });
 
 test('toTitle with a changed track goes through the loading hold back to the title', () => {
-  const args = { settings: { mode: 'stage', seed: 't1' } }, h = headless(rallyGame(), { args });
+  const args = { settings: { mode: 'stage', seed: 't1' } }, h = headless(game(), { args });
   h.jump('stage', 'paused', {}, args);
   h.engine.scene.state.settings.theme = 'winter'; // a track-shaping setting the built track doesn't have
   h.tap('pause.quit');
@@ -157,7 +157,7 @@ test('toTitle with a changed track goes through the loading hold back to the tit
 });
 
 test('confirm on the title drives; on the results card it retries', () => {
-  const args = { settings: { mode: 'stage', seed: 'k1' } }, h = headless(rallyGame(), { args });
+  const args = { settings: { mode: 'stage', seed: 'k1' } }, h = headless(game(), { args });
   h.step(1, { confirm: true });
   assert.deepEqual(h.scene.overlays, []); assert.equal(h.state().phase, 'ready');
   h.jump('stage', 'results', {}, args); assert.deepEqual(h.scene.overlays, ['results']);
@@ -166,7 +166,7 @@ test('confirm on the title drives; on the results card it retries', () => {
 });
 
 test('the ready and loading presets; the settings preset on the pad opens only settings', () => {
-  const args = { settings: { mode: 'stage', seed: 'p3' } }, h = headless(rallyGame(), { args });
+  const args = { settings: { mode: 'stage', seed: 'p3' } }, h = headless(game(), { args });
   h.jump('stage', 'ready', {}, args);
   assert.equal(h.state().phase, 'ready'); assert.deepEqual(h.scene.overlays, []);
   h.jump('stage', 'loading', {}, args);

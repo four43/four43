@@ -1,7 +1,7 @@
 // Game loop (spec tracks T-20 … T-27): the hold, pace/run-up, progress, bests and the stage scene
 // (engine headless(), autopilot policy). Run: node test/game.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT } from '../src/sim.js';
+import { DT } from '../src/sim.js';
 import { generateTrack } from '../src/gen/track.js';
 import { TrackWorld, pointAt } from '../src/world/trackWorld.js';
 import { makeLocator } from '../src/gen/locate.js';
@@ -10,7 +10,7 @@ import { allowedSpeed, runUpDistance, V_MAX } from '../src/game/pace.js';
 import { makeProgress } from '../src/game/progress.js';
 import { READY_T, COUNT_T } from '../src/game/stage.js';
 import { headless } from 'lion-hawk/test';
-import { rallyGame } from '../src/game.sim.js';
+import { benchSim, game } from './helpers/bench.mjs';
 import { makeBests, bestKey } from '../src/game/bests.js';
 import { autopilot } from './autopilot.js';
 await R.init();
@@ -26,7 +26,7 @@ function check(name, val, lo, hi, unit = '') {
 const test = async (name, f) => { if (!only || name.includes(only)) { console.log(`\n# ${name}`); await f(); } };
 const trackSim = (seed, kind, car = 'awd', opts = {}) => {
   const track = generateTrack(seed, { kind, theme: 'summer', ...opts });
-  return { track, sim: new Sim(R, { world: new TrackWorld(track), car, assist: true }) };
+  return { track, sim: benchSim({ world: new TrackWorld(track), car, assist: true }) };
 };
 
 await test('hold', () => {
@@ -145,7 +145,7 @@ await test('bests', () => {
 
 // A headless Rally on a generated track (field note #27): the settings are the old trackSim's (assist on, summer).
 function rally(seed, kind, mode, bests = makeBests(memStore())) {
-  const h = headless(rallyGame({ bests }), { args: { settings: { mode, seed, world: kind, theme: 'summer', assist: true } } });
+  const h = headless(game({ bests }), { args: { settings: { mode, seed, world: kind, theme: 'summer', assist: true } } });
   return { h, bests, S: () => h.engine.scene.state, track: h.engine.scene.state.sim.world.track, sim: h.engine.scene.state.sim };
 }
 // Steps with the autopilot policy until until(h, events) is true or maxTime s of sim time pass. Returns the events seen,

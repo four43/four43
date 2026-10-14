@@ -1,5 +1,5 @@
 // The stage scene (spec tracks T-20 … T-23; lion-hawk [S-3], field notes #7, #21–#23, #28): one main scene owns the
-// Sim, the Rapier world and the track and survives every menu (title, pause, results and settings are overlays).
+// Sim and the track (the World owns the Rapier world) and survives every menu (title, pause, results and settings are overlays).
 // Rally's run sub-states live in ctx.state.phase: title → loading → ready → countdown → running → finished.
 // The run logic moved here from the old Game class: same constants, same order (clock first, then progress), with
 // this.emit → e.emit, this.set → setPhase and DT → the step's dt (the same value).
@@ -20,7 +20,7 @@ const EPS = 1e-9;
 // Opens an overlay unless it is open or already requested in this step/transition (#36).
 const openOnce = (e, name) => { if (!e.isOpen(name, { pending: true })) e.overlay(name); };
 
-export function makeStage({ R, bests = null }) {
+export function makeStage({ bests = null }) {
   // --- state helpers (each takes the stage state s) -------------------------------------------------------------
   const track = s => s.sim.world.track ?? null;
   const modeOf = s => s.pad ? MODES.freeDrive : MODES[s.settings.mode];
@@ -83,7 +83,7 @@ export function makeStage({ R, bests = null }) {
       try { world = new TrackWorld(generateTrack(st.seed, { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, density: st.density, style: st.style })); }
       catch (err) { e.emit('toast', { text: `Couldn't build that track (${err.message}). Try another seed.`, seconds: 5 }); if (s.sim) return false; }
     }
-    if (!s.sim) s.sim = new Sim(R, { world: world ?? undefined, car: st.car, surface: st.surface, assist: st.assist });
+    if (!s.sim) s.sim = new Sim(e.world, { world: world ?? undefined, car: st.car, surface: st.surface, assist: st.assist });
     else if (world) s.sim.setWorld(world);
     else return false; // the pad is built once, in enter
     s.world = s.sim.world; s.sim.car.autoShift = st.gearbox === 'auto';
@@ -280,7 +280,11 @@ export function makeStage({ R, bests = null }) {
         if (I.camera.pressed) s.cam = (s.cam + 1) % 3;
         if (I.debug.pressed) s.wheels = !s.wheels;
       }, { stage: 'input.apply', after: ['lh.input'] });
-      ctx.system('rally.physics', () => s.sim.step(), { stage: 'physics.world' });
+      // The vehicle's forces go in before Rapier's step and the clock after it (overview §4.4: kits and games put pre-step
+      // work in physics.world before lh.physics.step). While a scene loads the World does not step Rapier (3c CI-16), and
+      // these skip with it, so the car's wheels, drivetrain and the clock freeze with its body.
+      ctx.system('rally.vehicle', () => { if (!e.loading.active) s.sim.preStep(); }, { stage: 'physics.world', before: ['lh.physics.step'] });
+      ctx.system('rally.after', () => { if (!e.loading.active) s.sim.postStep(); }, { stage: 'physics.world', after: ['lh.physics.events'] });
       s.mode = modeOf(s);
       if (s.pad) begin(e, s);
       else { title(e, s); e.overlay('title'); }

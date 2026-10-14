@@ -1,7 +1,8 @@
 // Generated tracks as Worlds (spec tracks T-8, T-12): heightfield orientation, spawn, and an
 // autopilot driving each layout end to end. Run: node test/track.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT } from '../src/sim.js';
+import { benchSim } from './helpers/bench.mjs';
+import { DT } from '../src/sim.js';
 import { qrot } from '../src/vehicle.js';
 import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
@@ -31,7 +32,7 @@ for (const { seed, kind, theme } of CASES) {
   test(`${seed} ${kind} ${theme}`, () => {
     const track = generateTrack(seed, { kind, theme });
     const world = new TrackWorld(track);
-    const sim = new Sim(R, { world, car: 'awd', assist: true });
+    const sim = benchSim({ world, car: 'awd', assist: true });
     const L = track.layout, loc = track.locator, t = track.terrain;
 
     // Spawn: settles on the road.
@@ -105,7 +106,7 @@ for (const { seed, kind, theme } of CASES) {
 for (const kind of ['loop', 'stage']) test(`t1 ${kind} world api`, () => {
   const track = generateTrack('t1', { kind, theme: 'summer' }), L = track.layout, loc = track.locator;
   const world = new TrackWorld(track);
-  const sim = new Sim(R, { world, car: 'awd', assist: true });
+  const sim = benchSim({ world, car: 'awd', assist: true });
   const sec = track.surfaces.sections[0], nxt = track.surfaces.sections[1];
   const p = pointAt(L, sec.s1 - 5), a = surfaceOfKey(sec.road), b = surfaceOfKey(nxt.road);
   const m = world.surfaceAt(p.x, p.z);

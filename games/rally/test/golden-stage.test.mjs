@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
 import { headless, golden, assertFinite, canonical, checksum } from 'lion-hawk/test';
-import { rallyGame } from '../src/game.sim.js';
+import { game } from './helpers/bench.mjs';
 import { DT } from '../src/sim.js';
 await R.init();
 
@@ -16,7 +16,7 @@ const snapshot = (h) => {
     stage: { phase: s.phase, time: s.time, clockOn: s.clockOn } };
 };
 function run() {
-  const h = headless(rallyGame(), { seed: 5, args: { settings: { mode: 'stage', seed: 'golden', world: 'stage', theme: 'summer', assist: true } } });
+  const h = headless(game(), { seed: 5, args: { settings: { mode: 'stage', seed: 'golden', world: 'stage', theme: 'summer', assist: true } } });
   h.tap('title.drive');
   const trail = [];
   for (let i = 0; i < STEPS; i++) {
