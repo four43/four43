@@ -1,6 +1,6 @@
 // test/mp.engine.harness.mjs — mpWorld on the engine path (lion-hawk 2f T7, #75, #88): each device is a headless engine running
 // tractorGame(), bound to one in-memory hub by a port (lion-hawk/test mp(), [T-11]), so every message reaches the syncs as a
-// command at the next step. The options and the result have exactly mpWorld's shape (TP_MP=engine runs the mp suites on it). No tests here.
+// command at the next step. It is mpWorld (mp.harness.mjs re-exports it). No tests here.
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mp } from 'lion-hawk/test';
 import { tractorGame } from '../src/game.sim.js';

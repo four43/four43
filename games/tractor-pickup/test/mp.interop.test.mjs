@@ -5,7 +5,7 @@ import R from '@dimforge/rapier3d-compat';
 import { headless } from 'lion-hawk/test';
 import { createMemoryHub, createPort } from 'lion-hawk/net';
 import { tractorGame } from '../src/game.sim.js';
-import { createGame } from '../src/sim/game.js';
+import { testGame } from './helpers/world.mjs';
 import { createHostSync } from '../src/net/host.js';
 import { createGuestSync } from '../src/net/guest.js';
 import { HATS } from '../src/sim/progress.js';
@@ -16,9 +16,9 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 function mixed({ engineHost }) {
   // clampProgress keeps only unlocked paints: 18 shows unlock every one PAINTS uses (the hats that unlocks stay off, as createGame has none)
   const hub = createMemoryHub(); let now = 0; const clock = () => now, devs = [];
-  const oldDev = (isHost, i) => { const d = { name: isHost ? 'host' : 'guest' + i, events: [], game: createGame(R, { seed: isHost ? 31 : 1000 + i, power: 'medium' }) };
+  const oldDev = (isHost, i) => { const d = { name: isHost ? 'host' : 'guest' + i, events: [], game: testGame({ seed: isHost ? 31 : 1000 + i, power: 'medium' }) };
     d.net = isHost ? hub.host() : hub.join();
-    d.sync = isHost ? createHostSync({ game: d.game, net: d.net, paint: PAINTS[i], clock }) : createGuestSync({ game: d.game, net: d.net, paint: PAINTS[i], clock, onFarm: (s, n) => (d.game = createGame(R, { seed: s, power: 'medium', player: n })) });
+    d.sync = isHost ? createHostSync({ game: d.game, net: d.net, paint: PAINTS[i], clock }) : createGuestSync({ game: d.game, net: d.net, paint: PAINTS[i], clock, onFarm: (s, n) => (d.game = testGame({ seed: s, power: 'medium', player: n })) });
     d.tick = () => { d.events.push(...d.sync.before(now)); const ev = d.game.step(STILL); d.events.push(...ev); d.sync.after(ev, now); }; return d; };
   const newDev = (isHost, i) => { const h = headless(tractorGame(), { wall0: now, args: { seed: isHost ? 31 : 1000 + i, started: true, trip: false, progress: { shows: 18, stickers: [], paint: PAINTS[i], hatsOff: HATS.map(h => h.id), bookSeen: 0 } } });
     const net = isHost ? hub.host() : hub.join(), d = { name: isHost ? 'host' : 'guest' + i, h, net, events: [], get game() { return h.engine.scene.state.game; }, get sync() { return h.engine.scene.state.net.sync; } };

@@ -2,8 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { mpWorld, inFront, inFrontOf, single, settle } from './mp.harness.mjs';
-import { createGame } from '../src/sim/game.js';
+import { mpWorld, inFront, inFrontOf, single, settle, hostFarm } from './mp.harness.mjs';
 import { ROUTE_ANIMALS, PER_PLAYER } from '../src/sim/herd.js';
 
 const routeFree = game => game.herd.free().filter(a => a.home === 'route').length;
@@ -53,7 +52,7 @@ test('a player who leaves takes no free animal away; the surplus is just not rep
 test("a new farm on the host is made for the players it has (M-62)", async () => {
   await RAPIER.init();
   const w = await mpWorld({ seed: 23, guests: 1 }); w.seconds(1);
-  const next = createGame(RAPIER, { seed: 77, power: 'medium' }); w.host.game = next; w.host.sync.setGame(next);
+  const next = hostFarm(w, 77);
   assert.equal(routeFree(next), ROUTE_ANIMALS + PER_PLAYER);
   w.seconds(3); assert.deepEqual(settle(w, 3), [], 'the guest makes the new farm and has its animals');
 });

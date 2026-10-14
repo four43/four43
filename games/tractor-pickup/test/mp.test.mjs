@@ -1,7 +1,7 @@
 // test/mp.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, inFront, free, single, countCalls, quietWarn, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle } from './mp.harness.mjs';
+import { mpWorld, inFront, free, single, countCalls, quietWarn, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle, hostFarm } from './mp.harness.mjs';
 import { CLAIM_RANGE, TREE_RANGE } from '../src/net/host.js';
 import { spawnPoint } from '../src/sim/spawn.js';
 import { makeRng } from '../src/sim/rng.js';
@@ -238,10 +238,9 @@ test('paint changes reach the other devices (M-2)', async () => {
   assert.deepEqual(w.guests[0].sync.players.map.get(1).paint, { body: 'white', trim: 'blue' });
 });
 test('a new farm on the host: the guest makes it too, after its own show (M-19)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 47 }); w.seconds(1);
   const g = w.guests[0]; g.game.mode = 'show';
-  w.host.game = createGame(RAPIER, { seed: 48, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.5);
+  hostFarm(w, 48); w.seconds(0.5);
   assert.equal(g.game.farm.seed, 47, 'not during the show');
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 48);
 });
@@ -444,15 +443,18 @@ test('host data never pulls an animal out of the guest trailer, whatever its own
   w.seconds(0.5); assert.equal(ga.state, 'ride'); assert.equal(g.game.load.landed(), 1);
 });
 
-test('the rate limits count in wall time: with the game frozen (rAF paused), a new window still opens (M-50)', async () => {
+// M-50 on the engine path (3l, was the old world's frozen-frame case, #75): messages reach the syncs as commands at the next step,
+// so a window is shown to follow the wall clock by holding the wall still while the sim runs on (2 s of steps), then moving it
+test('the rate limits count in wall time, not sim time: with the wall held, steps open no new window; a new wall second does (M-50)', async () => {
   let wall = 0; const w = await mpWorld({ seed: 74, clock: () => wall }); w.seconds(1); wall = 5000;
   const g = w.guests[0], H = w.host.net.id, G = g.net.id, handled = countCalls(w.host.sync, 'claim');
-  const deliver = () => w.hub.tick(w.now); // messages arrive, but no frame runs: sim time stands still
-  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled(), 60);
-  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled(), 61, 'the host: a new second, a new window');
-  const horns = () => g.sync.out.filter(e => e.type === 'remoteHorn').length; // no frame runs, so the guest's events wait in out
-  for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 60);
-  wall += 1100; w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 61, 'the guest: a new window too');
+  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); w.step(2); assert.equal(handled(), 60);
+  w.seconds(2); g.net.send(H, { t: 'claim', ids: [0] }, true); w.step(2); assert.equal(handled(), 60, 'sim time alone opens no window');
+  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); w.step(2); assert.equal(handled(), 61, 'the host: a new wall second, a new window');
+  const horns = () => g.events.filter(e => e.type === 'remoteHorn').length;
+  const h0 = horns(); for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'horn', n: 1 }, true); w.step(2); assert.equal(horns() - h0, 60);
+  w.seconds(2); w.host.net.send(G, { t: 'horn', n: 1 }, true); w.step(2); assert.equal(horns() - h0, 60, 'the guest: sim time alone opens no window');
+  wall += 1100; w.host.net.send(G, { t: 'horn', n: 1 }, true); w.step(2); assert.equal(horns() - h0, 61, 'the guest: a new window too');
 });
 
 test('a silent host (no fast message for 3 s) is shown away and boops pause; its messages back clear both (M-40)', async () => {
@@ -474,11 +476,10 @@ test('hostBack does not end the pause while the host is still silent; hostAway p
 });
 
 test('while a new farm waits for the guest show, the new herd is not put on the old farm (M-19)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 77 }); w.seconds(1);
   const g = w.guests[0]; g.game.mode = 'show'; w.seconds(0.3);
   const kinds = () => g.game.herd.animals.map(a => a.type + a.golden).join(), before = kinds(), n = g.game.herd.animals.length;
-  w.host.game = createGame(RAPIER, { seed: 78, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.5);
+  hostFarm(w, 78); w.seconds(0.5);
   assert.equal(g.game.farm.seed, 77); assert.equal(g.game.herd.animals.length, n); assert.equal(kinds(), before, 'the old farm keeps its animals');
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 78);
 });
@@ -490,10 +491,9 @@ test('ignored animal data (an older ownership number) never changes an animal ty
   w.seconds(0.5); assert.equal(ga.type, ha.type); assert.equal(ga.golden, ha.golden);
 });
 test('a new farm while the host is silent keeps boops paused (M-19, M-40)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 80 }); w.seconds(1);
   const g = w.guests[0], after = w.host.sync.after; w.host.sync.after = () => {}; w.seconds(3.5); assert.equal(g.game.boopsPaused, true);
-  w.host.game = createGame(RAPIER, { seed: 81, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.3);
+  hostFarm(w, 81); w.seconds(0.3);
   assert.equal(g.game.farm.seed, 81); assert.equal(g.game.boopsPaused, true, 'the new game is paused too'); assert.equal(g.sync.players.map.get(1).away, true);
   w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false);
 });

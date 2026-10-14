@@ -17,3 +17,15 @@ export function testWorld() {
   const h = headless(game);
   return { h, world: h.world, step(n = 1, fn = null) { pre = fn; try { for (let i = 0; i < n; i++) h.step(1); } finally { pre = null; } } };
 }
+
+import { tractorGame, FARM_EVENTS } from '../../src/game.sim.js';
+// a farm scene stepped one engine step at a time through the raw input seam: game.step(input) → that step's game events, as
+// createGame(...).step(input) returned them before the World. A test that waits for a new farm reads g.h.engine.scene.state.game.
+export function testGame({ seed = 14, power = 'medium', player = 1, args = {} } = {}) {
+  const h = headless(tractorGame(), { args: { seed, power, player, started: true, trip: false, ...args } }), s = h.engine.scene.state, buf = [];
+  h.engine.events.on(e => { if (!FARM_EVENTS.has(e.type) && e.type !== 'scene' && e.type !== 'overlay') buf.push(e); });
+  const g = s.game;
+  g.step = input => { buf.length = 0; s.raw = input; h.step(1); s.raw = null; return buf.slice(); };
+  g.h = h;
+  return g;
+}
