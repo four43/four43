@@ -182,7 +182,7 @@ test('twisty obstacles', () => {
   for (const style of STYLES) for (const kind of ['loop', 'stage']) {
     let n = 0, km = 0, bad = 0, badLaunch = 0;
     for (const seed of seeds) {
-      const L = generateLayout(rng(seed), { kind, style }), fs = placeFeatures(L, rng(seed).fork('features'), { density: 'mild' });
+      const L = generateLayout(rng(seed), { kind, style }), fs = placeFeatures(L, rng(seed).fork('features'), { obstacles: 'mild' });
       const kAt = (s) => Math.abs(L.curvature[L.closed ? ((Math.round(s) % L.n) + L.n) % L.n : Math.max(0, Math.min(L.n - 1, Math.round(s)))]);
       for (const f of fs) {
         if (f.type === 'berm') continue;

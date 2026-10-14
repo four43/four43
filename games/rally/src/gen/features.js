@@ -61,10 +61,10 @@ function makeFeature(type, s0, r, hk) {
 }
 
 // style: 'flowing' | 'twisty' (default: the layout's own style, else flowing).
-export function placeFeatures(layout, r, { density = 'mild', style = layout.style } = {}) {
+export function placeFeatures(layout, r, { obstacles = 'mild', style = layout.style } = {}) {
   const { n, closed, length, curvature: K } = layout;
   const tw = style === 'twisty', runUp = tw ? TWISTY.runUp : RUN_UP, runOut = tw ? TWISTY.runOut : RUN_OUT;
-  const wild = density === 'wild', hk = wild ? WILD_HEIGHT : 1, pack = wild ? WILD_PACK : 1;
+  const wild = obstacles === 'wild', hk = wild ? WILD_HEIGHT : 1, pack = wild ? WILD_PACK : 1;
   const kAt = (s) => {
     let i = Math.round(s);
     if (closed) i = ((i % n) + n) % n; else if (i < 0 || i > n - 1) return Infinity;

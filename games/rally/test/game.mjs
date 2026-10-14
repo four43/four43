@@ -139,7 +139,7 @@ await test('bests', () => {
   const bad = makeBests(memStore(true));
   bad.put('k', { time: 1 });
   check('broken storage: put is harmless, get → null', +(bad.get('k') === null), 1, 1);
-  const track = { seed: 's', kind: 'stage', style: 'twisty', theme: 'summer', density: 'mild' };
+  const track = { seed: 's', kind: 'stage', style: 'twisty', theme: 'summer', obstacles: 'mild' };
   check(`key ${bestKey('stage', track, 'awd')}`, +(bestKey('stage', track, 'awd') === 'stage|s|stage|twisty|summer|mild|awd'), 1, 1);
 });
 

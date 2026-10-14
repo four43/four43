@@ -7,11 +7,11 @@ import { SNOW } from '../snow.js';
 import { geomFromPart } from '../render.js';
 
 export const SURF_LOOK = {
-  tarmac: { base: '#4a4d52', speck: ['#5b5f64', '#3d4045', '#6a6d70'], density: 0.5, sky: 0x9fb8c8 },
-  hardpack: { base: '#7a5f45', speck: ['#8c6f52', '#634b36', '#977a5c'], density: 0.45, sky: 0xb4c4c9 },
-  gravel: { base: '#8d7a62', speck: ['#a8957a', '#6f5f4b', '#b9a88d', '#7d6b55'], density: 0.75, sky: 0xb7c6cc },
-  snow:   { base: '#f2f5f9', speck: ['#ffffff', '#d5dee6', '#c9d4de'], density: 0.35, sky: 0xc9d6e0 },
-  ice:    { base: '#bcd3e0', speck: ['#d9e8f0', '#a6c1d2', '#e8f2f7'], density: 0.25, sky: 0xc4d4de },
+  tarmac: { base: '#4a4d52', speck: ['#5b5f64', '#3d4045', '#6a6d70'], specks: 0.5, sky: 0x9fb8c8 },
+  hardpack: { base: '#7a5f45', speck: ['#8c6f52', '#634b36', '#977a5c'], specks: 0.45, sky: 0xb4c4c9 },
+  gravel: { base: '#8d7a62', speck: ['#a8957a', '#6f5f4b', '#b9a88d', '#7d6b55'], specks: 0.75, sky: 0xb7c6cc },
+  snow:   { base: '#f2f5f9', speck: ['#ffffff', '#d5dee6', '#c9d4de'], specks: 0.35, sky: 0xc9d6e0 },
+  ice:    { base: '#bcd3e0', speck: ['#d9e8f0', '#a6c1d2', '#e8f2f7'], specks: 0.25, sky: 0xc4d4de },
 };
 
 export function surfaceTexture(key, repeat) {
@@ -21,7 +21,7 @@ export function surfaceTexture(key, repeat) {
   x.fillStyle = L.base; x.fillRect(0, 0, 512, 512);
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const n = Math.floor(9000 * L.density);
+  const n = Math.floor(9000 * L.specks);
   for (let i = 0; i < n; i++) {
     x.fillStyle = L.speck[Math.floor(rnd() * L.speck.length)];
     const s = 1 + rnd() * (key === 'gravel' ? 3.5 : 2);

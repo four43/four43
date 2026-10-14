@@ -29,7 +29,8 @@ test('the Rally scan ignores comments but still flags code', () => {
 test('settings: normalizeSettings migrates without mutating, newSeed is a seeded 5-char id', () => {
   const saved = { v: 1, assist: true, mode: 'nope', world: 'pad' }, copy = { ...saved };
   const s = normalizeSettings(saved);
-  assert.equal(s.assist, false); assert.equal(s.mode, 'freeDrive'); assert.equal(s.world, 'loop'); assert.equal(s.v, 4);
+  assert.equal(s.assist, false); assert.equal(s.mode, 'freeDrive'); assert.equal(s.world, 'loop'); assert.equal(s.v, 5);
+  assert.equal(normalizeSettings({ v: 4, density: 'wild' }).obstacles, 'wild'); assert.equal('density' in normalizeSettings({ density: 'wild' }), false);
   assert.deepEqual(saved, copy);
   assert.match(newSeed(rng('x')), /^[0-9a-z]{5}$/);
   assert.equal(newSeed(rng('x')), newSeed(rng('x')));

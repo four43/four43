@@ -36,8 +36,9 @@ function state(e) {
 export const GROUPS = ['ground', 'prop', 'car', 'ray'];
 export const rallyPhysics = rapier => ({ rapier, gravity: [0, -9.81, 0], groups: GROUPS });
 
-export function rallyGame({ rapier, bests = makeBests() } = {}) {
-  if (!rapier) throw new Error('rallyGame: pass { rapier } (the initialised @dimforge/rapier3d-compat module, D9)');
+// The game's defineGame spec without its physics block: the entry (src/main.js) injects Rapier where it calls defineGame
+// (D9), and rallyGame does the same for tests and tools.
+export function rallySpec({ bests = makeBests() } = {}) {
   const { scene: stage, api } = makeStage({ bests });
   const { title, pause, results, settings } = makeOverlays(api);
   // → window.engine.debug. The HUD fakes emit events or run the moved handler; they show after the next step's flush.
@@ -56,10 +57,15 @@ export function rallyGame({ rapier, bests = makeBests() } = {}) {
     blocked: (index = 1) => api.handle(e, { type: 'blocked', index }),
     count: (n = 3) => e.emit('count', { n }),
   });
-  return defineGame({
+  return {
     id: 'rally', sim: { hz: HZ, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, start: 'stage',
-    defs: { materials: MATERIALS, models: PHYS }, physics: rallyPhysics(rapier),
+    defs: { materials: MATERIALS, models: PHYS },
     scenes: { stage, title, pause, results, settings }, policies: { autopilot: autopilotPolicy }, state, debug,
-  });
+  };
+}
+
+export function rallyGame({ rapier, bests } = {}) {
+  if (!rapier) throw new Error('rallyGame: pass { rapier } (the initialised @dimforge/rapier3d-compat module, D9)');
+  return defineGame({ ...rallySpec({ bests }), physics: rallyPhysics(rapier) });
 }
 

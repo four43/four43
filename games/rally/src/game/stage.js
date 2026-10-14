@@ -24,7 +24,7 @@ export function makeStage({ bests = null }) {
   // --- state helpers (each takes the stage state s) -------------------------------------------------------------
   const track = s => s.sim.world.track ?? null;
   const modeOf = s => s.pad ? MODES.freeDrive : MODES[s.settings.mode];
-  const trackKey = st => { const o = { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, density: st.density, style: st.style }; return JSON.stringify([st.seed, o]); };
+  const trackKey = st => { const o = { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, obstacles: st.obstacles, style: st.style }; return JSON.stringify([st.seed, o]); };
   const runKey = s => track(s) ? bestKey(s.mode.id, track(s), s.sim.carId) : null;
 
   function setPhase(e, s, phase) {
@@ -80,7 +80,7 @@ export function makeStage({ bests = null }) {
     const st = s.settings, key = trackKey(st);
     let world = null;
     if (!s.pad) {
-      try { world = new TrackWorld(generateTrack(st.seed, { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, density: st.density, style: st.style })); }
+      try { world = new TrackWorld(generateTrack(st.seed, { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, obstacles: st.obstacles, style: st.style })); }
       catch (err) { e.emit('toast', { text: `Couldn't build that track (${err.message}). Try another seed.`, seconds: 5 }); if (s.sim) return false; }
     }
     if (!s.sim) s.sim = new Sim(e.world, { world: world ?? undefined, car: st.car, surface: st.surface, assist: st.assist });
@@ -176,7 +176,7 @@ export function makeStage({ bests = null }) {
         case 'assist': s.sim.setAssist(value); break;
         case 'gearbox': s.sim.car.autoShift = value === 'auto'; break;
         case 'units': break; // the view reads it
-        default: api.toTitle(e); // mode, world, style, theme, density
+        default: api.toTitle(e); // mode, world, style, theme, obstacles
       }
     },
     setSeed(e, text) { const s = S(e); s.settings.seed = String(text).trim() || newSeed(e.rng('seeds')); s.settingsRev++; api.toTitle(e); },
