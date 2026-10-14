@@ -48,13 +48,13 @@ timing, bests) is specified there too (Phase 2).
 | `src/game/*.js` | The rest of the game layer: progress, pace, modes, bests, settings, autopilot — `tracks-spec.md` Phase 2 |
 | `src/menus.js` | The timing HUD (`GameHud`, on engine time) and time formatting |
 | `src/main.js` | Browser entry: awaits `RAPIER.init()`, loads/saves settings, calls `boot(game, view, { devices })`; `window.engine` is the debug hook |
-| `src/assets.json` | Baked Kenney car-kit meshes (vertex coloured) |
-| `bake.mjs` | Bakes the GLBs in `assets/models/` → `src/assets.json` |
+| `baked/` | `lion-hawk bake` output: the Kenney car-kit GLBs (vertex coloured), `manifest.json`, `phys.json` |
+| `game.config.js` | `lion-hawk bake` / `build` config: models, renames, entry, template, PWA |
 | `assets/models/` | Source models: Kenney Car Kit 3.1 (CC0) — the 4 GLBs in use + `Textures/colormap.png` |
 | `index.template.html` | Page shell, CSS, HUD/touch markup, meta/PWA tags; bundle injected at `/*BUNDLE*/` |
 | `pwa/` | Icon (svg + 192/512/apple-touch PNGs), manifest, service worker, 1200×630 `og-image.jpg` |
-| `build.py` | Bundles to `site/exp/rally/index.html`, copies `pwa/`, stamps the service-worker cache version |
-| `dev.mjs` | Dev server (`npm run dev`, port 8740, LAN-visible): rebuilds on save, live-reloads |
+| `npm run build` | `lion-hawk build --out <dir>` (or `$RALLY_OUT`): the page, `assets/models/`, `pwa/`, the stamped service worker |
+| `npm run dev` | `lion-hawk dev`: serves, rebuilds and re-bakes on save |
 | `test/physics.mjs` | Car physics validation |
 | `test/snow.mjs` | Fresh-snow validation |
 | `test/markers.mjs` | Marker posts tip and settle |
@@ -72,7 +72,7 @@ Commands: `npm run dev`, `npm test` (all headless suites, ~4 min), `npm run test
 `site/exp/rally`, push `gh-pages` (GitHub Actions deploys).
 
 New Kenney models come from the All-in-1 pack zip (`3D assets/<Kit>/Models/GLB format/`); copy only
-the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and add them to `bake.mjs`.
+the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and add them to `game.config.js`, then `npm run bake`.
 
 ## Simulation
 

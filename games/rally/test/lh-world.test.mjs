@@ -10,6 +10,7 @@ import { generateTrack } from '../src/gen/track.js';
 import { TrackWorld } from '../src/world/trackWorld.js';
 import MATERIALS from '../src/defs/materials.js';
 import { CARS } from '../src/cars.js';
+import { WHEEL_PARTS } from '../src/vehicle.js';
 import { heightAt } from '../src/gen/terrain.js';
 await R.init();
 
@@ -118,7 +119,7 @@ test('pad reset puts cones home, stopped', () => {
 test('the car is a World entity with cars.js mass and inertia (massProps, D3) and car-group colliders', () => {
   for (const id of ['awd', 'rwd']) {
     const sim = benchSim({ car: id, cones: false }), car = sim.car, cfg = CARS[id];
-    assert.equal(car.body, car.e.body); assert.ok(car.e.tags.has('car')); assert.equal(car.e.draw, false);
+    assert.equal(car.body, car.e.body); assert.ok(car.e.tags.has('car')); assert.equal(car.e.model, cfg.model);
     assert.ok(Math.abs(car.body.mass() - cfg.mass) < 1e-6 * cfg.mass, `${id} mass ${car.body.mass()}`);
     const I = car.body.principalInertia();
     assert.deepEqual([I.x, I.y, I.z].map(Math.round).sort(), [cfg.inertia.x, cfg.inertia.y, cfg.inertia.z].sort()); // Rapier sorts the principal axes
@@ -148,4 +149,21 @@ test('the track uses the terrain kit: materialAt, blendAt and heightAt agree wit
   assert.match(w.materialAt(L.x[40], L.z[40]), /^rally-(tarmac|hardpack|gravel|packed|ice)$/);
   assert.match(w.materialAt(L.x[40] + 30 * Math.cos(L.heading[40]), L.z[40] - 30 * Math.sin(L.heading[40])), /^rally-(grass|snowbank|sand|mud)$/);
   for (let i = 0; i < L.n; i += 97) assert.ok(Math.abs(w.terrain.heightAt(L.x[i] + 2, L.z[i]) - heightAt(track.terrain, L.x[i] + 2, L.z[i])) < 0.05);
+});
+
+const qmul = (a, b) => ({ x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+  z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z });
+const axis = (x, y, z, t) => ({ x: x * Math.sin(t / 2), y: y * Math.sin(t / 2), z: z * Math.sin(t / 2), w: Math.cos(t / 2) });
+test('the car is drawn by view sync: model, wheel part poses (hub in the body frame, Ry(steer) Rx(spin)), drawn by a hook', () => {
+  const sim = benchSim({ car: 'awd', cones: false }), car = sim.car, e = car.e, c = car.cfg;
+  assert.equal(e.model, c.model); assert.equal(e.draw, false); // render.js carView draws it once the models are loaded
+  assert.deepEqual(Object.keys(e.partXf), WHEEL_PARTS);
+  car.input.steer = 0.5; car.input.throttle = 1;
+  for (let i = 0; i < 240; i++) sim.step();
+  car.wheels.forEach((w, i) => {
+    const P = e.partXf[WHEEL_PARTS[i]], q = qmul(axis(0, 1, 0, w.steer), axis(1, 0, 0, w.spin));
+    assert.deepEqual([P.p.x, P.p.y, P.p.z], [w.local.x, w.local.y - Math.max(0, c.travel - w.x), w.local.z], `wheel ${i} hub`);
+    for (const k of ['x', 'y', 'z', 'w']) assert.ok(Math.abs(P.q[k] - q[k]) < 1e-12, `wheel ${i} q.${k}`);
+  });
+  assert.ok(car.wheels[0].steer !== 0 && car.wheels[2].spin !== 0, 'the test steered and rolled');
 });

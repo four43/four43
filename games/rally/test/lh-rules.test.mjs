@@ -36,3 +36,19 @@ test('the scan catches each rule and honours lh-allow', () => {
   assert.equal(violations('w.castRayAndGetNormal(r); // lh-allow: L-1 rays').length, 0);
   assert.equal(violations('const x = 1; // friction: 0.8 in a comment').length, 0);
 });
+test('no game file imports assets.json (overview §1.3)', () => {
+  const hits = files(SRC).filter(f => /assets\.json/.test(stripComments(readFileSync(f, 'utf8'))));
+  assert.deepEqual(hits, []);
+});
+test('the views read poses from the pool, not from Rapier (no per-frame Rapier vectors)', () => {
+  for (const f of ['render.js', 'render/padView.js', 'render/trackView.js']) {
+    const s = stripComments(readFileSync(join(SRC, f), 'utf8'));
+    assert.equal(/\.body\.(translation|rotation)\(\)/.test(s), false, f);
+  }
+});
+test('no raw three.js renderer or hand-made standard materials in the views (the engine renderer and compiler)', () => {
+  for (const f of ['render.js', 'render/padView.js', 'render/trackView.js', 'snowView.js']) {
+    const s = stripComments(readFileSync(join(SRC, f), 'utf8'));
+    assert.equal(/new\s+THREE\.(WebGLRenderer|MeshStandardMaterial|MeshBasicMaterial|MeshPhysicalMaterial|MeshLambertMaterial)\b/.test(s), false, f);
+  }
+});

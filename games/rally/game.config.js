@@ -1,5 +1,5 @@
 // Rally's lion-hawk CLI config (Node only; overview §4.3, §5.4). The Kenney Car Kit GLBs carry one textured material,
-// `colormap`: the bake samples it into vertex colours (palette: 'vertex', as bake.mjs did) and renames it per model.
+// `colormap`: the bake samples it into vertex colours (palette: 'vertex', as the retired bake.mjs did) and renames it per model.
 // Rally's car colliders are inline (the vehicle builds them) and the track is procedural, so the sidecars only feed
 // checks.materials. The engine's default optimise (weld on) applies: dropping the UVs lets weld merge vertices, so the
 // parity test compares triangle counts (3d note (a)).

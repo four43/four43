@@ -1,5 +1,5 @@
 // The bake (lion-hawk overview §5.3-1): every Kenney model is baked, each mesh part keeps today's triangle count (the
-// counts src/assets.json held at e03ed71; weld merges vertices once the palette step drops UVs, so vertex counts fall,
+// counts the retired src/assets.json held at e03ed71; weld merges vertices once the palette step drops UVs, so vertex counts fall,
 // e.g. hatchback-sports 3709 → about 2048), and phys.json was baked against today's registry.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import MATERIALS from '../src/defs/materials.js';
 
-const COUNTS = { // node name → triangle count (index count / 3), from src/assets.json at e03ed71
+const COUNTS = { // node name → triangle count (index count / 3), from the retired src/assets.json at e03ed71
   'hatchback-sports': { 'wheel-front-right': 332, 'wheel-front-left': 332, 'wheel-back-right': 332, 'wheel-back-left': 332, body: 760 },
   'sedan-sports': { 'wheel-back-right': 332, body: 712, spoiler: 48, 'wheel-back-left': 332, 'wheel-front-left': 332, 'wheel-front-right': 332 },
   'wheel-racing': { 'wheel-racing': 332 },
@@ -48,8 +48,4 @@ for (const [model, parts] of Object.entries(COUNTS)) {
 test('phys.json was baked against this registry', () => {
   assert.equal(phys.materials, MATERIALS.hash);
   assert.deepEqual(Object.keys(phys.models).sort(), Object.keys(COUNTS).sort());
-});
-test('today\'s assets.json counts are the table above (until the view retires it)', () => {
-  const a = json('../src/assets.json');
-  for (const [m, parts] of Object.entries(COUNTS)) assert.deepEqual(Object.fromEntries(Object.entries(a[m]).map(([k, v]) => [k, v.i.length / 3])), parts, m);
 });

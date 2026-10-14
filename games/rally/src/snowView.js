@@ -77,8 +77,9 @@ const NOISE = `
 `;
 
 export class SnowView {
-  constructor(renderer, scene) {
-    this.r = renderer;
+  // mc: the engine's material compiler; the snow surface is 'rally-packed' extended with the displacement patch.
+  constructor(renderer, scene, mc) {
+    this.r = renderer; this.mc = mc;
     this.px = new Uint32Array(N * N);
     this.data = new Uint8Array(this.px.buffer);
     const tex = this.tex = new THREE.DataTexture(this.data, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -97,9 +98,9 @@ export class SnowView {
   }
 
   material() {
-    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0 });
-    m.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, this.uniforms);
+    const uniforms = this.uniforms;
+    return this.mc.extend(this.mc.get('rally-packed'), 'rally-snow', (sh) => {
+      Object.assign(sh.uniforms, uniforms);
       sh.vertexShader = GLSL + sh.vertexShader.replace('#include <begin_vertex>', DISPLACE);
       sh.fragmentShader = GLSL + NOISE + sh.fragmentShader
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
@@ -126,8 +127,7 @@ export class SnowView {
           roughnessFactor = mix(mix(roughnessFactor, 0.12, sWear), 0.03, sGlint);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           normal = normalize((viewMatrix * vec4(sN, 0.0)).xyz);`);
-    };
-    return m;
+    });
   }
 
   // Shadow-map pass with the same displacement, so rut walls and berms shade the snow.

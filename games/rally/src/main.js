@@ -22,9 +22,8 @@ async function start() {
   const { engine } = boot(defineGame({ ...rallySpec({ bests: makeBests(storage ?? memoryStore()) }), physics: rallyPhysics(R) }), rallyView({ save }), {
     args: { settings: normalizeSettings(load()), pad: q.has('pad') },
     seed: (Math.random() * 2 ** 32) >>> 0,
-    devices: devices(document),
+    devices: devices(document), canvas: document.getElementById('view'),
   });
-  document.getElementById('loading')?.remove();
   const debug = () => engine.game.debug(engine);
   // ?debug=<screen>&mode=&n= on a phone: jump straight to a screen (the stage presets).
   if (q.get('debug')) debug().screen(q.get('debug'), { mode: q.get('mode') || undefined, n: Number(q.get('n')) || undefined });

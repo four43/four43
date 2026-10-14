@@ -1,24 +1,18 @@
-// Visuals for a TrackWorld (spec tracks T-9): terrain in 64 m chunks with three distance LODs and
-// skirts, a vertex-coloured road ribbon, instanced marker posts synced to their bodies, and
-// start/finish gates, and tall grass tufts scattered on grass verges near the camera.
-// Interface shared with PadView: constructor(scene, world), sync(sim),
-// dispose(); plus update(camera) so LOD can follow the camera rather than the car.
+// Visuals for a TrackWorld (spec tracks T-9): the terrain through lion-hawk's terrain mesh (64 m chunks, three distance
+// LODs, skirts), a vertex-coloured road ribbon, instanced marker posts drawn from the transform pool, start/finish gates,
+// and tall grass tufts scattered on grass verges near the camera. Every material comes from the engine's compiler.
+// Interface shared with PadView: constructor(scene, world, kit), sync(sim), dispose(); plus update(camera) so LOD
+// can follow the camera rather than the car.
 import * as THREE from 'three';
+import { createInstances } from 'lion-hawk/view';
+import { createTerrainMesh } from 'lion-hawk/kits/terrain/view';
 import { noise2 } from '../gen/noise.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
 import { rng } from '../gen/rng.js';
 
-const CHUNK = 64;                 // m (grid cells) per chunk side
-const LOD_STEP = [1, 2, 4];       // vertex spacing (m) per LOD
-const LOD_FAR = [150, 400];       // finer LOD while the chunk is nearer than this
-const HYST = 12;                  // m of hysteresis so chunks on a boundary don't flap
-const VIS_FAR = 760;              // chunks beyond this are hidden (fog is opaque by 700 m)
-const EVICT = [300, 720];         // drop cached LOD 0 / 1 geometry beyond these distances
-const SKIRT = 2;                  // m the chunk edges hang down to hide LOD cracks
 const DROP = [0, 0.35, 0.9];      // coarse LODs sink under the road so they never poke through it
 const ROAD_LIFT = 0.03, HALF = 3.5;
-const BUILD_MS = 3;               // per-frame budget for building chunk geometry after the first frame
 // Verge cover: scattered per 8 m world cell (deterministic per cell, cached), kept to cells within
 // RADIUS of the camera; the instance buffer is only rewritten when the camera changes cell.
 // Tufts shrink into the ground between FADE[0] and FADE[1] so the edge of the patch never pops.
@@ -28,12 +22,6 @@ const COVER = {
   // Snowbank verges get none: low drift meshes read as plates or rocks; the bumps show anyway.
 };
 const POST_H = 1.2, POST_W = 0.12, POST_D = 0.09; // matches TrackWorld's box collider
-
-// Theme looks: sky/fog colour, sun angle hint for the renderer, terrain palette.
-export const TRACK_LOOK = {
-  summer: { sky: 0xa9c3d4, low: false, fog: [150, 700] },
-  winter: { sky: 0xc9d6e0, low: true, fog: [150, 700] },
-};
 
 const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // sRGB hex -> linear
 const ROAD_COL = {
@@ -58,8 +46,11 @@ const PAL = {
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const mix3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
 
-// Neutral speckle multiplied over the vertex colours: detail up close, fog hides the tiling.
-function detailTexture(contrast = 1) {
+// Neutral speckle multiplied over the vertex colours: detail up close, fog hides the tiling. One texture per contrast,
+// kept for the page (the compiler keys materials by map, so per-track textures would leak a material per rebuild).
+const DETAIL = new Map();
+const detailTexture = (contrast = 1) => { let t = DETAIL.get(contrast); if (!t) DETAIL.set(contrast, t = makeDetail(contrast)); return t; };
+function makeDetail(contrast) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const x = cv.getContext('2d');
   x.fillStyle = '#ececec'; x.fillRect(0, 0, 256, 256);
@@ -75,7 +66,11 @@ function detailTexture(contrast = 1) {
   return t;
 }
 
-function bannerTexture(kind, closed) {
+const BANNERS = new Map(); // one per (kind, closed): at most three for the page
+const bannerTexture = (kind, closed) => { const k = `${kind}|${closed}`; let t = BANNERS.get(k); if (!t) BANNERS.set(k, t = makeBanner(kind, closed)); return t; };
+// The banner face is a little self-lit so it reads even with the sun behind it (emissive = its own colour × 0.35).
+const GLOW = (sh, inject) => { sh.fragmentShader = inject(sh.fragmentShader, 'emissivemap_fragment', 'totalEmissiveRadiance += diffuseColor.rgb * 0.35;'); };
+function makeBanner(kind, closed) {
   const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 128;
   const x = cv.getContext('2d');
   const chequer = (y0, h, sq) => {
@@ -149,172 +144,72 @@ function tuftGeometry() {
   return g;
 }
 
-export class TrackView {
-  constructor(scene, world) {
-    this.scene = scene; this.world = world;
-    const track = this.track = world.track, T = track.terrain;
-    this.theme = track.theme === 'winter' ? 'winter' : 'summer';
-    this.look = TRACK_LOOK[this.theme];
-    scene.background = new THREE.Color(this.look.sky);
-    scene.fog = new THREE.Fog(this.look.sky, ...this.look.fog);
-    this.root = new THREE.Group(); scene.add(this.root);
-    this.noise = noise2(`${track.seed}|look`);
-    // Snow gets a softer speckle so it reads white rather than grey.
-    this.detail = detailTexture();
-    this.groundDetail = this.theme === 'winter' ? detailTexture(0.45) : this.detail;
-    this.textures = [...new Set([this.detail, this.groundDetail])];
-    this.materials = [];
-
-    this.roadDist = this.buildRoadDistance();
-    this.terrainMat = this.mat(new THREE.MeshStandardMaterial({ vertexColors: true, map: this.groundDetail, roughness: 1, metalness: 0 }));
-    // Chunk grid: chunk (cx, cz) spans grid cells cx*64 .. cx*64+64 (clamped to the heightfield).
-    this.ncx = Math.ceil((T.nx - 1) / CHUNK); this.ncz = Math.ceil((T.nz - 1) / CHUNK);
-    this.chunks = [];
-    for (let cz = 0; cz < this.ncz; cz++) for (let cx = 0; cx < this.ncx; cx++) {
-      const x0 = T.x0 + cx * CHUNK, z0 = T.z0 + cz * CHUNK;
-      this.chunks.push({ cx, cz, x0, z0, x1: x0 + CHUNK, z1: z0 + CHUNK, geo: [null, null, null], lod: -1, mesh: null });
-    }
-    this.lodIndex = LOD_STEP.map((st) => this.chunkIndex(CHUNK / st + 1));
-    this.lastLod = null; this.pending = false; this.camera = null;
-    this.stats = { builds: 0, buildMs: 0, lastUpdateMs: 0 };
-
-    this.buildRoad();
-    this.buildMarkers();
-    this.buildGates();
-    this.buildCover();
-    this.mtx = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.v = new THREE.Vector3(); this.one = new THREE.Vector3(1, 1, 1);
-    // Build what the spawn needs right away (unbudgeted), so the first frame isn't patchy.
-    this.updateLod(track.spawn.x, track.spawn.z, Infinity);
-  }
-
-  mat(m) { this.materials.push(m); return m; }
-
-  // Distance (dm, capped 25.5 m) from each 1 m grid point to the nearest centreline sample, for
-  // the shoulder colour and for sinking coarse LODs under the road. Stamped near the road only.
-  buildRoadDistance() {
-    const T = this.track.terrain, L = this.track.layout, R = 12;
-    const out = new Uint8Array(T.nx * T.nz).fill(255);
-    for (let i = 0; i < L.n; i++) {
-      const sx = L.x[i] - T.x0, sz = L.z[i] - T.z0;
-      const ax = Math.max(0, Math.ceil(sx - R)), bx = Math.min(T.nx - 1, Math.floor(sx + R));
-      const az = Math.max(0, Math.ceil(sz - R)), bz = Math.min(T.nz - 1, Math.floor(sz + R));
-      for (let iz = az; iz <= bz; iz++) {
-        const dz = iz - sz, row = iz * T.nx;
-        for (let ix = ax; ix <= bx; ix++) {
-          const d = Math.min(255, Math.round(Math.hypot(ix - sx, dz) * 10));
-          if (d < out[row + ix]) out[row + ix] = d;
-        }
+// Distance (dm, capped 25.5 m) from each 1 m grid point to the nearest centreline sample, for the shoulder colour and for
+// sinking coarse LODs under the road. Stamped near the road only.
+export function roadDistance(track) {
+  const T = track.terrain, L = track.layout, R = 12;
+  const out = new Uint8Array(T.nx * T.nz).fill(255);
+  for (let i = 0; i < L.n; i++) {
+    const sx = L.x[i] - T.x0, sz = L.z[i] - T.z0;
+    const ax = Math.max(0, Math.ceil(sx - R)), bx = Math.min(T.nx - 1, Math.floor(sx + R));
+    const az = Math.max(0, Math.ceil(sz - R)), bz = Math.min(T.nz - 1, Math.floor(sz + R));
+    for (let iz = az; iz <= bz; iz++) {
+      const dz = iz - sz, row = iz * T.nx;
+      for (let ix = ax; ix <= bx; ix++) {
+        const d = Math.min(255, Math.round(Math.hypot(ix - sx, dz) * 10));
+        if (d < out[row + ix]) out[row + ix] = d;
       }
     }
-    return out;
   }
+  return out;
+}
 
-  // Shared index for a chunk of n×n vertices plus 4 skirts of n vertices each (outward facing).
-  chunkIndex(n) {
-    const idx = [];
-    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) {
-      const a = j * n + i, b = a + n, c = a + 1, d = b + 1;
-      idx.push(a, b, c, b, d, c);
-    }
-    // Skirts: edge e(k) and its skirt vertex s(k) = base + k. Edges listed with their outward axis.
-    const g = (i, j) => j * n + i;
-    const edges = [
-      [(k) => g(k, 0), [0, 0, -1], [1, 0, 0]], [(k) => g(k, n - 1), [0, 0, 1], [1, 0, 0]],
-      [(k) => g(0, k), [-1, 0, 0], [0, 0, 1]], [(k) => g(n - 1, k), [1, 0, 0], [0, 0, 1]],
-    ];
-    edges.forEach(([e, out, t], m) => {
-      const base = n * n + m * n;
-      // Face normal of (e_k, s_k, e_k+1) is (-tz, 0, tx); flip when that points inward.
-      const flip = -t[2] * out[0] + t[0] * out[2] < 0;
-      for (let k = 0; k < n - 1; k++) {
-        const e0 = e(k), e1 = e(k + 1), s0 = base + k, s1 = base + k + 1;
-        if (!flip) idx.push(e0, s0, e1, e1, s0, s1); else idx.push(e0, e1, s0, e1, s1, s0);
-      }
-    });
-    return new THREE.BufferAttribute(new Uint16Array(idx), 1);
-  }
-
-  buildChunk(ch, lod) {
-    const t0 = performance.now();
-    const T = this.track.terrain, H = T.heights, nx = T.nx, nz = T.nz, st = LOD_STEP[lod], n = CHUNK / st + 1;
-    const P = PAL[this.theme], nse = this.noise, dist = this.roadDist, drop = DROP[lod];
-    const nv = n * n + 4 * n;
-    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), uv = new Float32Array(nv * 2);
-    const hAt = (gx, gz) => H[(gz < 0 ? 0 : gz >= nz ? nz - 1 : gz) * nx + (gx < 0 ? 0 : gx >= nx ? nx - 1 : gx)];
-    const dAt = (gx, gz) => dist[(gz < 0 ? 0 : gz >= nz ? nz - 1 : gz) * nx + (gx < 0 ? 0 : gx >= nx ? nx - 1 : gx)] / 10;
-    const c = [0, 0, 0], e = [0, 0, 0];
-    for (let j = 0, v = 0; j < n; j++) for (let i = 0; i < n; i++, v++) {
-      const gx = ch.cx * CHUNK + i * st, gz = ch.cz * CHUNK + j * st;
-      const x = T.x0 + gx, z = T.z0 + gz, d = dAt(gx, gz);
-      let h = hAt(gx, gz);
-      if (drop && d < 7) h -= drop * (1 - smooth(4.5, 7, d));
-      pos[v * 3] = x; pos[v * 3 + 1] = h; pos[v * 3 + 2] = z;
-      uv[v * 2] = x / 8; uv[v * 2 + 1] = z / 8;
-      // Normal from the 1 m grid at this LOD's spacing, so neighbouring chunks agree at edges.
-      const dx = (hAt(gx + st, gz) - hAt(gx - st, gz)) / (2 * st), dz = (hAt(gx, gz + st) - hAt(gx, gz - st)) / (2 * st);
-      const il = 1 / Math.sqrt(dx * dx + 1 + dz * dz), ny = il;
-      nor[v * 3] = -dx * il; nor[v * 3 + 1] = ny; nor[v * 3 + 2] = -dz * il;
-      // Colour: two-tone ground by broad noise, fine variation, rock/earth on slopes, road shoulder.
-      const big = nse(x / 70, z / 70), fine = nse(x / 6.5, z / 6.5);
+// lion-hawk's terrain mesh with Rally's chunk numbers (3j #9): 64 m chunks, three LODs with hysteresis, skirts, a 3 ms
+// build budget, far LOD eviction, the road sink (coarse LODs sink under the road) and the detail-map uv. colorAt: two-tone
+// ground by broad noise, fine variation, earth/rock on slopes (by ny), road shoulder.
+export function terrainMeshOptions(track, theme, roadDist, noise) {
+  const T = track.terrain, P = PAL[theme], c = [0, 0, 0], e = [0, 0, 0];
+  const dAt = (x, z) => { const gx = Math.round(x - T.x0), gz = Math.round(z - T.z0);
+    return roadDist[(gz < 0 ? 0 : gz >= T.nz ? T.nz - 1 : gz) * T.nx + (gx < 0 ? 0 : gx >= T.nx ? T.nx - 1 : gx)] / 10; };
+  return {
+    chunkCells: 64, lods: [1, 2, 4], lodFar: [150, 400], hysteresis: 12, skirt: 2, visFar: 760, evict: [300, 720], budgetMs: 3, moveEps: 2,
+    drop: (x, z, lod) => { const d = dAt(x, z); return DROP[lod] && d < 7 ? DROP[lod] * (1 - smooth(4.5, 7, d)) : 0; },
+    colorAt(x, z, out, ny) {
+      const d = dAt(x, z), big = noise(x / 70, z / 70), fine = noise(x / 6.5, z / 6.5);
       mix3(c, P.a, P.b, 0.5 + 0.6 * big);
       const sl = smooth(P.slope[0], P.slope[1], ny);
       if (sl > 0) { mix3(e, P.earth, P.rock, 0.5 + 0.5 * fine); mix3(c, c, e, sl); }
       if (d < 8) mix3(c, c, P.shoulder, (1 - smooth(4.5, 7, d)) * 0.7);
       const k = 1 + 0.07 * fine;
-      col[v * 3] = c[0] * k; col[v * 3 + 1] = c[1] * k; col[v * 3 + 2] = c[2] * k;
-    }
-    // Skirt vertices: copies of the edge vertices hung SKIRT m lower.
-    const edgeV = [(k) => k, (k) => (n - 1) * n + k, (k) => k * n, (k) => k * n + n - 1];
-    edgeV.forEach((e, m) => {
-      for (let k = 0; k < n; k++) {
-        const s = n * n + m * n + k, v = e(k);
-        for (let a = 0; a < 3; a++) { pos[s * 3 + a] = pos[v * 3 + a]; nor[s * 3 + a] = nor[v * 3 + a]; col[s * 3 + a] = col[v * 3 + a]; }
-        pos[s * 3 + 1] -= SKIRT; uv[s * 2] = uv[v * 2]; uv[s * 2 + 1] = uv[v * 2 + 1];
-      }
-    });
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    geo.setIndex(this.lodIndex[lod]);
-    geo.computeBoundingSphere();
-    ch.geo[lod] = geo;
-    this.stats.builds++; this.stats.buildMs += performance.now() - t0;
-    return geo;
-  }
+      out[0] = c[0] * k; out[1] = c[1] * k; out[2] = c[2] * k; return out;
+    },
+    attributes: { uv: { size: 2, at: (x, z, out) => { out[0] = x / 8; out[1] = z / 8; return out; } } },
+  };
+}
 
-  // Pick each chunk's LOD from the rectangle distance to (px, pz). Geometry is built lazily: the
-  // first call builds everything it needs; later calls spend at most BUILD_MS and let deferred
-  // chunks show whatever LOD they already have.
-  updateLod(px, pz, budget = BUILD_MS) {
-    if (this.lastLod && !this.pending && Math.hypot(px - this.lastLod[0], pz - this.lastLod[1]) < 2) return;
-    const t0 = performance.now();
-    this.lastLod = [px, pz]; this.pending = false;
-    for (const ch of this.chunks) {
-      const dx = Math.max(ch.x0 - px, 0, px - ch.x1), dz = Math.max(ch.z0 - pz, 0, pz - ch.z1), d = Math.hypot(dx, dz);
-      if (ch.geo[0] && d > EVICT[0]) { if (ch.lod === 0) ch.lod = -1; ch.geo[0].dispose(); ch.geo[0] = null; }
-      if (ch.geo[1] && d > EVICT[1]) { if (ch.lod === 1) ch.lod = -1; ch.geo[1].dispose(); ch.geo[1] = null; }
-      if (d > VIS_FAR) { if (ch.mesh) ch.mesh.visible = false; continue; }
-      let want = d < LOD_FAR[0] ? 0 : d < LOD_FAR[1] ? 1 : 2;
-      if (ch.lod >= 0 && ch.lod < want && d < LOD_FAR[ch.lod] + HYST) want = ch.lod; // stay finer a bit
-      let lod = want;
-      if (!ch.geo[want]) {
-        if (performance.now() - t0 < budget) this.buildChunk(ch, want);
-        else {
-          this.pending = true;
-          lod = ch.geo.findIndex((g) => g); // anything already built
-          if (lod < 0) lod = 2, this.buildChunk(ch, 2); // never leave a hole; LOD 2 is cheap
-        }
-      }
-      if (!ch.mesh) {
-        ch.mesh = new THREE.Mesh(ch.geo[lod], this.terrainMat);
-        ch.mesh.receiveShadow = true; ch.mesh.matrixAutoUpdate = false;
-        this.root.add(ch.mesh);
-      }
-      ch.mesh.geometry = ch.geo[lod]; ch.mesh.visible = true; ch.lod = lod;
-    }
-    this.stats.lastUpdateMs = performance.now() - t0;
+export class TrackView {
+  constructor(scene, world, kit) {
+    this.scene = scene; this.world = world; this.mc = kit.mc;
+    const track = this.track = world.track;
+    this.theme = track.theme === 'winter' ? 'winter' : 'summer'; // also the light-rig preset (render.js)
+    this.root = new THREE.Group(); scene.add(this.root);
+    this.noise = noise2(`${track.seed}|look`);
+    // Snow gets a softer speckle so it reads white rather than grey.
+    this.detail = detailTexture();
+    this.groundDetail = this.theme === 'winter' ? detailTexture(0.45) : this.detail;
+    this.roadDist = roadDistance(track);
+    this.terrainMat = this.mc.get('rally-ground', { vertexColors: true, map: this.groundDetail });
+    this.terrainMesh = createTerrainMesh(world.terrain, { ...terrainMeshOptions(track, this.theme, this.roadDist, this.noise), compiler: this.mc, material: this.terrainMat });
+    this.root.add(this.terrainMesh.group);
+    this.stats = this.terrainMesh.stats;
+    this.camera = null;
+    this.focus = { position: { x: track.spawn.x, y: 0, z: track.spawn.z } };
+
+    this.buildRoad();
+    this.buildMarkers();
+    this.buildGates();
+    this.buildCover();
+    this.terrainMesh.update(this.focus); // the first update is unbudgeted: the spawn's chunks are there on frame one
   }
 
   // Road ribbon: 11 vertices across (edges, shoulders of colour, two wheel tracks) per 1 m sample.
@@ -353,40 +248,36 @@ export class TrackView {
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(nv > 65535 ? new THREE.BufferAttribute(new Uint32Array(idx), 1) : new THREE.BufferAttribute(new Uint16Array(idx), 1));
     geo.computeVertexNormals(); geo.computeBoundingSphere();
-    const mat = this.mat(new THREE.MeshStandardMaterial({
-      vertexColors: true, map: this.detail, roughness: 0.92, metalness: 0,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
-    }));
+    const mat = this.mc.get('rally-road', { vertexColors: true, map: this.detail });
+    mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4; // rally-road's only user
     this.road = new THREE.Mesh(geo, mat); this.road.receiveShadow = true; this.road.matrixAutoUpdate = false;
     this.root.add(this.road);
   }
 
-  // Markers: one InstancedMesh. Synced to the world's marker props when it has them; otherwise
-  // (no physics yet) drawn at the roadside's home positions.
+  // Markers: one instanced mesh through the engine, drawn from the world's marker props (their pool poses) when it has
+  // them; otherwise (no physics yet) at the roadside's home positions.
   buildMarkers() {
     this.markerProps = (this.world.props || []).filter((p) => p.kind === 'marker');
     const homes = this.track.roadside.markers;
     const count = this.markerProps.length || homes.length;
-    const mat = this.mat(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }));
-    const im = this.markers = new THREE.InstancedMesh(postGeometry(), mat, Math.max(1, count));
-    im.count = count; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+    const inst = this.markerInst = createInstances({ geometry: postGeometry(), material: this.mc.get('marker', { instanced: true, vertexColors: true }),
+      max: Math.max(1, count), castShadow: true, receiveShadow: true });
+    inst.count = count;
+    this.markers = inst.mesh;
     if (!this.markerProps.length) {
-      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
-      homes.forEach((h, i) => im.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y + POST_H / 2, h.z), q.setFromAxisAngle(up, h.yaw), one)));
-      im.instanceMatrix.needsUpdate = true;
+      const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), at = { x: 0, y: 0, z: 0 };
+      homes.forEach((h, i) => { at.x = h.x; at.y = h.y + POST_H / 2; at.z = h.z; inst.set(i, at, q.setFromAxisAngle(up, h.yaw), 1); });
+      inst.commit();
     }
-    this.root.add(im);
+    this.root.add(inst.mesh);
   }
 
   buildGates() {
     const { roadside, terrain: T, layout: L } = this.track;
-    const postMat = this.mat(new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: 0.6 }));
-    const edgeMat = this.mat(new THREE.MeshStandardMaterial({ color: 0xdedede, roughness: 0.7 }));
+    const postMat = this.mc.get('gate-post'), edgeMat = this.mc.get('gate-banner');
     const W = 6, TOP = 5.2, BAN = 1.1; // posts at ±6 m like TrackWorld's gate colliders; banner under the top
     for (const g of roadside.gates) {
-      const tex = bannerTexture(g.kind, L.closed); this.textures.push(tex);
-      // A little self-lit so the banner reads even with the sun behind it.
-      const face = this.mat(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35 }));
+      const face = this.mc.extend(this.mc.get('gate-banner', { map: bannerTexture(g.kind, L.closed) }), 'rally-banner-glow', GLOW);
       const grp = new THREE.Group();
       const ch = Math.cos(g.yaw), sh = Math.sin(g.yaw);
       const roadY = g.y;
@@ -404,32 +295,16 @@ export class TrackView {
     }
   }
 
-  // Verge cover: one InstancedMesh per kind (grass tufts so far), filled from cached cells.
+  // Verge cover: one engine instanced mesh per kind (grass tufts so far), filled from cached cells.
   buildCover() {
-    this.cover = {}; this.coverCells = new Map(); this.coverAt = null; this.coverTime = { value: 0 };
+    this.cover = {}; this.coverCells = new Map(); this.coverAt = null;
     const geos = { grass: tuftGeometry() };
     for (const kind of Object.keys(geos)) {
       const cfg = COVER[kind], cap = Math.ceil(cfg.perCell * Math.PI * ((COVER.radius + COVER.cell) / COVER.cell) ** 2);
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide });
-      const time = this.coverTime;
-      m.onBeforeCompile = (sh) => {
-        sh.uniforms.uTime = time;
-        sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-          vec4 iw = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-          transformed *= 1.0 - smoothstep(${COVER.fade[0].toFixed(1)}, ${COVER.fade[1].toFixed(1)}, distance(iw.xz, cameraPosition.xz));
-          float ph = iw.x * 0.37 + iw.z * 0.23, hh = transformed.y * transformed.y;
-          transformed.x += sin(uTime * 1.7 + ph) * 0.12 * hh;
-          transformed.z += sin(uTime * 1.1 + ph * 1.3) * 0.08 * hh;`);
-        // Blades are double-sided but lit as facing up from both sides (no black undersides).
-        sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
-          '#include <normal_fragment_begin>\n  normal = normalize(vNormal);');
-      };
-      m.customProgramCacheKey = () => `cover-${kind}`;
-      this.mat(m);
-      const im = new THREE.InstancedMesh(geos[kind], m, cap);
-      im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.castShadow = false;
-      im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-      this.root.add(im);
+      // Tufts sway (height²) and shrink into the ground between COVER.fade radii: the compiler's WIND feature.
+      const m = this.mc.get('rally-grass', { instanced: true, vertexColors: true, wind: { fade: COVER.fade, amp: [0.12, 0.08] } });
+      const im = createInstances({ geometry: geos[kind], material: m, max: cap, colors: true, castShadow: false, receiveShadow: true }).mesh;
+      this.root.add(im); // updateCover writes its matrix and colour arrays in place
       this.cover[kind] = im;
     }
   }
@@ -510,33 +385,29 @@ export class TrackView {
   update(camera) { this.camera = camera; }
 
   sync(sim) {
-    const p = this.camera ? this.camera.position : sim?.car?.body.translation();
-    if (p) { this.updateLod(p.x, p.z); this.updateCover(p.x, p.z); }
-    this.coverTime.value = performance.now() / 1000;
+    const p = this.camera ? this.camera.position : sim?.car?.e.xf.p;
+    if (p) {
+      this.focus.position.x = p.x; this.focus.position.z = p.z;
+      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z);
+    }
     const props = this.markerProps;
     if (!props.length) return;
-    for (let i = 0; i < props.length; i++) {
-      const t = props[i].body.translation(), r = props[i].body.rotation();
-      this.q.set(r.x, r.y, r.z, r.w);
-      this.markers.setMatrixAt(i, this.mtx.compose(this.v.set(t.x, t.y, t.z), this.q, this.one));
-    }
-    this.markers.instanceMatrix.needsUpdate = true;
+    for (let i = 0; i < props.length; i++) { const xf = props[i].e.xf; this.markerInst.set(i, xf.p, xf.q, 1); }
+    this.markerInst.commit();
   }
 
-  // Triangles in the visible terrain chunks (before frustum culling) plus road and markers.
+  // Triangles in the visible terrain chunks (before frustum culling) plus road, markers and cover.
   triangles() {
     let t = 0;
-    for (const ch of this.chunks) if (ch.mesh?.visible) t += ch.mesh.geometry.index.count / 3;
+    for (const m of this.terrainMesh.group.children) if (m.visible) t += m.geometry.index.count / 3;
     const cover = Object.values(this.cover).reduce((a, im) => a + im.count * im.geometry.index.count / 3, 0);
     return { terrain: t, road: this.road.geometry.index.count / 3, markers: this.markers.count * this.markers.geometry.index.count / 3, cover };
   }
 
+  // Geometries only: the compiler owns the materials, the page keeps the textures.
   dispose() {
+    this.terrainMesh.dispose();
     this.scene.remove(this.root);
-    for (const ch of this.chunks) for (const g of ch.geo) g?.dispose();
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
-    for (const m of this.materials) m.dispose();
-    for (const t of this.textures) t.dispose();
-    this.chunks = [];
   }
 }

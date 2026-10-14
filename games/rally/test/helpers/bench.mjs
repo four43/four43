@@ -5,6 +5,7 @@ import R from '@dimforge/rapier3d-compat';
 import { createEngine, defineGame } from 'lion-hawk/sim';
 import { rallyGame, rallyPhysics } from '../../src/game.sim.js';
 import MATERIALS from '../../src/defs/materials.js';
+import PHYS from '../../baked/phys.json' with { type: 'json' };
 import { Sim, HZ } from '../../src/sim.js';
 
 export const game = (opts = {}) => rallyGame({ rapier: R, ...opts });
@@ -12,7 +13,7 @@ export const game = (opts = {}) => rallyGame({ rapier: R, ...opts });
 export function benchSim(opts = {}) {
   let sim = null, engine = null;
   engine = createEngine(defineGame({
-    id: 'rally-bench', sim: { hz: HZ }, start: 'bench', defs: { materials: MATERIALS }, physics: rallyPhysics(R),
+    id: 'rally-bench', sim: { hz: HZ }, start: 'bench', defs: { materials: MATERIALS, models: PHYS }, physics: rallyPhysics(R),
     scenes: { bench: { enter(e, ctx) {
       sim = new Sim(ctx.world, { ...opts, step: () => engine.stepN(1) });
       ctx.system('rally.vehicle', () => sim.preStep(), { stage: 'physics.world', before: ['lh.physics.step'] });
