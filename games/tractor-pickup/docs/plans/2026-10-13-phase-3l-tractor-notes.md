@@ -24,9 +24,31 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
 
 ## Re-bless 1 (World)
 
+Causes (Task 11): every body and collider through `world.spawn` in the old creation order (ground, ramps, walls, props, trees, tractor,
+cars); friction `√f` with Multiply and restitution Max (D4, M-9) in place of Rapier's Average; the tractor's colliders carry no density
+under `massProps` (the old 0.1 density added about 1 kg); collision groups by name (same bits); the heightfield through
+`heightfieldDesc` (row-major, transposed from the x-major grid). Unchanged by Task 10 (registry surfaces): the same golden hashes at the end
+of Task 9 and Task 10 (drive 205b516f, pickup 95c3dbd4). The first differing trail checksum is the first one (step 59): the change is
+from the first contact on.
+
+| metric | before (1.8 path) | after (World) |
+|---|---|---|
+| drive-seed14 hash | 36a5f1c2 | 205b516f |
+| drive: tractor at step 900 (x, y, z) | 52.248, 0.0728, 6.519 | 52.228, 0.0728, 6.590 |
+| drive: events | horn 2 | horn 2 |
+| pickup-seed14 hash | 3b511221 | 95c3dbd4 |
+| pickup: tractor at the end | 53.257, 0.0591, -6.727 | 53.261, 0.0594, -6.730 |
+| pickup: boops / launches / lands, riders | 3 / 3 / 3, 3 | 3 / 3 / 3, 3 |
+| feel: course seconds, boops | 45.283, 2 | 45.283, 2 |
+| feel: bumps per peer, separation | 3, 3, 4.938 m | 3, 3, 4.933 m |
+
+All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
+
 ## R1 / R3 numbers
 
 ## lh-allow lines
+
+- `src/sim/tractor.js:39` `massProps` (D3): the playtested 1400 kg and tuned inertia.
 
 ## Playtest list
 
