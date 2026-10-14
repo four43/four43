@@ -1,14 +1,17 @@
-// lion-hawk G-2: the games share one three and one Rapier, and they consume the engine from its own repo, a sibling
-// of the four43 checkout (../../lion-hawk-engine from games/). The engine keeps its own copies only for its own tests;
-// engine source must not import three/Rapier until the build aliases them to the games' copies (phase 3 CLI).
+// lion-hawk G-2 and phase 3 D9: the games share one three and one Rapier and consume the engine from its own repo, a
+// sibling of the four43 checkout (../../lion-hawk-engine from games/). Engine view modules import three directly (bare
+// 'three' or 'three/addons/…', which `lion-hawk build` dedupes to the game's copy); engine code never imports Rapier (the
+// game injects its initialised module); engine sim code never imports three.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { findPackageJSON } from 'node:module';
-import { realpathSync, readFileSync, readdirSync } from 'node:fs';
+import { realpathSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { simRoots } from 'lion-hawk/test';
+import { jsFiles, importsOf } from './helpers/scan.mjs';
 
 const games = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
-const engine = realpathSync(`${games}/../../lion-hawk-engine`);
+const engine = process.env.LH_ENGINE ?? realpathSync(`${games}/../../lion-hawk-engine`);
 const members = ['pig-pens', 'tractor-pickup', 'rally'];
 const pkgJson = (dir, name) => realpathSync(findPackageJSON(name, pathToFileURL(`${games}/${dir}/package.json`)));
 
@@ -28,7 +31,12 @@ test('the shared copies satisfy the engine peer ranges', () => {
   assert.match(version('three'), /^0\.186\./);
   assert.match(version('@dimforge/rapier3d-compat'), /^0\.21\./);
 });
-test('engine source does not import three or Rapier yet (no alias in the game builds)', () => {
-  const files = readdirSync(`${engine}/src`, { recursive: true }).filter(f => f.endsWith('.js'));
-  for (const f of files) assert.doesNotMatch(readFileSync(`${engine}/src/${f}`, 'utf8'), /from\s*['"](three|@dimforge)/, f);
+test('engine source never imports Rapier (D9: defineGame({ physics: { rapier } }))', () => {
+  assert.deepEqual(importsOf(jsFiles(`${engine}/src`), /^@dimforge\//), []);
+});
+test('engine sim code never imports three (L-3), kit sim halves included', () => {
+  assert.deepEqual(importsOf(simRoots(`${engine}/`).flatMap(jsFiles), /^three(\/|$)/), []);
+});
+test("engine view code imports three only as 'three' or 'three/addons/…', which the build dedupes", () => {
+  assert.deepEqual(importsOf(jsFiles(`${engine}/src`), /^three(\/|$)/).filter(h => !/^three(\/addons\/[\w./-]+)?$/.test(h.spec)), []);
 });
