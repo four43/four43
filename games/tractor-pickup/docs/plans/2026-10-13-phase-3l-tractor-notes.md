@@ -8,6 +8,9 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
 
 ## What landed
 
+- Task 2: `src/defs/materials.js` (`defineMaterials` accepted every field and value as written, including `fill` and `sg` beside `extends`), `test/materials.test.mjs`, `defs` added to the purity sim roots. The "every bake rename target" test waited for Task 3.
+- Task 3: `game.config.js`, `baked/**` (40 GLBs, 8 `.anim.json`, `phys.json`, `manifest.json`, 1.1 MB), parity and bake tests, `test/fixtures/assets-counts.json` (40 models), `bake.mjs` deleted, `"bake": "lion-hawk bake"`, `meshoptimizer` `~1.2.0` devDependency. Bake decisions: `weld` stays on for every model (parity vertex counts matched, no per-model `weld:false`). Bake notes (not errors): `rock`, `rockA`, `rockB` report "flat, so it has no default hull" (the lone part is a flat grass-material mesh; they still bake with one collider each). Parity test keeps an explicit name table for five one-mesh props (bale, barrel, cone, hay-bale, shrub): the engine dedupes the part name against the same-named root node and bakes it as `<name>-2`; counts are compared unchanged. `meshoptimizer` is not resolvable from the game (only in the engine's node_modules and the lockfile is the integrator's): tests ran with an untracked, gitignored symlink `node_modules/meshoptimizer` to the engine's copy; the integrator's `npm install` makes it real.
+
 ## Decisions
 
 - R1 Notes live here (ruling P7), not in the engine repo.
