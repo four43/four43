@@ -8,7 +8,7 @@ import { scanPurity, stripComments } from 'lion-hawk/test';
 
 const src = fileURLToPath(new URL('../src/', import.meta.url));
 const NET = ['host', 'guest', 'players', 'kinds', 'bindings', 'protocol', 'replica', 'interp', 'forecast'].map(n => join(src, 'net', n + '.js'));
-const SIM = ['game.sim.js', 'game', 'sim', ...NET].map(p => p.startsWith('/') ? p : join(src, p));
+const SIM = ['game.sim.js', 'game', 'sim', 'defs', ...NET].map(p => p.startsWith('/') ? p : join(src, p));
 const files = p => !existsSync(p) ? [] : statSync(p).isDirectory() ? readdirSync(p).flatMap(n => files(join(p, n))) : p.endsWith('.js') ? [p] : [];
 const RULES = [/\blocalStorage\b/, /\bset(Timeout|Interval)\s*\(/, /\brequestAnimationFrame\b/,
   /from\s*['"][^'"]*\/(main|game\.view|devices|ui\/[^'"]*|render\/[^'"]*|audio\/[^'"]*|net\/(session|link|netlog|handshake))(\.js)?['"]/,
