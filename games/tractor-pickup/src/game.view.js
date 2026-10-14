@@ -141,9 +141,11 @@ function driveHalf({ withHud = false, tune = false, fps = false } = {}) {
       }));
     },
     // [S-6] a farm.new or a guest's welcome rebuilt the sim farm (its Rapier world is already freed): drop the old 3D farm,
-    // build the new one, and the camera starts behind the new tractor (main.js startFarm)
+    // build the new one, and the camera starts behind the new tractor (main.js startFarm). The old farm's voice line stops (the
+    // old dispose's voice.stop): the build's events, the new intro among them, flush after this hook
     built(engine, view) {
       const s = engine.scene.state; if (!w || !s.game || s.gen === gen) return;
+      try { page.voice.stop?.(); } catch (err) { warnOnce('voice stop', err); }
       drop(); build(s, engine.scene.args); hud?.reset(s, engine.scene.id); // 2f delta: the slot bar from state on built
       if (withHud) { link.show?.end(); Object.assign(link, { w, pending: null, poses: null }); } // a farm.new during the show ends it: no show.done for the old farm
       const t = s.game.tractor, p = t.body.translation();
