@@ -7,7 +7,7 @@ import { DRIVE } from '../sim/actions.js';
 import { PAINT_NAMES, MAX_PLAYERS, MAX_ID } from './protocol.js';
 import { HATS } from '../sim/progress.js';
 import { slotIndex } from '../sim/slots.js';
-import { spawnTrainDesc, attachRemoteTrain } from '../sim/trains.js';
+import { spawnTrainDesc, attachRemoteTrain, applyTrainRecord } from '../sim/trains.js';
 
 const HAT_LIST = ['none', ...HATS.map(h => h.id)], TYPE_LIST = Object.keys(TYPES), ANIMS = ['idle', 'walk', 'run', 'eat', 'dance'], MODES = ['drive', 'show', 'held', 'wait'];
 export const LIMIT = { coord: 400, height: 50, animals: 256, trees: 1024, riders: 16 };
@@ -58,9 +58,10 @@ export const TRAIN = kind({ name: 'train', code: 4, authority: 'owner', remote: 
   spawn: rec => spawnTrainDesc(rec),
   spawned: (e, world, rec) => { keep(e, rec); attachRemoteTrain(e, world); trainApply(e, rec); }, // also the CI-15 respawn after a guest's world.clear()
   apply(e, rec, world, s) { trainApply(e, rec); keep(e, rec, world, s); } });
-// the game fields of a remote train (bodies and input are the net part's): mode, full, riders, and its dirt onto its coverage (T-16, M-68)
+// the game fields of a remote train (bodies and input are the net part's), checked (sim/trains.js: a bad record is not used and counted):
+// mode, full, riders, and its dirt onto its coverage (T-16, M-68)
 function trainApply(e, rec) {
-  e.mode = rec.mode; e.full = rec.full; e.dirt = rec.dirt; e.riders = rec.riders;
-  if (e.coverage) e.coverage.dirt = rec.dirt[0]; if (e.trailer?.coverage) e.trailer.coverage.dirt = rec.dirt[1]; if (e.wagon?.coverage) e.wagon.coverage.dirt = rec.dirt[2];
+  if (!applyTrainRecord(e, rec)) return;
+  if (e.coverage) e.coverage.dirt = e.dirt[0]; if (e.trailer?.coverage) e.trailer.coverage.dirt = e.dirt[1]; if (e.wagon?.coverage) e.wagon.coverage.dirt = e.dirt[2];
 }
 export const KINDS = [ANIMAL, TREE, PLAYER, TRAIN];
