@@ -18,11 +18,23 @@ export default defineMaterials({
   // look-only model materials
   plumage:   { extends: 'fur', look: { fur: { length: 0.07, shells: 10, density: 34 } } }, // chicken shells (fur.js's len/density)
   pigHide:   { extends: 'pet', coverage: { mud: 1 } },                              // the pig crowd's skin: mud through COVERAGE_INSTANCED (Task 15)
-  leaf:      { extends: 'grass' },
-  petal:     { extends: 'grass' },
-  crop:      { extends: 'grass' },
+  // the Nature Kit's factor-only materials (no palette texture): their Kenney colours live here, so the compiler draws them
+  // (game.config.js renames Kenney's names to these ids; the colours are 2.1.0's, the factors read as sRGB bytes)
+  leaf:      { extends: 'grass', look: { color: '#29c9ab' } },   // leafsGreen
+  leafFall:  { extends: 'grass', look: { color: '#ff9241' } },   // leafsFall
+  blade:     { extends: 'grass', look: { color: '#2cd8b8' } },   // grass
+  petal:     { extends: 'grass', look: { color: '#feb147' } },   // colorYellow
+  petalRed:  { extends: 'grass', look: { color: '#e04a50' } },   // colorRed
+  crop:      { extends: 'grass', look: { color: '#f5bc64' } },   // corn
+  woodLight: { extends: 'wood', look: { color: '#ff8e62' } },    // wood
+  woodDark:  { extends: 'wood', look: { color: '#c46d4b' } },    // woodDark
+  bark:      { extends: 'wood', look: { color: '#e28357' } },    // woodBark
+  birch:     { extends: 'wood', look: { color: '#fff2de' } },    // woodBirch
+  signFace:  { extends: 'wood', look: { color: '#ffffff' } },    // _defaultMat
+  soil:      { extends: 'dirt', look: { color: '#e28357' } },    // dirt
+  stone:     { extends: 'gravel', look: { color: '#b8e2e8' } },  // stone
+  // the textured kits' palettes are baked into vertex colours (palette: 'vertex')
   hay:       { extends: 'grass' },
   produce:   { extends: 'flesh' },
-  stone:     { extends: 'gravel' },
   scenery:   { extends: 'grass', look: { roughness: 0.95, metalness: 0 } },          // one material for all instanced decor (draw-call parity)
 });

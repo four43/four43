@@ -10,8 +10,9 @@ export default {
     src: 'assets/models', out: 'baked',
     materials: './src/defs/materials.js',
     // Kenney's Nature Kit names → registry ids (A-2: renames apply before the checks)
-    rename: { materials: { woodDark: 'wood', woodBark: 'wood', woodBirch: 'wood', leafsGreen: 'leaf', leafsFall: 'leaf',
-      colorYellow: 'petal', colorRed: 'petal', corn: 'crop', _defaultMat: 'wood' } },
+    // (each keeps its own colour: the Nature Kit's materials are factor-only, and the ids carry the factors as look colours)
+    rename: { materials: { wood: 'woodLight', woodDark: 'woodDark', woodBark: 'bark', woodBirch: 'birch', leafsGreen: 'leaf', leafsFall: 'leafFall',
+      grass: 'blade', colorYellow: 'petal', colorRed: 'petalRed', corn: 'crop', _defaultMat: 'signFace', dirt: 'soil', stone: 'stone' } },
     palette: 'vertex',          // palette texels × base factors → COLOR_0, as bake.mjs did (Tractor's tools/glb.mjs logic)
     models: {
       fence: nature('fence_simple'), gate: nature('fence_gate'), planks: nature('fence_planks'), post: nature('fence_corner'),
