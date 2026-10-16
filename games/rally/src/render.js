@@ -1,191 +1,122 @@
+// Rally's 3D scene on the engine renderer (lion-hawk phase 3, overview §4.6): boot owns the WebGL renderer, the scene,
+// the camera, resize and the one render per frame; view sync draws the car. This module owns the car's static shaping
+// (a sync hook), the world views, the snow view, the looks (light-rig presets) and the camera wiring.
 import * as THREE from 'three';
-import ASSETS from './assets.json';
 import { SnowView } from './snowView.js';
 import { PadView, SURF_LOOK } from './render/padView.js';
+import { createRallyCamera } from './render/camera.js';
+import { WHEEL_PARTS } from './vehicle.js';
 
-export function geomFromPart(part, recenter = false) {
-  const g = new THREE.BufferGeometry();
-  const p = new Float32Array(part.p);
-  if (recenter) {
-    const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
-    for (let i = 0; i < p.length; i++) { mn[i % 3] = Math.min(mn[i % 3], p[i]); mx[i % 3] = Math.max(mx[i % 3], p[i]); }
-    for (let i = 0; i < p.length; i++) p[i] -= (mn[i % 3] + mx[i % 3]) / 2;
-  }
-  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-  const c = new Float32Array(part.c.length);
-  const col = new THREE.Color();
-  for (let i = 0; i < c.length; i += 3) {
-    col.setRGB(part.c[i] / 255, part.c[i + 1] / 255, part.c[i + 2] / 255, THREE.SRGBColorSpace); // sRGB -> linear once
-    c[i] = col.r; c[i + 1] = col.g; c[i + 2] = col.b;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-  g.setIndex(part.i);
-  g.computeVertexNormals();
-  return g;
-}
+// Looks as light-rig presets (3e): sky = background and fog colour; snow (the snow pad, winter) gets a low raking sun
+// and less sky fill so ruts and berms throw shadows. Pad looks keep the short pad fog, track themes the long hill fog.
+const SUN = { day: [25, 45, 18], low: [34, 15, 22] }; // sun offset from the car
+const TRACK_LOOK = { summer: { sky: 0xa9c3d4, low: false, fog: [150, 700] }, winter: { sky: 0xc9d6e0, low: true, fog: [150, 700] } };
+const hex = n => '#' + n.toString(16).padStart(6, '0');
+const look = (sky, low, fog) => ({ sky: hex(sky), hemi: low ? 0.85 : 1.1, sun: { intensity: low ? 3.6 : 2.4, offset: low ? SUN.low : SUN.day }, fog });
+export const RENDER = {
+  shading: 'standard', dpr: { touch: 2, desktop: 2 }, antialias: true, shadows: 'pcf', toneMapping: 'aces', exposure: 1.05,
+  camera: { fov: 60, fovPortrait: 64, near: 0.1, far: 1500 }, // the rigs' FOVs add over lhFov
+  lights: {
+    sky: '#b7c6cc', hemiSky: '#dfeaf2', ground: '#6b5d4a', hemi: 1.1,
+    sun: { color: '#fff1dc', intensity: 2.4, map: 2048, box: 30, offset: SUN.day, near: 1, far: 120, bias: -0.0005, normalBias: 0 },
+    fog: [60, 330],
+    presets: {
+      day: look(0xb7c6cc, false, [60, 330]),
+      ...Object.fromEntries(Object.entries(SURF_LOOK).map(([k, v]) => [`pad-${k}`, look(v.sky, k === 'snow', [60, 330])])),
+      ...Object.fromEntries(Object.entries(TRACK_LOOK).map(([k, v]) => [k, look(v.sky, v.low, v.fog)])),
+    },
+  },
+};
 
-// Repaint the Kenney blue-grey body panels in the livery colour, keeping shading.
-function repaint(geom, hex) {
-  const c = geom.getAttribute('color'), paint = new THREE.Color(hex);
-  const ref = new THREE.Color().setRGB(109 / 255, 110 / 255, 131 / 255, THREE.SRGBColorSpace);
-  const refL = ref.r * 0.3 + ref.g * 0.59 + ref.b * 0.11;
-  for (let i = 0; i < c.count; i++) {
-    const r = c.getX(i), g = c.getY(i), b = c.getZ(i);
-    const isPaint = b > r * 1.12 && b > g * 1.1 && r > 0.1 && r < 0.25;
-    if (!isPaint) continue;
-    const l = (r * 0.3 + g * 0.59 + b * 0.11) / refL;
-    c.setXYZ(i, paint.r * l, paint.g * l, paint.b * l);
-  }
+// The car's static shaping for view sync: a create hook, once per car entity, on the model clone view sync drew (it waits for
+// the GLB). The body (and spoiler) go into a shell scaled to the real car's track and wheelbase; each wheel node is reset to
+// the origin, scaled to the car's radius and given tyre material. View sync then binds the wheel nodes and poses them from the
+// sim's part poses (each node's centre on its hub), interpolated with the body.
+export function carView(sync, mc, carOf) {
+  return sync.on('#car', {
+    create(e, obj) {
+      const car = carOf(e); if (!car || !obj) return;
+      const cfg = car.cfg, [sx, sy, sz] = cfg.body.scale, ws = cfg.radius / 0.3, tyre = mc.get('tyre', { vertexColors: true });
+      const wheels = WHEEL_PARTS.map((name) => {
+        const w = obj.getObjectByName(name); w.removeFromParent();
+        w.position.set(0, 0, 0); w.quaternion.identity(); w.scale.setScalar(ws);
+        w.traverse((o) => { if (o.isMesh) o.material = tyre; });
+        return w;
+      });
+      const shell = new THREE.Group();
+      shell.scale.set(sx, sy, sz);
+      shell.position.set(0, -cfg.comHeight + cfg.radius - 0.3 * sy, car.zMid);
+      for (const n of [...obj.children]) shell.add(n);
+      obj.add(shell, ...wheels);
+      obj.name = `car#${e.id}`;
+      obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } }); // as before: no self-shadow acne
+    },
+  });
 }
 
 export class Renderer {
-  constructor(canvas) {
-    this.r = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.r.setPixelRatio(Math.min(2, window.devicePixelRatio));
-    this.r.shadowMap.enabled = true; this.r.shadowMap.type = THREE.PCFShadowMap;
-    this.r.toneMapping = THREE.ACESFilmicToneMapping; this.r.toneMappingExposure = 1.05;
-    this.scene = new THREE.Scene();
-    this.cam = new THREE.PerspectiveCamera(62, 1, 0.1, 1500);
+  constructor(gfx) {
+    this.gfx = gfx; this.r = gfx.renderer; this.doc = gfx.renderer.domElement.ownerDocument; this.scene = gfx.scene; this.cam = gfx.camera; this.lights = gfx.lights;
     this.camMode = 0; // 0 chase, 1 bumper, 2 bonnet
     this.orbit = false; // title screen: circle the car instead
-    const hemi = this.hemi = new THREE.HemisphereLight(0xdfeaf2, 0x6b5d4a, 1.1);
-    this.scene.add(hemi);
-    this.sunOffset = new THREE.Vector3(25, 45, 18);
-    this.sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
-    this.sun.castShadow = true; this.sun.shadow.mapSize.set(2048, 2048);
-    const sc = this.sun.shadow.camera; sc.left = sc.bottom = -30; sc.right = sc.top = 30; sc.near = 1; sc.far = 120;
-    this.sun.shadow.bias = -0.0005;
-    this.scene.add(this.sun, this.sun.target);
-    this.view = null; this.worldToken = 0;
-    this.camPos = new THREE.Vector3(0, 4, -8); this.camLook = new THREE.Vector3();
-    this.tmpQ = new THREE.Quaternion(); this.tmpV = new THREE.Vector3();
+    this.view = null; this.worldToken = 0; this.kit = null; this.drawn = null;
+    this.camRig = createRallyCamera(this.cam); this.camCar = { p: null, q: null, v: null, zFront: 0 };
     this.setSurface('gravel');
   }
 
-  // Swap the world's visuals. Pads build PadView synchronously; other kinds load
-  // render/<kind>View.js lazily (an esbuild glob import, so the bundle builds without it).
-  // Track views: `new TrackView(scene, world)` with sync(sim) and dispose(). Resolves when the
-  // view is in the scene; a newer setWorld call wins over a pending one.
+  // kit = { assets, mc, loaded }: the engine's asset loader and material compiler, and the models' preload; sync: view sync.
+  setKit(kit) { this.kit = kit; }
+  setSync(sync) { this.drawn = sync; }
+
+  // Swap the world's visuals. Pads build PadView (its cones need the models); other kinds load render/<kind>View.js lazily
+  // (an esbuild glob import). Track views: `new TrackView(scene, world, kit)` with sync(sim) and dispose(). Resolves when
+  // the view is in the scene (and marks <html data-rally-track>); a newer setWorld call wins over a pending one.
   setWorld(world) {
     const token = ++this.worldToken;
     if (this.view) { this.view.dispose(); this.view = null; }
+    const shown = (view) => { this.view = view; this.doc.documentElement.dataset.rallyTrack = world.track?.seed ?? 'pad'; return view; };
     if (world.kind === 'pad') {
-      this.view = new PadView(this.scene, world);
-      this.setSurface(world.surfaceKey || 'gravel');
-      return Promise.resolve(this.view);
+      const make = () => {
+        if (token !== this.worldToken) return null;
+        shown(new PadView(this.scene, world, this.kit));
+        this.setSurface(world.surfaceKey || 'gravel');
+        return this.view;
+      };
+      return this.kit.assets.has('cone') ? Promise.resolve(make()) : this.kit.loaded.then(make);
     }
-    this.setLook({ sky: 0xb7c6cc, low: false });
+    this.setLook('day');
     return import(`./render/${world.kind}View.js`).then((mod) => {
       if (token !== this.worldToken) return null;
       const View = mod[world.kind[0].toUpperCase() + world.kind.slice(1) + 'View']; // e.g. TrackView
-      this.view = new View(this.scene, world);
-      // The view's theme decides the sun and sky; it keeps its own (longer) fog for the hills.
-      if (this.view.look) { const fog = this.scene.fog; this.setLook(this.view.look); this.scene.fog = fog; }
+      shown(new View(this.scene, world, this.kit));
+      this.setLook(this.view.theme);
       return this.view;
     });
   }
 
-  setLook({ sky, low }) {
-    // Snow gets a low raking sun and less sky fill so ruts and berms throw shadows.
-    this.sunOffset.set(...(low ? [34, 15, 22] : [25, 45, 18]));
-    this.hemi.intensity = low ? 0.85 : 1.1; this.sun.intensity = low ? 3.6 : 2.4;
-    this.scene.background = new THREE.Color(sky);
-    this.scene.fog = new THREE.Fog(sky, 60, 330);
-  }
+  setLook(name) { this.lights.set(name); } // a RENDER.lights preset: sky, fog, hemisphere, sun intensity and offset
 
   // Pad surface: ground texture plus the matching sky and lighting.
   setSurface(key) {
-    this.setLook({ sky: SURF_LOOK[key].sky, low: key === 'snow' });
+    this.setLook(`pad-${key}`);
     if (this.view?.setSurface) this.view.setSurface(key);
   }
 
-  setCar(car) {
-    if (this.carGroup) this.scene.remove(this.carGroup);
-    const cfg = car.cfg, parts = ASSETS[cfg.model];
-    const g = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 });
-    const [sx, sy, sz] = cfg.body.scale;
-    const shell = new THREE.Group();
-    for (const [name, part] of Object.entries(parts)) {
-      if (name.startsWith('wheel')) continue;
-      const geo = geomFromPart(part);
-      const m = new THREE.Mesh(geo, bodyMat); m.castShadow = true; shell.add(m);
-    }
-    shell.scale.set(sx, sy, sz);
-    shell.position.set(0, -cfg.comHeight + cfg.radius - 0.3 * sy + (car.cfg.travel - car.staticComp) * 0, car.zMid);
-    g.add(shell);
-    this.scene.add(g);
-    const wheelMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
-    const ws = cfg.radius / 0.3;
-    this.wheelMeshes = car.wheels.map((w) => {
-      const src = parts[w.left ? 'wheel-front-left' : 'wheel-front-right'];
-      const geo = geomFromPart(src, true); geo.scale(ws, ws, ws);
-      const m = new THREE.Mesh(geo, wheelMat); m.castShadow = true; this.scene.add(m); return m;
-    });
-    if (this.oldWheels) this.oldWheels.forEach((m) => this.scene.remove(m));
-    this.oldWheels = this.wheelMeshes;
-    this.carGroup = g;
-  }
-
   sync(sim) {
-    const car = sim.car, b = car.body, p = b.translation(), q = b.rotation();
+    const car = sim.car, p = car.e.xf.p;
     if (sim.snow) {
-      if (!this.snowView) this.snowView = new SnowView(this.r, this.scene);
+      if (!this.snowView) this.snowView = new SnowView(this.r, this.scene, this.kit.mc);
       const f = car.wheels[0].center, r = car.wheels[2].center, l = Math.hypot(f.x - r.x, f.z - r.z) || 1;
       this.snowView.show(true);
       this.snowView.update(sim.snow, p, { x: (f.x - r.x) / l, z: (f.z - r.z) / l });
     } else if (this.snowView) this.snowView.show(false);
-    this.carGroup.position.set(p.x, p.y, p.z);
-    this.carGroup.quaternion.set(q.x, q.y, q.z, q.w);
-    const bq = this.carGroup.quaternion;
-    const steerQ = new THREE.Quaternion(), spinQ = new THREE.Quaternion();
-    const Y = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0);
-    car.wheels.forEach((w, i) => {
-      const m = this.wheelMeshes[i];
-      m.position.set(w.center.x, w.center.y, w.center.z);
-      steerQ.setFromAxisAngle(Y, w.steer); spinQ.setFromAxisAngle(X, w.spin);
-      m.quaternion.copy(bq).multiply(steerQ).multiply(spinQ);
-    });
     if (this.view) { this.view.update?.(this.cam); this.view.sync(sim); }
   }
 
   updateCamera(sim, dt) {
-    const car = sim.car, b = car.body, p = b.translation(), q = b.rotation(), v = b.linvel();
-    const cp = new THREE.Vector3(p.x, p.y, p.z), bq = new THREE.Quaternion(q.x, q.y, q.z, q.w);
-    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(bq); fwd.y = 0; fwd.normalize();
-    const vel = new THREE.Vector3(v.x, 0, v.z);
-    if (this.orbit) {
-      // Title screen: a slow circle round the car, a little above it.
-      this.orbitA = (this.orbitA ?? Math.atan2(-fwd.x, -fwd.z) + 0.6) + dt * 0.12;
-      this.camPos.set(p.x + 9 * Math.sin(this.orbitA), p.y + 3.2, p.z + 9 * Math.cos(this.orbitA));
-      this.camLook.set(p.x, p.y + 0.4, p.z);
-      this.cam.position.copy(this.camPos); this.cam.lookAt(this.camLook);
-      this.cam.fov = 55; this.cam.updateProjectionMatrix();
-      this.chaseDir = null; // the chase camera starts afresh behind the car
-    } else if (this.camMode === 0) {
-      // Chase: look direction blends body heading with travel direction so slides read.
-      const sp = vel.length();
-      const dir = fwd.clone();
-      if (sp > 3) dir.lerp(vel.normalize(), Math.min(0.55, (sp - 3) / 20)).normalize();
-      if (!this.chaseDir) this.chaseDir = dir.clone();
-      this.chaseDir.lerp(dir, 1 - Math.exp(-dt * 3.5)).normalize();
-      const want = cp.clone().addScaledVector(this.chaseDir, -6.8).add(new THREE.Vector3(0, 2.4, 0));
-      this.camPos.lerp(want, 1 - Math.exp(-dt * 8));
-      const look = cp.clone().addScaledVector(this.chaseDir, 3).add(new THREE.Vector3(0, 0.6, 0));
-      this.camLook.lerp(look, 1 - Math.exp(-dt * 12));
-      this.cam.position.copy(this.camPos); this.cam.lookAt(this.camLook);
-      this.cam.fov = 62 + Math.min(10, sp * 0.25); this.cam.updateProjectionMatrix();
-    } else {
-      const off = this.camMode === 1 ? new THREE.Vector3(0, 0.05, car.wheels[0].local.z + 0.9) : new THREE.Vector3(0, 0.62, 0.35);
-      this.cam.position.copy(cp).add(off.applyQuaternion(bq));
-      const look = cp.clone().add(new THREE.Vector3(0, 0.3, 20).applyQuaternion(bq));
-      this.cam.up.set(0, 1, 0).applyQuaternion(bq);
-      this.cam.lookAt(look); this.cam.up.set(0, 1, 0);
-      this.cam.fov = 72; this.cam.updateProjectionMatrix();
-    }
-    this.sun.position.set(p.x, p.y, p.z).add(this.sunOffset); this.sun.target.position.set(p.x, p.y, p.z);
+    const car = sim.car, xf = car.e.xf, c = this.camCar, o = this.drawn?.objectOf(car.e); // the car as view sync drew it this frame
+    c.p = o ? o.position : xf.p; c.q = o ? o.quaternion : xf.q; c.v = car.body.linvel(); c.zFront = car.wheels[0].local.z; // velocity is not in the pool
+    this.camRig.update(c, { orbit: this.orbit, mode: this.camMode, dt });
+    const p = xf.p; this.lights.follow(p.x, p.z, p.y); // the sun at car + offset, aimed at the car (hilly tracks)
   }
-
-  resize(w, h) { this.r.setSize(w, h, false); this.cam.aspect = w / h; this.cam.updateProjectionMatrix(); }
-  render() { this.r.render(this.scene, this.cam); }
 }

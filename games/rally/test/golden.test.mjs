@@ -3,8 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
+import { benchSim } from './helpers/bench.mjs';
 import { golden, assertFinite, canonical, checksum } from 'lion-hawk/test';
-import { Sim, DT } from '../src/sim.js';
+import { DT } from '../src/sim.js';
 import { generateTrack } from '../src/gen/track.js';
 import { TrackWorld } from '../src/world/trackWorld.js';
 import { makeProgress } from '../src/game/progress.js';
@@ -20,7 +21,7 @@ const snapshot = (sim, P) => {
 };
 function run(seed = 'golden') {
   const track = generateTrack(seed, { kind: 'stage', theme: 'summer' });
-  const sim = new Sim(R, { world: new TrackWorld(track), car: 'awd', assist: true });
+  const sim = benchSim({ world: new TrackWorld(track), car: 'awd', assist: true });
   const P = makeProgress(track); P.reset(0);
   const events = [], trail = [], inp = sim.car.input;
   let ctl = null;

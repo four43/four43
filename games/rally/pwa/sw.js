@@ -1,7 +1,7 @@
-// Offline support. The game is a single HTML file, so caching it (plus icons and
-// the Google Font) is enough to play with no connection.
+// Offline support. The page plus every file `lion-hawk build` lists (manifest, icons, `assets/models/*`) is precached;
+// the Google Font is cached as it is first fetched.
 const CACHE = 'rally-__VERSION__';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const PRECACHE = __PRECACHE__;
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

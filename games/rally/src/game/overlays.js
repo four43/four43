@@ -17,7 +17,7 @@ export function makeOverlays(api) {
       pick('world', 'World', ['loop', 'stage'], e => e.scene.state.settings.mode === 'freeDrive');
       pick('style', 'Style', ['twisty', 'flowing']);
       pick('theme', 'Theme', ['summer', 'winter']);
-      pick('density', 'Density', ['mild', 'wild']);
+      pick('obstacles', 'Obstacles', ['mild', 'wild']);
       pick('car', 'Car', ['awd', 'rwd']);
       u.field({ id: 'seed', label: 'Track seed', get: e => e.scene.state.settings.seed, set: (t, e) => api.setSeed(e, t) });
       u.button({ id: 'dice', label: 'New seed', action: e => api.rollSeed(e) });

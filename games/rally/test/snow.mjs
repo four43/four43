@@ -1,8 +1,9 @@
 // Fresh snow (spec R2-6): the snow field and how the car drives on it. Run: node test/snow.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT, PAD } from '../src/sim.js';
+import { benchSim } from './helpers/bench.mjs';
+import { DT, PAD } from '../src/sim.js';
 import { SnowField, SNOW } from '../src/snow.js';
-import { SURFACES } from '../src/tire.js';
+import { surfaceOfKey } from '../src/surface.js';
 await R.init();
 
 const only = process.argv[2];
@@ -13,7 +14,7 @@ function check(name, val, lo, hi, unit = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}: ${val.toFixed(3)}${unit}  [${lo}..${hi}]`);
   return ok;
 }
-const mk = (car, surface, extra = {}) => new Sim(R, { car, surface, cones: false, assist: false, ...extra });
+const mk = (car, surface, extra = {}) => benchSim({ car, surface, cones: false, assist: false, ...extra });
 const run = (sim, secs, fn) => { const n = Math.round(secs / DT); for (let i = 0; i < n; i++) { fn && fn(sim, i * DT); sim.step(); } };
 const test = (name, f) => { if (!only || name.includes(only)) { console.log(`\n# ${name}`); f(); } };
 const roll = (sim, vx, vz) => {
@@ -27,14 +28,14 @@ test('field: fresh, pressed, polished', () => {
   check('fresh surface is fresh snow', f.surface(3.3, -7.1).name === 'Fresh snow' ? 1 : 0, 1, 1);
   f.press(0, 0, 0, 1, 3000, 0, DT);
   check('pressed height (m)', f.height(0, 0), SNOW.packed - 2e-3, SNOW.packed + 0.01, ' m');
-  check('pressed surface mu (packed)', f.surface(0, 0).mu, SURFACES.packed.mu - 0.01, SURFACES.packed.mu + 0.01);
+  check('pressed surface mu (packed)', f.surface(0, 0).mu, surfaceOfKey('packed').mu - 0.01, surfaceOfKey('packed').mu + 0.01);
   check('berm beside the rut (m)', f.height(0.3125, 0), SNOW.depth + SNOW.berm * 0.8, SNOW.depth + SNOW.berm + 1e-3, ' m');
   check('0.6 m to the side untouched (m)', f.height(0.6, 0), SNOW.depth - 1e-3, SNOW.depth + 1e-3, ' m');
   const light = new SnowField(); light.press(0, 0, 0, 1, SNOW.fullLoad / 2, 0, DT);
   check('half load presses half way (m)', light.height(0, 0), 0.06, 0.09, ' m');
   // ~6 m of slip at 3 kN polishes to ice.
   for (let i = 0; i < 1.5 / DT; i++) f.press(0, 0, 0, 1, 3000, 5, DT);
-  check('polished surface mu (ice)', f.surface(0, 0).mu, SURFACES.ice.mu - 0.01, SURFACES.ice.mu + 0.03);
+  check('polished surface mu (ice)', f.surface(0, 0).mu, surfaceOfKey('ice').mu - 0.01, surfaceOfKey('ice').mu + 0.03);
   f.clear();
   check('clear restores fresh (m)', f.height(0, 0), SNOW.depth - 1e-3, SNOW.depth + 1e-3, ' m');
 });
@@ -107,7 +108,7 @@ test('rwd wheelspin polishes snow towards ice', () => {
   run(sim, 1);
   const rl = sim.car.wheels[2].point, at = { x: rl.x, z: rl.z };
   run(sim, 1.5, (s) => { s.car.input.throttle = 1; });
-  check('surface mu where the rear wheel started (polished part-way to ice)', sim.snow.surface(at.x, at.z).mu, 0, SURFACES.packed.mu - 0.1 * (SURFACES.packed.mu - SURFACES.ice.mu));
+  check('surface mu where the rear wheel started (polished part-way to ice)', sim.snow.surface(at.x, at.z).mu, 0, surfaceOfKey('packed').mu - 0.1 * (surfaceOfKey('packed').mu - surfaceOfKey('ice').mu));
 });
 
 test('awd top speed in fresh snow', () => {

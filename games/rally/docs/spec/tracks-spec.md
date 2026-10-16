@@ -372,8 +372,8 @@ state and the track; the only thing it does to the car is place it, hold it and 
     it); portrait phones hide the seed chip in timed runs and portrait touch screens move the dash
     under the HUD. Cards (pause, results) are a column whose list scrolls so the buttons stay on
     screen; on short wide screens they are two columns, buttons left and list right.
-  - *Body classes:* `scr-title` / `scr-play`, `menuOpen` (pause or results: touch controls
-    hidden), `timed`.
+  - *Screen state:* the engine's `<html data-lh-overlays>` (`title`; `pause` or `results`: touch
+    controls hidden). *Body classes* (game state): `onTrack`, `manual`, `timed`.
   - *Debug hooks* (`window.engine`, for the console, Playwright and phones): the stage presets
     (`engine.jump('stage', name, opts, { settings, pad })`) go to `title`, `loading`, `ready`,
     `countdown` (light n), `running`, `paused`, `results`, `settings`, `nearFinish` or `teleport`

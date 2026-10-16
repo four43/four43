@@ -130,16 +130,17 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 #closeSheet { border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
 
 
-/* Screens (spec tracks T-26): body.scr-title shows the title menu over the live scene; body.scr-play
-   the driving HUD and touch controls; body.menuOpen (pause, results) hides the touch controls. */
-body.scr-title #dash, body.scr-title .touch, body.scr-title .bar, body.scr-title #hud, body.menuOpen .touch { display: none !important; }
+/* Screens (spec tracks T-26) from the engine's own state: the title overlay shows the menu over the live scene;
+   otherwise the driving HUD and touch controls; pause or results hide the touch controls. */
+html[data-lh-overlays~="title"] #dash, html[data-lh-overlays~="title"] .touch, html[data-lh-overlays~="title"] .bar,
+html[data-lh-overlays~="title"] #hud, html[data-lh-overlays~="pause"] .touch, html[data-lh-overlays~="results"] .touch { display: none !important; }
 #pauseBtn { white-space: nowrap; }
 
 /* title menu */
 #title { position: fixed; z-index: 15; left: calc(var(--sa-l) + 10px); top: calc(var(--sa-t) + 10px); bottom: calc(var(--sa-b) + 10px);
   width: min(420px, calc(100vw - var(--sa-l) - var(--sa-r) - 20px)); display: none; flex-direction: column;
   background: var(--panel); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid rgba(237,230,214,.18); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-body.scr-title #title { display: flex; }
+html[data-lh-overlays~="title"] #title { display: flex; }
 .menuBody { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 10px; touch-action: pan-y; overscroll-behavior: contain; }
 #title h1 { margin: 0 0 12px; font-size: 40px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; line-height: 1; }
 #title h1 span { color: var(--amber); }
@@ -282,7 +283,7 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
       <div class="opt"><h3>Seed</h3><form class="seedRow" id="seedForm"><input id="seedInput" data-lh-slot="title.seed" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed" enterkeyhint="go"><button type="button" class="chip" id="diceBtn" data-lh-slot="title.dice" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form></div>
       <div class="opt"><h3>Track style</h3><div class="seg"><button data-title="style:twisty" data-lh-slot="title.style.twisty">Twisty</button><button data-title="style:flowing" data-lh-slot="title.style.flowing">Flowing</button></div></div>
       <div class="opt"><h3>Theme</h3><div class="seg"><button data-title="theme:summer" data-lh-slot="title.theme.summer">Summer</button><button data-title="theme:winter" data-lh-slot="title.theme.winter">Winter</button></div></div>
-      <div class="opt"><h3>Obstacles</h3><div class="seg"><button data-title="density:mild" data-lh-slot="title.density.mild">Mild</button><button data-title="density:wild" data-lh-slot="title.density.wild">Wild</button></div></div>
+      <div class="opt"><h3>Obstacles</h3><div class="seg"><button data-title="obstacles:mild" data-lh-slot="title.obstacles.mild">Mild</button><button data-title="obstacles:wild" data-lh-slot="title.obstacles.wild">Wild</button></div></div>
       <div class="opt"><h3>Car</h3><div class="seg"><button data-title="car:awd" data-lh-slot="title.car.awd">R5 4WD</button><button data-title="car:rwd" data-lh-slot="title.car.rwd">Classic RWD</button></div></div>
     </div>
   </div>
@@ -353,7 +354,7 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
 (function () { const r = document.getElementById('revs'); const n = 15;
   for (let i = 0; i < n; i++) { const el = document.createElement('i'); const a = -72 + 144 * i / (n - 1); el.style.transform = 'rotate(' + a + 'deg)'; r.appendChild(el); } })();
 </script>
-<script>/*BUNDLE*/</script>
+<!--APP-->
 <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker', e)));</script>
 </body>
 </html>

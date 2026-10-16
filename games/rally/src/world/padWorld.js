@@ -1,9 +1,7 @@
 // The Milestone 1 test pad as a World (spec T-1): flat ground with ramps, humps, a slope and
 // cones. One surface covers the whole pad and is chosen in the settings sheet.
-import { SURFACES } from '../tire.js';
+import { surfaceOfKey } from '../surface.js';
 
-export const GROUP_GROUND = 0x0001, GROUP_PROP = 0x0002, GROUP_CAR = 0x0004;
-export const groups = (member, filter) => (member << 16) | filter;
 
 // Static pad features, shared by physics and renderer.
 export const PAD = {
@@ -22,43 +20,44 @@ export const PAD = {
 
 const CONE_Y = 0.36; // cone body centre above the ground
 
-export function buildPad(R, world, pad = PAD) {
-  const g = groups(GROUP_GROUND, 0xffff);
-  const half = pad.size / 2;
-  const ground = world.createCollider(R.ColliderDesc.cuboid(half, 1, half).setTranslation(0, -1, 0)
-    .setFriction(0.8).setCollisionGroups(g));
+const q4 = q => [q.x, q.y, q.z, q.w];
+const ID = [0, 0, 0, 1];
+
+// Static pad features as inline World colliders (overview §4.3 entry shape), all 'rally-ground': the flat ground
+// first (snow binds to it), then ramps, humps and the slope. Shared with the renderer through PAD.
+export function padColliders(pad = PAD) {
+  const half = pad.size / 2, out = [];
+  out.push({ shape: 'box', half: [half, 1, half], p: [0, -1, 0], q: ID, material: 'rally-ground' });
   for (const r of pad.ramps) {
-    const ang = Math.atan2(r.h, r.len);
-    const hl = Math.hypot(r.len, r.h) / 2;
-    const q = quatYX(r.yaw, -ang);
+    const ang = Math.atan2(r.h, r.len), hl = Math.hypot(r.len, r.h) / 2, thick = 0.5;
     // Box whose top face is the ramp surface; centred so the low edge meets the ground.
-    const thick = 0.5;
-    const cx = r.x + Math.sin(r.yaw) * (r.len / 2), cz = r.z + Math.cos(r.yaw) * (r.len / 2);
-    const cy = r.h / 2 - thick * Math.cos(ang);
-    world.createCollider(R.ColliderDesc.cuboid(r.w / 2, thick, hl).setTranslation(cx, cy, cz)
-      .setRotation(q).setFriction(0.8).setCollisionGroups(g));
+    const cx = r.x + Math.sin(r.yaw) * (r.len / 2), cz = r.z + Math.cos(r.yaw) * (r.len / 2), cy = r.h / 2 - thick * Math.cos(ang);
+    out.push({ shape: 'box', half: [r.w / 2, thick, hl], p: [cx, cy, cz], q: q4(quatYX(r.yaw, -ang)), material: 'rally-ground' });
   }
   for (const b of pad.bumps) {
-    const q = { x: 0, y: 0, z: Math.sin(Math.PI / 4), w: Math.cos(Math.PI / 4) };
-    world.createCollider(R.ColliderDesc.cylinder(b.w / 2, b.r).setTranslation(b.x, -b.r + b.depth, b.z)
-      .setRotation(q).setFriction(0.8).setCollisionGroups(g));
+    out.push({ shape: 'cylinder', halfHeight: b.w / 2, r: b.r, p: [b.x, -b.r + b.depth, b.z],
+      q: [0, 0, Math.sin(Math.PI / 4), Math.cos(Math.PI / 4)], material: 'rally-ground' });
   }
   const s = pad.slope;
   if (s) {
-    const ang = Math.atan(s.grade), thick = 1;
-    const q = quatYX(0, -ang);
+    const ang = Math.atan(s.grade), thick = 1, hl = s.len / 2 / Math.cos(ang);
     // Plateau-free incline starting at ground level, rising toward +z.
-    const hl = s.len / 2 / Math.cos(ang);
-    world.createCollider(R.ColliderDesc.cuboid(s.w / 2, thick, hl)
-      .setTranslation(s.x, s.len / 2 * s.grade - thick / Math.cos(ang), s.z + s.len / 2)
-      .setRotation(q).setFriction(0.8).setCollisionGroups(g));
+    out.push({ shape: 'box', half: [s.w / 2, thick, hl], p: [s.x, s.len / 2 * s.grade - thick / Math.cos(ang), s.z + s.len / 2],
+      q: q4(quatYX(0, -ang)), material: 'rally-ground' });
   }
-  return ground;
+  return out;
 }
 
 function quatYX(yaw, pitch) { // yaw about Y then pitch about local X
   const cy = Math.cos(yaw / 2), sy = Math.sin(yaw / 2), cp = Math.cos(pitch / 2), sp = Math.sin(pitch / 2);
   return { w: cy * cp, x: cy * sp, y: sy * cp, z: -sy * sp };
+}
+
+// A cone as a convex hull: apex and a 32-point base ring (Rapier's cone primitive isn't a phase 3 collider shape).
+export function coneHull(halfHeight = 0.35, r = 0.22, n = 32) {
+  const pts = [0, halfHeight, 0];
+  for (let i = 0; i < n; i++) { const a = i / n * 2 * Math.PI; pts.push(Math.cos(a) * r, -halfHeight, Math.sin(a) * r); }
+  return pts;
 }
 
 export function coneLayout(pad = PAD) {
@@ -87,29 +86,24 @@ export class PadWorld {
     this.props = [];
   }
 
-  build(R, world) {
-    this.groundCollider = buildPad(R, world, this.pad);
-    this.ground = new Set([this.groundCollider.handle]);
+  build(lh) {
+    this.lh = lh;
+    this.groundEntity = lh.spawn({ tags: ['ground', 'pad'], body: 'fixed', colliders: padColliders(this.pad), groups: { member: ['ground'] } });
+    this.groundCollider = this.groundEntity.colliders[0].collider;
+    this.ground = new Set(this.groundEntity.colliders.map(c => c.collider.handle));
     this.props = [];
     if (!this.withCones) return;
     for (const c of coneLayout()) {
-      const body = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(c.x, CONE_Y, c.z));
-      world.createCollider(R.ColliderDesc.cone(0.35, 0.22).setMass(3).setFriction(0.6)
-        .setCollisionGroups(groups(GROUP_PROP, 0xffff)), body);
-      this.props.push({ body, home: { x: c.x, y: CONE_Y, z: c.z, yaw: 0 }, kind: 'cone' });
+      const e = lh.spawn({ tags: ['cone'], at: [c.x, CONE_Y, c.z], body: { type: 'dynamic', mass: 3 },
+        colliders: [{ shape: 'hull', points: coneHull(), p: [0, 0, 0], q: [0, 0, 0, 1], material: 'cone' }], groups: { member: ['prop'] } });
+      this.props.push({ e, body: e.body, home: { x: c.x, y: CONE_Y, z: c.z, yaw: 0 }, kind: 'cone' });
     }
   }
 
   // 'snow' is deformable fresh snow over the flat ground (spec R2-6); the features poking
   // through it (ramps, humps, slope) are packed snow.
   setSurface(key) { this.surfaceKey = key; }
-  surfaceAt() { return this.surfaceKey === 'snow' ? SURFACES.packed : SURFACES[this.surfaceKey]; }
+  surfaceAt() { return surfaceOfKey(this.surfaceKey === 'snow' ? 'packed' : this.surfaceKey); }
 
-  resetProps() {
-    for (const p of this.props) {
-      p.body.setTranslation({ x: p.home.x, y: p.home.y, z: p.home.z }, true);
-      p.body.setRotation({ x: 0, y: Math.sin(p.home.yaw / 2), z: 0, w: Math.cos(p.home.yaw / 2) }, true);
-      p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    }
-  }
+  resetProps() { for (const p of this.props) this.lh.place(p.e, { at: [p.home.x, p.home.y, p.home.z] }, { yaw: p.home.yaw }); }
 }

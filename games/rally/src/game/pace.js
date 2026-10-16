@@ -1,6 +1,6 @@
 // How fast the road allows (spec tracks T-23): corner speed from curvature and grip, capped for
 // obstacles. Shared by the test autopilot and the time-attack run-up. Pure: no Rapier, no DOM.
-import { SURFACES } from '../tire.js';
+import { surfaceOfKey } from '../surface.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { pointAt } from '../world/trackWorld.js';
 
@@ -12,7 +12,7 @@ export const OBSTACLE_V = 16, OBSTACLE_LEAD = 15;
 export const V_MAX = 38;
 export const CAPS = { kicker: 12, whoops: 12, crest: 16, tabletop: 16 };
 
-export const muAt = (track, s) => SURFACES[roadSurfaceAt(track.surfaces, s).road].mu;
+export const muAt = (track, s) => surfaceOfKey(roadSurfaceAt(track.surfaces, s).road).mu;
 
 // Allowed speed at s: min(V_MAX, sqrt(lat·μ·g/|κ|), obstacle cap). lat is the share of μ·g used.
 export function allowedSpeed(track, s, { lat = 0.55, caps = CAPS } = {}) {

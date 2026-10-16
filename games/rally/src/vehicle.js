@@ -1,7 +1,8 @@
 // Raycast rally car on a single Rapier rigid body. Each wheel casts its own ray,
 // runs its own suspension and tire model, and integrates its own spin.
 // Pure JS (no three.js) so it runs headless in Node.
-import { SURFACES, tireStep } from './tire.js';
+import { tireStep } from './tire.js';
+import { surfaceOfKey } from './surface.js';
 import { makeDrivetrain, driveStep, shift, rpmOf, gearRatio } from './drivetrain.js';
 import { SNOW } from './snow.js';
 
@@ -36,11 +37,14 @@ const rotAbout = (v, axis, ang) => { // Rodrigues
 };
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'];
+// The baked car models' wheel nodes, in wheel order (front pair, then rear; left first: Rally's left is +x, as the nodes).
+export const WHEEL_PARTS = ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'];
 
 export class Vehicle {
-  constructor(R, world, cfg, opts = {}) {
-    this.R = R; this.world = world; this.cfg = cfg;
-    this.surfaceAt = opts.surfaceAt || (() => SURFACES.gravel);
+  // lh: the scene's World (the car is one of its entities; the wheel rays query its Rapier world).
+  constructor(lh, cfg, opts = {}) {
+    this.lh = lh; this.R = lh.R; this.cfg = cfg;
+    this.surfaceAt = opts.surfaceAt || (() => surfaceOfKey('gravel'));
     this.snow = opts.snow || (() => null);   // current SnowField, if the pad is snow-covered
     this.assist = opts.assist ?? true;     // Assisted mode (ABS, TCS, slide control)
     this.autoShift = opts.autoShift ?? true;
@@ -64,7 +68,7 @@ export class Vehicle {
         rc: front ? c.rcF : c.rcR,
         omega: 0, st: { dx: 0, dy: 0 }, x: 0, xPrev: 0, contact: false, wasContact: false,
         fz: 0, fs: 0, fx: 0, fy: 0, kappa: 0, alpha: 0, rho: 0, steer: 0, spin: 0,
-        surf: SURFACES.gravel, center: v3(), point: v3(), normal: v3(0, 1, 0), drive: 0,
+        surf: surfaceOfKey('gravel'), center: v3(), point: v3(), normal: v3(0, 1, 0), drive: 0,
       });
     }
     this.staticComp = xs;
@@ -79,28 +83,40 @@ export class Vehicle {
   }
 
   createBody(pos, yaw) {
-    const R = this.R, c = this.cfg;
-    const q = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
-    const desc = R.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z).setRotation(q)
-      .setAdditionalMassProperties(c.mass, { x: 0, y: 0, z: 0 }, c.inertia, { w: 1, x: 0, y: 0, z: 0 })
-      .setCcdEnabled(true).setCanSleep(false);
-    this.body = this.world.createRigidBody(desc);
-    const len = c.wheelbase / 2 + 0.85;
-    // Rounded edges (0.2 m) so a nose that meets an upslope or a bump rides up it instead of
-    // digging in like a box corner (which stopped the car at 20+ g); low friction so it skids.
+    const c = this.cfg, len = c.wheelbase / 2 + 0.85;
+    // Rounded edges (0.2 m) so a nose that meets an upslope or a bump rides up it instead of digging in like a box corner
+    // (which stopped the car at 20+ g); low friction so it skids. Mass and inertia are the playtested cars.js values.
     const round = 0.2;
-    const hull = R.ColliderDesc.roundCuboid(0.86 - round, 0.24 - round, len - round, round)
-      .setTranslation(0, -c.comHeight + 0.20 + 0.24, this.zMid)
-      .setDensity(0).setFriction(0.3).setRestitution(0.1);
-    const cabin = R.ColliderDesc.cuboid(0.72, 0.27, len * 0.5).setTranslation(0, -c.comHeight + 0.68 + 0.27, this.zMid - 0.2)
-      .setDensity(0).setFriction(0.45).setRestitution(0.1);
-    this.colliders = [this.world.createCollider(hull, this.body), this.world.createCollider(cabin, this.body)];
+    this.e = this.lh.spawn({
+      // Drawn by view sync (the model, shaped by render.js carView), wheels from the part poses. They start at the static
+      // compression (seeded curr and prev), so a render before the first step has the wheels on their hubs.
+      tags: ['car'], at: [pos.x, pos.y, pos.z], yaw, model: c.model,
+      partXf: Object.fromEntries(this.wheels.map((w, i) => [WHEEL_PARTS[i], { p: [w.local.x, w.local.y - Math.max(0, c.travel - this.staticComp), w.local.z], q: [0, 0, 0, 1] }])),
+      body: { type: 'dynamic', ccd: true, canSleep: false, massProps: { mass: c.mass, com: [0, 0, 0], inertia: [c.inertia.x, c.inertia.y, c.inertia.z] } }, // lh-allow: massProps (D3): cars.js mass and inertia were tuned by playtest, not the colliders' volume
+      colliders: [
+        { shape: 'box', half: [0.86 - round, 0.24 - round, len - round], round, p: [0, -c.comHeight + 0.20 + 0.24, this.zMid], q: [0, 0, 0, 1], material: 'car-hull' },
+        { shape: 'box', half: [0.72, 0.27, len * 0.5], p: [0, -c.comHeight + 0.68 + 0.27, this.zMid - 0.2], q: [0, 0, 0, 1], material: 'car-cabin' },
+      ],
+      groups: { member: ['car'] },
+    });
+    this.body = this.e.body;
+    this.colliders = this.e.colliders.map((x) => x.collider);
+  }
+
+  // The wheels' part poses for view sync (3c partXf, 3g Task 13b): the hub in the body frame and Ry(steer) Rx(spin),
+  // interpolated with the body by the engine. Written only; nothing in the sim reads them. The spawn seeds them (createBody).
+  writeParts() {
+    const c = this.cfg;
+    for (let i = 0; i < 4; i++) {
+      const w = this.wheels[i], P = this.e.partXf[WHEEL_PARTS[i]];
+      P.p.x = w.local.x; P.p.y = w.local.y - Math.max(0, c.travel - w.x); P.p.z = w.local.z;
+      const sy = Math.sin(w.steer / 2), cy = Math.cos(w.steer / 2), sx = Math.sin(w.spin / 2), cx = Math.cos(w.spin / 2);
+      P.q.x = cy * sx; P.q.y = sy * cx; P.q.z = -sy * sx; P.q.w = cy * cx;
+    }
   }
 
   reset(pos, yaw) {
-    const q = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
-    this.body.setTranslation(pos, true); this.body.setRotation(q, true);
-    this.body.setLinvel(v3(), true); this.body.setAngvel(v3(), true);
+    this.lh.place(this.e, { at: [pos.x, pos.y, pos.z] }, { yaw }); // wakes it and zeroes its velocities (E-8)
     for (const w of this.wheels) { w.omega = 0; w.st.dx = w.st.dy = 0; w.wasContact = false; }
     this.dt.we = this.cfg.drive.idle * 2 * Math.PI / 60; this.dt.gear = 1; this.dt.shiftT = 0;
   }
@@ -195,7 +211,7 @@ export class Vehicle {
       const slant = Math.max(0.3, -down.y);
       const ray = new R.Ray(o, down);
       // On snow the ray reaches past travel to find the hard ground under the snow.
-      const hit = this.world.castRayAndGetNormal(ray, maxT + (snow ? SNOW.depth / slant : 0), true, undefined, this.rayGroups, undefined, b);
+      const hit = this.lh.rapier.castRayAndGetNormal(ray, maxT + (snow ? SNOW.depth / slant : 0), true, undefined, this.rayGroups, undefined, b); // lh-allow: raw Rapier raycast (L-1): Rally's own ray-cast wheels (overview §1.2)
       w.wasContact = w.contact;
       let t = hit ? hit.timeOfImpact ?? hit.toi : Infinity;
       w.onSnow = !!(hit && snow && hit.collider.handle === snow.groundHandle);
@@ -291,6 +307,7 @@ export class Vehicle {
     // Aerodynamic drag at the CoM.
     const sp = Math.hypot(v.x, v.y, v.z);
     if (sp > 0.1) b.applyImpulse(mul(v, -0.5 * 1.2 * c.cda * sp * DT), true);
+    this.writeParts();
   }
 
   // Tall grass, deep snow, sand and mud hold the car back: each wheel pays

@@ -1,30 +1,17 @@
 // A generated Track as a World (spec tracks T-8, T-11): one heightfield ground collider, marker
 // posts as knock-over props, static gate posts, per-position surfaces from the locator.
-import { SURFACES } from '../tire.js';
+import { createTerrain } from 'lion-hawk/kits/terrain';
+import { materialOf, surface, blendSurface } from '../surface.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
-import { GROUP_GROUND, GROUP_PROP, groups } from './padWorld.js';
 
 const HALF_ROAD = 3.5;
 // Posts are flat-sided like real roadside delineators: a round post rolls down the verge like a
 // pencil for ever, and damping can't stop a roll that gravity keeps feeding. Damping still stops
 // knocked posts spinning and sliding (spec R3-3). r is the visual radius.
-const MARKER = { h: 1.2, r: 0.06, half: [0.06, 0.6, 0.045], mass: 5, angDamp: 6, linDamp: 1.0, friction: 0.9 };
+const MARKER = { h: 1.2, r: 0.06, half: [0.06, 0.6, 0.045], mass: 5, angDamp: 6, linDamp: 1.0 }; // friction: the 'marker' material
 const GATE_POST = { off: 6, h: 4, r: 0.15 };   // posts ~6 m either side, outside the verge
 const RECOVER_BACK = 5, RECOVER_Y = 0.6;       // m back along the road; CoM above the road
-const BLEND_KEYS = ['mu', 'C', 'kp', 'ap', 'crr', 'drag'];
-
-// Rapier heightfield from terrain heights (row-major, heights[iz * nx + ix] at (x0 + ix, z0 + iz)).
-// rapier3d-compat 0.14–0.21: heightfield(nrows, ncols, ...) takes SUBDIVISION counts (rows along z,
-// columns along x), heights are (nrows+1)·(ncols+1) in column-major order (index iz + ix·nz),
-// `scale` is the field's full extent and the field is centred on the collider's translation.
-export function heightfieldDesc(R, t) {
-  const { nx, nz, heights, cell } = t, H = new Float32Array(nx * nz);
-  for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) H[iz + ix * nz] = heights[iz * nx + ix];
-  const sx = (nx - 1) * cell, sz = (nz - 1) * cell;
-  return R.ColliderDesc.heightfield(nz - 1, nx - 1, H, { x: sx, y: 1, z: sz })
-    .setTranslation(t.x0 + sx / 2, 0, t.z0 + sz / 2);
-}
 
 export class TrackWorld {
   constructor(track) {
@@ -36,82 +23,71 @@ export class TrackWorld {
     this.blends = new Map();
   }
 
-  build(R, phys) {
-    const t = this.track;
-    this.groundCollider = phys.createCollider(heightfieldDesc(R, t.terrain).setFriction(0.8)
-      .setCollisionGroups(groups(GROUP_GROUND, 0xffff)));
+  build(lh) {
+    const t = this.track, T = t.terrain;
+    this.lh = lh;
+    // The terrain kit: the heightfield entity (row-major heights; the World reorders them for Rapier) plus the
+    // material and blend lookups the wheels read (M-10).
+    this.blendOut = { a: null, b: null, w: 0 };
+    this.terrain = createTerrain(lh, { nx: T.nx, nz: T.nz, cell: T.cell, x0: T.x0, z0: T.z0, heights: T.heights,
+      material: 'rally-ground', materials: (x, z) => this.materialAt(x, z), blend: (x, z, out) => this.blendTo(x, z, out) });
+    this.groundEntity = this.terrain.entity;
+    this.groundCollider = this.groundEntity.colliders[0].collider;
     this.ground = new Set([this.groundCollider.handle]);
     this.props = [];
-    const pg = groups(GROUP_PROP, 0xffff);
-    this.R = R; this.phys = phys; this.newPosts = [];
     for (const m of t.roadside.markers) {
-      const home = { x: m.x, y: m.y + MARKER.h / 2, z: m.z, yaw: m.yaw };
-      this.props.push({ body: this.makeMarker(home), home, kind: 'marker' });
+      const home = { x: m.x, y: m.y + MARKER.h / 2, z: m.z, yaw: m.yaw }, e = this.makeMarker(home);
+      this.props.push({ e, body: e.body, home, kind: 'marker' });
     }
     this.gatePosts = [];
+    const posts = [];
     for (const g of t.roadside.gates) {
       for (const side of [1, -1]) {
         const x = g.x + side * GATE_POST.off * Math.cos(g.yaw), z = g.z - side * GATE_POST.off * Math.sin(g.yaw);
-        const y = heightAt(t.terrain, x, z) + GATE_POST.h / 2;
-        phys.createCollider(R.ColliderDesc.cylinder(GATE_POST.h / 2, GATE_POST.r).setTranslation(x, y, z)
-          .setFriction(0.6).setCollisionGroups(pg));
+        const y = heightAt(T, x, z) + GATE_POST.h / 2;
+        posts.push({ shape: 'cylinder', halfHeight: GATE_POST.h / 2, r: GATE_POST.r, p: [x, y, z], q: [0, 0, 0, 1], material: 'gate-post' });
         this.gatePosts.push({ x, y, z, h: GATE_POST.h, r: GATE_POST.r, gate: g.kind });
       }
     }
+    this.gateEntity = lh.spawn({ tags: ['gate-post'], body: 'fixed', colliders: posts, groups: { member: ['prop'] } });
   }
 
-  // Road within 3.5 m of the centreline, else verge; section changes blend over 10 m. Blended
-  // entries are cached per (from, to, t in 0.1 steps) so this stays allocation-free per step.
-  surfaceAt(x, z) {
+  // Road within 3.5 m of the centreline, else verge (M-10: the section's own surface).
+  materialAt(x, z) {
+    const t = this.track, { s, d } = t.locator.locate(x, z), r = roadSurfaceAt(t.surfaces, s);
+    return materialOf(Math.abs(d) <= HALF_ROAD ? r.road : r.verge);
+  }
+  // The kit's blend: section a → the next section's b over the last 10 m, at weight w.
+  blendTo(x, z, out) {
     const t = this.track, { s, d } = t.locator.locate(x, z);
     const r = roadSurfaceAt(t.surfaces, s), road = Math.abs(d) <= HALF_ROAD;
     const a = road ? r.road : r.verge, b = r.next ? (road ? r.next.road : r.next.verge) : a;
-    const q = Math.round(r.t * 10);
-    if (a === b || q === 0) return SURFACES[a];
-    if (q === 10) return SURFACES[b];
-    const key = `${a}|${b}|${q}`;
-    let e = this.blends.get(key);
-    if (!e) {
-      const A = SURFACES[a], B = SURFACES[b], w = q / 10;
-      e = { name: `${A.name}→${B.name}` };
-      for (const k of BLEND_KEYS) e[k] = A[k] + (B[k] - A[k]) * w;
-      e.B = Math.tan(Math.PI / (2 * e.C));
-      this.blends.set(key, e);
-    }
-    return e;
+    out.a = materialOf(a); out.b = materialOf(b); out.w = r.t;
+    return out;
+  }
+  // The tyre surface under a wheel: the blend quantised to tenths and cached (allocation-free per step).
+  surfaceAt(x, z) {
+    const o = this.terrain.blendAt(x, z, this.blendOut);
+    return blendSurface(this.blends, surface(o.a), surface(o.b), Math.round(o.w * 10));
   }
 
-  // A thin post on a sloped shoulder isn't stable in Rapier once awake (most tip over within a
-  // few seconds), so posts start asleep and only fall when the car wakes them. Teleporting a
-  // body home wakes it on the next step, so reset rebuilds each post instead (same prop object,
-  // new .body: views must read p.body every frame). Rapier 0.21 (persistent sleep islands) wakes
-  // a body inserted asleep on its first step, so afterStep() puts new posts back to sleep unless
-  // something really set them moving (one step of gravity is 0.04 m/s).
+  // A thin post on a sloped shoulder isn't stable in Rapier once awake (most tip over within a few seconds), so posts
+  // start asleep and only fall when the car wakes them: `body.sleep`, which the World puts back to sleep after their
+  // first step unless something set them moving (Rapier 0.21's wake-on-insert, #2).
   makeMarker(home) {
-    const R = this.R, phys = this.phys;
-    const body = phys.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(home.x, home.y, home.z)
-      .setRotation(yawQ(home.yaw)).setCanSleep(true).setSleeping(true)
-      .setAngularDamping(MARKER.angDamp).setLinearDamping(MARKER.linDamp));
-    phys.createCollider(R.ColliderDesc.cuboid(...MARKER.half).setMass(MARKER.mass)
-      .setFriction(MARKER.friction).setCollisionGroups(groups(GROUP_PROP, 0xffff)), body);
-    this.newPosts.push(body);
-    return body;
+    return this.lh.spawn({
+      tags: ['marker'], at: [home.x, home.y, home.z], yaw: home.yaw,
+      body: { type: 'dynamic', sleep: true, canSleep: true, mass: MARKER.mass, angularDamping: MARKER.angDamp, linearDamping: MARKER.linDamp },
+      colliders: [{ shape: 'box', half: MARKER.half, p: [0, 0, 0], q: [0, 0, 0, 1], material: 'marker' }],
+      groups: { member: ['prop'] },
+    });
   }
 
-  // Called by Sim after each physics step (spec R3-3: untouched posts stay standing).
-  afterStep() {
-    if (!this.newPosts.length) return;
-    for (const b of this.newPosts) {
-      const v = b.linvel(), w = b.angvel();
-      if (Math.hypot(v.x, v.y, v.z) < 0.2 && Math.hypot(w.x, w.y, w.z) < 0.5) b.sleep();
-    }
-    this.newPosts.length = 0;
-  }
-
+  // Teleporting a post wakes it, so a reset respawns each one (same prop object, new entity and body: views read p.e).
   resetProps() {
     for (const p of this.props) {
-      this.phys.removeRigidBody(p.body);
-      p.body = this.makeMarker(p.home);
+      this.lh.despawn(p.e);
+      p.e = this.makeMarker(p.home); p.body = p.e.body;
     }
   }
 
@@ -122,8 +98,6 @@ export class TrackWorld {
     return { x: p.x, y: p.road(this.track.terrain.road) + RECOVER_Y, z: p.z, yaw: p.yaw };
   }
 }
-
-const yawQ = (yaw) => ({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) });
 
 // Centreline point at distance s (wraps on loops, clamps on stages), interpolated between samples.
 export function pointAt(L, s) {

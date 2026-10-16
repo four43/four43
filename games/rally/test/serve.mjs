@@ -1,11 +1,13 @@
-// Builds a Rally entry and serves it for browser tests (lion-hawk 2c-rally R5): an esbuild bundle (iife, .json loader)
-// into build/e2e/, the page from index.template.html with the bundle inlined as build.py does, and a static server
-// on a random local port. serveRally({ entry }) → { url, close }.
+// Builds a Rally entry and serves it for browser tests (lion-hawk 2c-rally R5): an esbuild bundle (esm, .json loader,
+// dedupe plugin, as `lion-hawk build` bundles) into build/e2e/, the page from index.template.html with the bundle inlined
+// as an inline module script in place of <!--APP-->, and a static server on a random local port (also serving
+// /assets/models/* from baked/models/). serveRally({ entry }) → { url, close }.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { dedupe } from 'lion-hawk/build';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
@@ -15,17 +17,35 @@ export async function serveRally({ entry = 'src/main.js' } = {}) {
   fs.mkdirSync(out, { recursive: true });
   const name = path.basename(entry, '.js');
   const bundle = path.join(out, `${name}.bundle.js`);
-  await build({ entryPoints: [path.join(root, entry)], bundle: true, format: 'iife', loader: { '.json': 'json' }, outfile: bundle, logLevel: 'warning' });
+  await build({ entryPoints: [path.join(root, entry)], bundle: true, format: 'esm', plugins: [dedupe({ root })], loader: { '.json': 'json' }, outfile: bundle, logLevel: 'warning' });
   const js = fs.readFileSync(bundle, 'utf8');
   const html = fs.readFileSync(path.join(root, 'index.template.html'), 'utf8')
-    .replace('<script>/*BUNDLE*/</script>', () => `<script>${js.replace(/<\/script/g, '<\\/script')}</script>`);
+    .replace('<!--APP-->', () => `<script type="module">${js.replace(/<\/script/g, '<\\/script')}</script>`);
   fs.writeFileSync(path.join(out, `${name}.html`), html);
   const server = http.createServer((req, res) => {
     const p = new URL(req.url, 'http://x').pathname;
     if (p === '/' || p === '/index.html') { res.writeHead(200, { 'content-type': 'text/html' }).end(html); return; }
+    if (p.startsWith('/assets/models/')) { const m = path.join(root, 'baked/models', path.basename(p)); if (fs.existsSync(m)) { res.writeHead(200, { 'content-type': p.endsWith('.glb') ? 'model/gltf-binary' : 'application/json' }).end(fs.readFileSync(m)); return; } }
     const f = path.join(root, 'pwa', path.basename(p)); // manifest and icons, as the site serves them
     if (path.basename(p) !== 'sw.js' && fs.existsSync(f)) { res.writeHead(200, { 'content-type': TYPES[path.extname(f)] ?? 'application/octet-stream' }).end(fs.readFileSync(f)); return; }
     res.writeHead(404).end();
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${server.address().port}/`;
+  return { url, close: () => new Promise(r => { server.closeAllConnections?.(); server.close(() => r()); }) };
+}
+
+// A static server over a built directory (lion-hawk build output, or the baseline page): / → index.html, everything
+// else by path under dir. serveDir(dir) → { url, close }.
+export async function serveDir(dir) {
+  const rootDir = path.resolve(dir);
+  const TYPES2 = { ...TYPES, '.json': 'application/json', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg' };
+  const server = http.createServer((req, res) => {
+    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (p.endsWith('/')) p += 'index.html';
+    const f = path.join(rootDir, path.normalize(p));
+    if (!f.startsWith(rootDir) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'content-type': TYPES2[path.extname(f)] ?? 'application/octet-stream' }).end(fs.readFileSync(f));
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const url = `http://127.0.0.1:${server.address().port}/`;

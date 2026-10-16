@@ -1,6 +1,6 @@
 // Deformable fresh snow over the pad's flat ground (spec R2-6). A grid of snow height and wear,
 // stored in sparse tiles allocated the first time a tire touches them. Pure JS.
-import { SURFACES } from './tire.js';
+import { surfaceOfKey } from './surface.js';
 
 export const SNOW = {
   cell: 0.125,          // grid spacing (m)
@@ -33,9 +33,9 @@ const blend = (a, b, t, name) => {
   s.B = Math.tan(Math.PI / (2 * s.C));
   return s;
 };
-export const FRESH = { ...SURFACES.packed, name: 'Fresh snow' };
+export const FRESH = { ...surfaceOfKey('packed'), name: 'Fresh snow' };
 export const WORN = Array.from({ length: LEVELS + 1 }, (_, i) =>
-  blend(SURFACES.packed, SURFACES.ice, i / LEVELS, i < LEVELS / 2 ? 'Packed snow' : 'Icy snow'));
+  blend(surfaceOfKey('packed'), surfaceOfKey('ice'), i / LEVELS, i < LEVELS / 2 ? 'Packed snow' : 'Icy snow'));
 WORN[LEVELS].name = 'Ice';
 
 export class SnowField {

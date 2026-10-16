@@ -1,9 +1,10 @@
 // Rally's sim half (lion-hawk phase 2c, [S-1]…[S-5]): actions, the `stage` main scene with title/pause/results/settings
 // overlays, the autopilot policy, the JSON-safe state and the debug extras. Never touches three.js or the DOM.
-// The caller initialises Rapier (`await R.init()`) before createEngine/boot (#6).
-import R from '@dimforge/rapier3d-compat';
+// The entry and tests pass Rapier in (`rallyGame({ rapier })`, D9), initialised (`await R.init()`) before createEngine/boot (#6).
 import { defineGame, actions, axis, button } from 'lion-hawk/sim';
-import { DT } from './sim.js';
+import { HZ } from './sim.js';
+import MATERIALS from './defs/materials.js';
+import PHYS from '../baked/phys.json' with { type: 'json' };
 import { makeStage } from './game/stage.js';
 import { makeOverlays } from './game/overlays.js';
 import { makeBests } from './game/bests.js';
@@ -30,8 +31,15 @@ function state(e) {
   };
 }
 
-export function rallyGame({ bests = makeBests() } = {}) {
-  const { scene: stage, api } = makeStage({ R, bests });
+// Collision groups: declaration order gives today's bits (ground 1, prop 2, car 4, ray 8; the wheel rays are members of
+// 'ray' and see only 'ground').
+export const GROUPS = ['ground', 'prop', 'car', 'ray'];
+export const rallyPhysics = rapier => ({ rapier, gravity: [0, -9.81, 0], groups: GROUPS });
+
+// The game's defineGame spec without its physics block: the entry (src/main.js) injects Rapier where it calls defineGame
+// (D9), and rallyGame does the same for tests and tools.
+export function rallySpec({ bests = makeBests() } = {}) {
+  const { scene: stage, api } = makeStage({ bests });
   const { title, pause, results, settings } = makeOverlays(api);
   // → window.engine.debug. The HUD fakes emit events or run the moved handler; they show after the next step's flush.
   const debug = e => ({
@@ -49,10 +57,15 @@ export function rallyGame({ bests = makeBests() } = {}) {
     blocked: (index = 1) => api.handle(e, { type: 'blocked', index }),
     count: (n = 3) => e.emit('count', { n }),
   });
-  return defineGame({
-    id: 'rally', sim: { hz: 1 / DT, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, start: 'stage',
+  return {
+    id: 'rally', sim: { hz: HZ, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, start: 'stage',
+    defs: { materials: MATERIALS, models: PHYS },
     scenes: { stage, title, pause, results, settings }, policies: { autopilot: autopilotPolicy }, state, debug,
-  });
+  };
 }
 
-export default rallyGame();
+export function rallyGame({ rapier, bests } = {}) {
+  if (!rapier) throw new Error('rallyGame: pass { rapier } (the initialised @dimforge/rapier3d-compat module, D9)');
+  return defineGame({ ...rallySpec({ bests }), physics: rallyPhysics(rapier) });
+}
+

@@ -10,7 +10,7 @@ import { rng } from 'lion-hawk/sim';
 import { normalizeSettings, newSeed } from '../src/game/settings.js';
 
 const src = fileURLToPath(new URL('../src/', import.meta.url));
-const SIM = ['game.sim.js', 'sim.js', 'vehicle.js', 'drivetrain.js', 'tire.js', 'snow.js', 'cars.js', 'gen', 'world', 'game'].map(p => join(src, p));
+const SIM = ['game.sim.js', 'sim.js', 'vehicle.js', 'drivetrain.js', 'tire.js', 'snow.js', 'cars.js', 'surface.js', 'defs', 'gen', 'world', 'game'].map(p => join(src, p));
 const files = p => !existsSync(p) ? [] : statSync(p).isDirectory() ? readdirSync(p).flatMap(n => files(join(p, n))) : p.endsWith('.js') ? [p] : [];
 const RALLY = [/\blocalStorage\b/, /\bset(Timeout|Interval)\s*\(/, /\brequestAnimationFrame\b/,
   /from\s*['"][^'"]*\/(render|snowView|ui|menus|devices|game\.view|main)(\.js)?['"]/];
@@ -29,7 +29,8 @@ test('the Rally scan ignores comments but still flags code', () => {
 test('settings: normalizeSettings migrates without mutating, newSeed is a seeded 5-char id', () => {
   const saved = { v: 1, assist: true, mode: 'nope', world: 'pad' }, copy = { ...saved };
   const s = normalizeSettings(saved);
-  assert.equal(s.assist, false); assert.equal(s.mode, 'freeDrive'); assert.equal(s.world, 'loop'); assert.equal(s.v, 4);
+  assert.equal(s.assist, false); assert.equal(s.mode, 'freeDrive'); assert.equal(s.world, 'loop'); assert.equal(s.v, 5);
+  assert.equal(normalizeSettings({ v: 4, density: 'wild' }).obstacles, 'wild'); assert.equal('density' in normalizeSettings({ density: 'wild' }), false);
   assert.deepEqual(saved, copy);
   assert.match(newSeed(rng('x')), /^[0-9a-z]{5}$/);
   assert.equal(newSeed(rng('x')), newSeed(rng('x')));

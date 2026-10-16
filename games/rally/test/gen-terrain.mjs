@@ -57,7 +57,7 @@ const sbend = () => fromProgram([[250, 0], [157, 1 / 150], [120, 0], [Math.round
 
 const LAYOUTS = { straight: straight(), circle: circle(), sbend: sbend() };
 const SEEDS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
-const feats = (L, seed, density) => placeFeatures(L, rng(seed).fork('features'), { density });
+const feats = (L, seed, obstacles) => placeFeatures(L, rng(seed).fork('features'), { obstacles });
 const wrapS = (L, s) => L.closed ? ((s % L.length) + L.length) % L.length : s;
 const idx = (L, s) => L.closed ? ((Math.round(s) % L.n) + L.n) % L.n : Math.max(0, Math.min(L.n - 1, Math.round(s)));
 const nonBerm = (fs) => fs.filter((f) => f.type !== 'berm');
@@ -85,16 +85,16 @@ test('synthetic layouts', () => {
 });
 
 test('features: determinism', () => {
-  for (const [name, L] of Object.entries(LAYOUTS)) for (const density of ['mild', 'wild']) {
-    const a = JSON.stringify(feats(L, 'det', density)), b = JSON.stringify(feats(L, 'det', density));
-    check(`${name} ${density} identical`, +(a === b), 1, 1);
+  for (const [name, L] of Object.entries(LAYOUTS)) for (const obstacles of ['mild', 'wild']) {
+    const a = JSON.stringify(feats(L, 'det', obstacles)), b = JSON.stringify(feats(L, 'det', obstacles));
+    check(`${name} ${obstacles} identical`, +(a === b), 1, 1);
   }
 });
 
 test('features: placement rules', () => {
   let badClear = 0, badBerm = 0, berms = 0, total = 0, minGap = Infinity, outside = 0;
-  for (const [name, L] of Object.entries(LAYOUTS)) for (const seed of SEEDS) for (const density of ['mild', 'wild']) {
-    const fs = feats(L, seed, density);
+  for (const [name, L] of Object.entries(LAYOUTS)) for (const seed of SEEDS) for (const obstacles of ['mild', 'wild']) {
+    const fs = feats(L, seed, obstacles);
     for (const f of fs) {
       total++;
       if (f.s0 < 0 || f.s1 > L.length) outside++;
@@ -109,7 +109,7 @@ test('features: placement rules', () => {
         if (Math.abs(L.curvature[idx(L, s)]) > 1 / 120 + 1e-6) { badClear++; break; }
       }
     }
-    if (density === 'mild') {
+    if (obstacles === 'mild') {
       const nb = nonBerm(fs).sort((p, q) => p.s0 - q.s0);
       for (let k = 1; k < nb.length; k++) minGap = Math.min(minGap, nb[k].s0 - nb[k - 1].s0);
       if (L.closed && nb.length > 1) minGap = Math.min(minGap, nb[0].s0 + L.length - nb[nb.length - 1].s0);
@@ -137,9 +137,9 @@ test('features: placement rules', () => {
 test('features: dimensions', () => {
   let bad = 0, n = 0;
   const within = (v, [lo, hi], k = 1) => v >= lo * k - 1e-9 && v <= hi * k + 1e-9;
-  for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const density of ['mild', 'wild']) {
-    const hk = density === 'wild' ? 1.4 : 1;
-    for (const f of feats(L, seed, density)) {
+  for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const obstacles of ['mild', 'wild']) {
+    const hk = obstacles === 'wild' ? 1.4 : 1;
+    for (const f of feats(L, seed, obstacles)) {
       n++;
       const R = FEATURE_RANGES[f.type];
       let ok = true;
@@ -166,8 +166,8 @@ test('features: dimensions', () => {
 
 test('features: profile shapes', () => {
   const L = LAYOUTS.straight;
-  const find = (type, density = 'mild') => {
-    for (let k = 0; k < 200; k++) { const f = feats(L, 'shape' + k, density).find((q) => q.type === type); if (f) return f; }
+  const find = (type, obstacles = 'mild') => {
+    for (let k = 0; k < 200; k++) { const f = feats(L, 'shape' + k, obstacles).find((q) => q.type === type); if (f) return f; }
     throw new Error('no ' + type);
   };
   const kk = find('kicker'), lip = kk.s0 + kk.lipS;
@@ -222,10 +222,10 @@ function project(L, px, pz, i0, win = 4) {
 }
 const lerp = (a, b, t) => a + (b - a) * t;
 const T = {}, NAT = {}, HILLS = {}; // NAT: hills + bumps (no flattening); HILLS: hills only
-const terr = (name, density = 'mild', seed = 'ter') => {
-  const key = `${name}|${density}|${seed}`;
+const terr = (name, obstacles = 'mild', seed = 'ter') => {
+  const key = `${name}|${obstacles}|${seed}`;
   if (!T[key]) {
-    const L = LAYOUTS[name], fs = feats(L, seed, density);
+    const L = LAYOUTS[name], fs = feats(L, seed, obstacles);
     const t0 = performance.now();
     T[key] = { L, fs, t: generateTerrain(L, fs, rng(seed).fork('terrain'), {}) };
     T[key].ms = performance.now() - t0;
@@ -276,8 +276,8 @@ test('terrain: heightAt', () => {
 });
 
 test('terrain: road profile and bank', () => {
-  for (const name of Object.keys(LAYOUTS)) for (const density of ['mild', 'wild']) {
-    const { L, fs, t } = terr(name, density);
+  for (const name of Object.keys(LAYOUTS)) for (const obstacles of ['mild', 'wild']) {
+    const { L, fs, t } = terr(name, obstacles);
     let g = 0, b = 0, extra = 0, offErr = 0;
     const base = (i) => t.road[i] - profileOffset(fs, i);
     const last = L.closed ? L.n : L.n - 1;
@@ -286,9 +286,9 @@ test('terrain: road profile and bank', () => {
       b = Math.max(b, Math.abs(t.bank[i]));
       extra = Math.max(extra, Math.abs(t.bank[i] - bermBank(fs, i)));
     }
-    check(`${name} ${density} grade outside features (%)`, g * 100, 0, 12);
-    check(`${name} ${density} base bank (deg)`, extra / DEG, 0, 4.001);
-    check(`${name} ${density} total bank (deg)`, b / DEG, 0, 22.001);
+    check(`${name} ${obstacles} grade outside features (%)`, g * 100, 0, 12);
+    check(`${name} ${obstacles} base bank (deg)`, extra / DEG, 0, 4.001);
+    check(`${name} ${obstacles} total bank (deg)`, b / DEG, 0, 22.001);
     void offErr;
   }
   const { L, t } = terr('circle');
@@ -300,9 +300,9 @@ test('terrain: road profile and bank', () => {
 });
 
 test('terrain: flattening', () => {
-  for (const name of Object.keys(LAYOUTS)) for (const density of ['mild', 'wild']) {
-    const key = `${name}|${density}|ter`;
-    const { L, t } = terr(name, density), nat = NAT[key], r = rng('flat' + name + density);
+  for (const name of Object.keys(LAYOUTS)) for (const obstacles of ['mild', 'wild']) {
+    const key = `${name}|${obstacles}|ter`;
+    const { L, t } = terr(name, obstacles), nat = NAT[key], r = rng('flat' + name + obstacles);
     let road = 0, shoulder = 0, far = 0, nRoad = 0, nSh = 0, nFar = 0;
     for (let k = 0; k < 4000; k++) {
       const i = r.int(0, L.n - 1), d = r.range(-24, 24), h = L.heading[i];
@@ -322,9 +322,9 @@ test('terrain: flattening', () => {
         nFar++; far = Math.max(far, Math.abs(g - nat.heights[iz * t.nx + ix]));
       }
     }
-    check(`${name} ${density} road |d|<=3.5: ground - (road + tan(bank) d) (m, n=${nRoad})`, road, 0, 0.02);
-    check(`${name} ${density} shoulder |d|<=5.5 still flat (m, n=${nSh})`, shoulder, 0, 0.02);
-    check(`${name} ${density} |d|>=20.5 natural hills + bumps (m, n=${nFar})`, far, 0, 0.05);
+    check(`${name} ${obstacles} road |d|<=3.5: ground - (road + tan(bank) d) (m, n=${nRoad})`, road, 0, 0.02);
+    check(`${name} ${obstacles} shoulder |d|<=5.5 still flat (m, n=${nSh})`, shoulder, 0, 0.02);
+    check(`${name} ${obstacles} |d|>=20.5 natural hills + bumps (m, n=${nFar})`, far, 0, 0.05);
   }
   // blend is in between: at |d| ~ 13 the ground less its bumps lies between target and the hills
   const { L, t } = terr('straight'), nat = NAT['straight|mild|ter'], hl = HILLS['straight|mild|ter'];
@@ -402,7 +402,7 @@ test('terrain: obstacles in road[]', () => {
 test('terrain: performance', () => {
   for (const name of Object.keys(LAYOUTS)) { const e = terr(name); console.log(`  ${name}: ${e.t.nx}x${e.t.nz} in ${e.ms.toFixed(0)} ms`); }
   const big = circle(700); // ~4.4 km, bounds 1400 m => ~1700 x 1700 cells
-  const fs = placeFeatures(big, rng('big').fork('features'), { density: 'wild' });
+  const fs = placeFeatures(big, rng('big').fork('features'), { obstacles: 'wild' });
   const t0 = performance.now();
   const t = generateTerrain(big, fs, rng('big').fork('terrain'), {});
   const ms = performance.now() - t0;
@@ -411,18 +411,18 @@ test('terrain: performance', () => {
 });
 
 test('feature counts (report)', () => {
-  for (const [name, L] of Object.entries(LAYOUTS)) for (const density of ['mild', 'wild']) {
+  for (const [name, L] of Object.entries(LAYOUTS)) for (const obstacles of ['mild', 'wild']) {
     const c = {}; let n = 0;
-    for (const seed of SEEDS) for (const f of feats(L, seed, density)) { c[f.type] = (c[f.type] || 0) + 1; n++; }
-    console.log(`  ${name} ${density}: ${(n / SEEDS.length).toFixed(1)}/seed ${JSON.stringify(c)}`);
+    for (const seed of SEEDS) for (const f of feats(L, seed, obstacles)) { c[f.type] = (c[f.type] || 0) + 1; n++; }
+    console.log(`  ${name} ${obstacles}: ${(n / SEEDS.length).toFixed(1)}/seed ${JSON.stringify(c)}`);
   }
 });
 
 test('whoops clear the hull', () => {
   // Wheels in two troughs a wheelbase (2.4 m) apart: the ridge between must stay under the hull.
   let worst = 0, seen = 0;
-  for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const density of ['mild', 'wild'])
-    for (const f of feats(L, seed, density)) if (f.type === 'whoops') { seen++; worst = Math.max(worst, f.height * Math.sin(Math.PI * 1.2 / f.pitch) ** 2); }
+  for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const obstacles of ['mild', 'wild'])
+    for (const f of feats(L, seed, obstacles)) if (f.type === 'whoops') { seen++; worst = Math.max(worst, f.height * Math.sin(Math.PI * 1.2 / f.pitch) ** 2); }
   check(`worst whoops ridge between wheels over ${seen} sections (m)`, worst, 0, WHOOPS_RIDGE_MAX + 1e-9, ' m');
   let tallest = 0;
   for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const f of feats(L, seed, 'wild')) if (f.type === 'whoops') tallest = Math.max(tallest, f.height);

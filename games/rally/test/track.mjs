@@ -1,13 +1,14 @@
 // Generated tracks as Worlds (spec tracks T-8, T-12): heightfield orientation, spawn, and an
 // autopilot driving each layout end to end. Run: node test/track.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
-import { Sim, DT } from '../src/sim.js';
+import { benchSim } from './helpers/bench.mjs';
+import { DT } from '../src/sim.js';
 import { qrot } from '../src/vehicle.js';
 import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
 import { rng } from '../src/gen/rng.js';
 import { TrackWorld, pointAt } from '../src/world/trackWorld.js';
-import { SURFACES } from '../src/tire.js';
+import { surfaceOfKey } from '../src/surface.js';
 import { runUntil } from './autopilot.js';
 await R.init();
 
@@ -31,7 +32,7 @@ for (const { seed, kind, theme } of CASES) {
   test(`${seed} ${kind} ${theme}`, () => {
     const track = generateTrack(seed, { kind, theme });
     const world = new TrackWorld(track);
-    const sim = new Sim(R, { world, car: 'awd', assist: true });
+    const sim = benchSim({ world, car: 'awd', assist: true });
     const L = track.layout, loc = track.locator, t = track.terrain;
 
     // Spawn: settles on the road.
@@ -105,15 +106,15 @@ for (const { seed, kind, theme } of CASES) {
 for (const kind of ['loop', 'stage']) test(`t1 ${kind} world api`, () => {
   const track = generateTrack('t1', { kind, theme: 'summer' }), L = track.layout, loc = track.locator;
   const world = new TrackWorld(track);
-  const sim = new Sim(R, { world, car: 'awd', assist: true });
+  const sim = benchSim({ world, car: 'awd', assist: true });
   const sec = track.surfaces.sections[0], nxt = track.surfaces.sections[1];
-  const p = pointAt(L, sec.s1 - 5), a = SURFACES[sec.road], b = SURFACES[nxt.road];
+  const p = pointAt(L, sec.s1 - 5), a = surfaceOfKey(sec.road), b = surfaceOfKey(nxt.road);
   const m = world.surfaceAt(p.x, p.z);
   check(`blend mu mid-way ${a.name}→${b.name}`, m.mu, (a.mu + b.mu) / 2 - 0.01, (a.mu + b.mu) / 2 + 0.01);
   check('blend B = tan(pi / 2C)', Math.abs(m.B - Math.tan(Math.PI / (2 * m.C))), 0, 1e-9);
   check('blend cached (same object)', world.surfaceAt(p.x, p.z) === m ? 1 : 0, 1, 1);
   const off = pointAt(L, 300), h = off.yaw;
-  check('verge 5 m off the road', world.surfaceAt(off.x + 5 * Math.cos(h), off.z - 5 * Math.sin(h)) === SURFACES.grass ? 1 : 0, 1, 1);
+  check('verge 5 m off the road', world.surfaceAt(off.x + 5 * Math.cos(h), off.z - 5 * Math.sin(h)) === surfaceOfKey('grass') ? 1 : 0, 1, 1);
   let calls = 0; const t0 = performance.now();
   for (let k = 0; k < 20000; k++) { const q = pointAt(L, k % L.length); world.surfaceAt(q.x + 2, q.z); calls++; }
   check('surfaceAt cost (µs/call)', (performance.now() - t0) * 1000 / calls, 0, 5);

@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RAMPS } from '../src/devices.js';
-import { rallyGame } from '../src/game.sim.js';
+import { game } from './helpers/bench.mjs';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
 
@@ -19,7 +19,7 @@ test('pedal ramps: same rates as the removed Controls; ramps take dt as given, t
   near(throttle(0.95, 1, 0.1, {}), 1);
 });
 test('steer ramp takes dt as given; the engine caps it at maxFrame 0.1 s', () => {
-  assert.equal(rallyGame().sim.maxFrame, 0.1);
+  assert.equal(game().sim.maxFrame, 0.1);
   const v = RAMPS.steer(0, 1, 0.1, {});
   near(v, 0.1 * (1.2 + 3 * (0.1 / 0.35)));
 });

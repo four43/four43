@@ -1,22 +1,6 @@
 // Tire model: brush-style contact patch deflection (relaxation length) feeding a
 // normalised combined-slip Magic Formula. Pure JS, no rendering imports.
-
-// Surface table. mu = peak friction coefficient for rally tyres: gravel tyres on loose surfaces,
-// studded tyres on snow and ice (which grip snow better than gravel tyres grip gravel; spec R3-1).
-// C = Magic Formula shape: large-slip force ratio = sin(C*pi/2) (plateau vs drop).
-// kp = peak slip ratio, ap = peak slip angle (rad), crr = rolling resistance coeff.
-export const SURFACES = {
-  tarmac:   { name: 'Tarmac',        mu: 1.15, C: 1.50, kp: 0.10, ap: 0.12, crr: 0.015, drag: 0 },
-  hardpack: { name: 'Dirt',          mu: 0.90, C: 1.40, kp: 0.14, ap: 0.15, crr: 0.025, drag: 0 },
-  gravel:   { name: 'Loose gravel',  mu: 0.80, C: 1.25, kp: 0.18, ap: 0.18, crr: 0.035, drag: 0 },
-  grass:    { name: 'Grass',         mu: 0.55, C: 1.55, kp: 0.12, ap: 0.14, crr: 0.050, drag: 0.2 },
-  sand:     { name: 'Sand',          mu: 0.50, C: 1.20, kp: 0.22, ap: 0.20, crr: 0.120, drag: 0.14 },
-  mud:      { name: 'Mud',           mu: 0.40, C: 1.50, kp: 0.15, ap: 0.16, crr: 0.100, drag: 0.18 },
-  packed:   { name: 'Packed snow',   mu: 0.75, C: 1.25, kp: 0.20, ap: 0.20, crr: 0.030, drag: 0 },
-  snowbank: { name: 'Snowbank',      mu: 0.30, C: 1.20, kp: 0.25, ap: 0.22, crr: 0.150, drag: 0.1 },
-  ice:      { name: 'Ice',           mu: 0.55, C: 1.40, kp: 0.08, ap: 0.08, crr: 0.015, drag: 0 },
-};
-for (const s of Object.values(SURFACES)) s.B = Math.tan(Math.PI / (2 * s.C)); // peak at rho = 1
+// Surfaces come from the material registry (src/surface.js).
 
 // Normalised Magic Formula: returns F/D for normalised slip rho >= 0 (E = 0).
 export function mfNorm(rho, s) {
