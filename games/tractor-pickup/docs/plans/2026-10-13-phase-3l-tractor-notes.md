@@ -4,10 +4,10 @@ Plan: lion-hawk-engine `docs/plans/2026-10-13-phase-3l-tractor.md`. Branch `feat
 
 ## Outcome
 
-Tractor Pickup 1.9.0 runs on lion-hawk 0.10.1: the World with injected Rapier, the terrain, vehicle and coverage kits, the material
+Tractor Pickup 1.9.0 runs on lion-hawk 0.10.3: the World with injected Rapier, the terrain, vehicle and coverage kits, the material
 registry, `lion-hawk bake`/`build`, the engine renderer, light rig, assets, compiler paint, view sync, chase rig, audio service, the
-fx kit, and multiplayer on the World net part (NET_VERSION 4, solid driven trains that honk on contact). One done-test item is open on
-the engine: the hitch joint still names `JointData` (Integrator request 1). Not done (2g parked minors, plan Tasks 27 to 29): the #95,
+fx kit, and multiplayer on the World net part (NET_VERSION 4, solid driven trains that honk on contact). The hitch uses the 0.10.3
+descriptor joint, so the done test passes (request 1 closed); one mp test stays `todo` on Integrator request 6. Not done (2g parked minors, plan Tasks 27 to 29): the #95,
 #100, #105, #108 workaround removals, the bind/session/book minors and the tune-label minors; the R1/R3 perf browser suite (Task 20).
 
 ## What landed
@@ -19,7 +19,7 @@ the engine: the hitch joint still names `JointData` (Integrator request 1). Not 
 
 - R1 Notes live here (ruling P7), not in the engine repo.
 - R2 "R3 today" is measured from the read-only committed 1.8 page `site/exp/tractor-pickup/index.html`; `build.py` is never run in a four43 checkout (addendum).
-- R4 `world.R.JointData.spherical` in `src/sim/hitch.js` stays until the engine offers a descriptor form (Integrator request 1).
+- R4 The hitch is `world.joint(front, car, { type: 'spherical', a, b })` on 0.10.3; no `JointData` in game code (request 1 closed).
 - R6 `test:peers` script lands with `test/net.peers.browser.mjs` (Task 26, ruling P6).
 - R7 3a-R6: the iPad gesture e2e is run once on engine 0.8.0 in Task 1 (result below).
   - Result (Task 1): e2e.browser.mjs on engine 0.8.0, unchanged game: 14 tests, 14 pass, 0 fail.
@@ -30,7 +30,12 @@ the engine: the hitch joint still names `JointData` (Integrator request 1). Not 
   average 13 to 22 (its own field note: at ~2 fps under SwiftShader a 150 ms tap spans a 1 s hold); it passed alone at load 13 after
   Task 4. Playtest/re-run item on a quiet machine; `test:peers` 1/1; `lion-hawk bake --check` exit 0; `lion-hawk build --out <scratch>`: html 5941.5 KB (gzip 2318.3
   KB), assets 875.5 KB (gzip 226.7 KB), total gzip 2720.0 KB (1.8 page gzip 2369.8 KB plus assets: within R3).
-- `games/test/phase3-done.test.mjs` with tractor-pickup in MIGRATED: one violation left, `src/sim/hitch.js` `JointData` (request 1).
+- Before 0.10.3, `games/test/phase3-done.test.mjs` with tractor-pickup in MIGRATED: one violation left, `src/sim/hitch.js` `JointData` (request 1).
+- 0.10.3 (2026-10-16): `npm test` 854 tests, 853 pass, 0 fail, 1 todo (request 6); `phase3-done.test.mjs` with tractor-pickup in
+  MIGRATED (local only): PASS, 2/2. `test:e2e` 13/14: the iPad 1 s-hold gesture test
+  still fails ("a tap does not change the pace", 1 !== 0) at load average 5 to 10 (the e2e itself drives the load up); `test:peers` 1/1.
+- The remote-train record validator (finite, clamped, normalised, known fields only, rejects counted in `TRAIN_STATS.rejected`) is
+  committed in e1d118f with `test/trains.trust.test.mjs`.
 
 ## Vehicle kit (Task 13)
 
@@ -85,17 +90,26 @@ All feel samples are inside their tolerances (±3 %, ±1, ±1, ±0.5 m).
 
 ## Integrator requests
 
+6. **Net part (0.10.3): a straggler after the removals still hides a reused number on a guest (engine).** 0.10.3 forgets every
+   removal and the host drops the old relay clock on re-bind, so two of request 5's three tests pass. But a late train frame for the
+   old player 3 that reaches a guest after the REPEAT removals (and so after the forget) makes a fresh store entry with the old clock;
+   the new player 3's lower-clock records are then rejected as older (M-26) and the guest shows the stale train. The guest cannot
+   forget it: `world.net.player` is host-only and there is no guest `forget`. Wanted: the guest forgets an owner kind's entry when the
+   host's roster gives the number again (e.g. a `world.net.forget(kind, netId)` the game calls on a new `join`), or the host stamps a
+   re-bound number's relay with a new epoch. `test/mp.test.mjs` "a straggling frame from the old player 3" is `todo` on this.
+
 5. **Net part (3i): a reused player number with a lower clock stays invisible (engine).** After `removed()` forgets an owner-kind id,
    the REPEAT removal frames that follow (stamped `old time + 1`) are applied to the now-empty store entry and leave a tombstone
    (`createStore.apply`'s removed branch sets `{ rec: null, t }` for an absent id), so a new player given the same number, whose wall
    clock is lower, has every record rejected as older (M-26). 1.8's guest forgot by the roster's `join` counter. Wanted: a removal for
    an id with no entry leaves none (or `world.net.forget(kind, netId)` for the game). Three mp tests are `todo` on this.
+   Done in engine 0.10.3: two of the three tests are real and pass; the straggler case is request 6.
 
 4. **View sync draws a model only once it is loaded (engine).** `createViewSync` clones an entity's `model` on the first frame it sees
    it and throws `assets: '<key>' is not loaded` while `assets.preload` is still running. Wanted: sync skips (defers) an entity whose
    `assets.has(model)` is false and draws it on the first frame after it loads. Done in engine 0.10.1; the game's interim gate is gone.
 
-1. **`world.joint` without `JointData` (blocking at merge, not now).** `games/test/phase3-done.test.mjs` bans the `JointData` identifier in game code, but lion-hawk 0.8.0 `world.joint(a, b, data)` only takes raw Rapier joint data, so the trailer hitch writes `world.R.JointData.spherical(frontAnchor, TR.tongue)`. Wanted: `world.joint(a, b, { type: 'spherical', a: [x, y, z], b: [x, y, z] })` (the engine builds the JointData), or the done test waives `world.joint` lines.
+1. **`world.joint` without `JointData` (blocking at merge, not now).** `games/test/phase3-done.test.mjs` bans the `JointData` identifier in game code, but lion-hawk 0.8.0 `world.joint(a, b, data)` only takes raw Rapier joint data, so the trailer hitch writes `world.R.JointData.spherical(frontAnchor, TR.tongue)`. Wanted: `world.joint(a, b, { type: 'spherical', a: [x, y, z], b: [x, y, z] })` (the engine builds the JointData), or the done test waives `world.joint` lines. Done in engine 0.10.3.
 2. **`games/package-lock.json`** after `games/tractor-pickup/package.json` changes (plan request 1).
 3. **`games/test/**`** references to `build.py`, `src/assets.json`, `TP_MP` or the old mp world (plan request 2), if any.
 
