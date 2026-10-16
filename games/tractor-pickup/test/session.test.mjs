@@ -5,7 +5,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { createSession, parseRoomInput, roomName, joinUrl, ERRORS, signalServer } from '../src/net/session.js';
 import { qrSvg } from '../src/ui/qr.js';
 import { emitter } from '../src/net/link.js';
-import { createGame } from '../src/sim/game.js';
+import { testGame } from './helpers/world.mjs';
 import { NET_VERSION } from '../src/net/protocol.js';
 // D-4: let queued promises and immediate callbacks run, with no wall-clock wait
 const flush = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
@@ -39,8 +39,8 @@ function fakeHandshake({ peekResult, failCreate = 0, failCode = 'network', failJ
     kick(id) { if (failControl) return Promise.reject(new HandshakeError(failControl)); this.kicked = id; return Promise.resolve(); }, leave() { if (this.closed) return; this.left = true; this.closed = true; this.emit('closed', 'left'); } });
   return { Handshake, HandshakeError, made };
 }
-const setup = (fh, extra = {}) => { let game = createGame(RAPIER, { seed: 5, power: 'medium' }), changes = 0;
-  const s = createSession({ Handshake: fh.Handshake, getGame: () => game, onFarm: (seed, n) => (game = createGame(RAPIER, { seed, power: 'medium', player: n })), getPaint: () => ({ body: 'red', trim: 'yellow' }), onChange: () => changes++, retryMs: 5, ...extra });
+const setup = (fh, extra = {}) => { let game = testGame({ seed: 5, power: 'medium' }), changes = 0;
+  const s = createSession({ Handshake: fh.Handshake, getGame: () => game, onFarm: (seed, n) => (game = testGame({ seed, power: 'medium', player: n })), getPaint: () => ({ body: 'red', trim: 'yellow' }), onChange: () => changes++, retryMs: 5, ...extra });
   return { s, get game() { return game; }, get changes() { return changes; } };
 };
 

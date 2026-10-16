@@ -1,46 +1,22 @@
 // test/mp.harness.mjs — two (or more) games in one process over the in-memory hub (M-52). No tests here.
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createGame } from '../src/sim/game.js';
-import { DT } from '../src/sim/physics.js';
-import { createMemoryHub } from '../src/net/link.js';
-import { createHostSync } from '../src/net/host.js';
-import { createGuestSync } from '../src/net/guest.js';
-import { encodeFrame } from '../src/net/replica.js';
-import { ANIMAL, TRAIN, animalRecord } from '../src/net/kinds.js';
+import { encodeFrame, decodeFrame, createRegistry } from 'lion-hawk/sim';
+import { ANIMAL, TRAIN, KINDS, animalRecord } from '../src/net/kinds.js';
+import { MAX_PLAYERS } from '../src/net/protocol.js';
 import { HELD } from '../src/sim/herd.js';
 import { engineWorld } from './mp.engine.harness.mjs';
 export { moveTrain } from './train.mjs';
 
 export const STILL = { thr: 0, steer: 0, horn: false };
 export const PAINTS = [{ body: 'red', trim: 'yellow' }, { body: 'blue', trim: 'white' }, { body: 'green', trim: 'pink' }, { body: 'orange', trim: 'purple' }];
-// lion-hawk 2f T7: TP_MP=engine runs every mp suite on the engine path (mp.engine.harness.mjs: the same options and shape)
-export const mpWorld = process.env.TP_MP === 'engine' ? engineWorld : oldWorld;
-async function oldWorld({ seed = 21, guests = 1, link = {}, join = true, clock = null, bindings } = {}) { // bindings: the replicated kinds (default: the game's own)
-  await RAPIER.init();
-  const hub = createMemoryHub(link); let now = 0; const wall = clock || (() => now); // the syncs' wall clock (rate limits, the silence watchdog): the sim clock unless a test drives it
-  const host = { name: 'host', events: [], game: createGame(RAPIER, { seed, power: 'medium' }) };
-  host.net = hub.host(); host.sync = createHostSync({ game: host.game, net: host.net, paint: PAINTS[0], clock: wall, bindings });
-  const devs = [host];
-  const addGuest = () => {
-    const i = devs.length, g = { name: 'guest' + i, events: [], game: createGame(RAPIER, { seed: 1000 + i, power: 'medium' }) }; // its own solo farm until the welcome
-    g.net = hub.join();
-    g.sync = createGuestSync({ game: g.game, net: g.net, paint: PAINTS[i % PAINTS.length], clock: wall, bindings, onFarm: (s, n) => (g.game = createGame(RAPIER, { seed: s, power: 'medium', player: n })) });
-    devs.push(g); return g;
-  };
-  if (join) for (let i = 0; i < guests; i++) addGuest();
-  // inputs: [hostInput, guest1Input, ...] (missing = STILL), or a function (dev, index) -> input
-  const step = (n = 1, inputs = []) => {
-    for (let k = 0; k < n; k++) {
-      now += DT * 1000; hub.tick(now);
-      devs.forEach((d, i) => {
-        d.events.push(...d.sync.before(now));
-        const inp = typeof inputs === 'function' ? inputs(d, i) : inputs[i]; const ev = d.game.step(inp || STILL);
-        d.events.push(...ev); d.sync.after(ev, now);
-      });
-    }
-  };
-  const seconds = (s, inputs) => step(Math.round(s * 60), inputs);
-  return { hub, host, get guests() { return devs.slice(1); }, devs, step, seconds, addGuest, get now() { return now; } };
+// every mp suite runs on the engine path: each device a headless engine on one hub (mp.engine.harness.mjs; the old createGame world retired in 3l)
+export { engineWorld as mpWorld };
+// a new farm on the host (M-19), as the parent menu makes one: the set seed, then farm.new through ctx.load; steps all devices until
+// the host has it (its then() hands it to the host sync) and returns it
+export function hostFarm(w, seed) {
+  const h = w.host, old = h.game; h.engine.scene.state.settings.seed = seed; h.engine.command('farm.new', {});
+  for (let k = 0; h.game === old && k < 30; k++) w.step(1);
+  if (h.game === old) throw new Error('hostFarm: the host made no new farm');
+  return h.game;
 }
 // Put an animal (by id) in front of a device's tractor, standing still
 export function inFront(dev, a, ahead = 2.5) { const p = dev.game.tractorWorld({ x: ahead, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; a.hidden = false; }
@@ -57,7 +33,10 @@ export const quietWarn = fn => { const warn = console.warn, warned = []; console
 export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = {}) => w.host.net.send(to.net.id, encodeFrame({ key, sender: 1, time, groups: [{ kind: ANIMAL, records }] }), key);
 export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
 export const animalRec = o => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle', leader: null, line: 0, ...o });
-export const parked = (x, z) => ({ mode: 'drive', full: false, bodies: [0, 1, 2].map(() => ({ p: { x, y: 1, z }, q: { x: 0, y: 0, z: 0, w: 1 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 }, dirt: 0 })), riders: [] });
+// a hand-made train record (NET_VERSION 4: three F.body() fields, a batched input, the dirt list)
+const still = (x, y, z) => ({ p: { x, y, z }, q: { x: 0, y: 0, z: 0, w: 1 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 } });
+export const parked = (x, z) => ({ body: still(x, 1, z), trailer: still(x - 4, 1, z), wagon: still(x - 8, 1, z), input: { s: 1, list: [{ thr: 0, steer: 0, turn: 0 }] },
+  mode: 'drive', full: false, dirt: [0, 0, 0], riders: [] });
 // M-58: what a guest shows that the host does not (empty: all devices agree). Per guest that is not alone:
 // - every host animal: gone on the host -> gone, not drawn (elsewhere) or missing here; held by this guest -> held here (fly, ride, show);
 //   held by another player -> carried or not drawn here; walking into the barn -> toBarn here; free -> free here;
@@ -78,7 +57,7 @@ export function disagreements(w) {
       else if (owner) { if (b.state !== 'carried' && b.state !== 'elsewhere') at(a.id, `player ${owner} has it, here ${b.state}`); }
       else if (a.state === 'toBarn') { if (b.state !== 'toBarn') at(a.id, `walking in on the host, here ${b.state}`); }
       else if (!free(G, b)) at(a.id, `free on the host, here ${b.state}`);
-      if (owner || a.state === 'toBarn') { const h = animalRecord(a), r = g.sync.store.get('animal', a.id);
+      if (owner || a.state === 'toBarn') { const h = animalRecord(a, {}), r = g.sync.store.get('animal', a.id);
         if (!r || r.owner !== h.owner || r.epoch !== h.epoch) at(a.id, `owner ${h.owner} epoch ${h.epoch} on the host, here ${r ? `owner ${r.owner} epoch ${r.epoch}` : 'no record'}`); }
     }
     for (const b of G.herd.animals) if (HELD.has(b.state) && !(H.herd.animals[b.id]?.state === 'carried' && H.herd.animals[b.id].owner === you)) at(b.id, `held here, ${H.herd.animals[b.id]?.state} on the host`);
@@ -93,3 +72,15 @@ export function disagreements(w) {
 export function settle(w, s) { let left = disagreements(w); for (let i = 0; i < Math.round(s * 60) && left.length; i++) { w.step(1); left = disagreements(w); } return left; }
 // a connection change (M-42, M-53): every claim, release and frame, both ways, is lost for s seconds
 export function blackout(w, s, inputs) { w.hub.drop = (from, to, d) => d instanceof ArrayBuffer || d?.t === 'claim' || d?.t === 'release'; w.seconds(s, inputs); w.hub.drop = null; }
+
+// a device goes quiet (its page sleeps, 3l: the engine sends its frames, so the hub drops them): nothing from it reaches the others until
+// the returned function is called. ahead: hand-made frames stamped ahead of the hub clock (sendAnimals, trainFrame) still pass
+const REG = createRegistry(KINDS, { maxSender: MAX_PLAYERS });
+export function quiet(w, dev, { ahead = false, json = false } = {}) { // json: its JSON messages still go
+  const id = dev.net.id, prev = w.hub.drop;
+  w.hub.drop = (from, to, d) => {
+    if (from === id) { if (!(d instanceof ArrayBuffer)) return !json; if (!ahead) return true; try { return !(decodeFrame(d.slice(0), REG)?.time > w.now); } catch { return true; } }
+    return prev ? prev(from, to, d) : false;
+  };
+  return () => { w.hub.drop = prev; };
+}

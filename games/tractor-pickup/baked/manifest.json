@@ -1,0 +1,245 @@
+{
+  "v": 1,
+  "models": {
+    "bale": {
+      "glb": "models/bale.glb",
+      "anim": null,
+      "bytes": 3696,
+      "sha256": "d669612997bc65d7bafb61661ef9c2fc99152b790089df7fee640b7005f151bd"
+    },
+    "barn": {
+      "glb": "models/barn.glb",
+      "anim": null,
+      "bytes": 31932,
+      "sha256": "e1581fcb95ae5ea69db853c12d1d0f6d478710e425c29e8120564add377bf322"
+    },
+    "barrel": {
+      "glb": "models/barrel.glb",
+      "anim": null,
+      "bytes": 3472,
+      "sha256": "e423f99268b286a349118ce04b14635708b0a3cf0aab98ca539a9a3099174579"
+    },
+    "bunny": {
+      "glb": "models/bunny.glb",
+      "anim": "models/bunny.anim.json",
+      "bytes": 34100,
+      "sha256": "e3ee75bac1710b72e5f44f86572a97350acd2379f910d83a2a40f99494b73edc"
+    },
+    "bush": {
+      "glb": "models/bush.glb",
+      "anim": null,
+      "bytes": 3840,
+      "sha256": "e2f1205d3b8135acbfb25967c2d21a714ea1e2554dd3a235fc22bc0324ae3fa2"
+    },
+    "bushS": {
+      "glb": "models/bushS.glb",
+      "anim": null,
+      "bytes": 3060,
+      "sha256": "e199d022f02851a974199bd19eb65ad12b1cd5bfc468cb9f1a0a1152808e6a99"
+    },
+    "chick": {
+      "glb": "models/chick.glb",
+      "anim": "models/chick.anim.json",
+      "bytes": 33712,
+      "sha256": "6ef3c55e0e0077a8585d49c969a0c1e147da5c509bd9b999809efe1a37176ba5"
+    },
+    "chicken": {
+      "glb": "models/chicken.glb",
+      "anim": "models/chicken.anim.json",
+      "bytes": 35120,
+      "sha256": "7ed58d0c21eb8a3472803e8fbc868cacfe2b5e52d4f8c79438985f1db049ff49"
+    },
+    "cone": {
+      "glb": "models/cone.glb",
+      "anim": null,
+      "bytes": 3524,
+      "sha256": "4eec8d437a954a4a49314d98a6558fd0fe1ceee1e046b982f9eeab6cc62ce7fc"
+    },
+    "corn": {
+      "glb": "models/corn.glb",
+      "anim": null,
+      "bytes": 9188,
+      "sha256": "9bb87c1f39271f0af65b95e6b9c740480ceb17fcfa78d79f05dd87906fb06c37"
+    },
+    "cow": {
+      "glb": "models/cow.glb",
+      "anim": "models/cow.anim.json",
+      "bytes": 39892,
+      "sha256": "de498e8eb67864b14ba5fb9f645498e6d195154b61becd374e940512887019cb"
+    },
+    "dog": {
+      "glb": "models/dog.glb",
+      "anim": "models/dog.anim.json",
+      "bytes": 33336,
+      "sha256": "005177b594750461269295616c2ea5a70fec91bed2c613a7db30437f6650ef51"
+    },
+    "duck": {
+      "glb": "models/duck.glb",
+      "anim": "models/duck.anim.json",
+      "bytes": 35564,
+      "sha256": "4ac9beef1d3c51c6ac839cbf6b95952c637dfc9800201fd98e8a721440a08517"
+    },
+    "fence": {
+      "glb": "models/fence.glb",
+      "anim": null,
+      "bytes": 4376,
+      "sha256": "c8aea75cf9d401416871425b3a8ba572c54dcf3d6bd20f236052ff2fd41784b5"
+    },
+    "flowerR": {
+      "glb": "models/flowerR.glb",
+      "anim": null,
+      "bytes": 5128,
+      "sha256": "5d2fbe6399b075976fc78346b5a5a57505c89e4d9f504d032584bc118870ec21"
+    },
+    "flowerY": {
+      "glb": "models/flowerY.glb",
+      "anim": null,
+      "bytes": 6256,
+      "sha256": "b3e9a7b355619b89a0b66b29a1218b997a84fa6cb1ac6a12e2451ea3d3e03b1c"
+    },
+    "gate": {
+      "glb": "models/gate.glb",
+      "anim": null,
+      "bytes": 3104,
+      "sha256": "8ff6d4cfec9b8ddd8da98d47a9244725dc948eadf8d04a08cdd17ff981dbfe39"
+    },
+    "grass": {
+      "glb": "models/grass.glb",
+      "anim": null,
+      "bytes": 7340,
+      "sha256": "a7bdb8baf37af44d40a96efd2881f9df64caffe038a36a26bfe17d25df99b257"
+    },
+    "hat-cowboy": {
+      "glb": "models/hat-cowboy.glb",
+      "anim": null,
+      "bytes": 5072,
+      "sha256": "1a25a7b4d001c6aae07a879e0fdf33be62d5f92646cb2a87ed501a99b8b8f4b7"
+    },
+    "hat-party": {
+      "glb": "models/hat-party.glb",
+      "anim": null,
+      "bytes": 8076,
+      "sha256": "30d2367b1fb186736fec6136cdd3840ad7d780f4e013946f06b06825d1742a19"
+    },
+    "hat-straw": {
+      "glb": "models/hat-straw.glb",
+      "anim": null,
+      "bytes": 6132,
+      "sha256": "08dbe59ad3bcb46c6b0c4cb51b1b6db701b32a6c75210e90d74b65484226522b"
+    },
+    "hay": {
+      "glb": "models/hay.glb",
+      "anim": null,
+      "bytes": 4716,
+      "sha256": "030c7b7225a78f4dc76f6ee0d02cf1db65fd774ecc6108689160ac0c22595be2"
+    },
+    "log": {
+      "glb": "models/log.glb",
+      "anim": null,
+      "bytes": 7012,
+      "sha256": "24add3a1e6f3c9c83a747e232d4679ecca44fdd1b68497b6f14021c17f90efb1"
+    },
+    "oak": {
+      "glb": "models/oak.glb",
+      "anim": null,
+      "bytes": 7396,
+      "sha256": "6e4450a131c3eb94cc7d60682d0bd2150e16bf5ffbeccd51f0f3611645d07345"
+    },
+    "pig": {
+      "glb": "models/pig.glb",
+      "anim": "models/pig.anim.json",
+      "bytes": 37484,
+      "sha256": "d39e3c5d891e7d9dc3bd22eccc4aba52fb05fba1e4110c06f2971f746596862b"
+    },
+    "pumpkin": {
+      "glb": "models/pumpkin.glb",
+      "anim": null,
+      "bytes": 6468,
+      "sha256": "36d8e2ef1ac813636b82ee147b281b4c688809d58c9a46ac71e4b141098f2e99"
+    },
+    "rock": {
+      "glb": "models/rock.glb",
+      "anim": null,
+      "bytes": 4012,
+      "sha256": "a7219f25d2e36f1f34a05e2744c64a72fa6a5f0f2efcf7d95c28c761d09f6b83"
+    },
+    "rockA": {
+      "glb": "models/rockA.glb",
+      "anim": null,
+      "bytes": 6972,
+      "sha256": "7233dcff4bc611890e7c9245b6f7a6821aa59161452bb7cea66f37a6d2fe8e6d"
+    },
+    "rockB": {
+      "glb": "models/rockB.glb",
+      "anim": null,
+      "bytes": 8264,
+      "sha256": "9ff5a17233b15856224bdc6c054c89564fd373c59a3a55e1c058f50c580cb4a6"
+    },
+    "rockC": {
+      "glb": "models/rockC.glb",
+      "anim": null,
+      "bytes": 10140,
+      "sha256": "45ca338e7b8b05e26d0be52bd3b8c8cf22f7bb4fb3fffeaff1baf1ec48d13567"
+    },
+    "sheep": {
+      "glb": "models/sheep.glb",
+      "anim": "models/sheep.anim.json",
+      "bytes": 43840,
+      "sha256": "e9ac3c2a952459e0f5744f158b6d2109e348425a65b1a759a8b2f7206fddb230"
+    },
+    "shrub": {
+      "glb": "models/shrub.glb",
+      "anim": null,
+      "bytes": 8184,
+      "sha256": "9504179941703a93101e4876ab3ed4343c658fd8dfdbeff3d639b71b28d68d50"
+    },
+    "sprinkler": {
+      "glb": "models/sprinkler.glb",
+      "anim": null,
+      "bytes": 3224,
+      "sha256": "66a3dcaae602b9d65068a4470661d6747401d9e3fc6b664ab743b0a2941af8e5"
+    },
+    "stump": {
+      "glb": "models/stump.glb",
+      "anim": null,
+      "bytes": 4560,
+      "sha256": "16ea9149cd90101653683a6c56707ef658104ea196e5a0f2c8fe9520d952b326"
+    },
+    "stump-cut": {
+      "glb": "models/stump-cut.glb",
+      "anim": null,
+      "bytes": 3648,
+      "sha256": "06cf0f59d86d28fcbab3dad349b407cba89f3cd0b989f61f6c917eca5517f301"
+    },
+    "tractor": {
+      "glb": "models/tractor.glb",
+      "anim": null,
+      "bytes": 39620,
+      "sha256": "381b7e605d407e21fbe1abacfc6df45204307f778d187c7f8e28015fc83ffb46"
+    },
+    "trailer": {
+      "glb": "models/trailer.glb",
+      "anim": null,
+      "bytes": 6836,
+      "sha256": "69ce543c4ef4c11daa56cf6539717ea7e3625fb287a839ebc33d015cf33d09bb"
+    },
+    "tree": {
+      "glb": "models/tree.glb",
+      "anim": null,
+      "bytes": 5972,
+      "sha256": "f45cc0193b1223a2ccae19754506c7fa9d70c777cbd9e383f248c0bd347e766d"
+    },
+    "treeFat": {
+      "glb": "models/treeFat.glb",
+      "anim": null,
+      "bytes": 4792,
+      "sha256": "1bfdc464392dda7bca8edea9bbf0ad4579de2c93454ba8f5848f43c1c76f08d6"
+    },
+    "wash": {
+      "glb": "models/wash.glb",
+      "anim": null,
+      "bytes": 30756,
+      "sha256": "3f08e4ced3e83be4449c385a58b61b789e7eccbf40ab0fbbe5c961605aa330af"
+    }
+  }
+}

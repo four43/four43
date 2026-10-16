@@ -2,17 +2,21 @@
 // and the debug extras. Never touches three.js or the DOM. The caller initialises Rapier (`await R.init()`) before
 // createEngine/boot (#6).
 import R from '@dimforge/rapier3d-compat';
-import { defineGame, actions, axis, button } from 'lion-hawk/sim';
+import { defineGame } from 'lion-hawk/sim';
 import { makeFarm, makeSandbox, moveTrain, FARM_EVENTS } from './game/farm.js';
 import { makeOverlays } from './game/overlays.js';
 import { makeCommands } from './game/commands.js';
 import { netCommands, netConfig } from './game/net.js';
+import MATERIALS from './defs/materials.js';
+import PHYS from '../baked/phys.json' with { type: 'json' };
+import { PHYSICS } from './sim/ground.js';
 
 export { FARM_EVENTS };
+// the entry initialises Rapier through here (#6, D9: the defineGame file is the one that holds Rapier)
+export const initPhysics = () => R.init();
 
-// #81: goX/goZ are the wanted direction in the world frame (length = stick distance), merged across devices as one vector
-// (I-1); goBack: the stick is in the reverse cone on the screen (C-8). The device map hook writes them (2g).
-export const ACTIONS = actions({ goX: axis({ pair: 'goZ' }), goZ: axis(), goBack: button(), horn: button() });
+import { ACTIONS } from './sim/actions.js';
+export { ACTIONS }; // #81 (sim/actions.js)
 
 // JSON-safe summary for tests and the hook (#28: the createGame object stays in ctx.state, never here).
 function state(e) {
@@ -36,10 +40,10 @@ function state(e) {
   };
 }
 
-// clock overrides the syncs' wall clock, bindings the replicated kinds and the port's (tests only, T6). timer: ?fps only, the
-// entry's performance.now: the sim times its own Rapier steps into game.phys.worldMs for the meter (sim/physics.js, #106)
-export function tractorGame({ clock, bindings, timer } = {}) {
-  const { scene: farm, api } = makeFarm({ R, clock, bindings, timer }), { scene: sandbox } = makeSandbox({ R, timer });
+// clock overrides the syncs' wall clock (tests only, T6). ?fps: the entry passes
+// performance.now as boot's timer; world.stats.stepMsTotal is Rapier's running total (#106). R is handed to the engine here (D9).
+export function tractorGame({ clock } = {}) {
+  const { scene: farm, api } = makeFarm({ clock }), { scene: sandbox } = makeSandbox();
   // → window.engine.debug
   const debug = e => ({
     get game() { return e.scene.state.game; }, get farm() { return e.scene.state; }, get sync() { return e.scene.state.net?.sync ?? null; },
@@ -50,7 +54,8 @@ export function tractorGame({ clock, bindings, timer } = {}) {
   });
   return defineGame({
     id: 'tractor-pickup', sim: { hz: 60, maxCatchUp: 3, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm', // hz: the physics step (DT)
-    scenes: { farm, sandbox, ...makeOverlays() }, commands: { ...makeCommands(api), ...netCommands(api) }, net: netConfig(bindings ?? undefined), state, debug,
+    defs: { materials: MATERIALS, models: PHYS }, physics: { rapier: R, ...PHYSICS },
+    scenes: { farm, sandbox, ...makeOverlays() }, commands: { ...makeCommands(api), ...netCommands(api) }, net: netConfig(), state, debug,
   });
 }
 

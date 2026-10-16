@@ -1,9 +1,9 @@
 // Debug tools (D-5): the ?tune panel (feel constants as sliders) and the ?fps meter (X-4 stutter hunting).
 import { TUNE, TUNE_POWERS } from '../sim/tune.js';
-import { CAM } from '../render/camera.js';
+import { CAM } from '../view/rig.js';
 
 // The view's own rows: the chase camera (CAM) is the view's, so these sliders write it directly
-const VIEW_ROWS = [['cam dist', 'D', 4, 20, 0.5], ['cam height', 'H', 4, 22, 0.5], ['cam ahead', 'AHEAD', 2, 24, 0.5]];
+const VIEW_ROWS = [['cam dist', 'distance', 4, 20, 0.5], ['cam height', 'height', 4, 22, 0.5], ['cam ahead', 'lookAhead', 2, 24, 0.5]]; // the engine chase rig's opts
 
 // ?tune (lion-hawk 2g G4b): the sim rows (sim/tune.js) only ask: a slider calls send(id, value) and the power picker send('power',
 // name); the reset button calls reset(). What a sim row shows comes back through shown(key, value) (the `tune` event: the value the
@@ -65,7 +65,7 @@ export function createFpsMeter(renderer) {
     begin(now) { start = now; }, // rAF time at the start of this frame
     event(type) { cur.evs.add(type); },
     step() { cur.steps++; },
-    worldMs(ms) { cur.world += ms; }, // Rapier World.step time: the sim times its own steps under ?fps (sim/physics.js worldMs)
+    worldMs(ms) { cur.world += ms; }, // Rapier World.step time from the engine's timer hook (#106, world.stats)
     tick(dt, gap, simMs, drawMs, dist, programsBefore) {
       clock += dt; win.push(dt); if (win.length > 300) win.shift();
       if (gap > 50) log(`${clock.toFixed(1)}s gap ${gap.toFixed(0)}ms | before: sim ${prev.sim.toFixed(1)} (rapier ${prev.world.toFixed(1)}, ${prev.steps} steps) draw ${prev.draw.toFixed(1)}${prev.compiled ? ` +${prev.compiled} shaders` : ''}${prev.speech ? ' speech' : ''} [${prev.evs}] | idle ${(start - prev.end).toFixed(0)}ms${longTasks ? ` longtasks ${longTasks}` : ''} | now: ${cur.steps} steps | ${dist.toFixed(0)}m`);

@@ -1,7 +1,7 @@
 // test/mp.repair.test.mjs — repair after lost messages (M-56..M-58, M-53 loss tests)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, free, single, inFrontOf, countCalls, STILL, PAINTS, settle, disagreements, blackout, trainFrame, parked } from './mp.harness.mjs';
+import { mpWorld, free, single, inFrontOf, countCalls, STILL, PAINTS, settle, disagreements, blackout, trainFrame, parked, hostFarm } from './mp.harness.mjs';
 import { REPAIR_MS } from '../src/net/host.js';
 import { NET_VERSION } from '../src/net/protocol.js';
 import { createLoad } from '../src/sim/slots.js';
@@ -23,7 +23,7 @@ test('an away guest keeps its animals: the 3 s count only while its frames come 
   const w = await mpWorld({ seed: 92 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = inFrontOf(g, ha);
   w.seconds(3); assert.equal(ga.state, 'ride');
-  const hp = w.host.sync.players.map.get(2), t = hp.latest.bodies[0].p, empty = trainFrame(2, 2, { ...parked(t.x, t.z), riders: [] }, w.now + 1);
+  const hp = w.host.sync.players.map.get(2), t = hp.latest.body.p, empty = trainFrame(2, 2, { ...parked(t.x, t.z), riders: [] }, w.now + 1);
   w.hub.drop = (from, to, d) => from === g.net.id && d instanceof ArrayBuffer && d !== empty; // the guest's own train frames are lost; the host's last one has no riders
   g.net.send(w.host.net.id, empty, false); w.step(1); w.hub.drop = null;
   assert.ok(hp.latest.riders.length === 0, 'the host last heard a train without the animal');
@@ -83,11 +83,10 @@ test('everything lost for a second while two guests boop under a far network: al
   assert.deepEqual(settle(w, 3), []);
 });
 test('a lost new-farm welcome: the host sends the welcome with each keyframe, so the guest is on the new farm within 3 s; a guest in its show is not rebuilt twice (M-19, M-58)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 97, guests: 2 }); w.seconds(1);
   const [g, s] = w.guests; s.game.mode = 'show';
   w.hub.drop = (from, to, d) => to === g.net.id && d?.t === 'welcome'; // the new farm's welcome to g is lost
-  w.host.game = createGame(RAPIER, { seed: 98, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.2); w.hub.drop = null;
+  hostFarm(w, 98); w.seconds(0.2); w.hub.drop = null;
   assert.equal(g.game.farm.seed, 97, 'the welcome is lost'); assert.ok(disagreements(w).some(x => x.startsWith('guest1: farm')), 'the devices disagree after the loss');
   const t0 = w.now; let k = 0; while (g.game.farm.seed !== 98 && k++ < 180) w.step(1);
   assert.equal(g.game.farm.seed, 98); assert.ok(w.now - t0 <= 3000, `on the new farm after ${(w.now - t0).toFixed(0)} ms`);
@@ -138,12 +137,11 @@ test('a tree broken through its record (its tree message lost) breaks quietly: n
   w.seconds(2.5); assert.equal(g.game.trees.list[t.id].state, 'broken', 'broken again from the records'); assert.equal(bursts(), 0, 'still no burst');
 });
 test('a new farm with the same seed (a set seed): the guest builds it again, also after its show, and all agree within 3 s (M-19, M-26, M-58)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 103, guests: 2 }); w.seconds(1);
   const [g, s] = w.guests; s.game.mode = 'show';
   for (const a of w.host.game.herd.animals) a.epoch += 5; // the old farm's ownership numbers are high; the new farm's start at 0
   w.seconds(2.5); const id = single(w.host.game).id; assert.equal(g.sync.store.get('animal', id).epoch, 5);
-  const old = g.game, oldS = s.game; w.host.game = createGame(RAPIER, { seed: 103, power: 'medium' }); w.host.sync.setGame(w.host.game);
+  const old = g.game, oldS = s.game; hostFarm(w, 103);
   const t0 = w.now; let k = 0; while (g.game === old && k++ < 180) w.step(1);
   assert.notEqual(g.game, old, 'built again'); assert.ok(w.now - t0 <= 3000);
   w.seconds(2.5); assert.equal(s.game, oldS, 'the show guest waits'); assert.equal(g.sync.store.get('animal', id).epoch, 0, 'the new herd is taken');

@@ -7,17 +7,17 @@ import { createMenus, sunSvg } from '../ui/menus.js';
 import { createStickerArt } from '../ui/stickerArt.js';
 import { BED, minutesLeft } from '../sim/bedtime.js';
 
-// pics(doc): the page's { renderer, icons, tractorPic, sound, voice } (game.view.js). net (G5): { session, netlog } from the entry
+// pics(view): the page's { renderer, icons, tractorPic, sound, voice } (game.view.js). net (G5): { session, netlog } from the entry
 // (the session is set after boot, as it binds rooms to the engine), or null (no multiplayer panel). make: ui/menus.js's
 // createMenus (a test passes a stand-in)
 export function menuHalves(pics, net = null, { make = createMenus } = {}) {
   let menus = null, engine = null, seen = null; // seen: the book's last seen mark before it opened (the new stickers bounce, F-3)
   const command = (type, data) => { try { engine?.command(type, data); } catch (e) { console.warn('command ' + type, e); } };
-  const menusOf = doc => {
+  const menusOf = view => {
     if (menus) return menus;
-    const p = pics(doc);
-    return (menus = make(doc.getElementById('ui'), {
-      icons: p.icons, art: createStickerArt(p.renderer), tractorPic: p.tractorPic,
+    const p = pics(view);
+    return (menus = make(view.doc.getElementById('ui'), {
+      icons: p.icons, art: p.renderer ? createStickerArt(p.renderer, p.view.assets, p.view.materials) : null, tractorPic: p.tractorPic,
       onPaint(paint) { p.sound.plop(); command('paint', { body: paint.body, trim: paint.trim }); }, // W-3
       onHats(_, id) { p.sound.plop(); command('hat', { id }); }, // W-4
       onPlace(i, at) { command('sticker.place', { i, page: at.page, x: at.x, y: at.y }); }, // W-2
@@ -43,7 +43,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
   const half = (show, done, more = {}) => ({
     enter(e, view) {
       engine = e; ui = view.ui; if (!e.scene.state.progress) return;
-      try { show(menusOf(view.doc), e, progressOf(e), view); view.ui.adopt(); }
+      try { show(menusOf(view), e, progressOf(e), view); view.ui.adopt(); }
       catch (err) {
         console.warn(`screen ${done} failed to open`, err); try { menus?.hide(); } catch (e2) { console.warn('screen hide', e2); }
         try { e.ui.tryTap(done); } catch (e2) { console.warn(done, e2); }
@@ -68,7 +68,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
     reward: half((m, e, p, view) => {
       const r = e.scene.state.reward; if (!r) return;
       m.showReward({ sticker: r.sticker, newPaint: r.newPaint, newHat: r.newHat, progress: p });
-      const { sound, voice } = pics(view.doc);
+      const { sound, voice } = pics(view);
       if (r.newPaint || r.newHat) sound.bells();
       voice.say(['you-did-it', 'new-sticker']);
     }, 'reward.go'),
@@ -79,7 +79,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
     parent: {
       enter(e, view) {
         engine = e; const s = e.scene.state; if (!s.settings) return;
-        menusOf(view.doc).openParent(s.settings, s.seed, { guest: s.net?.role === 'guest', bed: { choice: s.bed.choice, left: minutesLeft(s.bed, Date.now()), phase: s.bed.phase } }); // M-19
+        menusOf(view).openParent(s.settings, s.seed, { guest: s.net?.role === 'guest', bed: { choice: s.bed.choice, left: minutesLeft(s.bed, Date.now()), phase: s.bed.phase } }); // M-19
         view.ui.adopt();
       },
       exit() { menus?.closeParent(); },
@@ -88,7 +88,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
     // M-29..M-36 (parity #23–#25): the Multiplayer panel over the farm, drawn from the session (net/session.js). Closing it ends a
     // code check or a join prompt (its client closes); a room goes on
     multiplayer: {
-      enter(e, view) { engine = e; ui = view.ui; const session = net?.session; if (!session) return; menusOf(view.doc).openMultiplayer(session); },
+      enter(e, view) { engine = e; ui = view.ui; const session = net?.session; if (!session) return; menusOf(view).openMultiplayer(session); },
       exit() { try { net?.session?.cancel(); } catch (err) { console.warn('multiplayer cancel', err); } menus?.closeMultiplayer(); },
     },
     // the session changed (net/session.js onChange): the open panel redraws
@@ -106,7 +106,7 @@ function sleepHalf(pics) {
   return {
     enter(e, view) {
       const doc = view.doc, ev = e.events.since(0).findLast(x => x.type === 'sleep'), quiet = ev?.quiet ?? true; // none in the log: never hide the wake
-      sound = pics(doc).sound; sound.lullaby(true);
+      sound = pics(view).sound; sound.lullaby(true);
       layer = doc.createElement('div'); layer.id = 'sleep'; layer.hidden = !quiet; t0 = e.time.sim;
       layer.innerHTML = `<button type="button" class="pic wake" data-lh-slot="sleep.wake" aria-label="Wake up">${sunSvg()}<span>Wake Up!</span><i></i></button>`;
       doc.getElementById('ui').appendChild(layer); view.ui.adopt();

@@ -1,13 +1,16 @@
-// Rally-feel tractor on Rapier's ray-cast vehicle controller (spec D-1..D-9).
+// Rally-feel tractor on the engine's vehicle kit (Rapier's ray-cast vehicle controller; spec D-1..D-9). The game keeps every tuning
+// value and the per-step maths and hands the per-wheel results to car.set() each step; the kit runs updateVehicle before lh.physics.step.
 // Chassis frame: +x forward, +y up, +z right. Kenney model +z maps to chassis +x.
-import { G, groups } from './physics.js';
+import { createVehicle } from 'lion-hawk/kits/vehicle';
+import { GROUPS } from './ground.js';
+import { afterWheels } from './wheels.js';
+const Q0 = [0, 0, 0, 1];
 
 export const POWER = {
   low:    { vmax: 6,  force: 5200,  rearSide: 0.85, slideMax: 0.35, loose: 0.08 },
   medium: { vmax: 9,  force: 7600,  rearSide: 0.62, slideMax: 0.6, loose: 0.03 },
   high:   { vmax: 12, force: 10000, rearSide: 0.48, slideMax: 0.78, loose: 0.02 },
 };
-export const SURFACE = { gravel: { grip: 1, vmul: 1 }, grass: { grip: 0.8, vmul: 0.7 }, mud: { grip: 0.55, vmul: 0.5 } };
 export const TP = {
   scale: 1.6, mass: 1400, revForce: 7600, vrev: 3, // revForce: as strong as Medium forward, so reverse can push jackknifed wagons back (review 3)
   brake: 30, handbrake: 60, roll: 1.5,
@@ -30,39 +33,45 @@ export function quatAxes(q) {
     r: { x: 2 * (x * z + w * y), y: 2 * (y * z - w * x), z: 1 - 2 * (x * x + y * y) },
   };
 }
-const yawQuat = yaw => { const a = yaw - Math.PI / 2; return { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }; };
 const ease = (cur, tgt, rate, dt) => cur + Math.max(-rate * dt, Math.min(rate * dt, tgt - cur));
 
-export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = () => 'gravel' }) {
-  const { RAPIER, world } = phys;
-  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, 0.3, z).setRotation(yawQuat(yaw))
-    .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.8)
-    .setAdditionalMassProperties(TP.mass, { x: 0.15, y: 0.45, z: 0 }, { x: 900, y: 2200, z: 2000 }, { x: 0, y: 0, z: 0, w: 1 }));
-  const cg = groups(G.VEHICLE, G.GROUND | G.STATIC | G.PROP | G.WALL);
-  const cols = [
-    world.createCollider(RAPIER.ColliderDesc.cuboid(1.55, 0.5, 1.0).setTranslation(0.27, 0.95, 0).setDensity(0.1).setFriction(0.2).setRestitution(0).setCollisionGroups(cg), body),
-    world.createCollider(RAPIER.ColliderDesc.cuboid(0.55, 0.55, 0.62).setTranslation(-0.55, 1.95, 0).setDensity(0.1).setFriction(0.2).setCollisionGroups(cg), body),
-  ];
-  const vc = world.createVehicleController(body);
-  const W = TRACTOR_WHEELS.map(w => ({ ...w }));
-  W.forEach((w, i) => {
-    vc.addWheel({ x: w.cx, y: w.cy + 0.12, z: w.cz }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, TP.suspRest, w.radius);
-    vc.setWheelSuspensionStiffness(i, TP.stiffness); vc.setWheelSuspensionCompression(i, TP.compression);
-    vc.setWheelSuspensionRelaxation(i, TP.relaxation); vc.setWheelMaxSuspensionForce(i, 1e6); vc.setWheelMaxSuspensionTravel(i, TP.travel);
-  });
-  const rayGroups = groups(0xffff, G.GROUND | G.STATIC), own = new Set(cols.map(c => c.handle));
+// The tractor's spawn desc (also a remote train's, src/sim/trains.js): tractor to tractor solid (M-7, user decision 2026-10-13: the
+// 'vehicle' filter; a solo farm has one tractor, so nothing changes there); model, scale: view data (view sync); coverage: the dirt level (T-16)
+export function tractorDesc({ x, z, yaw, y = 0.3 }) {
+  const a = yaw - Math.PI / 2; // the chassis +x is the heading
+  return { tags: ['tractor'], model: 'tractor', scale: TP.scale, coverage: { dirt: 0 }, at: [x, y, z], q: [0, Math.sin(a / 2), 0, Math.cos(a / 2)],
+    body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.8,
+      massProps: { mass: TP.mass, com: [0.15, 0.45, 0], inertia: [900, 2200, 2000] } }, // lh-allow: D3, the playtested 1400 kg and tuned inertia
+    colliders: [
+      { shape: 'box', half: [1.55, 0.5, 1.0], p: [0.27, 0.95, 0], q: Q0, part: 'body', material: 'chassis' },
+      { shape: 'box', half: [0.55, 0.55, 0.62], p: [-0.55, 1.95, 0], q: Q0, part: 'cab', material: 'chassis' },
+    ],
+    groups: { member: ['vehicle'], filter: ['ground', 'static', 'prop', 'wall', 'vehicle'] } };
+}
+export const createTractor = (world, opts) => attachTractor(world, world.spawn(tractorDesc(opts)), opts);
+// what a desc cannot hold: the vehicle kit, its wheels and the driving maths. yaw: the heading it reports before its first step
+// (the body's when not given)
+export function attachTractor(world, e, { power = 'medium', materialAt = () => 'route', yaw = null } = {}) { // materialAt: the ground's material id (M-10)
+  const p0 = e.body.translation(), x = p0.x, z = p0.z;
+  if (yaw === null) { const f0 = quatAxes(e.body.rotation()).f; yaw = Math.atan2(f0.x, f0.z); }
+  const body = e.body, cols = e.colliders.map(c => c.collider), W = TRACTOR_WHEELS.map(w => ({ ...w }));
+  const car = createVehicle(world, e, { forward: 'x', rayGroups: { member: [...GROUPS], filter: ['ground', 'static'] },
+    wheels: W.map(w => ({ at: [w.cx, w.cy + 0.12, w.cz], radius: w.radius, front: w.front, part: w.name, // the baked node: the kit writes its pose
+      suspension: { rest: TP.suspRest, stiffness: TP.stiffness, compression: TP.compression, relaxation: TP.relaxation, travel: TP.travel, maxForce: 1e6 } })) });
+  const vc = car.controller, wheelSet = { steer: 0, engine: 0, brake: 0, slip: 0, side: 0 }; // vc: read-only wheel queries
+  let armed = false, side = 0, u = null, r = null; // from step() to the hook after the wheel update (sim/wheels.js)
 
   const t = {
-    body, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, inTurn: 0, assist: 0,
-    x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, surface: 'gravel',
+    e, body, car, vc, W, cols, power, P: POWER[power], thr: 0, steer: 0, inThr: 0, inSteer: 0, inTurn: 0, assist: 0,
+    x, z, yaw, speed: 0, fwd: 0, slip: 0, engine: 0, ground: 'route', surface: 'gravel', // ground: material id; surface: its game.surface
     setPower(name) { this.power = name; this.P = POWER[name]; },
     setInput(thr, steer, turn = 0) { this.inThr = Math.max(-1, Math.min(1, thr)); this.inSteer = Math.max(-1, Math.min(1, steer)); this.inTurn = Math.max(-1, Math.min(1, turn)); },
     setAssist(bias) { this.assist = bias; },
     step(dt) {
-      const P = this.P, q = body.rotation(), { f, u, r } = quatAxes(q), lv = body.linvel(), p = body.translation();
-      this.fwd = lv.x * f.x + lv.z * f.z; const side = lv.x * r.x + lv.z * r.z; this.speed = Math.hypot(lv.x, lv.z);
+      const P = this.P, q = body.rotation(), ax = quatAxes(q), f = ax.f, lv = body.linvel(), p = body.translation(); u = ax.u; r = ax.r;
+      this.fwd = lv.x * f.x + lv.z * f.z; side = lv.x * r.x + lv.z * r.z; this.speed = Math.hypot(lv.x, lv.z);
       this.slip = this.speed > 1 ? Math.atan2(side, Math.abs(this.fwd)) : 0;
-      this.surface = surfaceAt(p.x, p.z); const SF = SURFACE[this.surface];
+      this.ground = materialAt(p.x, p.z); const SF = world.materials.get(this.ground).game; this.surface = SF.surface; // grip, vmul from the registry
       this.thr = ease(this.thr, this.inThr, TP.inputRate, dt);
       const v = this.fwd, maxSteer = TP.steerMax / (1 + Math.abs(v) * 0.06);
       const want = Math.max(-1, Math.min(1, this.inSteer + this.assist));
@@ -79,15 +88,17 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
       const drift = Math.abs(this.steer / maxSteer) * Math.min(1, this.speed / (0.5 * P.vmax)) * Math.max(0, this.thr);
       const rearSide = P.rearSide + (P.loose - P.rearSide) * drift;
       for (let i = 0; i < 4; i++) {
-        const w = W[i];
-        vc.setWheelSteering(i, w.front ? this.steer : 0);
-        vc.setWheelEngineForce(i, w.front ? 0 : force / 2);
-        vc.setWheelBrake(i, brake);
-        const n = vc.wheelIsInContact(i) && vc.wheelContactNormal(i), g = SF.grip * (n && n.y < TP.steep ? TP.steepGrip : 1);
-        vc.setWheelFrictionSlip(i, TP.slip * g);
-        vc.setWheelSideFrictionStiffness(i, (w.front ? 1 : rearSide) * SF.grip * (steep ? TP.steepGrip : 1)); // slide sideways off the bank
+        const w = W[i], n = vc.wheelIsInContact(i) && vc.wheelContactNormal(i), g = SF.grip * (n && n.y < TP.steep ? TP.steepGrip : 1);
+        wheelSet.steer = w.front ? this.steer : 0; wheelSet.engine = w.front ? 0 : force / 2; wheelSet.brake = brake;
+        wheelSet.slip = TP.slip * g; wheelSet.side = (w.front ? 1 : rearSide) * SF.grip * (steep ? TP.steepGrip : 1); // slide sideways off the bank
+        car.set(i, wheelSet);
       }
-      vc.updateVehicle(dt, undefined, rayGroups, c => !own.has(c.handle));
+      this.x = p.x; this.z = p.z; this.yaw = Math.atan2(f.x, f.z); armed = true;
+    },
+    // after the kit's wheel update, before the Rapier step (sim/wheels.js), with step()'s axes and slide: the impulses
+    after(dt) {
+      if (!armed) return; armed = false;
+      const P = this.P;
       // D-7 slide help: past slideMax, push the slide back toward the direction of travel
       const excess = Math.abs(this.slip) - P.slideMax;
       if (this.speed > 1 && excess > 0) {
@@ -105,8 +116,8 @@ export function createTractor(phys, { x, z, yaw, power = 'medium', surfaceAt = (
         body.applyTorqueImpulse({ x: -u.z * k, y: 0, z: u.x * k }, true);
         if (u.y < 0.2) body.applyImpulse({ x: 0, y: TP.mass * 4 * dt, z: 0 }, true);
       }
-      this.x = p.x; this.z = p.z; this.yaw = Math.atan2(f.x, f.z);
     },
   };
+  afterWheels(world, e, dt => t.after(dt));
   return t;
 }

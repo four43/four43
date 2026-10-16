@@ -7,7 +7,7 @@ import { createHud } from '../ui/hud.js';
 import { createRoster, createFinder, placeArrow } from '../ui/roster.js';
 import { createHornMarks } from '../render/hornMarks.js';
 import { paintBtnSvg, bookSvg, gearSvg } from '../ui/menus.js';
-import { VIEW } from '../render/scene.js';
+import { VIEW } from './size.js';
 import { slotIndex } from '../sim/slots.js';
 import { TYPES } from '../sim/herd.js';
 import { newStickers } from '../sim/progress.js';
@@ -44,7 +44,7 @@ function edgeArrow(rig, p) {
 }
 
 // root: #ui. world(): the farm's 3D (its fx), tractorAt(): the drawn tractor position (interpolated). icons, tractorPic: the
-// slot pictures and the bubble's tractor (ui/icons.js); paints: PAINTS (render/vehicles3d.js); scene: the page's three.js scene.
+// slot pictures and the bubble's tractor (ui/icons.js); paints: PAINTS (view/vehicles.js); scene: the page's three.js scene.
 export function createTractorHud(root, { icons, voice, sound, rig, paints, tractorPic, scene, world, tractorAt }) {
   const doc = root.ownerDocument, before = new Set(root.children);
   const hud = createHud(root, { icons, onWordTap: ids => voice.say(ids), onSlotTap: (type, golden) => { sound.animal(type); voice.say(golden ? ['golden', type] : [type]); } }); // E-3

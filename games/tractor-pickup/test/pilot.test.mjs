@@ -49,16 +49,15 @@ test('turn help only when slow and well off target (C-10)', () => {
 });
 
 // Closed loop: a real tractor, the pilot and a camera that swings behind the tractor as the chase camera does (V-2)
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT } from '../src/sim/physics.js';
+import { addGround, DT } from '../src/sim/ground.js';
+import { testWorld } from './helpers/world.mjs';
 import { createTractor, TP } from '../src/sim/tractor.js';
-await RAPIER.init();
 const drive = () => {
-  const phys = createPhysics(RAPIER), t = createTractor(phys, { x: 0, z: 0, yaw: 0, surfaceAt: () => 'gravel' }), p = createPilot();
+  const { world, step } = testWorld(); addGround(world); const t = createTractor(world, { x: 0, z: 0, yaw: 0, materialAt: () => 'route' }), p = createPilot();
   let cam = null;
   const run = (sec, stick, each) => { for (let i = 0; i < sec * 60; i++) {
     const lv = t.body.linvel(), want = t.fwd > 2 ? Math.atan2(lv.x, lv.z) : t.yaw; if (cam === null) cam = want; cam += wrap(want - cam) * Math.min(1, DT * 3);
-    const o = p.update(stick, cam, t.yaw, t.speed); t.setInput(o.thr, o.steer, o.turn); t.step(DT); phys.world.step(); each?.(o); } };
+    const o = p.update(stick, cam, t.yaw, t.speed); step(1, () => { t.setInput(o.thr, o.steer, o.turn); t.step(DT); }); each?.(o); } };
   return { t, run };
 };
 test('closed loop: held right, the tractor drives round in a circle (C-2, review 3)', () => {

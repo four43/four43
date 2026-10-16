@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
 import { headless } from 'lion-hawk/test';
+import { createEngine } from 'lion-hawk/sim';
 import { tractorGame } from '../src/game.sim.js';
 import { emptyProgress } from '../src/sim/progress.js';
 await R.init();
@@ -56,11 +57,11 @@ test('a clear of the stickers empties them and closes the parent menu and the bo
   h.command('stickers.clear', {}).step(1);
   assert.deepEqual(s.progress.stickers, []); assert.deepEqual(h.scene.overlays, []); assert.equal(s.game.mode, 'drive');
 });
-test('a new farm builds through ctx.load from farm.new and frees the old Rapier world (P-8, S-6)', () => {
-  const h = headless(tractorGame(), { args: { seed: 14, started: true, settings: { seed: 99 } } }), s = h.engine.scene.state, old = s.game;
-  let freed = 0; const free = old.phys.world.free.bind(old.phys.world); old.phys.world.free = () => { freed++; free(); };
+test('a new farm builds through ctx.load from farm.new and clears the old farm off the World (P-8, S-6)', () => {
+  const h = headless(tractorGame(), { args: { seed: 14, started: true, settings: { seed: 99 } } }), s = h.engine.scene.state, old = s.game, serial = h.world.serial;
   h.command('farm.new', {}).step(1); assert.equal(h.engine.loading.active, true);
-  h.untilLoaded(); assert.equal(freed, 1); assert.notEqual(s.game, old); assert.equal(s.game.farm.seed, 99); assert.equal(s.gen, 2);
+  h.untilLoaded(); assert.notEqual(h.world.serial, serial, 'world.clear() ran'); assert.equal(old.tractor.e.body, undefined, 'the old tractor is gone');
+  assert.notEqual(s.game, old); assert.equal(s.game.farm.seed, 99); assert.equal(s.gen, 2); assert.equal(s.game.world, h.world);
   assert.equal(h.events.of('farm').at(-1).seed, 99); assert.equal(s.started, true);
   h.command('farm.new', {}).command('farm.new', {}).step(1); h.untilLoaded(); h.untilLoaded(); assert.equal(s.gen, 4, 'the second request waited for the first');
 });
@@ -87,12 +88,12 @@ test('a join link opens the Multiplayer panel through a command; its close close
   h.command('multiplayer.open', {}).step(1); assert.deepEqual(h.scene.overlays, ['multiplayer'], 'never twice');
   h.tap('multiplayer.close'); h.step(1); assert.deepEqual(h.scene.overlays, []);
 });
-test('?fps: with the entry\'s timer the sim times its own Rapier steps; the state and its checksum do not see it (B-1, #106)', () => {
+test('?fps: with boot\'s timer the engine times the Rapier steps (world.stats); the state does not see it (B-1, #106)', () => {
   let now = 0; const timer = () => (now += 0.5); // each World.step reads it twice: 0.5 ms per step
   for (const scene of ['farm', 'sandbox']) {
-    const h = headless(tractorGame({ timer }), { scene, args: ARGS }), plain = headless(tractorGame(), { scene, args: ARGS });
-    h.step(10); plain.step(10);
-    assert.equal(h.engine.scene.state.game.phys.worldMs, 5, scene); assert.equal(plain.engine.scene.state.game.phys.worldMs, 0, `${scene}: no timer, no timing`);
-    assert.equal(h.checksum(), plain.checksum(), `${scene}: timing is no sim state`);
+    const e = createEngine(tractorGame(), { scene, args: ARGS, timer }), plain = createEngine(tractorGame(), { scene, args: ARGS });
+    e.stepN(10); plain.stepN(10);
+    assert.equal(e.world.stats.stepMsTotal, 5, scene); assert.equal(plain.world.stats.stepMsTotal, 0, `${scene}: no timer, no timing`);
+    assert.equal(JSON.stringify(e.state()), JSON.stringify(plain.state()), `${scene}: timing is no sim state`);
   }
 });

@@ -1,5 +1,7 @@
-// Trailer and wagon: dynamic bodies on two-wheel ray-cast controllers, joined by spherical joints (D-4, D-10, D-11).
-import { G, groups } from './physics.js';
+// Trailer and wagon: dynamic bodies on the engine's vehicle kit (two wheels each), joined by spherical joints (D-4, D-10, D-11).
+import { createVehicle } from 'lion-hawk/kits/vehicle';
+import { GROUPS } from './ground.js';
+import { afterWheels } from './wheels.js';
 import { quatAxes } from './tractor.js';
 
 export const TR = {
@@ -11,41 +13,62 @@ export const TRACTOR_HITCH = { x: -1.75, y: 0.62, z: 0 };
 
 const local2world = (b, l) => { const p = b.translation(), { f, u, r } = quatAxes(b.rotation()); return { x: p.x + f.x * l.x + u.x * l.y + r.x * l.z, y: p.y + f.y * l.x + u.y * l.y + r.y * l.z, z: p.z + f.z * l.x + u.z * l.y + r.z * l.z }; };
 
-function createCar(phys, front, frontAnchor, index) {
-  const { RAPIER, world } = phys;
+const Q0 = [0, 0, 0, 1];
+export const CAR_WHEELS = ['wheel-left', 'wheel-right']; // the kit's wheel parts, side -1 then +1 (the view's car hook names the nodes)
+// a car's spawn desc behind its front body (anything with translation() and rotation()) at frontAnchor; also a remote train's
+export function carDesc(front, frontAnchor) {
   const h = local2world(front, frontAnchor), q = front.rotation(), { f } = quatAxes(q);
   const cx = h.x - f.x * TR.tongue.x, cz = h.z - f.z * TR.tongue.x;
-  const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(cx, h.y - TR.tongue.y, cz).setRotation(q)
-    .setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.6));
-  const cg = groups(G.TRAILER, G.GROUND | G.STATIC | G.PROP | G.WALL);
-  world.createCollider(RAPIER.ColliderDesc.cuboid(TR.half.x, TR.half.y, TR.half.z).setMass(TR.mass).setFriction(0.2).setCollisionGroups(cg), body);
-  world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.06, 0.08).setTranslation(TR.half.x + 0.9, -0.15, 0).setMass(5).setCollisionGroups(cg), body); // tongue
-  const vc = world.createVehicleController(body);
-  for (const side of [-1, 1]) vc.addWheel({ x: TR.axleX, y: 0, z: side * TR.track }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, TR.suspRest, TR.wheelR);
-  for (let i = 0; i < 2; i++) {
-    vc.setWheelSuspensionStiffness(i, 22); vc.setWheelSuspensionCompression(i, 2.2); vc.setWheelSuspensionRelaxation(i, 2.8);
-    vc.setWheelFrictionSlip(i, 2.5); vc.setWheelSideFrictionStiffness(i, 1.2); vc.setWheelMaxSuspensionForce(i, 1e5); vc.setWheelMaxSuspensionTravel(i, 0.4);
-  }
-  const joint = world.createImpulseJoint(RAPIER.JointData.spherical(frontAnchor, TR.tongue), front, body, true);
+  return { tags: ['car'], model: 'trailer', coverage: { dirt: 0 }, at: [cx, h.y - TR.tongue.y, cz], q: [q.x, q.y, q.z, q.w],
+    body: { type: 'dynamic', canSleep: false, linearDamping: 0.05, angularDamping: 0.6 },
+    colliders: [ // bed: 260 kg and tongue: 5 kg through their materials' densities (src/defs/materials.js), as setMass gave
+      { shape: 'box', half: [TR.half.x, TR.half.y, TR.half.z], p: [0, 0, 0], q: Q0, part: 'bed', material: 'bed' },
+      { shape: 'box', half: [0.9, 0.06, 0.08], p: [TR.half.x + 0.9, -0.15, 0], q: Q0, part: 'tongue', material: 'tongue' },
+    ],
+    groups: { member: ['trailer'], filter: ['ground', 'static', 'prop', 'wall'] } };
+}
+// what a desc cannot hold: the vehicle kit and the hitch joint to the front entity
+function attachCar(world, e, frontE, frontAnchor, index) {
+  const front = frontE.body;
+  const body = e.body, car = createVehicle(world, e, { forward: 'x', rayGroups: { member: [...GROUPS], filter: ['ground', 'static'] },
+    wheels: [-1, 1].map((side, k) => ({ at: [TR.axleX, 0, side * TR.track], radius: TR.wheelR, front: false, part: CAR_WHEELS[k], slip: 2.5, side: 1.2,
+      suspension: { rest: TR.suspRest, stiffness: 22, compression: 2.2, relaxation: 2.8, travel: 0.4, maxForce: 1e5 } })) }), vc = car.controller;
+  const v3 = v => [v.x, v.y, v.z];
+  const joint = world.joint(frontE, e, { type: 'spherical', a: v3(frontAnchor), b: v3(TR.tongue) });
   joint.setContactsEnabled(false);
-  return { body, vc, index, joint, front, frontAnchor, dirt: 0 };
+  return { e, body, car, vc, index, joint, front, frontAnchor,
+    get dirt() { return e.coverage.dirt; }, set dirt(v) { e.coverage.dirt = v; } }; // the coverage kit's level (T-16)
 }
 
-export function createTrain(phys, tractor) {
-  const c0 = createCar(phys, tractor.body, TRACTOR_HITCH, 0);
-  const c1 = createCar(phys, c0.body, TR.rear, 1);
-  const cars = [c0, c1], rayGroups = groups(0xffff, G.GROUND | G.STATIC);
+const createCar = (world, frontE, frontAnchor, index) => attachCar(world, world.spawn(carDesc(frontE.body, frontAnchor)), frontE, frontAnchor, index);
+// the trailer and wagon behind a tractor, linked on its entity as e.trailer and e.wagon (the train's net record reads all three bodies, 3i)
+export function createTrain(world, tractor) {
+  const c0 = createCar(world, tractor.e, TRACTOR_HITCH, 0);
+  const c1 = createCar(world, c0.e, TR.rear, 1);
+  world.add(tractor.e, 'trailer', c0.e); world.add(tractor.e, 'wagon', c1.e);
+  return trainOf(world, [c0, c1]);
+}
+// the same train over existing car entities (a remote train: the net part spawned and linked them)
+export const attachTrain = (world, tractor, trailerE, wagonE) => trainOf(world, [attachCar(world, trailerE, tractor.e, TRACTOR_HITCH, 0), attachCar(world, wagonE, trailerE, TR.rear, 1)]);
+function trainOf(world, cars) {
+  const c0 = cars[0], carSet = { brake: 0 };
   const angle = i => {
     const a = quatAxes(cars[i].front.rotation()).f, b = quatAxes(cars[i].body.rotation()).f;
     return Math.atan2(a.z * b.x - a.x * b.z, a.x * b.x + a.z * b.z);
   };
-  return {
+  let armed = false;
+  const train = {
     cars, angle,
     hitchGap(i) { const c = cars[i], a = local2world(c.front, c.frontAnchor), b = local2world(c.body, TR.tongue); return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z); },
-    step(dt, { parked }) {
+    step(dt, { parked }) { // before the kit's wheel update: the brakes
+      carSet.brake = parked ? 20 : 0.2;
+      for (const c of cars) for (let i = 0; i < 2; i++) c.car.set(i, carSet);
+      armed = true;
+    },
+    // after the kit's wheel update, before the Rapier step (sim/wheels.js): the jackknife limit and the self-righting
+    after(dt) {
+      if (!armed) return; armed = false;
       for (const c of cars) {
-        for (let i = 0; i < 2; i++) c.vc.setWheelBrake(i, parked ? 20 : 0.2);
-        c.vc.updateVehicle(dt, undefined, rayGroups);
         // D-10 jackknife limit, applied as a velocity-level impulse pair (equal and opposite on the car and its front body),
         // split by yaw inertia, so it stays stable at any stiffness and the tractor cannot overpower it.
         const a = angle(c.index), over = Math.abs(a) - TR.limit;
@@ -68,5 +91,7 @@ export function createTrain(phys, tractor) {
       }
     },
   };
+  afterWheels(world, c0.e, dt => train.after(dt));
+  return train;
 }
 export { local2world };

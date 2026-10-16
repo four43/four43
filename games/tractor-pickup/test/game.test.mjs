@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createGame, CAPACITY } from '../src/sim/game.js';
+import { CAPACITY } from '../src/sim/game.js';
+import { testGame } from './helpers/world.mjs';
 import { moveTrain } from './train.mjs';
-await RAPIER.init();
 
 const STILL = { thr: 0, steer: 0, horn: false };
 // Farmyard animals wander near the start; send them away so only the animals a test places get booped.
@@ -14,7 +13,7 @@ const unhide = g => g.herd.animals.forEach(a => { if (a.hidden) { a.hidden = fal
 const place = (g, a) => { const p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; for (let i = 0; i < 90; i++) g.step(STILL); };
 
 test('an animal in the catch zone is booped, flies, and lands in slot 0', () => {
-  const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 11, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   const ev = []; for (let i = 0; i < 120; i++) ev.push(...g.step(STILL));
@@ -23,7 +22,7 @@ test('an animal in the catch zone is booped, flies, and lands in slot 0', () => 
   assert.equal(a.state, 'ride');
 });
 test('riders stay in their slot through a full-speed drive (R-4)', () => {
-  const g = createGame(RAPIER, { seed: 12, power: 'high' }); quiet(g);
+  const g = testGame({ seed: 12, power: 'high' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   for (const a of pickable(g).slice(0, 8)) place(g, a);
   assert.equal(g.load.landed(), 8);
@@ -31,7 +30,7 @@ test('riders stay in their slot through a full-speed drive (R-4)', () => {
     for (const s of g.load.slots) { g.slotWorld(s, w); const pa = s.animal; assert.equal(pa.state, 'ride'); assert.ok(Math.hypot(pa.x - w.x, pa.z - w.z) < 0.6, 'animal left its slot'); } }
 });
 test('the trailer and wagon never over-fill (G-1)', () => {
-  const g = createGame(RAPIER, { seed: 13, power: 'medium' }); quiet(g); unhide(g);
+  const g = testGame({ seed: 13, power: 'medium' }); quiet(g); unhide(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const list = pickable(g); assert.ok(list.length >= 14, `only ${list.length} single animals`);
   for (const a of list.slice(0, 14)) place(g, a);
@@ -39,13 +38,13 @@ test('the trailer and wagon never over-fill (G-1)', () => {
   assert.deepEqual([0, 1].map(c => g.load.slots.filter(s => s.car === c).length), [6, 6]);
 });
 test('show hooks: riders in order, props reset, delivery into the barn, respawn and an empty trailer (F-5, F-10, G-3)', () => {
-  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 14, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const placed = pickable(g).slice(0, 3); for (const a of placed) place(g, a);
-  const prop = g.yardProps.props.find(p => p.body); prop.body.setTranslation({ x: prop.start.x + 5, y: prop.start.y, z: prop.start.z }, true);
+  const prop = g.yardProps.props.find(p => p.body); prop.body.setTranslation({ x: prop.start.at[0] + 5, y: prop.start.at[1], z: prop.start.at[2] }, true);
   const riders = g.startShow();
   assert.equal(g.mode, 'show'); assert.deepEqual(riders.map(r => r.animal), placed);
-  assert.ok(Math.abs(prop.body.translation().x - prop.start.x) < 1e-3);
+  assert.ok(Math.abs(prop.body.translation().x - prop.start.at[0]) < 1e-3);
   riders.forEach(r => { r.animal.state = 'show'; });
   g.finishShow(riders);
   assert.equal(g.mode, 'drive'); assert.equal(g.load.landed(), 0);
@@ -53,20 +52,20 @@ test('show hooks: riders in order, props reset, delivery into the barn, respawn 
   assert.equal(g.herd.free().filter(a => a.home === 'route').length, 18);
 });
 test('no boops and no driving during the show', () => {
-  const g = createGame(RAPIER, { seed: 15, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 15, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   g.startShow(); const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   let booped = false; for (let i = 0; i < 120; i++) booped ||= g.step({ thr: 1, steer: 0, horn: false }).some(e => e.type === 'boop');
   assert.equal(booped, false); assert.ok(g.tractor.speed < 0.5);
 });
 test('the show resets broken trees (T-34)', () => {
-  const g = createGame(RAPIER, { seed: 16, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 16, power: 'medium' }); quiet(g);
   const t = g.trees.list[0]; t.state = 'broken';
   g.startShow();
   assert.equal(t.state, 'growing');
 });
 test('driving into a hiding bush boops the animal hidden there (A-13)', () => {
-  const g = createGame(RAPIER, { seed: 17, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 17, power: 'medium' }); quiet(g);
   for (let i = 0; i < 30; i++) g.step(STILL);
   const h = g.herd.animals.find(a => a.hidden && a.state === 'hide'); assert.ok(h, 'no hidden animal');
   // stand on the road 14 m before the bush, 1 m in from its line, facing along the road
@@ -79,7 +78,7 @@ test('driving into a hiding bush boops the animal hidden there (A-13)', () => {
   assert.equal(h.state, 'fly');
 });
 test('flights keep their previous step position for render interpolation (X-1)', () => {
-  const g = createGame(RAPIER, { seed: 18, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 18, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   g.step(STILL); const fl = g.flights.find(f => f.animal === a); assert.ok(fl);
@@ -87,7 +86,7 @@ test('flights keep their previous step position for render interpolation (X-1)',
   assert.ok(Math.hypot(fl.pos.x - fl.prev.x, fl.pos.y - fl.prev.y, fl.pos.z - fl.prev.z) > 0);
 });
 test('a boop always launches: no boop event without a launch (load full)', () => {
-  const g = createGame(RAPIER, { seed: 19, power: 'medium' }); quiet(g); unhide(g);
+  const g = testGame({ seed: 19, power: 'medium' }); quiet(g); unhide(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const ev = []; for (const a of pickable(g).slice(0, 14)) { const p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99; for (let i = 0; i < 90; i++) ev.push(...g.step(STILL)); }
   const boops = ev.filter(e => e.type === 'boop'), launches = ev.filter(e => e.type === 'launch');
@@ -96,7 +95,7 @@ test('a boop always launches: no boop event without a launch (load full)', () =>
 });
 
 test('in the reward state the tractor is held: full throttle goes nowhere, a coasting tractor stops, and nothing is booped or broken', () => {
-  const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 11, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   for (let i = 0; i < 150; i++) g.step({ thr: 1, steer: 0, horn: false }); // get up to speed, then the card comes up
   assert.ok(g.tractor.speed > 3, 'coasting at speed when the card appears');
@@ -113,7 +112,7 @@ test('in the reward state the tractor is held: full throttle goes nowhere, a coa
 });
 
 test('tractorLocal is fresh outside a step (the per-step axes cache is dropped) and the unused air event is gone', () => {
-  const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 11, power: 'medium' }); quiet(g);
   const ev = []; for (let i = 0; i < 30; i++) ev.push(...g.step(STILL));
   assert.equal(ev.filter(e => e.type === 'air').length, 0);
   const p = g.tractor.body.translation(), before = g.tractorLocal(p.x + 3, p.y, p.z + 1, {});
@@ -122,7 +121,7 @@ test('tractorLocal is fresh outside a step (the per-step axes cache is dropped) 
   assert.ok(Math.abs(before.x - after.x) + Math.abs(before.z - after.z) > 1, `local ${before.x},${before.z} -> ${after.x},${after.z}`);
 });
 test('with a full train there is no boop: an animal ahead or beside a trailer hops out of the way (B-14)', () => {
-  const g = createGame(RAPIER, { seed: 12, power: 'medium' }); quiet(g); unhide(g);
+  const g = testGame({ seed: 12, power: 'medium' }); quiet(g); unhide(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const list = pickable(g); for (const a of list.slice(0, 12)) place(g, a);
   assert.equal(g.load.landed(), 12); assert.ok(g.load.full());
@@ -137,7 +136,7 @@ test('with a full train there is no boop: an animal ahead or beside a trailer ho
   assert.equal(ahead.y, 0); assert.notEqual(ahead.state, 'dodge', 'the hop ends');
 });
 test('a boop does not slow the tractor (B-7 removed)', () => {
-  const g = createGame(RAPIER, { seed: 11, power: 'medium' }); quiet(g); unhide(g);
+  const g = testGame({ seed: 11, power: 'medium' }); quiet(g); unhide(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   for (let i = 0; i < 90; i++) g.step({ thr: 1, steer: 0, horn: false });
   const a = pickable(g)[0], p = g.tractorWorld({ x: 4, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
@@ -146,7 +145,7 @@ test('a boop does not slow the tractor (B-7 removed)', () => {
 });
 test('3/4 of the way through the barn with a rider, the train stops by itself, at any speed, and the show starts (F-1, F-5)', () => {
   for (const power of ['medium', 'high']) {
-    const g = createGame(RAPIER, { seed: 14, power }); quiet(g);
+    const g = testGame({ seed: 14, power }); quiet(g);
     for (let i = 0; i < 60; i++) g.step(STILL);
     place(g, pickable(g)[0]); assert.equal(g.load.landed(), 1);
     const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)], back = 40; // run up from 40 m out along the barn axis
@@ -163,7 +162,7 @@ test('3/4 of the way through the barn with a rider, the train stops by itself, a
   }
 });
 test('an empty train drives on through the barn (F-1)', () => {
-  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 14, power: 'medium' }); quiet(g);
   const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
   moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
   const ev = []; for (let i = 0; i < 60 * 8; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
@@ -172,11 +171,11 @@ test('an empty train drives on through the barn (F-1)', () => {
 
 test('createGame puts player n at its spawn point (M-10)', async () => {
   const { spawnPoint } = await import('../src/sim/spawn.js');
-  const g = createGame(RAPIER, { seed: 41, power: 'medium', player: 3 }), p = spawnPoint(g.farm, 3);
+  const g = testGame({ seed: 41, power: 'medium', player: 3 }), p = spawnPoint(g.farm, 3);
   assert.ok(Math.hypot(g.tractor.x - p.x, g.tractor.z - p.z) < 0.01);
 });
 test('with claims on, a booped animal waits at the top of its arc for the answer, then lands (M-14)', () => {
-  const g = createGame(RAPIER, { seed: 42, power: 'medium' }); quiet(g); g.claims = true;
+  const g = testGame({ seed: 42, power: 'medium' }); quiet(g); g.claims = true;
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   let ev = []; for (let i = 0; i < 90; i++) ev.push(...g.step(STILL)); // 1.5 s: past the top of every arc (at most 0.75 x 1.4 s), inside the 1 s hold (ends at 1.75 s at the earliest)
@@ -187,7 +186,7 @@ test('with claims on, a booped animal waits at the top of its arc for the answer
   assert.ok(ev.some(e => e.type === 'land' && e.animal === a)); assert.equal(a.state, 'ride');
 });
 test('a refused claim drops the flight with a poof, and frees its slot (M-14)', () => {
-  const g = createGame(RAPIER, { seed: 43, power: 'medium' }); quiet(g); g.claims = true;
+  const g = testGame({ seed: 43, power: 'medium' }); quiet(g); g.claims = true;
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   for (let i = 0; i < 20; i++) g.step(STILL);
@@ -196,20 +195,20 @@ test('a refused claim drops the flight with a poof, and frees its slot (M-14)', 
   assert.equal(g.flights.length, 0); assert.equal(g.load.slots.length, 0); assert.equal(a.state, 'elsewhere');
 });
 test('a claim with no answer for 1 s at the top of the arc times out (M-14)', () => {
-  const g = createGame(RAPIER, { seed: 44, power: 'medium' }); quiet(g); g.claims = true;
+  const g = testGame({ seed: 44, power: 'medium' }); quiet(g); g.claims = true;
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   const ev = []; for (let i = 0; i < 60 * 4; i++) ev.push(...g.step(STILL));
   const u = ev.find(e => e.type === 'unclaim'); assert.ok(u); assert.equal(u.reason, 'timeout'); assert.equal(g.load.slots.length, 0);
 });
 test('paused boops: nothing is booped (M-40)', () => {
-  const g = createGame(RAPIER, { seed: 45, power: 'medium' }); quiet(g); g.boopsPaused = true;
+  const g = testGame({ seed: 45, power: 'medium' }); quiet(g); g.boopsPaused = true;
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   const ev = []; for (let i = 0; i < 60; i++) ev.push(...g.step(STILL)); assert.ok(!ev.some(e => e.type === 'boop'));
 });
 test('with a remote herd there is no B-14 dodge and no respawn after the show (M-12, M-16)', () => {
-  const g = createGame(RAPIER, { seed: 46, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 46, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   for (const a of pickable(g).slice(0, 12)) place(g, a);
   g.herd.remote = true;
@@ -220,14 +219,14 @@ test('with a remote herd there is no B-14 dodge and no respawn after the show (M
 });
 test('fullDodge makes animals hop out of the way of any full train given as poses (M-12, B-14)', async () => {
   const { fullDodge } = await import('../src/sim/game.js');
-  const g = createGame(RAPIER, { seed: 47, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 47, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const a = pickable(g)[0], p = g.tractorWorld({ x: 3, y: 0, z: 0 }, {}); a.x = p.x; a.z = p.z; a.state = 'idle'; a.timer = 99;
   const ev = []; fullDodge(g.herd, g.tractor.body.translation(), g.tractor.body.rotation(), g.train.cars.map(c => ({ p: c.body.translation(), q: c.body.rotation() })), ev);
   assert.equal(a.state, 'dodge'); assert.ok(ev.some(e => e.type === 'dodge' && e.animal === a));
 });
 test('a guest whose only flight is refused in the barn gets no show: the train drives on (M-14, F-1)', () => {
-  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g); g.claims = true;
+  const g = testGame({ seed: 14, power: 'medium' }); quiet(g); g.claims = true;
   const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
   moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
   const along = () => { const t = g.tractor.body.translation(); return (t.x - b.x) * f[0] + (t.z - b.z) * f[1]; };
@@ -241,7 +240,7 @@ test('a guest whose only flight is refused in the barn gets no show: the train d
   assert.ok(ev.some(e => e.type === 'unclaim')); assert.ok(!ev.some(e => e.type === 'barnPass'), 'no show for no animals'); assert.equal(g.mode, 'drive');
 });
 test('a chick that waits for its turn to launch starts from where it stands, not from where the tractor was at the boop (A-8)', () => {
-  const g = createGame(RAPIER, { seed: 11, power: 'high' }); quiet(g); unhide(g);
+  const g = testGame({ seed: 11, power: 'high' }); quiet(g); unhide(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   const hen = g.herd.animals.find(x => g.herd.animals.some(c => c.leader === x.id)); assert.ok(hen, 'no hen with chicks');
   const chicks = g.herd.animals.filter(c => c.leader === hen.id);
@@ -256,14 +255,14 @@ test('a chick that waits for its turn to launch starts from where it stands, not
   assert.ok(worst < 0.6, `a chick jumped ${worst.toFixed(2)} m in one step`);
 });
 test('on the last drive before bedtime, an empty train also stops in the barn (E-5)', () => {
-  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g); g.lastDrive = true;
+  const g = testGame({ seed: 14, power: 'medium' }); quiet(g); g.lastDrive = true;
   const b = g.farm.yard.barn, f = [Math.sin(b.yaw), Math.cos(b.yaw)];
   moveTrain(g, b.x - f[0] * 30, b.z - f[1] * 30, b.yaw); for (let i = 0; i < 30; i++) g.step(STILL);
   const ev = []; for (let i = 0; i < 60 * 8; i++) ev.push(...g.step({ thr: 1, steer: 0, horn: false }));
   assert.ok(ev.some(e => e.type === 'barnPass'));
 });
 test('a closed barn gate holds the train in the barn with no show; the show starts when it opens; no gate is single player (M-71, M-72)', () => {
-  const g = createGame(RAPIER, { seed: 14, power: 'medium' }); quiet(g);
+  const g = testGame({ seed: 14, power: 'medium' }); quiet(g);
   for (let i = 0; i < 60; i++) g.step(STILL);
   place(g, pickable(g)[0]); assert.equal(g.barnGate, null); assert.equal(g.barnWait, 0);
   let answer = 3, asked = 0; g.barnGate = () => { asked++; return answer; }; // player 3's show has the barn

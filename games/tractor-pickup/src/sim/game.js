@@ -1,5 +1,6 @@
-// The whole simulation: farm + terrain + physics + tractor + train + trees + herd + boops + flights + riders + barn pass + show hooks.
-import { createPhysics, DT } from './physics.js';
+// The whole simulation: farm + terrain + physics + tractor + train + trees + herd + boops + flights + riders + barn pass + show hooks,
+// on the scene's World (lion-hawk 3l): pre(input) runs before the engine's Rapier step (lh.physics.step), post() after it.
+import { addGround, DT } from './ground.js';
 import { createTractor, quatAxes } from './tractor.js';
 import { createTrain, local2world, TR } from './hitch.js';
 import { generateFarm, YARD_HALF, yardFree, inWash } from './track.js';
@@ -12,7 +13,9 @@ import { createLoad, slotPoint, newRider, stepRider } from './slots.js';
 import { launchLocal, FLIGHT, SPLIT } from './launch.js';
 import { spawnPoint } from './spawn.js';
 import { makeRng } from './rng.js';
-import { stepDirt, stepRiderDirt, WASH_RATE } from './dirt.js';
+import { stepRiderDirt, WASH_RATE } from './dirt.js';
+import { bindTrains, stepRemoteTrains } from './trains.js';
+import { trainFields } from '../net/kinds.js';
 
 export const CAPACITY = 12;                            // G-1: 6 in the trailer + 6 in the wagon
 export const CATCH = { x0: 1.6, x1: 4.0, half: 1.6 }; // B-1: box in front of the nose, 1.5 x tractor width
@@ -21,14 +24,14 @@ const STILL = { thr: 0, steer: 0, horn: false };
 export const CLAIM_WAIT = 1; // M-14: s a guest's animal waits at the top of its arc for the host's answer
 const STOP = 0.88; // F-5: speed kept per step while the train stops in the barn (stopped from full speed in about half a second)
 
-export function createGame(RAPIER, { seed, power = 'medium', player = 1, timer = null }) { // timer: ?fps (physics.js)
-  const farm = generateFarm(seed), road = buildRoad(farm), terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1)), rng = makeRng(seed ^ 0x51ed);
+export function createGame(world, { seed, power = 'medium', player = 1 }) {
+  const farm = generateFarm(seed), road = buildRoad(farm), game = {}, terrain = createTerrain(farm, road, makeRng(seed ^ 0x7e11a1)), rng = makeRng(seed ^ 0x51ed);
   const items = scatterScenery(farm, road, makeRng(seed ^ 0x9e3779b9), terrain);
-  const phys = createPhysics(RAPIER, { terrain, timer }); addFarmColliders(phys, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
-  const yardProps = addYardProps(phys, farm), s = spawnPoint(farm, player); // M-10
-  const trees = createTrees(phys, [...farm.yard.obstacles.filter(o => o.kind === 'tree' || o.kind === 'bush'), ...roadside(farm, road, makeRng(seed ^ 0x70adc0de))]); // T-34, T-35
-  const tractor = createTractor(phys, { x: s.x, z: s.z, yaw: s.yaw, power, surfaceAt: road.surfaceAt });
-  const train = createTrain(phys, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
+  const ground = addGround(world, { terrain, materialAt: road.materialAt }); addFarmColliders(world, farm, road, terrain); // routes are closed in by banks, fences and the yard fence (T-17)
+  const yardProps = addYardProps(world, farm), s = spawnPoint(farm, player); // M-10
+  const trees = createTrees(world, [...farm.yard.obstacles.filter(o => o.kind === 'tree' || o.kind === 'bush'), ...roadside(farm, road, makeRng(seed ^ 0x70adc0de))]); // T-34, T-35
+  const tractor = createTractor(world, { x: s.x, z: s.z, yaw: s.yaw, power, materialAt: ground.materialAt });
+  const train = createTrain(world, tractor), bodies = [tractor.body, ...train.cars.map(c => c.body)];
   const flights = [], barnPass = makeBarnPass(farm.yard.barn);
   const mudSpots = farm.routes.flatMap((R, r) => R.tiles.flatMap((t, k) => t.type === 'mud' ? [road.featureCenter(r, k)] : []));
   const env = {
@@ -46,11 +49,12 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1, timer =
   const slotWorld = (sl, out) => Object.assign(out, local2world(train.cars[sl.car].body, slotPoint(sl.k, sl.animal.ride?.rider, TR.half.y, {})));
   const prevVel = train.cars.map(c => { const v = c.body.linvel(); return { x: v.x, y: v.y, z: v.z }; });
   const tmp = {}, tmp2 = {}, tmp3 = {}, tmp4 = {}, aw = {}, al = {};
-  let pendingPass = false, lastSurface = 'gravel', wasClean = true;
+  let pendingPass = false, lastSurface = 'gravel', wasClean = true, cur = null, curLoad = null; // cur, curLoad: the step's events and load, from pre to post
 
-  const game = {
-    farm, road, terrain, items, phys, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
-    load: createLoad(CAPACITY), mode: 'drive', dirt: { tractor: 0 }, // T-16: dirt levels 0..1 (cars and animals carry their own)
+  bindTrains(world, game); // first: other players' trains (net replicas, also respawned after a world.clear()) attach to this farm
+  Object.assign(game, {
+    farm, road, terrain, ground, items, world, yardProps, trees, tractor, train, herd, flights, rng, tractorWorld, tractorLocal, slotWorld,
+    load: createLoad(CAPACITY), mode: 'drive', dirt: { get tractor() { return tractor.e.coverage.dirt; }, set tractor(v) { tractor.e.coverage.dirt = v; } }, // T-16: the coverage kit's levels 0..1 (cars and animals carry their own)
     others: [], claims: false, boopsPaused: false, // multiplayer: other tractors for the herd (M-12), boops wait for the host (M-14), host away (M-40)
     hats: [], // W-4, M-60: the hats this player wears; a boop puts one on the animal (a.hat), and its train record tells the others
     wearHats(ids) { game.hats = ids; for (const f of flights) putHat(f.animal); for (const s of game.load.slots) if (s.landed) putHat(s.animal); }, // the riders change hats at once
@@ -69,8 +73,10 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1, timer =
       if (ok) { flights[i].claim = null; return []; }
       const ev = []; dropFlight(i, ev, 'refused'); return ev;
     },
-    step(input) {
-      const drive = game.mode === 'drive' ? input : STILL, load = game.load, events = [];
+    // the step before the engine's Rapier step (the farm scene's step hook): horn, aim help, the tractor and train, the trees
+    pre(input) {
+      stepRemoteTrains(world); // N-13: the other players' trains, from their replicated input
+      const drive = game.mode === 'drive' ? input : STILL, events = cur = []; curLoad = game.load;
       axes = quatAxes(tractor.body.rotation());
       if (drive.horn) { herd.horn(tractor); events.push({ type: 'horn' }); }
       // B-3 aim help: nudge steering toward a close animal ahead
@@ -79,8 +85,13 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1, timer =
         if (l.x > 0 && d < best && Math.abs(Math.atan2(l.z, l.x)) < AIM.cone) { best = d; assist = Math.max(-AIM.max, Math.min(AIM.max, -Math.atan2(l.z, l.x) * AIM.gain)); } }
       tractor.setAssist(tractor.fwd > 0.5 && drive.onTarget !== false ? assist : 0); // C-11: only when nearly on the wanted heading
       tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer, drive.turn || 0); tractor.step(DT);
+      if (tractor.e.net) { const I = tractor.e.input; I.thr = tractor.inThr; I.steer = tractor.inSteer; I.turn = tractor.inTurn; } // N-13: what the others step this train with
       train.step(DT, { parked: tractor.hold || (Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3) });
-      events.push(...trees.step(DT, bodies, game.mode === 'drive')); phys.step(); // trees first: a broken trunk's collider is gone before contact resolves
+      events.push(...trees.step(DT, bodies, game.mode === 'drive')); // trees first: a broken trunk's collider is gone before contact resolves
+    },
+    // the step after it (a 'post' stage system): herd, boops, flights, riders, the barn pass, the barn stop and dirt; its events in order
+    post() {
+      const events = cur, load = curLoad; cur = null; curLoad = null;
       axes = quatAxes(tractor.body.rotation());
       herd.step(DT, { tractor, others: game.others });
       // boops (B-1, B-2: any speed; A-13: a hider sits at its bush, so driving into the bush finds it) and the dog that jumps in by itself (A-7)
@@ -116,22 +127,23 @@ export function createGame(RAPIER, { seed, power = 'medium', player = 1, timer =
       if (pendingPass && flights.length === 0) game.barnWait = load.landed() > 0 && game.barnGate ? game.barnGate() : 0; // M-71, M-72: one show at a time: held in the barn until the host gives it
       if (pendingPass && flights.length === 0 && !game.barnWait) { pendingPass = false; if (load.landed() > 0 || game.lastDrive) events.push({ type: 'barnPass' }); else game.mode = 'drive'; } // M-14: the only flight was refused or timed out: no show for no animals, drive on
       if (game.mode === 'arrive' || game.mode === 'show') for (const b of bodies) { const v = b.linvel(); if (Math.hypot(v.x, v.z) > 0.05) b.setLinvel({ x: v.x * STOP, y: v.y, z: v.z * STOP }, true); }
-      // dirt (T-15, T-16): mud and gravel dirty the tractor, cars and riders; only the sprinkler and the farmyard wash (T-36) clean
-      const sf = tractor.speed / tractor.P.vmax, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0, washing = washAt(tractor.x, tractor.z); let anyWash = washing > 0;
-      game.dirt.tractor = stepDirt(game.dirt.tractor, { surface: tractor.surface, speedFrac: sf, washing }, DT);
+      // dirt (T-15, T-16): the coverage kit (run before this system) added dirtRate × metres to the tractor and cars and did the sprinkler and
+      // yard-wash cleaning (the wash at its own washTime). Riders get the splash from a car in mud (animals are not entities: game rule).
+      const M = world.materials, washAt = (x, z) => road.inSprinkler(x, z) ? 1 : inWash(farm.yard, x, z) ? WASH_RATE : 0; let anyWash = washAt(tractor.x, tractor.z) > 0;
       for (const c of train.cars) {
-        const p = c.body.translation(), w = washAt(p.x, p.z), surf = road.surfaceAt(p.x, p.z);
-        anyWash ||= w > 0; c.dirt = stepDirt(c.dirt, { surface: surf, speedFrac: sf, washing: w }, DT);
-        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: surf === 'mud', speed: tractor.speed, washing: w }, DT);
+        const p = c.body.translation(), w = washAt(p.x, p.z), under = M.get(ground.materialAt(p.x, p.z)).game;
+        anyWash ||= w > 0;
+        for (const sl of load.slots) if (sl.car === c.index && sl.landed) sl.animal.dirt = stepRiderDirt(sl.animal.dirt, { carInMud: under.surface === 'mud', speed: tractor.speed, washing: w }, DT);
       }
       if (tractor.surface === 'mud' && lastSurface !== 'mud') events.push({ type: 'mud-enter' });
       lastSurface = tractor.surface;
       if (anyWash && !wasClean && game.dirt.tractor < 0.05 && train.cars.every(c => c.dirt === 0)) { events.push({ type: 'washed' }); wasClean = true; }
       if (game.dirt.tractor > 0.05) wasClean = false;
       axes = null;
+      if (tractor.e.net) trainFields(game, tractor.e); // the train's record (mode, full, dirt, riders) while a session runs
       return events;
     },
-  };
+  });
   function dropFlight(i, events, reason) { const fl = flights.splice(i, 1)[0], a = fl.animal; fl.load.release(fl.slot); a.state = 'elsewhere'; events.push({ type: 'unclaim', animal: a, reason, pos: { ...fl.pos } }); }
   const putHat = a => { a.hat = game.hats.length ? game.hats[a.id % game.hats.length] : null; }; // M-60: the owner chooses, at the boop
   function launch(a, events, delay = 0) {

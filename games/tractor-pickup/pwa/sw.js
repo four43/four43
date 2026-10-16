@@ -1,7 +1,6 @@
-// Offline support. The game is a single HTML file, so caching it (plus icons and
-// the Google Font) is enough to play with no connection.
+// Offline support: the page, its model files (assets/models, D1), the icons and the Google Font.
 const CACHE = 'tractor-pickup-__VERSION__';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const PRECACHE = __PRECACHE__; // lion-hawk build stamps the list: ./, the manifest, the icons and every assets/models file (D1)
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

@@ -2,7 +2,6 @@
 // through), until the tractor hits it at breakSpeed or faster: then it bursts (the renderer shows gibs and a stump) and the
 // tractor loses a little speed. A bush is never solid: the tractor's body touching it pops it at any speed. reset() grows
 // everything back. Pure sim: no three.
-import { G, groups } from './physics.js';
 import { quatAxes } from './tractor.js';
 
 export const TREE = { breakSpeed: 4, slowdown: 0.15, regrowTime: 0.8, bushSpeed: 0.5 }; // m/s, fraction of speed lost per tree, s, m/s
@@ -15,11 +14,16 @@ const WOBBLE_TIME = 1;  // s for a wobble to die out
 const TRUNK = { single: 0.7, young: 0.4 }; // collider radius
 
 // items: { kind: 'tree' | 'bush', x, z, r, young?, scale? } from the farmyard (track.js) and the route shoulders (scenery.js)
-export function createTrees(phys, items) {
-  const { RAPIER, world } = phys, cg = groups(G.WALL, G.VEHICLE | G.PROP);
-  const list = items.map((o, id) => ({ id, kind: o.kind === 'bush' ? 'bush' : 'tree', x: o.x, z: o.z, r: o.r, young: !!o.young, scale: o.scale ?? 1, yaw: o.yaw ?? 0, state: 'standing', wobble: 0, grow: 1, near: false, collider: null }));
-  const addCollider = t => { if (t.kind === 'tree') t.collider = world.createCollider(RAPIER.ColliderDesc.cylinder(1.2, t.young ? TRUNK.young : TRUNK.single).setTranslation(t.x, 1.2, t.z).setFriction(0.1).setCollisionGroups(cg)); };
-  const dropCollider = t => { if (t.collider) { world.removeCollider(t.collider, true); t.collider = null; } };
+export function createTrees(world, items) {
+  const list = items.map((o, id) => ({ id, kind: o.kind === 'bush' ? 'bush' : 'tree', x: o.x, z: o.z, r: o.r, young: !!o.young, scale: o.scale ?? 1, yaw: o.yaw ?? 0, state: 'standing', wobble: 0, grow: 1, near: false, solid: false, e: null }));
+  // a tree's trunk: a fixed cylinder only the tractor (and props) hit, the trailers go through; a bush: no body (popped by distance)
+  for (const t of list) t.e = t.kind === 'tree'
+    ? world.spawn({ tags: ['tree'], body: 'fixed', at: [t.x, 1.2, t.z], tree: t, groups: { member: ['wall'], filter: ['vehicle', 'prop'] },
+      colliders: [{ shape: 'cylinder', halfHeight: 1.2, r: t.young ? TRUNK.young : TRUNK.single, p: [0, 0, 0], q: [0, 0, 0, 1], material: 'trunk' }] })
+    : world.spawn({ tags: ['bush'], tree: t });
+  // a broken trunk's collider is disabled, not removed: contacts and queries skip it exactly as a removed one; the entity and its handle stay
+  const addCollider = t => { if (t.kind === 'tree' && !t.solid) { t.e.colliders[0].collider.setEnabled(true); t.solid = true; } };
+  const dropCollider = t => { if (t.solid) { t.e.colliders[0].collider.setEnabled(false); t.solid = false; } };
   list.forEach(addCollider);
   return {
     list,
@@ -52,7 +56,7 @@ export function createTrees(phys, items) {
     // M-17: the host broke this one (or a guest asked it to): no speed check, no slowdown; null when it is not standing
     breakById(id, dir = { x: 0, z: 1 }) { const t = list[id]; if (!t || t.state !== 'standing') return null; dropCollider(t); t.state = 'broken'; t.wobble = 0; t.near = false; t.grow = 0; return { type: 'treeBreak', tree: t, dir, speed: 0, remote: true }; },
     // M-56: the host has this one standing (or growing) again: it grows back like reset() does, alone; false when it is not broken
-    regrowById(id) { const t = list[id]; if (!t || t.state !== 'broken') return false; t.state = 'growing'; t.grow = 0; if (!t.collider) addCollider(t); t.wobble = 0; t.near = false; return true; },
-    reset() { for (const t of list) { if (t.state === 'broken') { t.state = 'growing'; t.grow = 0; } if (!t.collider) addCollider(t); t.wobble = 0; t.near = false; } },
+    regrowById(id) { const t = list[id]; if (!t || t.state !== 'broken') return false; t.state = 'growing'; t.grow = 0; addCollider(t); t.wobble = 0; t.near = false; return true; },
+    reset() { for (const t of list) { if (t.state === 'broken') { t.state = 'growing'; t.grow = 0; } addCollider(t); t.wobble = 0; t.near = false; } },
   };
 }

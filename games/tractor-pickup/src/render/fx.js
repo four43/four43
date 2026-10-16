@@ -1,25 +1,16 @@
-// Particle pool on one InstancedMesh of small cubes + a tire-mark ring buffer on a second InstancedMesh. Two draw calls, no per-frame allocation.
-import * as THREE from 'three';
-const MAX = 1200, TM = 400;
-export function createFx(scene, groundY = () => 0) {
-  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), MAX);
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false;
-  const P = Array.from({ length: MAX }, () => ({ life: 0, dead: true, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0, max: 1, g: 0, drag: 0, spin: 0, gy: 0 }));
-  const col = new THREE.Color(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), axis = new THREE.Vector3(0.3, 1, 0.2).normalize(), up = new THREE.Vector3(0, 1, 0);
-  m4.makeScale(0, 0, 0); for (let i = 0; i < MAX; i++) { mesh.setMatrixAt(i, m4); mesh.setColorAt(i, col.set('#fff')); }
-  scene.add(mesh);
-  let next = 0, colorDirty = false, cLo = MAX, cHi = -1; // B-4: the color rows written since the last upload
-  // color: any THREE.Color input, or null when `col` was already set by the caller (no string parsing in hot paths)
-  const emit = (x, y, z, vx, vy, vz, size, life, color, g = 9.8, drag = 0.5) => {
-    const i = next; next = (next + 1) % MAX; const p = P[i];
-    p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz; p.size = size; p.life = p.max = life; p.g = g; p.drag = drag; p.spin = Math.random() * 6; p.dead = false; p.gy = groundY(x, z);
-    mesh.setColorAt(i, color === null ? col : col.set(color)); colorDirty = true; if (i < cLo) cLo = i; if (i > cHi) cHi = i;
-  };
+// The farm's effects (3l: the pool and its motion are the fx kit's createParticles and createMarks, lion-hawk/kits/fx/view). The
+// presets here (stars, gravel, dust, mud, water, sparkles, confetti, the rainbow trail and halo, the barn frame) are what the game
+// emits. compiler: the view's material compiler (the cubes take the white 'paper' look, tinted per instance).
+import { createParticles, createMarks } from 'lion-hawk/kits/fx/view';
+export function createFx(scene, groundY = () => 0, { compiler } = {}) {
+  const parts = createParticles({ max: 1200, gravity: 9.8, drag: 0.5, floor: groundY, material: compiler?.get('paper', { instanced: true }) ?? null });
+  const marks = createMarks({ max: 400, width: 0.45, length: 0.9, heightAt: groundY, lift: 0.06 });
+  scene.add(parts.mesh, marks.mesh);
+  const col = parts.color;
+  // the game's preset arguments (..., size, life, color, g, drag); the kit's emit takes life before size
+  const emit = (x, y, z, vx, vy, vz, size, life, color, g = 9.8, drag = 0.5) => parts.emit(x, y, z, vx, vy, vz, life, size, color, g, drag);
   const R = a => (Math.random() - 0.5) * a;
   const hsl = (h, l = 0.6) => col.setHSL(h, 0.85, l);
-  const marks = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.45, 1).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: '#5a4630', transparent: true, opacity: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), TM);
-  marks.count = 0; marks.frustumCulled = false; scene.add(marks); let tmNext = 0;
   return {
     stars(x, y, z) { for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; emit(x, y, z, Math.cos(a) * 5, 3, Math.sin(a) * 5, 0.22, 0.6, '#ffd84a', 2); } },
     gravel(x, z, dx, dz, n = 3) { const gy = groundY(x, z); for (let i = 0; i < n; i++) emit(x + R(0.4), gy + 0.2, z + R(0.4), -dx * 4 + R(3), 2 + Math.random() * 2.5, -dz * 4 + R(3), 0.09, 0.7, Math.random() < 0.5 ? '#bfa57a' : '#8d7656'); },
@@ -37,23 +28,7 @@ export function createFx(scene, groundY = () => 0) {
     sparkleFrame(points) { for (const [i, p] of points.entries()) if (Math.random() < 0.7) emit(p.x + R(0.2), p.y + R(0.2), p.z + R(0.2), 0, 0.2, 0, 0.3, 0.7, i % 3 ? '#ffe066' : '#ffffff', 0); },
     sparkleTrail(points) { for (const p of points) if (Math.random() < 0.5) emit(p.x + R(1), p.y + Math.random() * 0.6, p.z + R(1), 0, 0.5, 0, 0.18, 1, '#ffe066', -0.3); },
     // a flat quad on the ground along the heading; alpha 0..1 thins it
-    tireMark(x, z, yaw, alpha = 1) {
-      q.setFromAxisAngle(up, yaw); s.set(0.5 + 0.5 * alpha, 1, 0.9); m4.compose(v.set(x, groundY(x, z) + 0.06, z), q, s);
-      marks.setMatrixAt(tmNext, m4); tmNext = (tmNext + 1) % TM; marks.count = Math.min(TM, marks.count + 1); marks.instanceMatrix.needsUpdate = true;
-    },
-    update(dt) {
-      let any = false, lo = MAX, hi = -1; // B-4: upload only the rows written this frame (live particles are a short run of the ring)
-      for (let i = 0; i < MAX; i++) {
-        const p = P[i]; if (p.dead) continue;
-        if (i < lo) lo = i; hi = i;
-        if (p.life <= 0) { p.dead = true; any = true; m4.makeScale(0, 0, 0); mesh.setMatrixAt(i, m4); continue; }
-        any = true; p.life -= dt; p.vy -= p.g * dt; const k = Math.max(0, 1 - p.drag * dt); p.vx *= k; p.vz *= k;
-        p.x += p.vx * dt; p.y = Math.max(p.gy + 0.03, p.y + p.vy * dt); p.z += p.vz * dt; p.spin += dt * 4;
-        const sc = p.size * Math.min(1, p.life / p.max * 2);
-        m4.compose(v.set(p.x, p.y, p.z), q.setFromAxisAngle(axis, p.spin), s.set(sc, sc, sc)); mesh.setMatrixAt(i, m4);
-      }
-      if (any) { const a = mesh.instanceMatrix; a.clearUpdateRanges(); a.addUpdateRange(lo * 16, (hi - lo + 1) * 16); a.needsUpdate = true; }
-      if (colorDirty && mesh.instanceColor) { const c = mesh.instanceColor; c.clearUpdateRanges(); c.addUpdateRange(cLo * 3, (cHi - cLo + 1) * 3); c.needsUpdate = true; colorDirty = false; cLo = MAX; cHi = -1; }
-    },
+    tireMark(x, z, yaw, alpha = 1) { marks.add(x, z, Math.sin(yaw), Math.cos(yaw), alpha); },
+    update(dt) { parts.update(dt); marks.update(); },
   };
 }

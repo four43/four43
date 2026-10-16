@@ -1,24 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysics, DT, G, groups } from '../src/sim/physics.js';
+import { addGround, DT } from '../src/sim/ground.js';
+import { testWorld } from './helpers/world.mjs';
 import { createTractor, quatAxes, TP } from '../src/sim/tractor.js';
 import { createTrain } from '../src/sim/hitch.js';
-await RAPIER.init();
 
 const make = (power = 'medium', extra) => {
-  const phys = createPhysics(RAPIER); extra?.(phys);
-  const t = createTractor(phys, { x: 0, z: 0, yaw: 0, power });
-  const train = createTrain(phys, t);
+  const { world, step } = testWorld(); addGround(world); extra?.(world);
+  const t = createTractor(world, { x: 0, z: 0, yaw: 0, power });
+  const train = createTrain(world, t);
   const stats = { maxAngle: 0, maxGap: 0, nan: false, minUp: 1, minCarUp: 1, airborne: false };
   const run = (sec, thr, steer) => { for (let i = 0; i < sec * 60; i++) {
-    t.setInput(thr, steer); t.step(DT); train.step(DT, { parked: false }); phys.world.step();
+    step(1, () => { t.setInput(thr, steer); t.step(DT); train.step(DT, { parked: false }); });
     for (let k = 0; k < 2; k++) { stats.maxAngle = Math.max(stats.maxAngle, Math.abs(train.angle(k))); stats.maxGap = Math.max(stats.maxGap, train.hitchGap(k)); }
     for (const b of [t.body, ...train.cars.map(c => c.body)]) { const p = b.translation(); if (!Number.isFinite(p.x + p.y + p.z)) stats.nan = true; stats.minUp = Math.min(stats.minUp, quatAxes(b.rotation()).u.y); }
     for (const c of train.cars) stats.minCarUp = Math.min(stats.minCarUp, quatAxes(c.body.rotation()).u.y);
     if ([0, 1, 2, 3].every(i => !t.vc.wheelIsInContact(i))) stats.airborne = true;
   } };
-  return { phys, t, train, run, stats };
+  return { world, t, train, run, stats };
 };
 
 test('the train settles in line behind the tractor', () => {
@@ -41,10 +40,10 @@ test('reversing at full lock is limited by the jackknife torque', () => {
   assert.ok(stats.maxAngle < 80 * Math.PI / 180, `angle ${stats.maxAngle}`);
 });
 test('ramp jump: airborne, lands upright, joints hold', () => {
-  const ramp = phys => { // 5 m up to 0.6 m, 1 m table, 3 m down; crest at x = 30
-    const { RAPIER, world } = phys; const pts = [];
+  const ramp = world => { // 5 m up to 0.6 m, 1 m table, 3 m down; crest at x = 30
+    const pts = [];
     for (const [x, y] of [[25, 0], [30, 0.6], [31, 0.6], [34, 0]]) for (const z of [-3.5, 3.5]) pts.push(x, y, z, x, -0.2, z);
-    world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pts)).setCollisionGroups(groups(G.STATIC, 0xffff)));
+    world.spawn({ body: 'fixed', groups: { member: ['static'] }, colliders: [{ shape: 'hull', points: pts, p: [0, 0, 0], q: [0, 0, 0, 1], material: 'pad' }] });
   };
   const { t, run, stats } = make('medium', ramp); run(1, 0, 0); run(7, 1, 0); run(3, 0, 0);
   assert.ok(stats.airborne, 'never left the ground'); assert.equal(stats.nan, false);

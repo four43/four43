@@ -23,17 +23,17 @@ test('bucketed nearest() matches a brute-force search', () => {
 test('road sizes (T-2)', () => { assert.equal(ROAD_HALF, 7); assert.equal(SHOULDER, 1.5); assert.equal(CORRIDOR, 8.5); });
 test('surfaces: yard gravel, road gravel, grass shoulder, mud tile mud', () => {
   const farm = generateFarm(5), road = buildRoad(farm);
-  assert.equal(road.surfaceAt(10, 10), 'gravel'); assert.equal(road.surfaceAt(50, -50), 'gravel');
-  const p = road.routes[0].pts[60]; assert.equal(road.surfaceAt(p.x, p.z), 'gravel');
-  assert.equal(road.surfaceAt(p.x + p.tz * 6.5, p.z - p.tx * 6.5), 'gravel');
-  assert.equal(road.surfaceAt(p.x + p.tz * 8, p.z - p.tx * 8), 'grass');
-  assert.equal(road.surfaceAt(p.x - p.tz * 8, p.z + p.tx * 8), 'grass');
+  assert.equal(road.materialAt(10, 10), 'route'); assert.equal(road.materialAt(50, -50), 'route');
+  const p = road.routes[0].pts[60]; assert.equal(road.materialAt(p.x, p.z), 'route');
+  assert.equal(road.materialAt(p.x + p.tz * 6.5, p.z - p.tx * 6.5), 'route');
+  assert.equal(road.materialAt(p.x + p.tz * 8, p.z - p.tx * 8), 'meadow');
+  assert.equal(road.materialAt(p.x - p.tz * 8, p.z + p.tx * 8), 'meadow');
   let muds = 0;
   for (const [r, R] of farm.routes.entries()) R.tiles.forEach((t, k) => { if (t.type === 'mud') {
     const c = road.featureCenter(r, k), fx = Math.sin(c.yaw), fz = Math.cos(c.yaw); muds++;
-    assert.equal(road.surfaceAt(c.x, c.z), 'mud');
-    assert.equal(road.surfaceAt(c.x + fx * 12, c.z + fz * 12), 'mud'); assert.equal(road.surfaceAt(c.x + fz * 6, c.z - fx * 6), 'mud');  // 0.35 TILE along, the full width across
-    assert.equal(road.surfaceAt(c.x + fx * 13.5, c.z + fz * 13.5), 'gravel');
+    assert.equal(road.materialAt(c.x, c.z), 'mudhole');
+    assert.equal(road.materialAt(c.x + fx * 12, c.z + fz * 12), 'mudhole'); assert.equal(road.materialAt(c.x + fz * 6, c.z - fx * 6), 'mudhole');  // 0.35 TILE along, the full width across
+    assert.equal(road.materialAt(c.x + fx * 13.5, c.z + fz * 13.5), 'route');
   } });
   assert.ok(muds > 0);
 });

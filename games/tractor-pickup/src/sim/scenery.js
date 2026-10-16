@@ -2,13 +2,13 @@
 import { TILE, SIZE, DIRS, tileCenter, YARD_HALF, TREE_R, WASH } from './track.js';
 import { ROAD_HALF, CORRIDOR } from './road.js';
 import { CUT } from './terrain.js';
-import { G, groups } from './physics.js';
 import { addRamp } from './sandbox.js';
 export const TALL = ['oak', 'tree', 'treeFat'];
 export const FIELD_D = CUT.top + 2; // field scenery stands this far (plus its radius) from a centerline: past the cut top and the fence
 const UNDER = ['bush', 'bush', 'bushS', 'bushS', 'grass', 'grass', 'rock', 'flowerY', 'flowerR', 'log', 'stump']; // forest floor: mostly bushes and grass
 const R = { oak: 1.4, tree: 1.0, treeFat: 1.3, bush: 0.9, bushS: 0.5, rock: 0.5, pumpkin: 0.4, corn: 0.4, grass: 0.2, flowerY: 0.15, flowerR: 0.15, log: 0.6, stump: 0.5, hay: 0.8 };
 const yawQ = y => ({ x: 0, y: Math.sin(y / 2), z: 0, w: Math.cos(y / 2) });
+const qa = q => [q.x, q.y, q.z, q.w], Q0 = [0, 0, 0, 1];
 
 // Four sides of an axis-aligned rect as wall segments, with openings { x, z, w } cut where they sit on a side.
 export function wallsOfRect(Rc, gaps = []) {
@@ -26,9 +26,9 @@ const H = YARD_HALF;
 export const GATE_W = 17; // T-3: the gate gap equals the corridor between the edge feet (2 x 8.5 m)
 export const yardWalls = () => wallsOfRect({ x0: -H, x1: H, z0: -H, z1: H }, [[H, 0], [0, H], [-H, 0], [0, -H]].map(([x, z]) => ({ x, z, w: GATE_W })));
 
-function addWall(phys, [ax, az, bx, bz], h, group, y0 = 0) { // a 0.3 m thick wall from y0 up to y0 + h
-  const { RAPIER, world } = phys, L = Math.hypot(bx - ax, bz - az), th = Math.atan2(-(bz - az), bx - ax);
-  world.createCollider(RAPIER.ColliderDesc.cuboid(L / 2, h / 2, 0.15).setTranslation((ax + bx) / 2, y0 + h / 2, (az + bz) / 2).setRotation(yawQ(th)).setFriction(0.1).setRestitution(0).setCollisionGroups(group));
+function wallBox([ax, az, bx, bz], h, y0 = 0) { // a 0.3 m thick wall from y0 up to y0 + h
+  const L = Math.hypot(bx - ax, bz - az), th = Math.atan2(-(bz - az), bx - ax);
+  return { shape: 'box', half: [L / 2, h / 2, 0.15], p: [(ax + bx) / 2, y0 + h / 2, (az + bz) / 2], q: qa(yawQ(th)), material: 'fence' };
 }
 
 // Arc centers of every curve tile: the corner shared by the entry and exit edges. The inside of the curve is the quarter disc around it.
@@ -90,45 +90,53 @@ export function roadside(farm, road, rng) {
   return out;
 }
 
-export function addFarmColliders(phys, farm, road, terrain) {
-  const { RAPIER, world } = phys, cg = groups(G.STATIC, 0xffff), wall = groups(G.WALL, 0xffff), y = farm.yard, b = y.barn;
-  farm.routes.forEach((R2, r) => R2.tiles.forEach((t, k) => { if (t.type === 'ramp') addRamp(phys, { ...road.featureCenter(r, k), width: 14 }); }));
+// one fixed 'walls' entity holds every wall collider, in the old creation order (barn, wash, yard, route fences); ramps come first
+export function addFarmColliders(world, farm, road, terrain) {
+  const y = farm.yard, b = y.barn, walls = [];
+  farm.routes.forEach((R2, r) => R2.tiles.forEach((t, k) => { if (t.type === 'ramp') addRamp(world, { ...road.featureCenter(r, k), width: 14 }); }));
   const fx = Math.sin(b.yaw), fz = Math.cos(b.yaw);
   for (const sd of [-1, 1]) { // drive-through barn: two side walls along the axis (T-28), and the open door leaves in line with them
     const ox = Math.cos(b.yaw) * sd * b.width, oz = -Math.sin(b.yaw) * sd * b.width;
-    world.createCollider(RAPIER.ColliderDesc.cuboid(0.3, 2.5, b.half).setTranslation(b.x + ox, 2.5, b.z + oz).setRotation(yawQ(b.yaw)).setFriction(0.1).setCollisionGroups(wall));
+    walls.push({ shape: 'box', half: [0.3, 2.5, b.half], p: [b.x + ox, 2.5, b.z + oz], q: qa(yawQ(b.yaw)), material: 'fence' });
     for (const end of [-1, 1]) { const a = end * (b.half + b.leaf / 2);
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.15, 2.3, b.leaf / 2).setTranslation(b.x + ox + fx * a, 2.3, b.z + oz + fz * a).setRotation(yawQ(b.yaw)).setFriction(0.1).setCollisionGroups(wall)); }
+      walls.push({ shape: 'box', half: [0.15, 2.3, b.leaf / 2], p: [b.x + ox + fx * a, 2.3, b.z + oz + fz * a], q: qa(yawQ(b.yaw)), material: 'fence' }); }
   }
   if (y.wash) { // T-36: the wash's corner posts and side brushes
-    const w = y.wash, wf = [Math.sin(w.yaw), Math.cos(w.yaw)], wr = [Math.cos(w.yaw), -Math.sin(w.yaw)], at = (a, s) => ({ x: w.x + wf[0] * a + wr[0] * s, y: WASH.h / 2, z: w.z + wf[1] * a + wr[1] * s });
+    const w = y.wash, wf = [Math.sin(w.yaw), Math.cos(w.yaw)], wr = [Math.cos(w.yaw), -Math.sin(w.yaw)], at = (a, s) => [w.x + wf[0] * a + wr[0] * s, WASH.h / 2, w.z + wf[1] * a + wr[1] * s];
     for (const sd of [-1, 1]) {
-      for (const e of [-1, 1]) world.createCollider(RAPIER.ColliderDesc.cuboid(0.25, WASH.h / 2, 0.25).setTranslation(...Object.values(at(e * WASH.half, sd * (WASH.width + 0.3)))).setFriction(0.1).setCollisionGroups(wall));
-      world.createCollider(RAPIER.ColliderDesc.cylinder(1.6, 0.5).setTranslation(...Object.values(at(0, sd * (WASH.width + 0.3)))).setFriction(0.1).setCollisionGroups(wall));
+      for (const e of [-1, 1]) walls.push({ shape: 'box', half: [0.25, WASH.h / 2, 0.25], p: at(e * WASH.half, sd * (WASH.width + 0.3)), q: Q0, material: 'fence' });
+      walls.push({ shape: 'cylinder', halfHeight: 1.6, r: 0.5, p: at(0, sd * (WASH.width + 0.3)), q: Q0, material: 'fence' });
     }
   }
-  for (const seg of yardWalls(farm)) addWall(phys, seg, 1.0, wall);
+  for (const seg of yardWalls(farm)) walls.push(wallBox(seg, 1.0));
   for (const seg of terrain.fences) { // T-17 route fences, 1.2 m above the ground; where a fence runs onto the cut foot it reaches down into the slope
     const ya = terrain.height(seg[0], seg[1]), yb = terrain.height(seg[2], seg[3]), y0 = Math.min(ya, yb) - 0.3;
-    addWall(phys, seg, Math.max(ya, yb) + 1.2 - y0, wall, y0);
+    walls.push(wallBox(seg, Math.max(ya, yb) + 1.2 - y0, y0));
   }
+  return world.spawn({ tags: ['walls'], body: 'fixed', groups: { member: ['wall'] }, colliders: walls });
 }
 
 // T-31: bales roll (cylinder on its side), cones and barrels tip; trees and bushes are in trees.js. T-32: reset() on each show.
-export function addYardProps(phys, farm) {
-  const { RAPIER, world } = phys, cg = groups(G.PROP, 0xffff), props = [], S = Math.SQRT1_2;
+// Masses are the old setMass values through body.mass (D3). The cone is a 17-point hull (no cone shape in the collider schema).
+const CONE = [0, 0.35, 0, ...Array.from({ length: 16 }, (_, i) => [Math.cos(i / 8 * Math.PI) * 0.25, -0.35, Math.sin(i / 8 * Math.PI) * 0.25]).flat()];
+const PROP = {
+  bale: { y: 0.75, mass: 150, shape: { shape: 'cylinder', halfHeight: 0.6, r: 0.75 } },
+  cone: { y: 0.35, mass: 2, shape: { shape: 'hull', points: CONE } },
+  barrel: { y: 0.5, mass: 25, shape: { shape: 'cylinder', halfHeight: 0.5, r: 0.4 } },
+};
+export function addYardProps(world, farm) {
+  const props = [], S = Math.SQRT1_2;
   for (const o of farm.yard.obstacles) {
     if (o.kind === 'tree' || o.kind === 'bush') continue; // they belong to the tree system (trees.js): the tractor breaks them (T-34)
-    const cy = Math.cos(o.yaw / 2), sy = Math.sin(o.yaw / 2);
+    const cy = Math.cos(o.yaw / 2), sy = Math.sin(o.yaw / 2), P = PROP[o.kind];
     const q = o.kind === 'bale' ? { x: cy * S, y: sy * S, z: -sy * S, w: cy * S } : yawQ(o.yaw); // bale: yaw then 90 degrees about x
-    const y = { bale: 0.75, cone: 0.35, barrel: 0.5 }[o.kind];
-    const shape = { bale: () => RAPIER.ColliderDesc.cylinder(0.6, 0.75).setMass(150), cone: () => RAPIER.ColliderDesc.cone(0.35, 0.25).setMass(2), barrel: () => RAPIER.ColliderDesc.cylinder(0.5, 0.4).setMass(25) }[o.kind]();
-    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(o.x, y, o.z).setRotation(q).setLinearDamping(0.3).setAngularDamping(0.5));
-    world.createCollider(shape.setFriction(0.6).setRestitution(0.1).setCollisionGroups(cg), body);
-    props.push({ ...o, body, start: { x: o.x, y, z: o.z, q } });
+    const e = world.spawn({ tags: ['prop', o.kind], at: [o.x, P.y, o.z], q: qa(q), prop: o,
+      body: { type: 'dynamic', linearDamping: 0.3, angularDamping: 0.5, mass: P.mass },
+      colliders: [{ ...P.shape, p: [0, 0, 0], q: Q0, material: 'prop' }], groups: { member: ['prop'] } });
+    props.push({ ...o, e, body: e.body, start: { at: [o.x, P.y, o.z], q: qa(q) } });
   }
   return {
     props,
-    reset() { for (const p of props) if (p.body) { p.body.setTranslation(p.start, true); p.body.setRotation(p.start.q, true); p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true); } },
+    reset() { for (const p of props) world.place(p.e, { at: p.start.at }, { q: p.start.q }); }, // place: pose set, velocities zeroed, body woken (E-8)
   };
 }

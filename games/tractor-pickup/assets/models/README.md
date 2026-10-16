@@ -3,7 +3,7 @@
 Every 3D model in the game is a GLB file in this folder (spec X-8). Edit them by hand (for example in Blender), then:
 
 ```bash
-npm run bake    # assets/models/*.glb -> src/assets.json
+npm run bake    # lion-hawk bake: assets/models/*.glb -> baked/
 npm run build   # -> site/exp/tractor-pickup/
 ```
 

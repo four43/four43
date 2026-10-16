@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { showLayout, tallyLayout, TALLY, LINEUP } from '../sim/showSteps.js';
 import { TYPES } from '../sim/herd.js';
 import { SCALE } from '../render/petScale.js';
-import { VIEW } from '../render/scene.js';
+import { VIEW } from '../view/size.js';
 import { holdToFire } from './hold.js';
 const headY = type => 1.4 * (SCALE[type] ?? 1) + 0.6; // a Cube Pet is about 1.4 model units tall: a number floats just above its head
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));

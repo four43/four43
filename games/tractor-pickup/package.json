@@ -1,13 +1,15 @@
 {
   "name": "tractor-pickup",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.9.0",
   "type": "module",
   "scripts": {
     "test": "node --test --test-concurrency=4 test/",
-    "bake": "node bake.mjs",
-    "build": "python3 build.py",
-    "test:e2e": "node --test test/e2e.browser.mjs"
+    "bake": "lion-hawk bake",
+    "build": "lion-hawk build",
+    "dev": "lion-hawk dev",
+    "test:e2e": "node --test test/e2e.browser.mjs",
+    "test:peers": "node --test test/net.peers.browser.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
@@ -19,6 +21,7 @@
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/extensions": "^4.5.1",
     "esbuild": "^0.28.2",
+    "meshoptimizer": "~1.2.0",
     "playwright-core": "^1.64.0",
     "pngjs": "^7.0.0"
   }

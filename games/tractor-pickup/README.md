@@ -12,8 +12,8 @@ npm test           # node --test test/
 ## Build
 
 ```bash
-npm run build      # writes site/exp/tractor-pickup/ (do not commit it; deploys go through gh-pages)
-npm run bake       # after editing a model in assets/models/
+npm run build -- --out <dir>   # or TRACTOR_OUT=<dir> npm run build (lion-hawk build; never --site from a checkout)
+npm run bake                   # lion-hawk bake: assets/models/*.glb -> baked/, after editing a model
 ```
 
 ## Run multiplayer locally
@@ -46,8 +46,8 @@ curl -s localhost:8080/healthz     # ok
 Then, back in `games/tractor-pickup`, build and serve the game:
 
 ```bash
-npm run build
-cd ../../site/exp/tractor-pickup && python3 -m http.server 8767
+npm run build -- --out /tmp/tractor
+cd /tmp/tractor && python3 -m http.server 8767
 ```
 
 Open `http://localhost:8767/?signal=http://localhost:8080&seed=7` in two windows (use a private window for the second so the two keep separate saved state):

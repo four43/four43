@@ -1,0 +1,446 @@
+{
+ "bale": {
+  "bale": {
+   "v": 84,
+   "i": 240
+  }
+ },
+ "barn": {
+  "walls": {
+   "v": 144,
+   "i": 216
+  },
+  "trim": {
+   "v": 720,
+   "i": 1080
+  },
+  "roof-shingles": {
+   "v": 120,
+   "i": 180
+  },
+  "roof-gables": {
+   "v": 60,
+   "i": 96
+  },
+  "roof-trim": {
+   "v": 758,
+   "i": 1140
+  }
+ },
+ "barrel": {
+  "barrel": {
+   "v": 68,
+   "i": 192
+  }
+ },
+ "bunny": {
+  "body": {
+   "v": 342,
+   "i": 1197
+  },
+  "leg-front-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-back-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-back-right": {
+   "v": 32,
+   "i": 132
+  }
+ },
+ "bush": {
+  "plant_bushLarge": {
+   "v": 132,
+   "i": 180
+  }
+ },
+ "bushS": {
+  "plant_bush": {
+   "v": 80,
+   "i": 96
+  }
+ },
+ "chick": {
+  "body": {
+   "v": 201,
+   "i": 798
+  },
+  "leg-front-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 32,
+   "i": 132
+  },
+  "wing-left": {
+   "v": 44,
+   "i": 204
+  },
+  "wing-right": {
+   "v": 44,
+   "i": 204
+  }
+ },
+ "chicken": {
+  "body": {
+   "v": 273,
+   "i": 858
+  },
+  "leg-front-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 32,
+   "i": 132
+  },
+  "wing-left": {
+   "v": 44,
+   "i": 204
+  },
+  "wing-right": {
+   "v": 44,
+   "i": 204
+  }
+ },
+ "cone": {
+  "cone": {
+   "v": 74,
+   "i": 132
+  }
+ },
+ "corn": {
+  "crops_cornStageD": {
+   "v": 272,
+   "i": 444
+  },
+  "corn": {
+   "v": 82,
+   "i": 114
+  }
+ },
+ "cow": {
+  "body": {
+   "v": 299,
+   "i": 1107
+  },
+  "Group": {
+   "v": 48,
+   "i": 204
+  },
+  "leg-front-left": {
+   "v": 40,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 40,
+   "i": 132
+  },
+  "leg-back-left": {
+   "v": 40,
+   "i": 132
+  },
+  "leg-back-right": {
+   "v": 40,
+   "i": 132
+  }
+ },
+ "dog": {
+  "body": {
+   "v": 296,
+   "i": 942
+  },
+  "leg-front-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-back-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-back-right": {
+   "v": 32,
+   "i": 132
+  }
+ },
+ "duck": {
+  "body": {
+   "v": 371,
+   "i": 1254
+  },
+  "leg-front-left": {
+   "v": 32,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 32,
+   "i": 132
+  },
+  "wing-left": {
+   "v": 52,
+   "i": 204
+  },
+  "wing-right": {
+   "v": 52,
+   "i": 204
+  }
+ },
+ "fence": {
+  "fence_simple": {
+   "v": 96,
+   "i": 192
+  }
+ },
+ "flowerR": {
+  "flower_redA": {
+   "v": 134,
+   "i": 228
+  }
+ },
+ "flowerY": {
+  "flower_yellowB": {
+   "v": 234,
+   "i": 462
+  }
+ },
+ "gate": {
+  "arch": {
+   "v": 72,
+   "i": 108
+  }
+ },
+ "grass": {
+  "grass_large": {
+   "v": 448,
+   "i": 672
+  }
+ },
+ "hat-cowboy": {
+  "hat": {
+   "v": 152,
+   "i": 432
+  }
+ },
+ "hat-party": {
+  "hat": {
+   "v": 315,
+   "i": 912
+  }
+ },
+ "hat-straw": {
+  "hat": {
+   "v": 220,
+   "i": 624
+  }
+ },
+ "hay": {
+  "hay-bale": {
+   "v": 172,
+   "i": 540
+  }
+ },
+ "log": {
+  "log": {
+   "v": 312,
+   "i": 600
+  }
+ },
+ "oak": {
+  "tree_oak": {
+   "v": 324,
+   "i": 588
+  }
+ },
+ "pig": {
+  "body": {
+   "v": 194,
+   "i": 570
+  },
+  "Group": {
+   "v": 36,
+   "i": 174
+  },
+  "leg-front-left": {
+   "v": 40,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 40,
+   "i": 132
+  },
+  "leg-back-left": {
+   "v": 40,
+   "i": 132
+  },
+  "leg-back-right": {
+   "v": 40,
+   "i": 132
+  }
+ },
+ "pumpkin": {
+  "crop_pumpkin": {
+   "v": 240,
+   "i": 360
+  }
+ },
+ "rock": {
+  "rock_smallC": {
+   "v": 30,
+   "i": 48
+  }
+ },
+ "rockA": {
+  "rock_largeA": {
+   "v": 234,
+   "i": 240
+  }
+ },
+ "rockB": {
+  "rock_largeB": {
+   "v": 239,
+   "i": 255
+  }
+ },
+ "rockC": {
+  "rock_tallA": {
+   "v": 383,
+   "i": 408
+  }
+ },
+ "sheep": {
+  "body": {
+   "v": 478,
+   "i": 1092
+  },
+  "Group": {
+   "v": 36,
+   "i": 174
+  },
+  "leg-front-left": {
+   "v": 56,
+   "i": 132
+  },
+  "leg-front-right": {
+   "v": 56,
+   "i": 132
+  },
+  "leg-back-left": {
+   "v": 56,
+   "i": 132
+  },
+  "leg-back-right": {
+   "v": 56,
+   "i": 132
+  }
+ },
+ "shrub": {
+  "shrub": {
+   "v": 300,
+   "i": 300
+  }
+ },
+ "sprinkler": {
+  "arch": {
+   "v": 72,
+   "i": 108
+  }
+ },
+ "stump-cut": {
+  "stump": {
+   "v": 73,
+   "i": 210
+  }
+ },
+ "stump": {
+  "stump_old": {
+   "v": 208,
+   "i": 360
+  }
+ },
+ "tractor": {
+  "wheel-front-right": {
+   "v": 288,
+   "i": 996
+  },
+  "wheel-front-left": {
+   "v": 288,
+   "i": 996
+  },
+  "wheel-back-right": {
+   "v": 384,
+   "i": 1284
+  },
+  "wheel-back-left": {
+   "v": 384,
+   "i": 1284
+  },
+  "body": {
+   "v": 292,
+   "i": 678
+  },
+  "fenders": {
+   "v": 152,
+   "i": 360
+  },
+  "roof": {
+   "v": 30,
+   "i": 54
+  },
+  "glass": {
+   "v": 34,
+   "i": 54
+  },
+  "details": {
+   "v": 172,
+   "i": 426
+  }
+ },
+ "trailer": {
+  "bed": {
+   "v": 144,
+   "i": 216
+  },
+  "wheel": {
+   "v": 68,
+   "i": 192
+  }
+ },
+ "tree": {
+  "tree_default": {
+   "v": 192,
+   "i": 342
+  }
+ },
+ "treeFat": {
+  "tree_fat": {
+   "v": 96,
+   "i": 150
+  }
+ },
+ "wash": {
+  "frame": {
+   "v": 120,
+   "i": 180
+  },
+  "canopy": {
+   "v": 1164,
+   "i": 2628
+  },
+  "brush": {
+   "v": 400,
+   "i": 1104
+  }
+ }
+}

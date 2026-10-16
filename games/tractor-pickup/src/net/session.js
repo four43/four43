@@ -70,7 +70,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
         r = await h.createRoom({ public: true, maxPlayers: MAX_PLAYERS, meta: {} });
         if (stale()) { if (!r.closed) r.leave(); return; }
         if (!CODE.test(r.code)) throw { code: 'other' }; // the code goes into the QR link
-        if (bind) bound = bind({ role: 'host', transport: link(r) }); else sync = createHostSync({ game: getGame(), net: link(r), paint: getPaint(), clock: () => performance.now() });
+        if (bind) bound = bind({ role: 'host', transport: link(r) }); else sync = createHostSync({ game: getGame(), world: getGame().world, net: link(r), paint: getPaint(), clock: () => performance.now() });
         room = r; code = r.code; watch(r); state = 'hosting';
         r.on('members', changed); r.on('meta', changed); r.on('peerAway', changed); r.on('peerBack', changed); r.on('peerLeft', changed); r.on('peer', p => { p.on?.('type', changed); changed(); });
       } catch (e) {
@@ -93,7 +93,7 @@ export function createSession({ Handshake, server = SERVER, lag = null, getGame,
       if (state !== 'prompt') return; state = 'joining'; welcomed = false; changed();
       const h = client(), stale = () => hs !== h || state !== 'joining'; let r = null;
       try { r = await h.joinRoom(code); if (stale()) { if (!r.closed) r.leave(); return; }
-        let b = null; if (bind) b = bound = bind({ role: 'guest', transport: link(r) }); else sync = createGuestSync({ game: getGame(), net: link(r), paint: getPaint(), onFarm, clock: () => performance.now() });
+        let b = null; if (bind) b = bound = bind({ role: 'guest', transport: link(r) }); else sync = createGuestSync({ game: getGame(), world: getGame().world, net: link(r), paint: getPaint(), onFarm, clock: () => performance.now() });
         const y = sync; room = r; watch(r); state = 'joined';
         unstick(); waitT = setTimeout(() => { if (bound === b && sync === y && room === r && !cur()?.you) { stuck = true; log('no welcome from the host after', welcomeMs / 1000, 's: no peer connection?'); changed(); } }, welcomeMs); waitT?.unref?.(); // the panel says so; Leave still works
         r.on('members', changed); r.on('hostAway', changed); r.on('hostBack', changed); r.on('peer', p => { p.on?.('type', changed); changed(); }); } // the host row follows the real connection

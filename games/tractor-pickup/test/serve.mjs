@@ -1,34 +1,22 @@
-// Builds a Tractor Pickup entry and serves it for browser tests (lion-hawk 2g G1, Pig Pens' serve.mjs the model): an esbuild
-// bundle (iife, .json loader) into build/e2e/, the page from template.html with the bundle inlined as build.py does (no voice or
-// animal clips: speech and the synth fill in), the pwa/ files except sw.js, and a static server on a random local port.
-// serveTractor({ entry }) → { url, close }.
+// Builds Tractor Pickup with lion-hawk build (--e2e: unminified, no audio clips: speech and the synth fill in) into build/e2e/ and
+// serves that directory on a random local port (lion-hawk 3l; was an esbuild bundle in a template). serveTractor() → { url, close }.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
+import { build } from 'lion-hawk/build';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
-
-export async function serveTractor({ entry = 'src/main.js' } = {}) {
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.glb': 'model/gltf-binary', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+export async function serveTractor() {
   const out = path.join(root, 'build/e2e');
-  fs.mkdirSync(out, { recursive: true });
-  const name = path.basename(entry, '.js');
-  const bundle = path.join(out, `${name}.bundle.js`);
-  await build({ entryPoints: [path.join(root, entry)], bundle: true, format: 'iife', loader: { '.json': 'json' }, outfile: bundle, logLevel: 'warning' });
-  const js = fs.readFileSync(bundle, 'utf8');
-  const html = fs.readFileSync(path.join(root, 'template.html'), 'utf8').replace('<!--APP-->', () => js.replace(/<\/script/g, '<\\/script'))
-    .replace('<!--VOICE-->', 'window.__VOICE__={};window.__ANIMALS__={};');
-  fs.writeFileSync(path.join(out, `${name}.html`), html);
+  await build({ game: root, out, e2e: true });
   const server = http.createServer((req, res) => {
-    const p = new URL(req.url, 'http://x').pathname;
-    if (p === '/' || p === '/index.html') { res.writeHead(200, { 'content-type': 'text/html' }).end(html); return; }
-    const f = path.join(root, 'pwa', path.basename(p)); // manifest and icons, as the site serves them
-    if (path.basename(p) !== 'sw.js' && fs.existsSync(f)) { res.writeHead(200, { 'content-type': TYPES[path.extname(f)] ?? 'application/octet-stream' }).end(fs.readFileSync(f)); return; }
-    res.writeHead(404).end();
+    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p === '/') p = '/index.html';
+    const f = path.join(out, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
+    if (!f.startsWith(out) || path.basename(f) === 'sw.js' || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404).end(); return; }
+    res.writeHead(200, { 'content-type': TYPES[path.extname(f)] ?? 'application/octet-stream' }).end(fs.readFileSync(f));
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const url = `http://127.0.0.1:${server.address().port}/`;
-  return { url, close: () => new Promise(r => { server.closeAllConnections?.(); server.close(() => r()); }) };
+  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => new Promise(r => { server.closeAllConnections?.(); server.close(() => r()); }) };
 }

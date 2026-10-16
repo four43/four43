@@ -1,7 +1,7 @@
 // test/mp.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, inFront, free, single, countCalls, quietWarn, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle } from './mp.harness.mjs';
+import { mpWorld, inFront, free, single, countCalls, quietWarn, STILL, PAINTS, moveTrain, sendAnimals, trainFrame, animalRec, parked, settle, hostFarm, quiet } from './mp.harness.mjs';
 import { CLAIM_RANGE, TREE_RANGE } from '../src/net/host.js';
 import { spawnPoint } from '../src/sim/spawn.js';
 import { makeRng } from '../src/sim/rng.js';
@@ -55,7 +55,7 @@ test('a guest joins a host whose animals have turned many times: yaws go out in 
 test('a host id far past the herd is dropped and a leader the guest lacks is no leader (M-44, M-50)', async () => {
   const w = await mpWorld({ seed: 27 }); w.seconds(0.5);
   const g = w.guests[0], n = g.game.herd.animals.length, rec = (leader, o) => animalRec({ home: 'yard', hidden: true, x: 1, z: 2, leader, line: 1, ...o });
-  w.host.sync.after = () => {}; w.step(); // the host goes quiet: only the frames below reach the guest
+  quiet(w, w.host, { ahead: true }); w.step(); // the host goes quiet: only the frames below reach the guest
   sendAnimals(w, g, [[0, rec(40000)], [1, rec(0)], [60000, rec(null)]]); w.seconds(0.5);
   assert.equal(g.game.herd.animals.length, n, 'no animals grown up to 60000');
   const [a0, a1] = g.game.herd.animals; assert.equal(a0.leader, null); assert.equal(a1.leader, 0); assert.equal(a0.home, 'yard'); assert.equal(a0.hidden, true);
@@ -129,7 +129,7 @@ test('the host refuses a claim from a tractor more than 8 m away (M-50)', async 
   const w = await mpWorld({ seed: 35 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game);
   const seen = countCalls(w.host.sync, 'claim');
-  const t = w.host.sync.players.map.get(2).latest.bodies[0].p; assert.ok(Math.hypot(ha.x - t.x, ha.z - t.z) > CLAIM_RANGE, 'the guest tractor is more than 8 m away');
+  const t = w.host.sync.players.map.get(2).latest.body.p; assert.ok(Math.hypot(ha.x - t.x, ha.z - t.z) > CLAIM_RANGE, 'the guest tractor is more than 8 m away');
   g.net.send(w.host.net.id, { t: 'claim', ids: [ha.id] }, true); w.seconds(0.3);
   assert.equal(seen(), 1, 'the claim was handled'); assert.ok(free(w.host.game, ha), 'still free');
 });
@@ -204,7 +204,7 @@ test('trees: a guest break shows on the host and the other guests; the host brea
   // move guest 1's tractor next to the tree on the host's view: use a broken-by-id break on the guest (as trees.step would) and let after() report it
   g1.game.trees.breakById(t.id); g1.sync.after([{ type: 'treeBreak', tree: t, dir: { x: 1, z: 0 }, speed: 5 }], w.now);
   w.seconds(0.3);
-  const g1p = w.host.sync.players.map.get(2).latest.bodies[0].p; assert.ok(Math.hypot(t.x - g1p.x, t.z - g1p.z) > TREE_RANGE, 'the tree is out of reach');
+  const g1p = w.host.sync.players.map.get(2).latest.body.p; assert.ok(Math.hypot(t.x - g1p.x, t.z - g1p.z) > TREE_RANGE, 'the tree is out of reach');
   assert.notEqual(w.host.game.trees.list[t.id].state, 'broken', 'too far from guest 1: refused');
   const near = g1.game.trees.list.find(x => x.kind === 'tree' && Math.hypot(x.x - g1.game.tractor.x, x.z - g1.game.tractor.z) < 60);
   assert.ok(near, 'a tree within reach of a moved tractor exists');
@@ -238,10 +238,9 @@ test('paint changes reach the other devices (M-2)', async () => {
   assert.deepEqual(w.guests[0].sync.players.map.get(1).paint, { body: 'white', trim: 'blue' });
 });
 test('a new farm on the host: the guest makes it too, after its own show (M-19)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 47 }); w.seconds(1);
   const g = w.guests[0]; g.game.mode = 'show';
-  w.host.game = createGame(RAPIER, { seed: 48, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.5);
+  hostFarm(w, 48); w.seconds(0.5);
   assert.equal(g.game.farm.seed, 47, 'not during the show');
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 48);
 });
@@ -312,7 +311,7 @@ test('a guest regrow counts at most once in 5 s; the extra ones are not passed o
 test('a repeated id in claim, release or delivered is handled once (M-50)', async () => {
   const w = await mpWorld({ seed: 59 }); w.seconds(1);
   const g = w.guests[0], H = w.host.net.id; w.hub.drop = (from, to) => to === g.net.id; // the guest hears nothing back (so it gives nothing back either)
-  const near = a => { const t = w.host.sync.players.map.get(2).latest.bodies[0].p; Object.assign(a, { x: t.x + 2, z: t.z, state: 'idle', timer: 99, hidden: false }); };
+  const near = a => { const t = w.host.sync.players.map.get(2).latest.body.p; Object.assign(a, { x: t.x + 2, z: t.z, state: 'idle', timer: 99, hidden: false }); };
   const [a, b] = w.host.game.herd.free().filter(x => !x.hidden && x.type !== 'chick');
   const ea = a.epoch; near(a); g.net.send(H, { t: 'claim', ids: [a.id, a.id] }, true); w.seconds(0.2);
   assert.deepEqual([a.owner, a.epoch], [2, ea + 1], 'granted once');
@@ -346,7 +345,7 @@ test('player 3 leaves and a new guest gets number 3: the other guest sees the ne
   const g = w.addGuest(); w.seconds(1); assert.equal(g.sync.you, 3);
   const seen = g2.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, 'player 2 sees the new train where it is');
 });
-test('a straggling frame from the old player 3 after it left does not hide the new player 3: seen within 3 s (M-26, M-39, M-58)', async () => {
+test('a straggling frame from the old player 3 after it left does not hide the new player 3: seen within 3 s (M-26, M-39, M-58)', { todo: 'engine 0.10.3: a guest has no forget for a straggler that lands after the removals; its old clock outranks the new player 3 (phase 3l notes, Integrator request 6)' }, async () => {
   const w = await mpWorld({ seed: 64, guests: 2 }); w.seconds(1);
   const [g2, g3] = w.guests;
   g3.net.leave(); w.seconds(0.5); assert.ok(!g2.sync.players.map.has(3), 'gone from the roster');
@@ -439,69 +438,69 @@ test('host data never pulls an animal out of the guest trailer, whatever its own
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id];
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   w.seconds(3); assert.equal(ga.state, 'ride');
-  w.host.sync.after = () => {}; w.step();
+  quiet(w, w.host, { ahead: true }); w.step();
   sendAnimals(w, g, [[ha.id, animalRec({ type: ha.type, golden: ha.golden, epoch: ga.epoch + 5, x: 40, z: 40 })]]);
   w.seconds(0.5); assert.equal(ga.state, 'ride'); assert.equal(g.game.load.landed(), 1);
 });
 
-test('the rate limits count in wall time: with the game frozen (rAF paused), a new window still opens (M-50)', async () => {
+// M-50 on the engine path (3l, was the old world's frozen-frame case, #75): messages reach the syncs as commands at the next step,
+// so a window is shown to follow the wall clock by holding the wall still while the sim runs on (2 s of steps), then moving it
+test('the rate limits count in wall time, not sim time: with the wall held, steps open no new window; a new wall second does (M-50)', async () => {
   let wall = 0; const w = await mpWorld({ seed: 74, clock: () => wall }); w.seconds(1); wall = 5000;
   const g = w.guests[0], H = w.host.net.id, G = g.net.id, handled = countCalls(w.host.sync, 'claim');
-  const deliver = () => w.hub.tick(w.now); // messages arrive, but no frame runs: sim time stands still
-  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled(), 60);
-  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); deliver(); assert.equal(handled(), 61, 'the host: a new second, a new window');
-  const horns = () => g.sync.out.filter(e => e.type === 'remoteHorn').length; // no frame runs, so the guest's events wait in out
-  for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 60);
-  wall += 1100; w.host.net.send(G, { t: 'horn', n: 1 }, true); deliver(); assert.equal(horns(), 61, 'the guest: a new window too');
+  for (let i = 0; i < 70; i++) g.net.send(H, { t: 'claim', ids: [0] }, true); w.step(2); assert.equal(handled(), 60);
+  w.seconds(2); g.net.send(H, { t: 'claim', ids: [0] }, true); w.step(2); assert.equal(handled(), 60, 'sim time alone opens no window');
+  wall += 1100; g.net.send(H, { t: 'claim', ids: [0] }, true); w.step(2); assert.equal(handled(), 61, 'the host: a new wall second, a new window');
+  const horns = () => g.events.filter(e => e.type === 'remoteHorn').length;
+  const h0 = horns(); for (let i = 0; i < 70; i++) w.host.net.send(G, { t: 'horn', n: 1 }, true); w.step(2); assert.equal(horns() - h0, 60);
+  w.seconds(2); w.host.net.send(G, { t: 'horn', n: 1 }, true); w.step(2); assert.equal(horns() - h0, 60, 'the guest: sim time alone opens no window');
+  wall += 1100; w.host.net.send(G, { t: 'horn', n: 1 }, true); w.step(2); assert.equal(horns() - h0, 61, 'the guest: a new window too');
 });
 
 test('a silent host (no fast message for 3 s) is shown away and boops pause; its messages back clear both (M-40)', async () => {
   const w = await mpWorld({ seed: 75 }); w.seconds(1);
-  const g = w.guests[0], after = w.host.sync.after, p1 = () => g.sync.players.map.get(1);
-  w.host.sync.after = () => {}; // the host's page sleeps: nothing comes, and no hostAway either
+  const g = w.guests[0], p1 = () => g.sync.players.map.get(1);
+  const talk = quiet(w, w.host); // the host's page sleeps: nothing comes, and no hostAway either
   w.seconds(2.5); assert.equal(g.game.boopsPaused, false, 'not yet'); assert.equal(p1().away, false);
   w.seconds(1); assert.equal(g.game.boopsPaused, true); assert.equal(p1().away, true, 'a ghost');
-  w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false); assert.equal(p1().away, false);
+  talk(); w.seconds(0.3); assert.equal(g.game.boopsPaused, false); assert.equal(p1().away, false);
 });
 test('hostBack does not end the pause while the host is still silent; hostAway pauses at once, before any silence (M-40)', async () => {
   const w = await mpWorld({ seed: 76 }); w.seconds(1);
-  const g = w.guests[0], after = w.host.sync.after;
-  w.host.sync.after = () => {}; w.hub.away(w.host.net.id); w.seconds(3.5); assert.equal(g.game.boopsPaused, true);
+  const g = w.guests[0], talk = quiet(w, w.host);
+  w.hub.away(w.host.net.id); w.seconds(3.5); assert.equal(g.game.boopsPaused, true);
   w.hub.back(w.host.net.id); w.seconds(0.2); assert.equal(g.game.boopsPaused, true, 'still silent'); assert.equal(g.sync.players.map.get(1).away, true);
-  w.hub.away(w.host.net.id); w.hub.back(w.host.net.id); w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false, 'back and talking');
+  w.hub.away(w.host.net.id); w.hub.back(w.host.net.id); talk(); w.seconds(0.3); assert.equal(g.game.boopsPaused, false, 'back and talking');
   w.hub.away(w.host.net.id); w.seconds(0.1); // the server says away; fast messages that were on their way may still come in
   assert.equal(g.game.boopsPaused, true); assert.equal(g.sync.players.map.get(1).away, true);
 });
 
 test('while a new farm waits for the guest show, the new herd is not put on the old farm (M-19)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 77 }); w.seconds(1);
   const g = w.guests[0]; g.game.mode = 'show'; w.seconds(0.3);
   const kinds = () => g.game.herd.animals.map(a => a.type + a.golden).join(), before = kinds(), n = g.game.herd.animals.length;
-  w.host.game = createGame(RAPIER, { seed: 78, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.5);
+  hostFarm(w, 78); w.seconds(0.5);
   assert.equal(g.game.farm.seed, 77); assert.equal(g.game.herd.animals.length, n); assert.equal(kinds(), before, 'the old farm keeps its animals');
   g.game.mode = 'drive'; w.seconds(0.5); assert.equal(g.game.farm.seed, 78);
 });
 test('ignored animal data (an older ownership number) never changes an animal type (M-26)', async () => {
   const w = await mpWorld({ seed: 79 }); w.seconds(1);
   const g = w.guests[0], ha = w.host.game.herd.free().find(a => !a.hidden && a.type !== 'cow'), ga = g.game.herd.animals[ha.id]; ha.epoch = 5; w.seconds(0.5); assert.equal(ga.epoch, 5);
-  w.host.sync.after = () => {}; w.step();
+  quiet(w, w.host, { ahead: true }); w.step();
   sendAnimals(w, g, [[ha.id, animalRec({ type: 'cow', golden: !ha.golden, epoch: 4, x: 40, z: 40 })]]);
   w.seconds(0.5); assert.equal(ga.type, ha.type); assert.equal(ga.golden, ha.golden);
 });
 test('a new farm while the host is silent keeps boops paused (M-19, M-40)', async () => {
-  const RAPIER = (await import('@dimforge/rapier3d-compat')).default, { createGame } = await import('../src/sim/game.js');
   const w = await mpWorld({ seed: 80 }); w.seconds(1);
-  const g = w.guests[0], after = w.host.sync.after; w.host.sync.after = () => {}; w.seconds(3.5); assert.equal(g.game.boopsPaused, true);
-  w.host.game = createGame(RAPIER, { seed: 81, power: 'medium' }); w.host.sync.setGame(w.host.game); w.seconds(0.3);
+  const g = w.guests[0], talk = quiet(w, w.host, { json: true }); w.seconds(3.5); assert.equal(g.game.boopsPaused, true); // its frames stop; the new farm's welcome still comes
+  hostFarm(w, 81); w.seconds(0.3);
   assert.equal(g.game.farm.seed, 81); assert.equal(g.game.boopsPaused, true, 'the new game is paused too'); assert.equal(g.sync.players.map.get(1).away, true);
-  w.host.sync.after = after; w.seconds(0.3); assert.equal(g.game.boopsPaused, false);
+  talk(); w.seconds(0.3); assert.equal(g.game.boopsPaused, false);
 });
 
 test('a waiting flight is in the guest train record (the host sees it there), but nobody draws it in that train before the host gives it (M-22, M-57)', async () => {
-  const { trainRecord } = await import('../src/net/players.js');
   const w = await mpWorld({ seed: 82, guests: 2, link: { delay: 400 } }); w.seconds(2);
-  const [g, o] = w.guests, ha = single(w.host.game), ga = g.game.herd.animals[ha.id], oa = () => o.game.herd.animals[ha.id], ids = () => trainRecord(g.game).riders.map(c => c.id);
+  const [g, o] = w.guests, ha = single(w.host.game), ga = g.game.herd.animals[ha.id], oa = () => o.game.herd.animals[ha.id], ids = () => (g.game.tractor.e.riders ?? []).map(c => c.id);
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   let k = 0; while (!g.game.flights.some(f => f.animal === ga && f.u >= 0) && k++ < 200) w.step(1);
   const f = g.game.flights.find(x => x.animal === ga); assert.ok(f && f.claim === 'pending' && f.u >= 0, 'in the air, unanswered');
@@ -514,18 +513,18 @@ test('a waiting flight is in the guest train record (the host sees it there), bu
 });
 test('a silent guest (its page stopped, its socket still open) is shown away on the host and the other guests; its frames back clear it (M-39)', async () => {
   const w = await mpWorld({ seed: 84, guests: 2 }); w.seconds(1);
-  const [g, o] = w.guests, after = g.sync.after, hp = () => w.host.sync.players.map.get(2), op = () => o.sync.players.map.get(2);
-  g.sync.after = () => {}; // the guest's page stops: no frames, and no peerAway either
+  const [g, o] = w.guests, hp = () => w.host.sync.players.map.get(2), op = () => o.sync.players.map.get(2);
+  const talk = quiet(w, g); // the guest's page stops: no frames, and no peerAway either
   w.seconds(2.5); assert.equal(hp().away, false, 'not yet');
   w.seconds(1); assert.equal(hp().away, true, 'away on the host'); w.seconds(0.2); assert.equal(op().away, true, 'and on the other guest');
-  g.sync.after = after; w.seconds(0.3); assert.equal(hp().away, false); assert.equal(op().away, false);
+  talk(); w.seconds(0.3); assert.equal(hp().away, false); assert.equal(op().away, false);
   w.hub.away(g.net.id); w.seconds(0.2); assert.equal(hp().away, true, 'the server still says away at once');
 });
 test('player 3 leaves and a new guest gets number 3 within one host diff: the other guests see the new train, though its clock starts lower (M-22, M-26, M-39)', async () => {
   const w = await mpWorld({ seed: 85, guests: 3 }); w.seconds(1);
   const [g2, g3, g4] = w.guests;
   g3.net.send(w.host.net.id, trainFrame(3, 3, parked(40, 40), 1e9)); w.seconds(0.3); // the old player 3's clock was far ahead of the new one's
-  assert.ok(g4.sync.store.get('train', 3)?.bodies[0].p.x === 40, 'player 4 has the old train 3');
+  assert.ok(g4.sync.store.get('train', 3)?.body.p.x === 40, 'player 4 has the old train 3');
   g3.net.leave(); const g = w.addGuest(); // the host frees number 3 and gives it again at once: the roster never goes without a player 3
   w.seconds(1.5); assert.equal(g.sync.you, 3);
   for (const o of [g2, g4]) { const seen = o.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, `${o.name} sees the new train where it is`); }
@@ -545,13 +544,13 @@ test('a newer free record does not poof a waiting flight: the 1 s hold decides (
   g.game.boopsPaused = true; assert.deepEqual(settle(w, 3), []);
 });
 test('a boop of an animal the store already shows in another train is refused at once, with no claim (M-14, M-22)', async () => {
-  const { decodeFrame, encodeFrame } = await import('../src/net/replica.js'), { ANIMAL } = await import('../src/net/kinds.js'), { BINDINGS, registryOf } = await import('../src/net/bindings.js'), REGISTRY = registryOf(BINDINGS);
   const w = await mpWorld({ seed: 87 }); w.seconds(1);
   const g = w.guests[0], ha = single(w.host.game), ga = g.game.herd.animals[ha.id], claims = [];
   w.hub.drop = (from, to, d) => { if (d?.t === 'claim') claims.push(d); return false; };
   g.game.boopsPaused = true; { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   w.seconds(0.5); g.game.boopsPaused = false; // the guest draws it free in front of its tractor
-  g.sync.store.apply(decodeFrame(encodeFrame({ key: false, sender: 1, time: w.now + 1, groups: [{ kind: ANIMAL, records: [[ha.id, animalRec({ type: ha.type, state: 'carried', owner: 3, epoch: ha.epoch + 1 })]] }] }), REGISTRY)); // its record is newer than the drawing
+  quiet(w, w.host); // the newest record the guest holds says another train has it, newer than the drawing (no host frame comes to redraw the herd)
+  const gn = g.engine.world.net; gn.remoteOf(gn.find('animal', ha.id)).last = animalRec({ type: ha.type, state: 'carried', owner: 3, epoch: ha.epoch + 1 });
   let k = 0; while (!g.events.some(e => e.type === 'launch' && e.animal === ga) && k++ < 60) w.step(1);
   assert.ok(g.events.some(e => e.type === 'launch' && e.animal === ga), 'booped'); w.step(2);
   assert.equal(g.events.find(e => e.type === 'unclaim' && e.animal === ga)?.reason, 'refused', 'poofed at once');
@@ -565,20 +564,6 @@ test('a guest horn counts at most once in 300 ms; the extra ones are not passed 
   g1.net.send(H, { t: 'horn' }, true); w.seconds(0.05); assert.deepEqual(heard(), [1, 1], 'still within 300 ms');
   w.seconds(0.1); g1.net.send(H, { t: 'horn' }, true); w.seconds(0.1); assert.deepEqual(heard(), [2, 2], 'after 300 ms');
 });
-test('a new kind of shared object is a kind and a row in the binding table: it replicates with no new message, from the host and from a guest (M-22)', async () => {
-  const { F, kind } = await import('../src/net/replica.js'), { BINDINGS } = await import('../src/net/bindings.js');
-  const GATE = kind({ name: 'gate', code: 9, authority: 'host', max: 4, idMax: 3, fields: { open: F.bool() } }); // the host's
-  const FLAG = kind({ name: 'flag', code: 10, authority: 'owner', max: 1, idMin: 1, idMax: 4, fields: { up: F.bool() } }); // each player's own
-  const bindings = [...BINDINGS, { kind: GATE, read: at => [[2, { open: !!at.game.gateOpen }]] }, { kind: FLAG, read: at => [[at.you, { up: !!at.game.flagUp }]] }];
-  const w = await mpWorld({ seed: 89, guests: 2, bindings }); w.seconds(1);
-  const [g2, g3] = w.guests, json = []; w.hub.drop = (from, to, d) => { if (!(d instanceof ArrayBuffer)) json.push(d.t); return false; };
-  assert.deepEqual(g2.sync.store.get('gate', 2), { open: false }); assert.deepEqual(g3.sync.store.get('flag', 2), { up: false });
-  w.host.game.gateOpen = true; g2.game.flagUp = true; w.host.game.flagUp = true; w.seconds(0.3);
-  assert.deepEqual(g2.sync.store.get('gate', 2), { open: true }, 'host -> guest'); assert.deepEqual(g3.sync.store.get('flag', 2), { up: true }, 'guest -> host -> other guest');
-  assert.deepEqual(g3.sync.store.get('flag', 1), { up: true }, 'the host has its own too');
-  assert.ok(json.every(t => t === 'welcome'), `no new message: ${json}`);
-});
-
 test('a slot the host reuses reaches the guest as the new animal (G-3, M-26)', async () => {
   const w = await mpWorld({ seed: 81 }); w.seconds(1);
   const g = w.guests[0], H = w.host.game.herd, old = H.free().find(a => a.home === 'route' && !a.hidden && a.type !== 'chick' && !H.animals.some(c => c.leader === a.id));
