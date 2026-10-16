@@ -21,6 +21,7 @@ const EPS = 1e-9;
 const openOnce = (e, name) => { if (!e.isOpen(name, { pending: true })) e.overlay(name); };
 
 export function makeStage({ bests = null }) {
+  const ctxOf = new WeakMap(); // stage state → its scene ctx (kept out of the state, which stays data)
   // --- state helpers (each takes the stage state s) -------------------------------------------------------------
   const track = s => s.sim.world.track ?? null;
   const modeOf = s => s.pad ? MODES.freeDrive : MODES[s.settings.mode];
@@ -100,7 +101,7 @@ export function makeStage({ bests = null }) {
     s.sim.car.hold = true;
     setPhase(e, s, 'loading');
     e.emit('toast', { text: 'Building the track…', seconds: null }); // null: shown while loading
-    s.ctx.load({ hold: LOAD_HOLD, settle: true, label: 'Building the track…', build: () => build(e, s),
+    ctxOf.get(s).load({ hold: LOAD_HOLD, settle: true, label: 'Building the track…', build: () => build(e, s),
       then: () => { const t = s.loadThen; s.loadThen = null; if (t === 'begin') begin(e, s); else title(e, s); } });
   }
 
@@ -268,8 +269,9 @@ export function makeStage({ bests = null }) {
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = normalizeSettings(a.settings);
       if (!settings.seed) settings.seed = newSeed(e.rng('seeds'));
-      const s = Object.assign(ctx.state, { settings, pad: !!a.pad, sim: null, world: null, mode: null, phase: null, pose: null, loadThen: null, ctx,
+      const s = Object.assign(ctx.state, { settings, pad: !!a.pad, sim: null, world: null, mode: null, phase: null, pose: null, loadThen: null,
         builtKey: null, poseCache: null, worldRev: 0, carRev: 0, settingsRev: 0, cam: 0, wheels: false, holdT: 0, holdFired: false, titleBest: null });
+      ctxOf.set(s, ctx);
       clear(s);
       build(e, s);
       // Device snapshot → car controls (#23: runs under the pause overlay too; physics is frozen there anyway).
@@ -289,7 +291,7 @@ export function makeStage({ bests = null }) {
       if (s.pad) begin(e, s);
       else { title(e, s); e.overlay('title'); }
     },
-    exit(e, ctx) { ctx.state.sim?.dispose(); }, // [S-3]
+    exit(e, ctx) { ctx.state.sim?.dispose(); ctxOf.delete(ctx.state); }, // [S-3]
     step(e, dt, ctx) {
       const s = ctx.state, car = s.sim.car, I = e.input.snapshot; // not called while loading (the engine suspends it)
       actions(e, s, dt);

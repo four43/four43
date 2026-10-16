@@ -177,3 +177,10 @@ test('the ready and loading presets; the settings preset on the pad opens only s
   h.jump('stage', 'settings', {}, pad);
   assert.equal(h.state().kind, 'pad'); assert.deepEqual(h.scene.overlays, ['settings']); // on the pad there is no title to open over
 });
+
+test('the stage state never holds the scene ctx (serialisable state, 2d carry-over)', () => {
+  const h = headless(game(), { args: STAGE });
+  assert.equal('ctx' in h.engine.scene.state, false);
+  h.fill('title.seed', 'ctx2'); // a rebuild through ctx.load still works
+  h.until(x => x.state().phase === 'title' && x.state().seed === 'ctx2', { maxSeconds: 5, message: 'rebuilt' });
+});
