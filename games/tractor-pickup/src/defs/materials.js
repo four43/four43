@@ -29,7 +29,7 @@ export default defineMaterials({
   trunk:   { extends: 'wood', phys: { friction: 0.1, restitution: 0 } },
   prop:    { extends: 'wood', phys: { friction: 0.6, restitution: 0.1 } },
   // art (bake renames, overview §5.4); vertex colours give the colour (D5)
-  pet:     { extends: 'flesh', look: { roughness: 1, metalness: 0, subsurface: { strength: 0 } }, ...dirty }, // flesh's red subsurface tinted every animal pink
+  pet:     { extends: 'flesh', look: { roughness: 1, metalness: 0, subsurface: { color: '#fff6ee', strength: 1 } }, ...dirty }, // soft, hue-neutral edge translucency (lion-hawk 0.11.1)
   gold:    { extends: 'steel', look: { color: '#ffd24a', metalness: 0.2, roughness: 0.45, emissive: '#6a4a00' }, ...dirty },
   leaf:    { extends: 'grass', look: { roughness: 1 } },
   petal:   { extends: 'grass', look: { roughness: 1 } },
