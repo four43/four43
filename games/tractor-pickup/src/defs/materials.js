@@ -20,15 +20,17 @@ export default defineMaterials({
   ground:  { extends: 'dirt', phys: { friction: 0.6, restitution: 0 } },
   pad:     { extends: 'gravel', phys: { friction: 0.9, restitution: 0 } },
   ramp:    { extends: 'wood', phys: { friction: 0.9, restitution: 0 }, look: { color: '#c9ad7f', roughness: 1 } },
-  chassis: { extends: 'steel', phys: { friction: 0.2, restitution: 0 }, ...dirty },
+  // no environment map in this game, so metalness 1 renders black: painted and steel parts read as 1.8's matte Lambert
+  steel:   { look: { metalness: 0, roughness: 1 } },
+  chassis: { extends: 'steel', phys: { friction: 0.2, restitution: 0 }, look: { metalness: 0, roughness: 1 }, ...dirty },
   bed:     { extends: 'wood', phys: { friction: 0.2, restitution: 0, sg: 1, fill: 260 / 1.68 / 1000 }, ...dirty },
   tongue:  { extends: 'steel', phys: { friction: 0.5, restitution: 0, sg: 1, fill: 5 / 0.03456 / 1000 } },
   fence:   { extends: 'wood', phys: { friction: 0.1, restitution: 0 } },
   trunk:   { extends: 'wood', phys: { friction: 0.1, restitution: 0 } },
   prop:    { extends: 'wood', phys: { friction: 0.6, restitution: 0.1 } },
   // art (bake renames, overview §5.4); vertex colours give the colour (D5)
-  pet:     { extends: 'flesh', look: { roughness: 1, metalness: 0 }, ...dirty },
-  gold:    { extends: 'steel', look: { color: '#ffd24a', metalness: 0.7, roughness: 0.3, emissive: '#6a4a00' }, ...dirty },
+  pet:     { extends: 'flesh', look: { roughness: 1, metalness: 0, subsurface: { strength: 0 } }, ...dirty }, // flesh's red subsurface tinted every animal pink
+  gold:    { extends: 'steel', look: { color: '#ffd24a', metalness: 0.2, roughness: 0.45, emissive: '#6a4a00' }, ...dirty },
   leaf:    { extends: 'grass', look: { roughness: 1 } },
   petal:   { extends: 'grass', look: { roughness: 1 } },
   crop:    { extends: 'grass', look: { roughness: 1 } },
