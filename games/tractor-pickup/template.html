@@ -215,8 +215,14 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .parent.mp .qr{width:min(260px,70vw);margin:0 auto 10px;background:#fff;padding:6px;border-radius:10px}.parent.mp .qr svg{width:100%;height:auto;display:block}
 .parent.mp .players{list-style:none;padding:0;margin:8px 0}.parent.mp .players li{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid #eadcc6}
 .parent.mp .players img{width:64px;height:48px;object-fit:contain}.parent.mp .players em{margin-left:auto;font-style:normal;color:#7a5a3a}.parent.mp .players button{min-height:40px;padding:4px 12px}
-.parent.mp .row.big button{flex:1;min-height:72px;font-size:22px}.parent.mp .pre{display:inline-flex;align-items:center;gap:2px;font-weight:700}.parent.mp input[name=room]{font:inherit;width:5.5em;padding:8px;border:2px solid #a98a63;border-radius:8px;text-transform:uppercase}
+.parent.mp .row.big button{flex:1;min-height:72px;font-size:22px}.parent.mp .pre{display:inline-flex;align-items:center;gap:2px;font-weight:700}.parent.mp input[name=room]{font:inherit;font-weight:700;width:5.5em;min-height:48px;box-sizing:border-box;padding:8px 10px;border:4px solid #6b4428;border-radius:14px;background:#fffcf8;color:#3a2412;text-transform:uppercase}
 .parent.mp .err{color:#b3261e;font-weight:700}.parent button:disabled{opacity:.45;cursor:default}
+.parent.mp button:not(.x):not(.help){all:unset;box-sizing:border-box;cursor:pointer;min-width:84px;min-height:54px;padding:8px 18px;text-align:center;font:700 17px/1.2 Andika,system-ui,sans-serif;color:#3a2412;background:#fffcf8;border:4px solid #6b4428;border-radius:18px;box-shadow:0 5px 0 #6b4428;-webkit-tap-highlight-color:transparent}
+.parent.mp button:not(.x):not(.help):active{transform:translateY(3px);box-shadow:0 2px 0 #6b4428}
+.parent.mp button.primary:not(.x){background:#f5c84c;border-color:#9a6a0e;box-shadow:0 5px 0 #9a6a0e}.parent.mp button.primary:not(.x):active{box-shadow:0 2px 0 #9a6a0e}
+.parent.mp .row.big button:not(.x){flex:1;min-height:72px;font-size:22px;color:#fff;background:#3fae4a;border-color:#1f6b28;box-shadow:0 5px 0 #1f6b28}.parent.mp .row.big button:not(.x):active{box-shadow:0 2px 0 #1f6b28}
+.parent.mp .players button:not(.x){min-height:40px;padding:4px 12px;font-size:15px;border-width:3px;box-shadow:0 3px 0 #6b4428}
+.parent.mp button:not(.x):not(.help):disabled{opacity:.45;cursor:default;transform:none}
 @keyframes bob{50%{transform:translateY(-8px) rotate(-1.5deg)}}
 @keyframes grow{0%{transform:scale(0) rotate(-12deg)}100%{transform:scale(1) rotate(0)}}
 @keyframes bounce{0%{transform:scale(0)}55%{transform:scale(1.3)}75%{transform:scale(.9)}100%{transform:scale(1)}}
