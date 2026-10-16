@@ -130,16 +130,17 @@ body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 #closeSheet { border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
 
 
-/* Screens (spec tracks T-26): body.scr-title shows the title menu over the live scene; body.scr-play
-   the driving HUD and touch controls; body.menuOpen (pause, results) hides the touch controls. */
-body.scr-title #dash, body.scr-title .touch, body.scr-title .bar, body.scr-title #hud, body.menuOpen .touch { display: none !important; }
+/* Screens (spec tracks T-26) from the engine's own state: the title overlay shows the menu over the live scene;
+   otherwise the driving HUD and touch controls; pause or results hide the touch controls. */
+html[data-lh-overlays~="title"] #dash, html[data-lh-overlays~="title"] .touch, html[data-lh-overlays~="title"] .bar,
+html[data-lh-overlays~="title"] #hud, html[data-lh-overlays~="pause"] .touch, html[data-lh-overlays~="results"] .touch { display: none !important; }
 #pauseBtn { white-space: nowrap; }
 
 /* title menu */
 #title { position: fixed; z-index: 15; left: calc(var(--sa-l) + 10px); top: calc(var(--sa-t) + 10px); bottom: calc(var(--sa-b) + 10px);
   width: min(420px, calc(100vw - var(--sa-l) - var(--sa-r) - 20px)); display: none; flex-direction: column;
   background: var(--panel); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid rgba(237,230,214,.18); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-body.scr-title #title { display: flex; }
+html[data-lh-overlays~="title"] #title { display: flex; }
 .menuBody { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 10px; touch-action: pan-y; overscroll-behavior: contain; }
 #title h1 { margin: 0 0 12px; font-size: 40px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; line-height: 1; }
 #title h1 span { color: var(--amber); }

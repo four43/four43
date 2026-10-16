@@ -19,7 +19,7 @@ export const MODELS = ['hatchback-sports', 'sedan-sports', 'cone'];
 
 const lengthText = (m, units) => units === 'mph' ? `${(m / 1609.344).toFixed(1)} mi` : `${(m / 1000).toFixed(1)} km`;
 const BUILDING = 'Building the track…';
-const STAGE_CLASSES = ['scr-title', 'scr-play', 'menuOpen', 'onTrack', 'manual'];
+const STAGE_CLASSES = ['onTrack', 'manual']; // game state; the screens follow the engine's <html data-lh-overlays>
 
 // Lap table for the pause card (lap modes), split table for the results card: the removed Menus' markup.
 function lapTable(s) {
@@ -110,7 +110,7 @@ export function rallyView({ save = () => {} } = {}) {
   let hud = null, ghud = null, els = null, off = null, unlisten = null;
   let seen = null, toast = null; // per enter: what the view last reflected; the toast { text, until } (engine time)
   let cur = null; // the stage state the GameHud adapter reads
-  let ready = false, offCar = null, loaded = null; // the models are loaded; the car's sync hook; the preload
+  let carHook = null, loaded = null; // the car's sync hook (once per page); the models' preload
   // GameHud reads Game's fields; the stage state has them under the same names except phase (#22: engine clock).
   const hudGame = {
     get timed() { return !!(cur.mode?.clock && cur.world?.track); }, get state() { return cur.phase; },
@@ -132,19 +132,15 @@ export function rallyView({ save = () => {} } = {}) {
     enter(engine, view) {
       const doc = view.doc, win = doc.defaultView;
       renderer ??= new Renderer(view.gfx);
-      renderer.setKit({ assets: view.assets, mc: view.materials }); renderer.setSync(view.sync);
-      // The car's sync hook: before the first frame, so view sync binds its wheel nodes; it fills them once the models are in.
-      offCar ??= carView(view.sync, view.assets, view.materials, (e) => (engine.scene.state?.sim?.car?.e === e ? engine.scene.state.sim.car : null));
+      // The models: view sync draws the car once its GLB is in, and the pad view's cones wait for them (Renderer.setWorld).
       loaded ??= view.assets.preload(MODELS).then(() => { doc.getElementById('loading')?.remove(); });
-      ready = false;
-      view.wait(loaded.then(() => {
-        if (seen === null) return; // exited meanwhile
-        ready = true;
-      }));
+      view.wait(loaded);
+      renderer.setKit({ assets: view.assets, mc: view.materials, loaded }); renderer.setSync(view.sync);
+      carHook ??= carView(view.sync, view.materials, (e) => (engine.scene.state?.sim?.car?.e === e ? engine.scene.state.sim.car : null));
       hud ??= new Hud(doc.body);
       ghud ??= new GameHud({ now: () => engine.time.sim });
       els ??= { toast: doc.getElementById('toast'), seedChip: doc.getElementById('seedChip') };
-      seen = { s: null, worldRev: -1, carRev: -1, settingsRev: -1, surface: null, units: null };
+      seen = { s: null, worldRev: -1, built: null, builtRev: -1, carRev: -1, settingsRev: -1, surface: null, units: null };
       toast = null; ghud.reset();
       unlisten = engine.events.on(e => {
         if (e.type === 'toast') toast = { text: e.text, until: e.seconds == null ? null : engine.time.sim + e.seconds };
@@ -161,22 +157,29 @@ export function rallyView({ save = () => {} } = {}) {
       off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },
     exit(engine, view) {
-      unlisten?.(); unlisten = null; off?.(); off = null; seen = null; cur = null; toast = null; offCar?.(); offCar = null; ready = false;
+      unlisten?.(); unlisten = null; off?.(); off = null; seen = null; cur = null; toast = null;
       for (const c of STAGE_CLASSES) view.doc.body.classList.remove(c);
       if (els) els.toast.hidden = true;
     },
+    // [S-6] #50: a load's build hands the new world to the renderer here, so view.wait holds the settle until the track view
+    // is in the scene (frame() catches worlds made outside a load: the first enter and jumps).
+    built(engine, view) {
+      const s = engine.scene.state; if (!s.sim || !seen) return;
+      seen.built = s; seen.builtRev = s.worldRev;
+      view.wait(renderer.setWorld(s.world));
+    },
     frame(engine, alpha, view) {
-      const s = engine.scene.state, doc = view.doc; if (!s.sim || !seen) return; // until the models are in (ready), the screens and HUD run but nothing 3D is drawn
+      const s = engine.scene.state, doc = view.doc; if (!s.sim || !seen) return;
       cur = s;
       const newWorld = s !== seen.s || s.worldRev !== seen.worldRev;
-      if (ready && (newWorld || s.carRev !== seen.carRev)) {
-        if (newWorld) { view.wait(renderer.setWorld(s.world)); seen.surface = null; seen.units = null; } // [S-6] also holds a settling load (frame acks)
+      if (newWorld || s.carRev !== seen.carRev) {
+        if (newWorld) { if (s !== seen.built || s.worldRev !== seen.builtRev) view.wait(renderer.setWorld(s.world)); seen.surface = null; seen.units = null; }
         if (s !== seen.s) seen.settingsRev = s.settingsRev; // a new stage (enter/jump) is not a settings change
         seen.s = s; seen.worldRev = s.worldRev; seen.carRev = s.carRev;
         cls(doc, 'onTrack', s.world.kind !== 'pad');
       }
       const st = s.settings;
-      if (ready && st.surface !== seen.surface) { seen.surface = st.surface; if (s.world.kind === 'pad') renderer.setSurface(st.surface); } // the surface option is pad-only
+      if (st.surface !== seen.surface) { seen.surface = st.surface; if (s.world.kind === 'pad') renderer.setSurface(st.surface); } // the surface option is pad-only
       if (st.units !== seen.units) { seen.units = st.units; hud.setUnits(st.units); showSeed(s); }
       if (seen.s === s && s.settingsRev !== seen.settingsRev) { seen.settingsRev = s.settingsRev; save(st); }
 
@@ -184,8 +187,6 @@ export function rallyView({ save = () => {} } = {}) {
       renderer.orbit = titleOpen;
       renderer.camMode = s.cam;
       hud.debug.hidden = !s.wheels;
-      cls(doc, 'scr-title', titleOpen); cls(doc, 'scr-play', !titleOpen);
-      cls(doc, 'menuOpen', ov.includes('pause') || ov.includes('results'));
       cls(doc, 'manual', st.gearbox === 'manual');
 
       // Toast: while loading, or an event's text until its engine-time deadline (#22).
@@ -195,7 +196,7 @@ export function rallyView({ save = () => {} } = {}) {
       els.toast.hidden = text === null;
       if (text !== null && els.toast.textContent !== text) els.toast.textContent = text;
 
-      if (ready && seen.s === s) {
+      if (seen.s === s) {
         renderer.sync(s.sim);
         renderer.updateCamera(s.sim, Math.min(0.1, view.dt)); // #19: 0 for hook renders (no camera motion, no snap)
       }

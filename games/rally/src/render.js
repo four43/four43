@@ -28,38 +28,27 @@ export const RENDER = {
   },
 };
 
-// The car's static shaping for view sync: a create hook, once per car entity. The car entity is undrawn (draw: false), so
-// the hook returns its object at once: a shell scaled to the real car's track and wheelbase, and four empty wheel nodes
-// named as the sim's part poses. View sync binds those nodes on the first frame and poses them from the sim's part poses,
-// interpolated with the body. The baked model fills them on the first frame its GLB is loaded: the body (and spoiler)
-// into the shell, and each wheel recentred on its hub, scaled to the car's radius, in tyre material.
-const _box = new THREE.Box3(), _c = new THREE.Vector3();
-export function carView(sync, assets, mc, carOf) {
+// The car's static shaping for view sync: a create hook, once per car entity, on the model clone view sync drew (it waits for
+// the GLB). The body (and spoiler) go into a shell scaled to the real car's track and wheelbase; each wheel node is reset to
+// the origin, scaled to the car's radius and given tyre material. View sync then binds the wheel nodes and poses them from the
+// sim's part poses (each node's centre on its hub), interpolated with the body.
+export function carView(sync, mc, carOf) {
   return sync.on('#car', {
-    create(e) {
-      const car = carOf(e); if (!car) return null;
-      const cfg = car.cfg, [sx, sy, sz] = cfg.body.scale, obj = new THREE.Group(), shell = new THREE.Group();
+    create(e, obj) {
+      const car = carOf(e); if (!car || !obj) return;
+      const cfg = car.cfg, [sx, sy, sz] = cfg.body.scale, ws = cfg.radius / 0.3, tyre = mc.get('tyre', { vertexColors: true });
+      const wheels = WHEEL_PARTS.map((name) => {
+        const w = obj.getObjectByName(name); w.removeFromParent();
+        w.position.set(0, 0, 0); w.quaternion.identity(); w.scale.setScalar(ws);
+        w.traverse((o) => { if (o.isMesh) o.material = tyre; });
+        return w;
+      });
+      const shell = new THREE.Group();
       shell.scale.set(sx, sy, sz);
       shell.position.set(0, -cfg.comHeight + cfg.radius - 0.3 * sy, car.zMid);
-      obj.add(shell);
-      for (const name of WHEEL_PARTS) { const w = new THREE.Group(); w.name = name; obj.add(w); }
+      for (const n of [...obj.children]) shell.add(n);
+      obj.add(shell, ...wheels);
       obj.name = `car#${e.id}`;
-      obj.userData.rally = { shell, ws: cfg.radius / 0.3, filled: false };
-      return obj;
-    },
-    frame(e, obj) {
-      const u = obj?.userData.rally;
-      if (!u || u.filled || !assets.has(e.model)) return;
-      u.filled = true;
-      const tpl = assets.clone(e.model), tyre = mc.get('tyre', { vertexColors: true });
-      for (const name of WHEEL_PARTS) {
-        const w = tpl.getObjectByName(name); w.removeFromParent();
-        w.position.set(0, 0, 0); w.quaternion.identity(); w.scale.setScalar(u.ws); w.updateMatrixWorld(true);
-        _box.setFromObject(w).getCenter(_c); w.position.sub(_c); // recentred on its hub
-        w.traverse((o) => { if (o.isMesh) o.material = tyre; });
-        obj.getObjectByName(name).add(w);
-      }
-      for (const n of [...tpl.children]) u.shell.add(n);
       obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } }); // as before: no self-shadow acne
     },
   });
@@ -67,7 +56,7 @@ export function carView(sync, assets, mc, carOf) {
 
 export class Renderer {
   constructor(gfx) {
-    this.gfx = gfx; this.r = gfx.renderer; this.scene = gfx.scene; this.cam = gfx.camera; this.lights = gfx.lights;
+    this.gfx = gfx; this.r = gfx.renderer; this.doc = gfx.renderer.domElement.ownerDocument; this.scene = gfx.scene; this.cam = gfx.camera; this.lights = gfx.lights;
     this.camMode = 0; // 0 chase, 1 bumper, 2 bonnet
     this.orbit = false; // title screen: circle the car instead
     this.view = null; this.worldToken = 0; this.kit = null; this.drawn = null;
@@ -75,26 +64,31 @@ export class Renderer {
     this.setSurface('gravel');
   }
 
-  // kit = { assets, mc }: the engine's asset loader and material compiler; sync: view sync (the car's drawn object).
+  // kit = { assets, mc, loaded }: the engine's asset loader and material compiler, and the models' preload; sync: view sync.
   setKit(kit) { this.kit = kit; }
   setSync(sync) { this.drawn = sync; }
 
-  // Swap the world's visuals. Pads build PadView synchronously; other kinds load render/<kind>View.js lazily (an
-  // esbuild glob import). Track views: `new TrackView(scene, world, kit)` with sync(sim) and dispose(). Resolves when the
-  // view is in the scene; a newer setWorld call wins over a pending one.
+  // Swap the world's visuals. Pads build PadView (its cones need the models); other kinds load render/<kind>View.js lazily
+  // (an esbuild glob import). Track views: `new TrackView(scene, world, kit)` with sync(sim) and dispose(). Resolves when
+  // the view is in the scene (and marks <html data-rally-track>); a newer setWorld call wins over a pending one.
   setWorld(world) {
     const token = ++this.worldToken;
     if (this.view) { this.view.dispose(); this.view = null; }
+    const shown = (view) => { this.view = view; this.doc.documentElement.dataset.rallyTrack = world.track?.seed ?? 'pad'; return view; };
     if (world.kind === 'pad') {
-      this.view = new PadView(this.scene, world, this.kit);
-      this.setSurface(world.surfaceKey || 'gravel');
-      return Promise.resolve(this.view);
+      const make = () => {
+        if (token !== this.worldToken) return null;
+        shown(new PadView(this.scene, world, this.kit));
+        this.setSurface(world.surfaceKey || 'gravel');
+        return this.view;
+      };
+      return this.kit.assets.has('cone') ? Promise.resolve(make()) : this.kit.loaded.then(make);
     }
     this.setLook('day');
     return import(`./render/${world.kind}View.js`).then((mod) => {
       if (token !== this.worldToken) return null;
       const View = mod[world.kind[0].toUpperCase() + world.kind.slice(1) + 'View']; // e.g. TrackView
-      this.view = new View(this.scene, world, this.kit);
+      shown(new View(this.scene, world, this.kit));
       this.setLook(this.view.theme);
       return this.view;
     });

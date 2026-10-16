@@ -92,16 +92,17 @@ export class SnowView {
       uHMax: { value: H_MAX }, uDepth: { value: SNOW.depth }, uPacked: { value: SNOW.packed },
     };
     const mesh = this.mesh = new THREE.Mesh(grid(), this.material());
-    mesh.customDepthMaterial = this.depthMaterial();
+    mesh.customDepthMaterial = mc.depth(mesh.material); // the shadow pass runs the same displacement: ruts and berms shade the snow
     mesh.receiveShadow = mesh.castShadow = true; mesh.frustumCulled = false;
     scene.add(mesh);
   }
 
   material() {
     const uniforms = this.uniforms;
-    return this.mc.extend(this.mc.get('rally-packed'), 'rally-snow', (sh) => {
+    return this.mc.extend(this.mc.get('rally-packed'), 'rally-snow', (sh, inject, { depth } = {}) => {
       Object.assign(sh.uniforms, uniforms);
       sh.vertexShader = GLSL + sh.vertexShader.replace('#include <begin_vertex>', DISPLACE);
+      if (depth) return; // the shadow-pass twin (mc.depth): the displacement only
       sh.fragmentShader = GLSL + NOISE + sh.fragmentShader
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
           vec4 sT = snowTex(vSnowXZ);
@@ -128,16 +129,6 @@ export class SnowView {
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           normal = normalize((viewMatrix * vec4(sN, 0.0)).xyz);`);
     });
-  }
-
-  // Shadow-map pass with the same displacement, so rut walls and berms shade the snow.
-  depthMaterial() {
-    const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
-    m.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, this.uniforms);
-      sh.vertexShader = GLSL + sh.vertexShader.replace('#include <begin_vertex>', DISPLACE);
-    };
-    return m;
   }
 
   show(on) { this.mesh.visible = on; }

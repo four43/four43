@@ -154,10 +154,14 @@ test('the track uses the terrain kit: materialAt, blendAt and heightAt agree wit
 const qmul = (a, b) => ({ x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
   z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z });
 const axis = (x, y, z, t) => ({ x: x * Math.sin(t / 2), y: y * Math.sin(t / 2), z: z * Math.sin(t / 2), w: Math.cos(t / 2) });
-test('the car is drawn by view sync: model, wheel part poses (hub in the body frame, Ry(steer) Rx(spin)), drawn by a hook', () => {
+test('the car is drawn by view sync: model, wheel part poses (hub in the body frame, Ry(steer) Rx(spin)), seeded at spawn', () => {
   const sim = benchSim({ car: 'awd', cones: false }), car = sim.car, e = car.e, c = car.cfg;
-  assert.equal(e.model, c.model); assert.equal(e.draw, false); // render.js carView draws it once the models are loaded
+  assert.equal(e.model, c.model); assert.equal(e.draw, undefined); // view sync draws the model; render.js carView shapes it
   assert.deepEqual(Object.keys(e.partXf), WHEEL_PARTS);
+  car.wheels.forEach((w, i) => { // before any step: both halves at the static compression, so a first render has wheels on hubs
+    const hub = [w.local.x, w.local.y - Math.max(0, c.travel - car.staticComp), w.local.z], prev = sim.lh.partXfPrev(e, WHEEL_PARTS[i]);
+    for (const P of [e.partXf[WHEEL_PARTS[i]], prev]) { assert.deepEqual([P.p.x, P.p.y, P.p.z], hub, `wheel ${i} seeded hub`); assert.deepEqual([P.q.x, P.q.y, P.q.z, P.q.w], [0, 0, 0, 1]); }
+  });
   car.input.steer = 0.5; car.input.throttle = 1;
   for (let i = 0; i < 240; i++) sim.step();
   car.wheels.forEach((w, i) => {

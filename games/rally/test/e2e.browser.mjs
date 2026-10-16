@@ -28,7 +28,7 @@ test('desktop: title → Drive → countdown → running, keyboard pause and res
     await game.step(1); // an apply that sees the key up: with no step between them, a second latched tap is no new press (R5 report)
     await game.page.keyboard.press('Escape'); await frames(game); await game.step(1);
     assert.deepEqual((await game.scene()).overlays, []);
-    assert.equal(await game.page.evaluate(() => document.body.classList.contains('scr-play')), true);
+    assert.equal(await game.page.evaluate(() => (document.documentElement.dataset.lhOverlays ?? '').split(' ').includes('title')), false);
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
@@ -62,10 +62,11 @@ test('desktop: settings sheet, a title choice rebuilds the track, results card, 
   } finally { await game.close(); }
 });
 
-test('desktop: title help and seed form, pause card, stage exit clears its body classes and toast', async t => {
+test('desktop: title help and seed form, pause card, screens from data-lh-overlays, stage exit clears its body classes and toast', async t => {
   if (skip) return t.skip(skip);
   const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: SETTINGS });
   const body = () => game.page.evaluate(() => [...document.body.classList].filter(c => /^(scr-|menuOpen|onTrack|manual)/.test(c)).sort());
+  const overlays = () => game.page.evaluate(() => document.documentElement.dataset.lhOverlays);
   try {
     assert.match(await game.page.locator('#modeHelp').textContent(), /Point to point/);
     assert.equal(await game.page.locator('#titleBest').textContent(), 'No time set yet');
@@ -85,14 +86,14 @@ test('desktop: title help and seed form, pause card, stage exit clears its body 
     assert.equal(await game.page.locator('#pause').isVisible(), true);
     assert.equal(await game.page.locator('#restartBtn').isVisible(), true);
     assert.equal(await game.page.evaluate(() => document.activeElement?.dataset.testid), 'pause.resume');
-    assert.deepEqual(await body(), ['menuOpen', 'onTrack', 'scr-play']);
+    assert.deepEqual(await body(), ['onTrack']); assert.equal(await overlays(), 'pause');
     await game.tap('pause.resume');
     assert.equal(await game.page.locator('#pause').isVisible(), false);
 
     await game.jump('stage', 'loading', {}, { settings: { mode: 'stage', seed: 'e2e3', gearbox: 'manual' } });
     await game.render();
     assert.equal(await game.page.locator('#toast').isVisible(), true);
-    assert.deepEqual(await body(), ['manual', 'onTrack', 'scr-title']);
+    assert.deepEqual(await body(), ['manual', 'onTrack']); assert.equal(await overlays(), 'title');
     // A jump exits and re-enters the stage half; until the next frame nothing it set is left behind (checked in the
     // same task: the driver renders on every rAF).
     const after = await game.page.evaluate(() => {
@@ -101,7 +102,7 @@ test('desktop: title help and seed form, pause card, stage exit clears its body 
     });
     assert.deepEqual(after, { cls: [], toast: true });
     await game.render();
-    assert.deepEqual(await body(), ['onTrack', 'scr-play']);
+    assert.deepEqual(await body(), ['onTrack']); assert.equal(await overlays(), '');
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });

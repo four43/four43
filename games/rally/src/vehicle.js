@@ -80,7 +80,6 @@ export class Vehicle {
     this.absF = [1, 1, 1, 1]; this.tcsF = 1; this.slideF = 1;
     this.tq = [0, 0, 0, 0];
     this.createBody(opts.pos || v3(0, 1, 0), opts.yaw || 0);
-    this.writeParts(xs);
   }
 
   createBody(pos, yaw) {
@@ -89,9 +88,10 @@ export class Vehicle {
     // (which stopped the car at 20+ g); low friction so it skids. Mass and inertia are the playtested cars.js values.
     const round = 0.2;
     this.e = this.lh.spawn({
-      // draw: false: view sync draws the car through Rally's create hook (render.js carView), which fills it once the
-      // models are loaded, so no frame clones an unloaded model.
-      tags: ['car'], at: [pos.x, pos.y, pos.z], yaw, model: c.model, draw: false, partXf: WHEEL_PARTS,
+      // Drawn by view sync (the model, shaped by render.js carView), wheels from the part poses. They start at the static
+      // compression (seeded curr and prev), so a render before the first step has the wheels on their hubs.
+      tags: ['car'], at: [pos.x, pos.y, pos.z], yaw, model: c.model,
+      partXf: Object.fromEntries(this.wheels.map((w, i) => [WHEEL_PARTS[i], { p: [w.local.x, w.local.y - Math.max(0, c.travel - this.staticComp), w.local.z], q: [0, 0, 0, 1] }])),
       body: { type: 'dynamic', ccd: true, canSleep: false, massProps: { mass: c.mass, com: [0, 0, 0], inertia: [c.inertia.x, c.inertia.y, c.inertia.z] } }, // lh-allow: massProps (D3): cars.js mass and inertia were tuned by playtest, not the colliders' volume
       colliders: [
         { shape: 'box', half: [0.86 - round, 0.24 - round, len - round], round, p: [0, -c.comHeight + 0.20 + 0.24, this.zMid], q: [0, 0, 0, 1], material: 'car-hull' },
@@ -104,13 +104,12 @@ export class Vehicle {
   }
 
   // The wheels' part poses for view sync (3c partXf, 3g Task 13b): the hub in the body frame and Ry(steer) Rx(spin),
-  // interpolated with the body by the engine. Written only; nothing in the sim reads them. x: each wheel's compression
-  // (at creation, before any step has cast a ray, the static compression).
-  writeParts(x = null) {
+  // interpolated with the body by the engine. Written only; nothing in the sim reads them. The spawn seeds them (createBody).
+  writeParts() {
     const c = this.cfg;
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i], P = this.e.partXf[WHEEL_PARTS[i]];
-      P.p.x = w.local.x; P.p.y = w.local.y - Math.max(0, c.travel - (x ?? w.x)); P.p.z = w.local.z;
+      P.p.x = w.local.x; P.p.y = w.local.y - Math.max(0, c.travel - w.x); P.p.z = w.local.z;
       const sy = Math.sin(w.steer / 2), cy = Math.cos(w.steer / 2), sx = Math.sin(w.spin / 2), cx = Math.cos(w.spin / 2);
       P.q.x = cy * sx; P.q.y = sy * cx; P.q.z = -sy * sx; P.q.w = cy * cx;
     }
