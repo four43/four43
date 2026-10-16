@@ -1,7 +1,6 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim, ST } from '../src/sim.js';
-await RAPIER.init();
-const sim = createSim(RAPIER, { pigs: 48, seed: 4 });
+import { farmSim } from './farmSim.mjs';
+import { ST } from '../src/sim.js';
+const sim = farmSim({ pigs: 48, seed: 4 });
 const muddy = () => sim.pigs.filter(p => p.mud > 0.3).length;
 console.log('muddy at start', muddy());
 for (let s = 0; s < 60 * 240; s++) { sim.step(); if (s % (60 * 60) === 0 && s) console.log(`t=${s / 60}s muddy ${muddy()} resting ${sim.pigs.filter(p => p.state === ST.REST).length}`); }

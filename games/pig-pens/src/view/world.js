@@ -1,34 +1,21 @@
-// The 3D farm (lion-hawk 2e P6): main.js's rendering code (lights, ground, patches, fences, troughs and their food,
-// decor, pigs with mud and eyelids, Zzz, dog, snacks, the two rings, buildFarmExtras, hose nozzle/spray/pipe), moved
-// out of its closure unchanged except for three reads: the Shoo ring follows `s.ring`, the nozzle is drawn where the
-// sim eased it (`s.hose`, #60) and the pipe trails from it. View only: three.js, Math.random and the DOM are fine here.
-// buildWorld({ renderer, sim, tilt }) → { scene, update(dt, s, frame), draw(camera, dist), select(at, kind), feathers(ev), dispose() }
+// The 3D farm (lion-hawk 2e P6; on the phase 3 engine since 3k): ground, patches, fences, troughs and their food, decor,
+// the pig crowd (pigs3d.js), Zzz, the two rings, buildFarmExtras and the hose, all under one root group in the engine's
+// scene. Geometry is the baked models' (models.js) on the compiler's materials; lights, fog, sky, renderer and post are the
+// engine's (view.gfx). The tractor and snacks are view sync's (tractor3d.js). View only: three.js, Math.random and the DOM
+// are fine here. buildWorld({ gfx, assets, mc, sim, world }) → { root, update(dt, s, frame, alpha), select(at, kind),
+// feathers(ev), night, dispose() }
 import * as THREE from 'three';
-import { ASSETS, geoFrom, modelGeo, mergeGeos, boxGeo, animM, sampleAnim, lerpM } from '../gfx.js';
+import { disposeTree } from 'lion-hawk/view';
+import { modelGeometry, mergeGeos, boxGeo, sceneryMaterials } from './models.js';
+import { createPigs } from './pigs3d.js';
 import { buildFarmExtras } from '../farm3d.js';
-import { ST, FOOD_KINDS } from '../sim.js';
+import { ST } from '../sim.js';
 import { L } from '../layout.js';
-import { createTiltShift } from '../tiltshift.js';
 
-const tilts = new WeakMap(); // one tilt-shift (and its render targets) per renderer, so a re-entered farm reuses it
-
-export function buildWorld({ renderer, sim, tilt = true }) {
+export function buildWorld({ gfx, assets, mc, sim, world }) {
   const { lay } = sim;
-  const scene = new THREE.Scene();
-  const SKY = new THREE.Color('#bfe6f5');
-  scene.background = SKY; scene.fog = new THREE.Fog(SKY, 70, 170);
-  // tilt-shift miniature look, focused on the camera's look-at point, only once zoomed in; ?tilt=0 turns it off
-  let fx = tilts.get(renderer); if (!fx) tilts.set(renderer, fx = createTiltShift(renderer, { on: tilt })); fx.params.on = tilt;
-
-  const hemi = new THREE.HemisphereLight('#eef7ff', '#b9a27c', 1.3); scene.add(hemi);
-  const sun = new THREE.DirectionalLight('#fff3dc', 2.1);
-  sun.position.set(-26, 46, 22); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 36, bottom: -36, near: 5, far: 120 });
-  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
-  scene.add(sun);
-
-  const matV = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const scene = new THREE.Group(); scene.name = 'farm'; gfx.scene.add(scene); // everything the farm draws (disposed on exit)
+  const MAT = sceneryMaterials(mc), matV = MAT.plain;
 
   // ground with gentle colour variation
   {
@@ -65,13 +52,13 @@ export function buildWorld({ renderer, sim, tilt = true }) {
 
   // ---------- fences --------------------------------------------------------------
   const recentre = new THREE.Matrix4().makeTranslation(0, 0.05, 0.465);
-  const fenceGeo = geoFrom([ASSETS.fence.fence_simple], recentre);
-  const planksGeo = geoFrom([ASSETS.planks.fence_planks], recentre);
+  const fenceGeo = modelGeometry(assets, 'fence', recentre, { parts: ['fence_simple'] });
+  const planksGeo = modelGeometry(assets, 'planks', recentre, { parts: ['fence_planks'] });
   const byKind = { fence: [], planks: [], gate: [] };
   for (const e of lay.edges) byKind[e.kind].push(e);
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
   const instanced = (geo, list, setter, opts = {}) => {
-    const m = new THREE.InstancedMesh(geo, opts.mat || matV, list.length);
+    const m = new THREE.InstancedMesh(geo, opts.mat || MAT.instanced, list.length);
     list.forEach((e, i) => { setter(e, mtx); m.setMatrixAt(i, mtx); });
     m.castShadow = opts.cast !== false; m.receiveShadow = true; scene.add(m); return m;
   };
@@ -108,8 +95,7 @@ export function buildWorld({ renderer, sim, tilt = true }) {
   }
   { const m = new THREE.Mesh(mergeGeos(troughParts), matV); m.castShadow = m.receiveShadow = true; scene.add(m); }
   const troughFoodMeshes = Object.entries(troughFood).map(([kind, list]) => {
-    const g = kind === 'cob' ? modelGeo('cob') : kind === 'cabbage' ? modelGeo('cabbage') : kind === 'carrot' ? modelGeo('carrot') : modelGeo('apple');
-    const m = new THREE.InstancedMesh(g, matV, list.length); m.castShadow = true; scene.add(m);
+    const m = new THREE.InstancedMesh(modelGeometry(assets, kind), MAT.instanced, list.length); m.castShadow = true; scene.add(m);
     return { m, list };
   });
   const updateTroughFood = () => {
@@ -123,122 +109,20 @@ export function buildWorld({ renderer, sim, tilt = true }) {
   {
     const groups = {}; for (const d of lay.decor) (groups[d.m] ||= []).push(d);
     for (const [name, list] of Object.entries(groups)) {
-      const g = name === 'corn' ? geoFrom(Object.values(ASSETS.corn)) : name === 'barrel' ? modelGeo(name, new THREE.Matrix4().makeRotationZ(Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(0.34, 0.38, 0))) : modelGeo(name);
+      const g = modelGeometry(assets, name, name === 'barrel' ? new THREE.Matrix4().makeRotationZ(Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(0.34, 0.38, 0)) : null);
       instanced(g, list, (d, m) => m.compose(v3.set(d.x, 0, d.z), q.setFromAxisAngle(UP, d.rot), s3.setScalar(d.s)), { cast: !['grass', 'grassS', 'flowerY', 'flowerR'].includes(name) });
     }
   }
 
-  // ---------- pets ------------------------------------------------------------------
-  const pigParts = ASSETS.pig.parts.map(p => geoFrom([p]));
-  // Eyelids: tag the eye vertices (flat white and grey patches on the face) with (flag, u, v) so the shader can close them.
-  for (const g of pigParts) {
-    const pos = g.attributes.position, col = g.attributes.color, eye = new Float32Array(pos.count * 3);
-    if (g === pigParts[0]) for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), r = col.getX(i), gg = col.getY(i), b = col.getZ(i);
-      const white = r > 0.75 && gg > 0.75 && b > 0.75, grey = Math.abs(r - gg) < 0.03 && b > r && r < 0.12;
-      if (Math.abs(z - 0.64) < 0.02 && y > 0.6 && y < 0.93 && Math.abs(x) > 0.05 && Math.abs(x) < 0.48 && (white || grey))
-        eye.set([1, (Math.abs(x) - 0.06) / 0.41, (y - 0.62) / 0.31], i * 3);
-    }
-    g.setAttribute('aEye', new THREE.BufferAttribute(eye, 3));
-  }
-  const N = sim.pigs.length;
-  // per-pig mud: blotchy noise mask that creeps up from the legs as the level rises
-  const mudAttr = new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4); // mud, seed, scale, sleep mudAttr.setUsage(THREE.DynamicDrawUsage);
-  const pigMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  pigMat.onBeforeCompile = sh => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
-attribute vec4 aMud; attribute vec3 aEye; varying vec3 vMudP; varying vec2 vMud; varying vec3 vEye; varying float vSleep;`).replace('#include <begin_vertex>', `#include <begin_vertex>
-vEye = aEye; vSleep = aMud.w;
-vMudP = position * 2.3 + vec3(aMud.y * 31.7, aMud.y * 17.3, aMud.y * 7.1);
-#ifdef USE_INSTANCING
-vec4 mudW = modelMatrix * instanceMatrix * vec4(position, 1.0);
-#else
-vec4 mudW = modelMatrix * vec4(position, 1.0);
-#endif
-vMud = vec2(aMud.x, clamp(mudW.y / max(0.05, aMud.z * 1.5), 0.0, 1.0));`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-varying vec3 vMudP; varying vec2 vMud; varying vec3 vEye; varying float vSleep;
-float mh(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-float mn(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(mh(i), mh(i + vec3(1,0,0)), f.x), mix(mh(i + vec3(0,1,0)), mh(i + vec3(1,1,0)), f.x), f.y),
-             mix(mix(mh(i + vec3(0,0,1)), mh(i + vec3(1,0,1)), f.x), mix(mh(i + vec3(0,1,1)), mh(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
-if (vMud.x > 0.002) {
-  float n = mn(vMudP) * 0.75 + mn(vMudP * 2.4) * 0.25;
-  float s = n * 0.6 + (1.0 - vMud.y) * 0.6;
-  float th = 1.22 - vMud.x * 0.98;
-  float m = smoothstep(th, th + 0.07, s);
-  vec3 mudc = mix(vec3(0.15, 0.072, 0.028), vec3(0.26, 0.135, 0.058), mn(vMudP * 4.0)) * (0.75 + 0.25 * vMud.y);
-  diffuseColor.rgb = mix(diffuseColor.rgb, mudc, m);
-}
-if (vEye.x > 0.5 && vSleep > 0.5) {
-  // closed eye: pink lid with a little curved lash line
-  vec3 lid = vec3(0.70, 0.27, 0.42);
-  float line = 0.38 + 0.9 * (vEye.y - 0.5) * (vEye.y - 0.5);
-  float lash = 1.0 - smoothstep(0.045, 0.075, abs(vEye.z - line));
-  diffuseColor.rgb = mix(lid, vec3(0.06, 0.06, 0.08), lash * step(0.08, vEye.y) * step(vEye.y, 0.92));
-}`);
-  };
-  for (const g of pigParts) g.setAttribute('aMud', mudAttr);
-  const pigMeshes = pigParts.map(g => { const m = new THREE.InstancedMesh(g, pigMat, N); m.castShadow = true; m.frustumCulled = false; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; });
-  const PIG_ANIM = animM('pig'), DOG_ANIM = animM('dog');
-  const dogGroup = new THREE.Group(); scene.add(dogGroup);
-  const dogMeshes = ASSETS.dog.parts.map(p => { const m = new THREE.Mesh(geoFrom([p]), matV); m.castShadow = true; m.matrixAutoUpdate = false; dogGroup.add(m); return m; });
-  dogGroup.matrixAutoUpdate = false;
-
-  const tmpA = new THREE.Matrix4(), tmpB = new THREE.Matrix4();
-  const animState = sim.pigs.map(p => ({ name: 'idle', t: Math.random(), prev: 'idle', prevT: 0, blend: 1, rest: 0, phase: Math.random() * 10 }));
-  function pickAnim(p, s) {
-    switch (p.state) {
-      case ST.GRAB: return ['dance', 2.2];
-      case ST.AIR: return ['gesture-negative', 1.5];
-      case ST.EAT: return ['eat', 1];
-      case ST.REST: return ['idle', 0.4];
-      case ST.SHOWER: if (p.speed < 0.25 && Math.hypot(p.px - sim.hose.x, p.pz - sim.hose.z) < 2.2 && sim.hose.active) return ['dance', 1.4]; break;
-      case ST.SNACK: if (p.speed < 0.2) return ['eat', 1.3]; break;
-      case ST.GRAZE: if (p.speed < 0.15) return [Math.sin(s.phase * 0.3 + sim.time * 0.25) > -0.2 ? 'eat' : 'idle', 0.7]; break;
-    }
-    if (p.speed < 0.12) return ['idle', 1];
-    const sc = p.scale / 0.62;
-    if (p.speed < 1.7) return ['walk', Math.max(0.5, p.speed / (0.85 * sc))];
-    return ['run', p.speed / (2.6 * sc)];
-  }
-  const W = new THREE.Matrix4(), Q = new THREE.Quaternion(), Qid = new THREE.Quaternion(), Qt = new THREE.Quaternion(), Qy = new THREE.Quaternion(), Qr = new THREE.Quaternion();
-  const PM = new THREE.Matrix4(), PB = new THREE.Matrix4(), TMP = new THREE.Matrix4(), ZX = new THREE.Vector3(0, 0, 1);
-  function updatePigs(dt) {
-    for (const p of sim.pigs) {
-      const s = animState[p.i];
-      const [name, rate] = pickAnim(p, s);
-      if (name !== s.name) { s.prev = s.name; s.prevT = s.t; s.name = name; s.blend = 0; }
-      s.t += dt * rate; s.prevT += dt * rate; s.blend = Math.min(1, s.blend + dt * 6);
-      s.rest += ((p.state === ST.REST ? 1 : 0) - s.rest) * Math.min(1, dt * 3);
-      // world transform: tumbling uses the physics body rotation, then eases back upright
-      Qy.setFromAxisAngle(UP, p.yaw);
-      if (p.state === ST.GRAB || p.state === ST.AIR) Q.set(p.rot[0], p.rot[1], p.rot[2], p.rot[3]).multiply(Qy);
-      else if (p.getUp > 0) { Qt.set(p.tumbleQ[0], p.tumbleQ[1], p.tumbleQ[2], p.tumbleQ[3]); Q.copy(Qid).slerp(Qt, p.getUp * p.getUp * (3 - 2 * p.getUp)).multiply(Qy); }
-      else Q.copy(Qy);
-      if (s.rest > 0.01) Q.multiply(Qr.setFromAxisAngle(ZX, s.rest * 1.45 * (p.i % 2 ? 1 : -1)));
-      // rotate about the physics body centre so tumbling looks right; feet sit r below it
-      W.compose(v3.set(p.px, p.py, p.pz), Q, s3.setScalar(p.scale)).multiply(TMP.makeTranslation(0, -p.r / p.scale, 0));
-      if (s.rest > 0.01) W.multiply(TMP.makeTranslation((p.i % 2 ? -1 : 1) * 0.35 * s.rest, -0.18 * s.rest, 0));
-      for (let k = 0; k < pigMeshes.length; k++) {
-        sampleAnim(PIG_ANIM, s.name, s.t, k, PM);
-        if (s.blend < 1) { sampleAnim(PIG_ANIM, s.prev, s.prevT, k, PB); lerpM(PB, PM, s.blend, PM); }
-        TMP.multiplyMatrices(W, PM); pigMeshes[k].setMatrixAt(p.i, TMP);
-      }
-    }
-    for (const p of sim.pigs) mudAttr.setXYZW(p.i, p.mud, p.seed, p.scale, animState[p.i].rest > 0.6 ? 1 : 0);
-    mudAttr.needsUpdate = true;
-    for (const m of pigMeshes) m.instanceMatrix.needsUpdate = true;
-  }
+  const pigs = createPigs({ root: scene, assets, mc, sim, world });
   // little Zzz's drifting up from pigs asleep at night
-  const zTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.font = '900 52px "Sniglet", "Arial Rounded MT Bold", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 8; g.strokeStyle = '#4a3a6a'; g.strokeText('z', 32, 34); g.fillStyle = '#ffffff'; g.fillText('z', 32, 34); return new THREE.CanvasTexture(c); })();
+  const N = sim.pigs.length, zTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.font = '900 52px "Sniglet", "Arial Rounded MT Bold", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 8; g.strokeStyle = '#4a3a6a'; g.strokeText('z', 32, 34); g.fillStyle = '#ffffff'; g.fillText('z', 32, 34); return new THREE.CanvasTexture(c); })();
   const zs = Array.from({ length: 36 }, () => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: zTex, transparent: true, depthWrite: false })); sp.visible = false; scene.add(sp); return { sp, age: 0, life: 0, x: 0, y: 0, z: 0, ph: 0 }; });
   let zNext = 0; const zTimer = new Float32Array(N).map(() => Math.random() * 3);
   function updateZs(dt) {
     const night = sim.clock.night;
     for (const p of sim.pigs) {
-      const asleep = night && p.state === ST.REST && animState[p.i].rest > 0.8;
+      const asleep = night && p.state === ST.REST && pigs.anim[p.i].rest > 0.8;
       if (!asleep) continue;
       zTimer[p.i] -= dt; if (zTimer[p.i] > 0) continue; zTimer[p.i] = 2.2 + Math.random() * 1.4;
       const z = zs[zNext]; zNext = (zNext + 1) % zs.length;
@@ -252,39 +136,12 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
       z.sp.scale.setScalar((0.3 + u * 0.35) * z.s); z.sp.material.opacity = Math.min(1, u * 5) * (1 - u * u);
     }
   }
-  const dogAnim = { name: 'idle', t: 0 };
-  function updateDog(dt) {
-    const d = sim.dog;
-    const name = d.speed < 0.2 ? 'idle' : d.speed < 2.5 ? 'walk' : 'run';
-    const rate = name === 'idle' ? 1 : name === 'walk' ? d.speed / 0.7 : d.speed / 2.4;
-    dogAnim.name = name; dogAnim.t += dt * rate;
-    const hopY = Math.sin(Math.min(1, d.hop) * Math.PI / 2) * 1.05;
-    W.compose(v3.set(d.x, hopY, d.z), Q.setFromAxisAngle(UP, d.yaw), s3.setScalar(0.62));
-    dogGroup.matrix.copy(W); dogGroup.matrixWorldNeedsUpdate = true;
-    dogMeshes.forEach((m, k) => { sampleAnim(DOG_ANIM, name, dogAnim.t, k, m.matrix); m.matrixWorldNeedsUpdate = true; });
-  }
-
-  // ---------- thrown snacks -------------------------------------------------------------
-  const foodMeshes = Object.fromEntries(FOOD_KINDS.map(k => {
-    const g = modelGeo(k); g.computeBoundingBox(); const bb = g.boundingBox; g.translate(0, -(bb.max.y + bb.min.y) / 2, 0); // pivot at centre for tumbling
-    const m = new THREE.InstancedMesh(g, matV, 16); m.castShadow = true; m.frustumCulled = false; m.count = 0; scene.add(m); return [k, m];
-  }));
-  const FOOD_SCALE = { apple: 1.7, carrot: 0.75, cabbage: 1.35, cob: 1.0 };
-  function updateFoods() {
-    for (const m of Object.values(foodMeshes)) m.count = 0;
-    for (const f of sim.foods) {
-      const m = foodMeshes[f.kind]; const shrink = (1 - Math.min(1, f.bites / 2.5) * 0.7) * Math.max(0, f.life);
-      m.setMatrixAt(m.count++, mtx.compose(v3.set(f.x, f.y, f.z), Q.set(f.rot[0], f.rot[1], f.rot[2], f.rot[3]), s3.setScalar(FOOD_SCALE[f.kind] * shrink)));
-    }
-    for (const m of Object.values(foodMeshes)) m.instanceMatrix.needsUpdate = true;
-  }
-
   // target ring under the finger
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false }));
   ring.position.y = 0.04; ring.visible = false; scene.add(ring);
   const selRing = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.8, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.95, depthWrite: false }));
   selRing.position.y = 0.045; selRing.visible = false; scene.add(selRing);
-  const extras = buildFarmExtras({ scene, sim, matV, sun, hemi, fogColor: scene.fog.color });
+  const extras = buildFarmExtras({ scene, sim, assets, mc, MAT, lights: { sun: gfx.lights.sun, hemi: gfx.lights.hemi, background: gfx.scene.background, fog: gfx.scene.fog } });
 
 
   // ---------- hose: nozzle, hose pipe and water particles ---------------------------
@@ -353,28 +210,23 @@ if (vEye.x > 0.5 && vSleep > 0.5) {
 
   updateTroughFood();
   return {
-    scene,
+    root: scene, pigs, get night() { return extras.night; },
     // One drawn frame (main.js's frame minus the sim, input and HUD). dt is the frame time, 0 for hook renders (#19):
     // nothing here divides by it. `frame` counts drawn frames (trough food every 8th, as before).
-    update(dt, s, frame) {
-      updatePigs(dt); updateZs(dt); updateDog(dt); updateHose(dt, s.hose); updateFoods(); extras.update(dt);
+    update(dt, s, frame, alpha = 1) {
+      pigs.update(dt, alpha); updateZs(dt); updateHose(dt, s.hose); extras.update(dt);
       if ((frame & 7) === 0) updateTroughFood();
       ring.visible = !!s.ring;
       if (s.ring) { ring.position.x = s.ring[0]; ring.position.z = s.ring[1]; ring.rotation.y += dt; ring.scale.setScalar(1 + 0.08 * Math.sin(performance.now() * 0.01)); }
     },
-    draw(camera, dist) { fx.render(scene, camera, dist); },
     // the yellow selection ring (main.js renderCard): at [x, z] or null, scaled by kind
     select(at, kind) {
       if (at) { selRing.visible = true; selRing.position.x = at[0]; selRing.position.z = at[1]; selRing.scale.setScalar(kind === 'tractor' ? 3.2 : kind === 'bird' ? 0.5 : 1); } else selRing.visible = false;
     },
     feathers(ev) { extras.spawnFeathers(ev.x, ev.y, ev.z, ev.n, ev.tint); },
     dispose() {
-      const seen = new Set(), free = o => { if (o && !seen.has(o)) { seen.add(o); o.dispose?.(); } };
-      scene.traverse(o => {
-        free(o.geometry);
-        for (const m of [].concat(o.material ?? [])) { free(m); for (const k in m) if (m[k]?.isTexture) free(m[k]); }
-      });
-      scene.clear();
+      pigs.dispose(); extras.dispose(); if (pipe) pipe.geometry.dispose();
+      gfx.scene.remove(scene); disposeTree(scene, { keepShared: true }); // the compiler's materials and the assets' geometry stay
     },
   };
 }

@@ -1,13 +1,11 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim } from '../src/sim.js';
+import { farmSim } from './farmSim.mjs';
 import { CST_NAME, FST } from '../src/chickens.js';
-await RAPIER.init();
-const sim = createSim(RAPIER, { pigs: 48, seed: 2, hour: 7 });
+const sim = farmSim({ pigs: 48, seed: 2, hour: 7 });
 const F = sim.flock; const ev = {};
 let t0 = performance.now(), lastH = -1;
 for (let s = 0; s < 60 * 300; s++) {
   sim.step();
-  for (const e of sim.events.splice(0)) ev[e.type] = (ev[e.type] || 0) + 1;
+  for (const e of sim.log.splice(0)) ev[e.type] = (ev[e.type] || 0) + 1;
   const h = Math.floor(sim.clock.hour);
   if (h !== lastH && h % 2 === 0) {
     lastH = h; const st = {}; for (const b of F.birds) st[CST_NAME[b.state]] = (st[CST_NAME[b.state]] || 0) + 1;

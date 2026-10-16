@@ -3,23 +3,26 @@
 // so the sim does all the picking and a replay reproduces it.
 import { bindPointer, bindKeyboard, bindStick, bindHold } from 'lion-hawk/view';
 import { PRESS, TAP, LIFT } from './game/farm.js';
-import { rig, ray } from './view/rig.js';
+import { rig } from './view/rig.js';
 
 // The `tool` payload for one phase (plan "Interfaces"): silent while driving or before the camera exists; the Hand sends
 // no moves, and once the view turned its drag into an orbit no press and an `orbit` tap; a finger on a lifting tool also
 // sends `aim`, the ray LIFT[tool] px above it (#54). Fresh arrays per command (#72).
 export function toolAt(engine) {
-  let tool = 'hand', touch = false; // the gesture's own, from its down
+  let tool = 'hand', touch = false, orbitSent = false; // the gesture's own, from its down
+  const ray = (cx, cy) => rig.orbit.ray(cx, cy); // a fresh array per call (#72)
   return (cx, cy, ev, phase) => {
-    if (!rig.ready) return null;
+    if (!rig.orbit) return null;
     if (phase === 'down') {
-      const s = engine.scene.state; if (s.driving) return null;
+      const s = engine.scene.state; rig.downDriving = s.driving; if (s.driving) return null;
       tool = s.tool; touch = ev?.pointerType !== 'mouse';
+      rig.downTool = tool; rig.pressAt = { x: cx, y: cy }; orbitSent = false; // the rig resets orbiting on its capturing pointerdown
     }
     if (tool === 'hand') {
-      if (phase === 'move') return null;
-      if (rig.orbiting && phase === 'press') return null;
-      if (rig.orbiting && phase === 'tap') return { ray: ray(cx, cy), orbit: true };
+      const orbiting = rig.orbit.orbiting;
+      if (phase === 'move') { if (orbiting && !orbitSent) { orbitSent = true; return { ray: ray(cx, cy), orbit: true }; } return null; } // once: the sim drops the press target
+      if (orbiting && phase === 'press') return null;
+      if (orbiting && phase === 'tap') return { ray: ray(cx, cy), orbit: true };
     }
     const lift = touch ? LIFT[tool] : undefined;
     return lift ? { ray: ray(cx, cy), aim: ray(cx, cy - lift) } : { ray: ray(cx, cy) };
@@ -38,7 +41,7 @@ export const KEYS = {
 export function devices(doc) {
   const $ = id => doc.getElementById(id);
   return [
-    e => bindPointer(e, { surface: $('c'), type: 'tool', at: toolAt(e), filter: { button: [0] }, press: PRESS, tap: TAP, doc }),
+    e => bindPointer(e, { surface: $('c'), type: 'tool', at: toolAt(e), filter: { button: [0] }, press: PRESS, tap: TAP, uncapped: true, doc }),
     e => bindKeyboard(e, KEYS, { target: doc.defaultView, doc }),
     // the fixed drive pad (#53): deflects from its own centre, travel 36% of its width, no dead zone (main.js stickMove)
     e => bindStick(e, { root: $('stick'), base: $('stick'), knob: $('knob'), origin: 'centre', x: ['steer', -1], y: ['throttle', 1],

@@ -1,0 +1,203 @@
+{
+  "v": 1,
+  "models": {
+    "apple": {
+      "glb": "models/apple.glb",
+      "anim": null,
+      "bytes": 7160,
+      "sha256": "6ea48fa6a5638858fd0109677251444bd581bd8fc72e88f77b16c37c5c4a02dd"
+    },
+    "barrel": {
+      "glb": "models/barrel.glb",
+      "anim": null,
+      "bytes": 10620,
+      "sha256": "08f60365eef35fc54e7c3a3416e2f7c5e8d4279a14d4c68f17622ffd6c6cb701"
+    },
+    "bush": {
+      "glb": "models/bush.glb",
+      "anim": null,
+      "bytes": 5228,
+      "sha256": "3a48d0d4d5aeb1fd4769e737c10b8ec69452abf6615b67d9b189eee0892b048e"
+    },
+    "bushS": {
+      "glb": "models/bushS.glb",
+      "anim": null,
+      "bytes": 3924,
+      "sha256": "47258015cd6619936db0c9974555f05f23842f7eb01096214eb17cfb3ea83b5f"
+    },
+    "cabbage": {
+      "glb": "models/cabbage.glb",
+      "anim": null,
+      "bytes": 7736,
+      "sha256": "df63c56b3f24008902d4a69d606bd42c925d0f3b02864b023cac53924f07194f"
+    },
+    "carrot": {
+      "glb": "models/carrot.glb",
+      "anim": null,
+      "bytes": 6796,
+      "sha256": "d77f75ab57980a808868cbcfff71e635df08a4193e792a3245c1f0594ae58ef4"
+    },
+    "chick": {
+      "glb": "models/chick.glb",
+      "anim": "models/chick.anim.json",
+      "bytes": 44512,
+      "sha256": "e4b9b015b77e6fba16ea36ad80db91d9a95c05556f649bfaab780ba73fc54a69"
+    },
+    "cob": {
+      "glb": "models/cob.glb",
+      "anim": null,
+      "bytes": 7280,
+      "sha256": "a01253069eb59988a2483b5567619bb62822b40646fee7cc590d8df6fd741128"
+    },
+    "corn": {
+      "glb": "models/corn.glb",
+      "anim": null,
+      "bytes": 12764,
+      "sha256": "d24a2d03571ce9d52e91a3826e35144bad0134c8986a15cc78102e5af0ca67bd"
+    },
+    "dog": {
+      "glb": "models/dog.glb",
+      "anim": null,
+      "bytes": 44452,
+      "sha256": "54852ca78843691510d4cc136f9622c672f2a861aa6602f65e019d8d4df1246d"
+    },
+    "egg": {
+      "glb": "models/egg.glb",
+      "anim": null,
+      "bytes": 3900,
+      "sha256": "518ba17b813dc4c65db77d949f34fc87909470997a1d7c761f11899d4e58367d"
+    },
+    "fence": {
+      "glb": "models/fence.glb",
+      "anim": null,
+      "bytes": 5712,
+      "sha256": "d5ed89f6c144c2f551276268e53cdf93a6849ef449e6ed2eab640b633798a9f1"
+    },
+    "flowerR": {
+      "glb": "models/flowerR.glb",
+      "anim": null,
+      "bytes": 6780,
+      "sha256": "d23a2db3667cda18d5a1f99c9b8da96b2b74224d53aa50e6745dee346dcef685"
+    },
+    "flowerY": {
+      "glb": "models/flowerY.glb",
+      "anim": null,
+      "bytes": 8608,
+      "sha256": "9a7e75635dbe257ed037f2ed194ffb6cbe8b7ee5870558c4e25250ac7c6033e7"
+    },
+    "fox": {
+      "glb": "models/fox.glb",
+      "anim": null,
+      "bytes": 52544,
+      "sha256": "b149dc080c51ec029758e84c39294d03e84f54b6ee44f211a73ac1d7f07cd0a4"
+    },
+    "gate": {
+      "glb": "models/gate.glb",
+      "anim": null,
+      "bytes": 20452,
+      "sha256": "3b363f8b7a471d5269861293e7f16612886be58e664eb9712a0c37bf9c6e2ff3"
+    },
+    "grass": {
+      "glb": "models/grass.glb",
+      "anim": null,
+      "bytes": 10740,
+      "sha256": "83ba3980fa51b8312da5a60946923f07c90174fea6b0f068eba453984b7b1b8c"
+    },
+    "grassS": {
+      "glb": "models/grassS.glb",
+      "anim": null,
+      "bytes": 7440,
+      "sha256": "0adb4911287d28a2f0f3bbc45bbee7910fe36cf0b18c49ac66e524bceaf8237c"
+    },
+    "hay": {
+      "glb": "models/hay.glb",
+      "anim": null,
+      "bytes": 8964,
+      "sha256": "0f8f96a3f45b46c7992d1d44ed8ed3316f89959f7510fc9cca36eabb5fd57710"
+    },
+    "hayB": {
+      "glb": "models/hayB.glb",
+      "anim": null,
+      "bytes": 15844,
+      "sha256": "b43aa80d1a52aa358953bdd03428845b8c4561412e82954e63330ad812e3ba98"
+    },
+    "oak": {
+      "glb": "models/oak.glb",
+      "anim": null,
+      "bytes": 10584,
+      "sha256": "ee64939ca1c9023e6941b4ea4f215f5c908c7082ecd0596a33849591eb5af8c6"
+    },
+    "pig": {
+      "glb": "models/pig.glb",
+      "anim": "models/pig.anim.json",
+      "bytes": 46596,
+      "sha256": "af8df3bd10697a96c1d917b408a6075e123af53ce68e1fe34f402e4e81e7b774"
+    },
+    "planks": {
+      "glb": "models/planks.glb",
+      "anim": null,
+      "bytes": 4924,
+      "sha256": "1f8f6123f67cbf4122109cb2b89d7fe0321a353cb04661fac45f04f1916a6b85"
+    },
+    "post": {
+      "glb": "models/post.glb",
+      "anim": null,
+      "bytes": 6952,
+      "sha256": "db435a01f16a1369d6f67732376b5308bbf794480807548943dceb9cf6308092"
+    },
+    "pumpkin": {
+      "glb": "models/pumpkin.glb",
+      "anim": null,
+      "bytes": 8884,
+      "sha256": "8dbc77b9617a4689a112a27242dc89ca09313054b08bac093c63b7f65d2fcf13"
+    },
+    "rock": {
+      "glb": "models/rock.glb",
+      "anim": null,
+      "bytes": 5044,
+      "sha256": "bcc7b1d7efbdb8cefffdda5268225f5143502cae917c5a4d4704b806ac956b48"
+    },
+    "sack": {
+      "glb": "models/sack.glb",
+      "anim": null,
+      "bytes": 4064,
+      "sha256": "7c92867bbb25b238db8db1b938ca9855144b3694530be74666bd54c3364309a8"
+    },
+    "sign": {
+      "glb": "models/sign.glb",
+      "anim": null,
+      "bytes": 7120,
+      "sha256": "f97f0a67660911e6b9b18391a47d2b158e833a7a69c1023a93bdc15aaaa74baa"
+    },
+    "tractor": {
+      "glb": "models/tractor.glb",
+      "anim": null,
+      "bytes": 69504,
+      "sha256": "e60ddee1d5581716ed47fa02a2f27dacac91b04983fa53e0d23a403d1da14abf"
+    },
+    "tree": {
+      "glb": "models/tree.glb",
+      "anim": null,
+      "bytes": 8140,
+      "sha256": "acf9597d33d70d4b85ba381eb8b7359c45f2046dc332d79dd82757978161ae1c"
+    },
+    "treeFall": {
+      "glb": "models/treeFall.glb",
+      "anim": null,
+      "bytes": 11780,
+      "sha256": "1aabec219439f1f06a20bc59517b846aae75b8c9dfedc641dcb2c2b67c3088f6"
+    },
+    "treeFat": {
+      "glb": "models/treeFat.glb",
+      "anim": null,
+      "bytes": 6268,
+      "sha256": "8992763069a93fe7dfb96bf4bdc752d85c38e8579f917053531eda4630f393f5"
+    },
+    "wheat": {
+      "glb": "models/wheat.glb",
+      "anim": null,
+      "bytes": 27680,
+      "sha256": "34d1f15ead5a593d091ee8ab44cedda791a5207a11315ef880e4ce74853e6cbf"
+    }
+  }
+}

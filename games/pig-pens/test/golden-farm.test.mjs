@@ -1,5 +1,5 @@
-// The engine path (lion-hawk 2e P2): with no input, headless(pigPensGame) steps the same createSim the phase-0 golden
-// drives directly, so it must reproduce goldens/farm-seed3.json bit-for-bit. Never blessed from here.
+// The engine path (lion-hawk 2e P2; since 3k the only path): with no input, headless(pigPensGame) must reproduce
+// goldens/farm-seed3.json bit-for-bit (golden.test.mjs blesses it). Never blessed from here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
@@ -7,7 +7,7 @@ import { headless, golden, assertFinite, checksum, canonical } from 'lion-hawk/t
 import { tool, tapAt, rayTo } from './rays.mjs';
 import { pigPensGame } from '../src/game.sim.js';
 import { FARM_EVENTS } from '../src/game/farm.js';
-import { createSim, DT } from '../src/sim.js';
+import { DT } from '../src/sim.js';
 await R.init();
 
 const STEPS = 1200;
@@ -30,15 +30,6 @@ test('the sim rate is the herd step', () => { assert.equal(1 / pigPensGame().sim
 test('the farm scene reproduces the phase-0 sim golden (seed 3, 24 pigs, 1200 steps) bit-for-bit', () => {
   golden(new URL('./goldens/farm-seed3.json', import.meta.url), run(), { bless: false });
 });
-// The golden rounds to 6 digits; this compares the engine path with a direct createSim run at full precision.
-test('the engine path and a direct createSim run agree to the last bit', () => {
-  const sim = createSim(R, { pigs: 24, seed: 3 }), events = [];
-  for (let i = 0; i < STEPS; i++) { sim.step(); for (const e of sim.events.splice(0)) events.push(`${i}:${e.type}`); }
-  const got = run();
-  assert.deepEqual(got.events, events);
-  assert.deepStrictEqual(got.state, snapshot(sim)); // numbers compared with Object.is: every bit
-});
-
 // Every tool through the engine path, seed 5: a Shoo drag, three Feed taps, a Hose drag with a lifted aim, a Grab and
 // throw, the bell and nightfall; 1200 steps. New in 2e; re-bless only for a deliberate behaviour change.
 function scripted() {

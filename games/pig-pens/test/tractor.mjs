@@ -1,7 +1,5 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim } from '../src/sim.js';
-await RAPIER.init();
-const sim = createSim(RAPIER, { pigs: 48, seed: 2 });
+import { farmSim } from './farmSim.mjs';
+const sim = farmSim({ pigs: 48, seed: 2 });
 const T = sim.tractor;
 for (let s = 0; s < 120; s++) sim.step();
 const p0 = [T.x, T.z, T.yaw];

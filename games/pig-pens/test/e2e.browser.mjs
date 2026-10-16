@@ -8,8 +8,8 @@ const ENTRY = process.env.PIGPENS_ENTRY ?? 'src/main.js';
 const ARGS = { pigs: 24 };
 const frames = game => game.page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); // devices update per frame
 const world = (game, fn) => game.page.evaluate(fn);
-// #56: a hold counts device time, which the driver caps at maxFrame (0.1 s) per frame, and SwiftShader draws the farm
-// at about 4–5 fps; so wait in real time, stepping, until the press has landed (at most `ms`).
+// #56: since phase 3k a hold counts uncapped real time (about 0.75 s), and SwiftShader draws the farm at a few fps; so wait
+// in real time, stepping, until the press has landed (at most `ms`).
 async function holdUntil(game, pred, ms = 10000) {
   const t0 = Date.now();
   for (;;) { await game.page.waitForTimeout(250); await game.step(1); if (pred(await game.state())) return; if (Date.now() - t0 > ms) throw new Error(`press did not land in ${ms / 1000} s`); }
@@ -73,8 +73,8 @@ test('desktop: card and Escape; bell and night hints and label; Feed badge; hold
     const tr = await world(game, () => { const x = window.engine.debug.sim.tractor; return [x.x, 1.2, x.z]; });
     at = await game.point({ world: tr });
     await game.page.mouse.move(at.x, at.y); await game.page.mouse.down(); await frames(game); await game.step(1);
-    assert.equal(await game.page.locator('#press').isVisible(), true, 'the hold ring shows');
-    await holdUntil(game, s => s.driving); // 0.75 s of device time, then the press command lands
+    if (!(await game.state()).driving) assert.equal(await game.page.locator('#press').isVisible(), true, 'the hold ring shows'); // presses count real time since 3k (#56): SwiftShader frames can land the press first
+    await holdUntil(game, s => s.driving); // 0.75 s of real time, then the press command lands
     await game.page.mouse.up(); await game.step(1);
     await expectState(game, 'driving', true); assert.equal(await game.page.locator('#tools').isVisible(), false);
     await game.page.keyboard.down('w'); await frames(game); await game.step(120); await game.page.keyboard.up('w');

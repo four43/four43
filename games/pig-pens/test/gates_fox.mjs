@@ -1,10 +1,8 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import { createSim } from '../src/sim.js';
+import { farmSim } from './farmSim.mjs';
 import { hit } from '../src/flow.js';
-await RAPIER.init();
 // 1) close every gate: no pig may change area, and none may sit inside a closed gate
 {
-  const sim = createSim(RAPIER, { pigs: 48, seed: 3 });
+  const sim = farmSim({ pigs: 48, seed: 3 });
   for (let s = 0; s < 120; s++) sim.step();
   let t = performance.now(); for (const g of sim.lay.gates) sim.setGate(g.id, false);
   console.log('closing 15 gates took', (performance.now() - t).toFixed(0), 'ms total');
@@ -18,7 +16,7 @@ await RAPIER.init();
 }
 // 2) coop door shut at dusk: the fox gets nobody
 for (const shut of [false, true]) {
-  const sim = createSim(RAPIER, { pigs: 30, seed: 9, hour: 17.5 });
+  const sim = farmSim({ pigs: 30, seed: 9, hour: 17.5 });
   let shutDone = false;
   for (let s = 0; s < 60 * 160; s++) {
     sim.step();
@@ -28,7 +26,7 @@ for (const shut of [false, true]) {
 }
 // 3) dog chases the fox off
 {
-  const sim = createSim(RAPIER, { pigs: 30, seed: 9, hour: 19.9 });
+  const sim = farmSim({ pigs: 30, seed: 9, hour: 19.9 });
   sim.lay.coop.open = false;
   let spawned = false, fled = false, tFlee = 0;
   for (let s = 0; s < 60 * 120 && !fled; s++) {

@@ -1,7 +1,7 @@
-// Offline support. The game is a single HTML file, so caching it (plus icons and
-// the Google Font) is enough to play with no connection.
+// Offline support. The page, the baked models, the icons and the Google Font are
+// cached, so the farm plays with no connection.
 const CACHE = 'pig-pens-__VERSION__';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const PRECACHE = __PRECACHE__; // the build's list: the page, assets/models/*, the manifest and icons
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
