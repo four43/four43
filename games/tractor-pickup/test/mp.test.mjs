@@ -336,7 +336,7 @@ test('a guest that leaves: its tractor poofs and its animals go with it, and the
   assert.equal(ha.state, 'gone'); assert.equal(w.host.sync.players.list().length, 0);
   assert.ok(w.host.events.some(e => e.type === 'playerGone' && e.n === 2)); assert.equal(w.host.game.herd.free().filter(a => a.home === 'route').length, ROUTE_ANIMALS + PER_PLAYER - 1, 'one player fewer: the carried one goes and is not replaced, the rest stay (M-62)');
 });
-test('player 3 leaves and a new guest gets number 3: the other guest sees the new train, though its clock starts lower (M-22, M-26, M-39)', { todo: 'engine 3i: REPEAT removals after a forget leave a tombstone newer than the new player\'s clock (phase 3l notes, Integrator request 5)' }, async () => {
+test('player 3 leaves and a new guest gets number 3: the other guest sees the new train, though its clock starts lower (M-22, M-26, M-39)', async () => {
   const w = await mpWorld({ seed: 63, guests: 2 }); w.seconds(1);
   const [g2, g3] = w.guests, H = w.host.net.id;
   g3.net.send(H, trainFrame(3, 3, parked(g3.game.tractor.x, g3.game.tractor.z), 1e9)); w.seconds(0.3); // the old player 3's clock was far ahead of the new one's
@@ -345,7 +345,7 @@ test('player 3 leaves and a new guest gets number 3: the other guest sees the ne
   const g = w.addGuest(); w.seconds(1); assert.equal(g.sync.you, 3);
   const seen = g2.sync.players.map.get(3)?.pose?.tractor.p; assert.ok(seen && dist(seen, g.game.tractor) < 0.3, 'player 2 sees the new train where it is');
 });
-test('a straggling frame from the old player 3 after it left does not hide the new player 3: seen within 3 s (M-26, M-39, M-58)', { todo: 'engine 3i: REPEAT removals after a forget leave a tombstone newer than the new player\'s clock (phase 3l notes, Integrator request 5)' }, async () => {
+test('a straggling frame from the old player 3 after it left does not hide the new player 3: seen within 3 s (M-26, M-39, M-58)', { todo: 'engine 0.10.3: a guest has no forget for a straggler that lands after the removals; its old clock outranks the new player 3 (phase 3l notes, Integrator request 6)' }, async () => {
   const w = await mpWorld({ seed: 64, guests: 2 }); w.seconds(1);
   const [g2, g3] = w.guests;
   g3.net.leave(); w.seconds(0.5); assert.ok(!g2.sync.players.map.has(3), 'gone from the roster');
@@ -520,7 +520,7 @@ test('a silent guest (its page stopped, its socket still open) is shown away on 
   talk(); w.seconds(0.3); assert.equal(hp().away, false); assert.equal(op().away, false);
   w.hub.away(g.net.id); w.seconds(0.2); assert.equal(hp().away, true, 'the server still says away at once');
 });
-test('player 3 leaves and a new guest gets number 3 within one host diff: the other guests see the new train, though its clock starts lower (M-22, M-26, M-39)', { todo: 'engine 3i: REPEAT removals after a forget leave a tombstone newer than the new player\'s clock (phase 3l notes, Integrator request 5)' }, async () => {
+test('player 3 leaves and a new guest gets number 3 within one host diff: the other guests see the new train, though its clock starts lower (M-22, M-26, M-39)', async () => {
   const w = await mpWorld({ seed: 85, guests: 3 }); w.seconds(1);
   const [g2, g3, g4] = w.guests;
   g3.net.send(w.host.net.id, trainFrame(3, 3, parked(40, 40), 1e9)); w.seconds(0.3); // the old player 3's clock was far ahead of the new one's

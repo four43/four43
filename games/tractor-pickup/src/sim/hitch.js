@@ -33,7 +33,8 @@ function attachCar(world, e, frontE, frontAnchor, index) {
   const body = e.body, car = createVehicle(world, e, { forward: 'x', rayGroups: { member: [...GROUPS], filter: ['ground', 'static'] },
     wheels: [-1, 1].map((side, k) => ({ at: [TR.axleX, 0, side * TR.track], radius: TR.wheelR, front: false, part: CAR_WHEELS[k], slip: 2.5, side: 1.2,
       suspension: { rest: TR.suspRest, stiffness: 22, compression: 2.2, relaxation: 2.8, travel: 0.4, maxForce: 1e5 } })) }), vc = car.controller;
-  const joint = world.joint(frontE, e, world.R.JointData.spherical(frontAnchor, TR.tongue)); // engine request: world.joint without JointData (notes, Integrator request 1)
+  const v3 = v => [v.x, v.y, v.z];
+  const joint = world.joint(frontE, e, { type: 'spherical', a: v3(frontAnchor), b: v3(TR.tongue) });
   joint.setContactsEnabled(false);
   return { e, body, car, vc, index, joint, front, frontAnchor,
     get dirt() { return e.coverage.dirt; }, set dirt(v) { e.coverage.dirt = v; } }; // the coverage kit's level (T-16)
