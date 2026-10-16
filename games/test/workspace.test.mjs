@@ -1,22 +1,30 @@
-// lion-hawk G-2 and phase 3 D9: the games share one three and one Rapier and consume the engine from its own repo, a
-// sibling of the four43 checkout (../../lion-hawk-engine from games/). Engine view modules import three directly (bare
+// lion-hawk G-2 and phase 3 D9: the games share one three and one Rapier, and each game pins its own tagged release of the
+// engine (github:four43/lion-hawk-engine#vX.Y.Z). The engine rules below scan the installed copy (LH_ENGINE overrides it, e.g.
+// with a local engine checkout). Engine view modules import three directly (bare
 // 'three' or 'three/addons/…', which `lion-hawk build` dedupes to the game's copy); engine code never imports Rapier (the
 // game injects its initialised module); engine sim code never imports three.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { findPackageJSON } from 'node:module';
 import { realpathSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { simRoots } from 'lion-hawk/test';
 import { jsFiles, importsOf } from './helpers/scan.mjs';
 
 const games = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
-const engine = process.env.LH_ENGINE ?? realpathSync(`${games}/../../lion-hawk-engine`);
 const members = ['pig-pens', 'tractor-pickup', 'rally'];
 const pkgJson = (dir, name) => realpathSync(findPackageJSON(name, pathToFileURL(`${games}/${dir}/package.json`)));
+const engine = process.env.LH_ENGINE ?? dirname(pkgJson('tractor-pickup', 'lion-hawk'));
+const PIN = /^github:four43\/lion-hawk-engine#v(\d+\.\d+\.\d+)$/;
 
-test('every game consumes the engine from its own repo', () => {
-  for (const m of members) assert.equal(pkgJson(m, 'lion-hawk'), `${engine}/package.json`, m);
+test('every game pins its own tagged lion-hawk release, and that release is what it gets', () => {
+  for (const m of members) {
+    const spec = JSON.parse(readFileSync(`${games}/${m}/package.json`, 'utf8')).dependencies?.['lion-hawk'];
+    const pin = PIN.exec(spec ?? '');
+    assert.ok(pin, `${m}: lion-hawk must be pinned as github:four43/lion-hawk-engine#vX.Y.Z (got ${spec})`);
+    assert.equal(JSON.parse(readFileSync(pkgJson(m, 'lion-hawk'), 'utf8')).version, pin[1], `${m}: installed lion-hawk matches its pin`);
+  }
 });
 for (const name of ['three', '@dimforge/rapier3d-compat']) {
   test(`one copy of ${name} across the games`, () => {
