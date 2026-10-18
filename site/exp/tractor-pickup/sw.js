@@ -1,7 +1,6 @@
-// Offline support. The game is a single HTML file, so caching it (plus icons and
-// the Google Font) is enough to play with no connection.
-const CACHE = 'tractor-pickup-1.8.0-25ef641deb40';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+// Offline support: the page, its model files (assets/models, D1), the icons and the Google Font.
+const CACHE = 'tractor-pickup-1.9.0+lh0.11.1-52be5f318e22';
+const PRECACHE = ["./","assets/models/bale.glb","assets/models/barn.glb","assets/models/barrel.glb","assets/models/bunny.glb","assets/models/bunny.anim.json","assets/models/bush.glb","assets/models/bushS.glb","assets/models/chick.glb","assets/models/chick.anim.json","assets/models/chicken.glb","assets/models/chicken.anim.json","assets/models/cone.glb","assets/models/corn.glb","assets/models/cow.glb","assets/models/cow.anim.json","assets/models/dog.glb","assets/models/dog.anim.json","assets/models/duck.glb","assets/models/duck.anim.json","assets/models/fence.glb","assets/models/flowerR.glb","assets/models/flowerY.glb","assets/models/gate.glb","assets/models/grass.glb","assets/models/hat-cowboy.glb","assets/models/hat-party.glb","assets/models/hat-straw.glb","assets/models/hay.glb","assets/models/log.glb","assets/models/oak.glb","assets/models/pig.glb","assets/models/pig.anim.json","assets/models/pumpkin.glb","assets/models/rock.glb","assets/models/rockA.glb","assets/models/rockB.glb","assets/models/rockC.glb","assets/models/sheep.glb","assets/models/sheep.anim.json","assets/models/shrub.glb","assets/models/sprinkler.glb","assets/models/stump.glb","assets/models/stump-cut.glb","assets/models/tractor.glb","assets/models/trailer.glb","assets/models/tree.glb","assets/models/treeFat.glb","assets/models/wash.glb","apple-touch-icon.png","icon-192.png","icon-512.png","icon.svg","manifest.webmanifest","og-image.jpg"]; // lion-hawk build stamps the list: ./, the manifest, the icons and every assets/models file (D1)
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -28,7 +27,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 1.8.0-25ef641deb40), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 1.9.0+lh0.11.1-52be5f318e22), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;

@@ -1,7 +1,7 @@
-// Offline support. The game is a single HTML file, so caching it (plus icons and
-// the Google Font) is enough to play with no connection.
-const CACHE = 'rally-0.3.1-423469e7d461';
-const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+// Offline support. The page plus every file `lion-hawk build` lists (manifest, icons, `assets/models/*`) is precached;
+// the Google Font is cached as it is first fetched.
+const CACHE = 'rally-0.4.0+lh0.11.1-3f058841a5b8';
+const PRECACHE = ["./","assets/models/cone.glb","assets/models/hatchback-sports.glb","assets/models/sedan-sports.glb","assets/models/wheel-racing.glb","apple-touch-icon.png","icon-192.png","icon-512.png","icon.svg","manifest.webmanifest","og-image.jpg"];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
@@ -28,7 +28,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 0.3.1-423469e7d461), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 0.4.0+lh0.11.1-3f058841a5b8), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
