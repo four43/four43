@@ -1,7 +1,7 @@
 # Rally Sim — Spec
 
 Status: **0.3.1, live at https://four43.com/exp/rally/** (2026-10-10). Reverse-documented from the
-first-round source (`rally-sim-src.zip`), then playtest rounds 2–4 (sections at the end, newest
+first-round source (`rally-sim-src.zip`), then playtest rounds 2–5 (sections at the end, newest
 last). Generated tracks, worlds and the game loop are specified in `tracks-spec.md`; plans live in
 `docs/plans/`. The sections below describe the current game; the round sections record what each
 round changed and why.
@@ -92,7 +92,12 @@ the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and 
   anti-roll bar force from left/right compression difference. Force applied along body up.
 - **Tire forces** applied at the contact point raised by the axle's roll-centre height (gives
   geometric weight transfer).
-- **Steering:** `maxLock` with partial Ackermann (`ackermann` 0..1 blend).
+- **Steering:** `maxLock` with partial Ackermann (`ackermann` 0..1 blend), plus **self-aligning
+  countersteer** (R5-2, `ALIGN` in `vehicle.js`): when the front axle's velocity points against
+  the yaw (an oversteer slide), the fronts turn toward it — the angle that gives zero front slip,
+  capped at `maxLock` — weighted by `1 − |steer input|`, faded in over 3–8 m/s forward speed and
+  0–0.15 rad/s yaw rate. Hands off, the car catches its own slide; at full input the driver gets
+  exactly the lock asked for.
 - **Brakes:** total torque with front bias; handbrake on rears only. Brake applied as an
   impulse-limited torque that can stop but not reverse the wheel.
 - **Rolling resistance** per surface (`crr`); **aero drag** `0.5 ρ CdA v²` at the CoM.
@@ -102,9 +107,19 @@ the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and 
   (σx 0.12 m, σy 0.30 m), integrated with exact exponential decay.
 - Slip ratio and slip angle derived from the deflection; normalised by the surface's peak slip
   (`kp`, `ap`) into a combined slip `ρ`, clamped at 4 (full slide).
+- **Load-sensitive cornering stiffness** (R5-3): the peak slip angle grows as
+  `(Fz / 3500 N)^0.5` (load ratio clamped 0.6–1.6), so cornering stiffness is sublinear in load,
+  and each car's rear tires use `rearAp` (0.85) × the surface's `ap` — a stiffer rear axle (toe-in,
+  wider tires). Together they give both cars a stable understeer gradient; with stiffness ∝ load
+  every car was neutral-steer by statics.
 - Force = `μ Fz · MF(ρ)` with a normalised Magic Formula (shape `C`, `B` chosen so the peak is at
   ρ = 1), split along the slip direction (friction circle).
 - Load sensitivity: peak μ falls 12 % per +100 % load over 3500 N (floor 50 %).
+- **Plowing** (R5-4): on loose surfaces a tire sliding sideways bulldozes a wedge of material,
+  adding a side force `plow · Fz · tanh(v_lat / 3 m/s)` on top of friction, ramped in from 2× to
+  3× the peak slip angle (so it's a slide effect, not extra cornering grip). `plow` per surface:
+  gravel 0.25, sand 0.35, snowbank 0.30, mud 0.20, packed snow 0.12, dirt 0.10; tarmac, ice and
+  grass (which has its own tall-grass drag) 0.
 - Low-speed patch damper fades in below 3 m/s to stop rocking at rest; gains are kept under the
   explicit stability limit.
 
@@ -118,13 +133,16 @@ Defined in `SURFACES`: tarmac, hardpack, gravel, grass, sand, mud, snow, snowban
   throttle above redline; idle governor holds idle. Engine never stalls (floor ~50 rpm).
 - Implicit (backward-Euler) slipping clutch with torque capacity; auto-clutch slips from idle
   bite and opens during shifts.
-- Gearbox: 5 forward + reverse, final drive, 0.12 s throttle-cut shift.
+- Gearbox: 5 forward + reverse, final drive, 0.12 s throttle-cut shift. While the clutch is open
+  the throttle **auto-blips** the engine toward the new gear's road-speed rpm (R5-1), so a
+  downshift re-engages without dragging the driven wheels.
 - Diffs: plate LSDs (preload + power/coast ramp) per driven axle; AWD adds a viscous centre diff
   around a 50:50 split.
 
 ### Driver logic (`Vehicle.control`)
-- **Auto-shift:** up at 94 % redline with throttle; down when the lower gear lands under 80 %
-  redline and current rpm < 48 % redline.
+- **Auto-shift:** up at 94 % redline (engine rpm) with throttle; down when the road-speed rpm
+  (driven wheels × ratio, `roadRpm`) is < 48 % redline in the current gear and < 80 % in the lower
+  one. Road speed, not engine rpm, because the engine sags during a shift (R5-1).
 - **Reverse:** reverse is a negative ratio (R2-3). Auto: hold brake at < 0.5 m/s for 0.35 s to
   engage reverse; in reverse, throttle and brake swap; throttle while near-stopped returns to 1st.
   Manual: shift down from 1st.
@@ -239,8 +257,9 @@ The physics targets, with grip as raised in Round 3:
 Per car, headless with assists off unless noted:
 - Static settle: ΣFz = mg ± 0.5 %, front share ± 1 %, static sag ± 5 %, CoM height ± 1 cm, no creep.
 - Drop test: damped heave 1.2–1.7 Hz; < 8 % residual after 1.5 cycles.
-- Skidpad steady lateral g (40 m circle): tarmac 0.95–1.05; AWD dirt 0.75–0.90; gravel 0.68–0.80
-  (RWD 0.66–0.80); AWD packed snow 0.64–0.76, ice 0.44–0.56.
+- Skidpad steady lateral g (40 m circle): tarmac 0.95–1.05; AWD dirt 0.75–0.90; gravel 0.68–0.87
+  (RWD 0.66–0.87); AWD packed snow 0.64–0.84, ice 0.44–0.56. Loose-surface bands were 0.80 / 0.76
+  before R5-4: the best steady state there is now a drift.
 - 0–100 km/h (assists on): AWD tarmac 4.2–5.0 s, gravel 4.3–5.5 s; RWD gravel 6.5–8.5 s.
 - 100–0 km/h (ABS on): tarmac 35–42 m, gravel 44–56 m; front load share rises under braking.
 - Hold on a 10 % grade with brake + handbrake: < 1 cm drift in 10 s.
@@ -248,7 +267,13 @@ Per car, headless with assists off unless noted:
 - Reverse (R2-3): holding brake from rest in Auto, or throttle in Manual R, drives backwards.
 - Assisted steering (R2-2): full lock at 72 km/h.
 - Slide control (R2-2), RWD on dirt and gravel, full throttle with 0.8 steer for 1.2 s from
-  54 km/h: Sim spins (≥ 90° body slip), Assisted holds it to 10–60°.
+  54 km/h: Sim slides ≥ 35° body slip (it spun ≥ 90° before self-aligning steering), Assisted holds
+  it to 10–60° and under 0.75 × Sim.
+- Slides (R5), both cars on gravel in a matched gear: light braking from 90 km/h in Auto makes 2–4
+  downshifts ≥ 0.4 s apart with no driven wheel past 0.8 × peak slip ratio; steady 0.06 steer at
+  72 km/h runs front / rear slip angle ≥ 1.7 (AWD) / ≥ 1.35 (RWD); a 60 °/s yaw kick at 72 km/h,
+  hands off, peaks under 7.5° body slip with yaw rate under 3 °/s within 1 s; a 30° slide at
+  72 km/h, coasting with no steering, is under 5° within 0.95 s.
 
 ## Site and PWA
 
@@ -398,3 +423,35 @@ specified in `tracks-spec.md`.
   and the zone; then real multi-touch via CDP: first touch steers 0 with the slider under it, half
   the range ≈ half lock, full lock past it, gas while steering, release order, brake held when the
   thumb slides off, all released, re-zero on a new touch, release on page hide. 797/797.
+
+## Round 5: slides (2026-10-18)
+
+Playtest feedback: "the cars slide around a ton … like they're on ice, even when it's gravel …
+we seem to not recover from slides". Steady grip was right (skidpads in band) — the problem was
+transient. Headless probes found one bug and three missing pieces of physics.
+
+- **R5-1 Downshifts don't lock the wheels (bug).** Auto downshifts decided on engine rpm, which
+  sags while the clutch is open, so braking cascaded 3-2-1 in 0.12 s (1st at 57 km/h), and the
+  clutch re-engaged onto a slow engine: driven wheels hit slip ratio −0.5 (≈ 3× peak), killing side
+  grip right at turn-in (RWD: a snap spin). Now downshifts use road-speed rpm and the gearbox
+  auto-blips during the shift. Measured: worst driven-wheel lock 2.8–2.9 × peak → 0.24–0.26.
+- **R5-2 Self-aligning steering.** Real fronts self-align (caster) into a slide when the driver's
+  grip is light; with keyboard/touch and no force feedback the player couldn't find the
+  countersteer. See Steering above. A hands-off 60 °/s yaw kick at 72 km/h settles in 0.3–0.6 s
+  (was 1.5 s AWD; RWD never settled).
+- **R5-3 Understeer gradient.** Cornering stiffness ∝ load made both cars exactly neutral; see
+  the tire model. Front / rear slip angle in a gentle steady corner: AWD 1.43 → 1.91,
+  RWD 1.21 → 1.43.
+- **R5-4 Plowing on loose surfaces.** Sliding sideways on gravel now scrubs speed like digging
+  in: a 30° slide at 72 km/h straightens in 0.77 s AWD / 0.88 s RWD (was 1.06 / 1.27 s). Grip
+  driving is unchanged (~0.71 g on the gravel skidpad, slip 8° front / 3° rear), but the skidpad
+  driver now finds more in a drift — AWD 0.84 g (front 19°, rear 10°), RWD 0.80 g (rear 20°);
+  packed snow 0.68 → 0.80 g — as on real loose surfaces, where sliding builds a wedge to lean on.
+  Bands widened to match.
+- **Validation:** `test/physics.mjs` 66 (was 50: 14 new R5 checks, each failing on the pre-R5
+  physics; the slide-control and loose skidpad targets revised as above); `npm test` all passing.
+  Plow values live in the `rally-*` materials' `game` block
+  (`game.plow`, `src/defs/materials.js`; the engine's `tire` schema has no such field). Goldens
+  re-blessed (same checkpoints, the 20 s drive ends 0.6–1.7 m further on). `test/feel.mjs --check`:
+  stage times within ±3 %; grass coast from 80 km/h 0.55 → 0.47 g (no more downshift lock-ups adding
+  braking; `verge.mjs` band 0.3–0.75 g); its off-road samples were already outside tolerance before R5.

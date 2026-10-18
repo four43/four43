@@ -13,6 +13,7 @@ export const CARS = {
     arbF: 10000, arbR: 5000,          // N per m of left/right compression difference
     rcF: 0.08, rcR: 0.12,             // roll-centre heights (m)
     maxLock: 30 * deg, ackermann: 0.5,
+    rearAp: 0.85,                     // rear peak slip angle × this: stiffer rear (toe-in, wider tires)
     brakeTorque: 6000, brakeBias: 0.58, handbrakeTorque: 1500,
     cda: 0.80,
     body: { scale: [1.45, 1.45, 1.48], color: 0x2f6fd6 },
@@ -37,6 +38,7 @@ export const CARS = {
     arbF: 9000, arbR: 4000,
     rcF: 0.08, rcR: 0.14,
     maxLock: 32 * deg, ackermann: 0.5,
+    rearAp: 0.85,
     brakeTorque: 5000, brakeBias: 0.62, handbrakeTorque: 1400,
     cda: 0.75,
     body: { scale: [1.45, 1.45, 1.70], color: 0xe8b323 },

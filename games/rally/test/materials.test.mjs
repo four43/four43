@@ -18,10 +18,14 @@ const OLD = {
 };
 export { OLD };
 
-test('every surface key has a rally-<key> material whose tire block is the old SURFACES entry', () => {
+// Plow side force per surface, added after the move (rally-spec R5-4).
+const PLOW = { tarmac: 0, hardpack: 0.10, gravel: 0.25, grass: 0, sand: 0.35, mud: 0.20, packed: 0.12, snowbank: 0.30, ice: 0 };
+
+test('every surface key has a rally-<key> material whose tire block is the old SURFACES entry, plus its plow', () => {
   for (const [k, s] of Object.entries(OLD)) {
     const m = MATERIALS.get(`rally-${k}`), { name, ...tire } = s;
     assert.deepEqual({ ...m.tire }, tire, k);
+    assert.equal(m.game.plow, PLOW[k], k);
     assert.equal(m.game.name, name, k);
   }
 });

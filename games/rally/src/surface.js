@@ -1,14 +1,14 @@
 // Tyre surfaces from the material registry (lion-hawk M-10, phase 3; replaces tire.js SURFACES). An entry is a
-// material's `tire` block plus its display name (`game.name`) and the Magic Formula B (peak at rho = 1), derived once
-// per material at load. Rally's surface keys (gen/surfaces.js, the pad setting) name materials 'rally-<key>'.
+// material's `tire` block plus its display name and plow (`game.name`, `game.plow`) and the Magic Formula B (peak at
+// rho = 1), derived once per material at load. Rally's surface keys (gen/surfaces.js, the pad setting) name materials 'rally-<key>'.
 import MATERIALS from './defs/materials.js';
 
-const BLEND_KEYS = ['mu', 'C', 'kp', 'ap', 'crr', 'drag'];
+const BLEND_KEYS = ['mu', 'C', 'kp', 'ap', 'crr', 'drag', 'plow'];
 const BY_INDEX = [];
 for (const id of MATERIALS.ids) {
   const m = MATERIALS.get(id), t = m.tire;
   if (!t) continue;
-  const s = { id, name: m.game?.name ?? id, mu: t.mu, C: t.C, kp: t.kp, ap: t.ap, crr: t.crr, drag: t.drag };
+  const s = { id, name: m.game?.name ?? id, mu: t.mu, C: t.C, kp: t.kp, ap: t.ap, crr: t.crr, drag: t.drag, plow: m.game?.plow ?? 0 };
   s.B = Math.tan(Math.PI / (2 * s.C));
   BY_INDEX[MATERIALS.index(id)] = Object.freeze(s);
 }

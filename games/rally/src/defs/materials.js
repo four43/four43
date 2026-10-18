@@ -6,18 +6,19 @@
 import { defineMaterials } from 'lion-hawk/sim';
 
 // look.color white: the pad's surface texture carries the colour (the pad ground is the only mesh drawn with these).
-const ground = (base, name, tire, look = {}) => ({ extends: base, phys: { friction: 0.8, restitution: 0 }, tire, look: { color: '#ffffff', ...look }, game: { name } });
+// `plow` (R5-4, loose-surface side force) isn't an engine tire field, so it rides in the free-form `game` block.
+const ground = (base, name, { plow, ...tire }, look = {}) => ({ extends: base, phys: { friction: 0.8, restitution: 0 }, tire, look: { color: '#ffffff', ...look }, game: { name, plow } });
 
 export default defineMaterials({
-  'rally-tarmac':   ground('asphalt', 'Tarmac',       { mu: 1.15, C: 1.50, kp: 0.10, ap: 0.12, crr: 0.015, drag: 0 }, { roughness: 0.85, metalness: 0 }),
-  'rally-hardpack': ground('dirt',    'Dirt',         { mu: 0.90, C: 1.40, kp: 0.14, ap: 0.15, crr: 0.025, drag: 0 }, { roughness: 0.95, metalness: 0 }),
-  'rally-gravel':   ground('gravel',  'Loose gravel', { mu: 0.80, C: 1.25, kp: 0.18, ap: 0.18, crr: 0.035, drag: 0 }, { roughness: 0.95, metalness: 0 }),
-  'rally-grass':    ground('grass',   'Grass',        { mu: 0.55, C: 1.55, kp: 0.12, ap: 0.14, crr: 0.050, drag: 0.2 }, { roughness: 1, metalness: 0, side: 'double' }), // the verge tufts
-  'rally-sand':     ground('dirt',    'Sand',         { mu: 0.50, C: 1.20, kp: 0.22, ap: 0.20, crr: 0.120, drag: 0.14 }),
-  'rally-mud':      ground('mud',     'Mud',          { mu: 0.40, C: 1.50, kp: 0.15, ap: 0.16, crr: 0.100, drag: 0.18 }),
-  'rally-packed':   ground('snow',    'Packed snow',  { mu: 0.75, C: 1.25, kp: 0.20, ap: 0.20, crr: 0.030, drag: 0 }, { roughness: 0.95, metalness: 0 }),
-  'rally-snowbank': ground('snow',    'Snowbank',     { mu: 0.30, C: 1.20, kp: 0.25, ap: 0.22, crr: 0.150, drag: 0.1 }),
-  'rally-ice':      ground('ice',     'Ice',          { mu: 0.55, C: 1.40, kp: 0.08, ap: 0.08, crr: 0.015, drag: 0 }, { roughness: 0.25, metalness: 0 }),
+  'rally-tarmac':   ground('asphalt', 'Tarmac',       { mu: 1.15, C: 1.50, kp: 0.10, ap: 0.12, crr: 0.015, drag: 0, plow: 0 }, { roughness: 0.85, metalness: 0 }),
+  'rally-hardpack': ground('dirt',    'Dirt',         { mu: 0.90, C: 1.40, kp: 0.14, ap: 0.15, crr: 0.025, drag: 0, plow: 0.10 }, { roughness: 0.95, metalness: 0 }),
+  'rally-gravel':   ground('gravel',  'Loose gravel', { mu: 0.80, C: 1.25, kp: 0.18, ap: 0.18, crr: 0.035, drag: 0, plow: 0.25 }, { roughness: 0.95, metalness: 0 }),
+  'rally-grass':    ground('grass',   'Grass',        { mu: 0.55, C: 1.55, kp: 0.12, ap: 0.14, crr: 0.050, drag: 0.2, plow: 0 }, { roughness: 1, metalness: 0, side: 'double' }), // the verge tufts
+  'rally-sand':     ground('dirt',    'Sand',         { mu: 0.50, C: 1.20, kp: 0.22, ap: 0.20, crr: 0.120, drag: 0.14, plow: 0.35 }),
+  'rally-mud':      ground('mud',     'Mud',          { mu: 0.40, C: 1.50, kp: 0.15, ap: 0.16, crr: 0.100, drag: 0.18, plow: 0.20 }),
+  'rally-packed':   ground('snow',    'Packed snow',  { mu: 0.75, C: 1.25, kp: 0.20, ap: 0.20, crr: 0.030, drag: 0, plow: 0.12 }, { roughness: 0.95, metalness: 0 }),
+  'rally-snowbank': ground('snow',    'Snowbank',     { mu: 0.30, C: 1.20, kp: 0.25, ap: 0.22, crr: 0.150, drag: 0.1, plow: 0.30 }),
+  'rally-ice':      ground('ice',     'Ice',          { mu: 0.55, C: 1.40, kp: 0.08, ap: 0.08, crr: 0.015, drag: 0, plow: 0 }, { roughness: 0.25, metalness: 0 }),
   // The heightfield and the pad's ground boxes (today's friction 0.8); wheels read the surfaces above, not this.
   'rally-ground': { extends: 'dirt', phys: { friction: 0.8, restitution: 0 }, look: { roughness: 1, metalness: 0 } },
   'rally-road':   { extends: 'gravel', phys: { friction: 0.8, restitution: 0 }, look: { roughness: 0.92, metalness: 0 } },

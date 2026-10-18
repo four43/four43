@@ -30,6 +30,15 @@ export function makeDrivetrain(cfg, wheelInertia = 1.2) {
 
 export function rpmOf(dt) { return dt.we * RPM; }
 
+// Driven-wheel speed (rad/s, signed) and the engine rpm it implies in a given gear: the rpm the
+// clutch will lock at, which is what shift decisions and the downshift blip work from.
+function drivenOmega(c, w) {
+  return c.layout === 'awd' ? (w[0].omega + w[1].omega + w[2].omega + w[3].omega) / 4 : (w[2].omega + w[3].omega) / 2;
+}
+export function roadRpm(dt, w, gear = dt.gear) {
+  return Math.abs(drivenOmega(dt.cfg, w) * gearRatio({ cfg: dt.cfg, gear })) * RPM;
+}
+
 export function gearRatio(dt) {
   const c = dt.cfg;
   if (dt.gear === 0) return 0;
@@ -58,14 +67,15 @@ export function driveStep(dt, w, throttle, autoClutch, h, out) {
   const shifting = dt.shiftT > 0;
 
   // Input shaft speed seen by the clutch, from the driven wheels.
-  let wIn = 0;
-  if (c.layout === 'awd') wIn = (w[0].omega + w[1].omega + w[2].omega + w[3].omega) / 4;
-  else wIn = (w[2].omega + w[3].omega) / 2;
-  wIn *= G;
+  const wIn = drivenOmega(c, w) * G;
 
   // Engine torque: throttle blend between full curve and engine braking, rev limiter.
   const rpm = dt.we * RPM;
   let thr = shifting ? 0 : throttle;
+  // Auto-blip (sequential box): with the clutch open, the throttle brings the engine up to the
+  // new gear's road speed, so a downshift doesn't re-engage onto a slow engine and drag the
+  // driven wheels into a skid. Upshifts need no blip: the target is below the engine.
+  if (shifting && G !== 0) thr = clamp((Math.abs(wIn) * RPM - rpm) / 300, 0, 1);
   // Idle governor holds idle rpm.
   if (rpm < c.idle) thr = Math.max(thr, Math.min(1, (c.idle - rpm) / 200));
   dt.limiter = rpm > c.redline;

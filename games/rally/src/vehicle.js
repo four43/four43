@@ -3,7 +3,7 @@
 // Pure JS (no three.js) so it runs headless in Node.
 import { tireStep } from './tire.js';
 import { surfaceOfKey } from './surface.js';
-import { makeDrivetrain, driveStep, shift, rpmOf, gearRatio } from './drivetrain.js';
+import { makeDrivetrain, driveStep, shift, rpmOf, roadRpm } from './drivetrain.js';
 import { SNOW } from './snow.js';
 
 export const DT = 1 / 240;     // chassis step
@@ -15,6 +15,12 @@ export const SLIDE = { from: 1.2, to: 2.5, floor: 0.15 };
 // Surface drag (tall grass etc.): drag·fz at walking pace, faded in over ~2 m/s, growing with
 // (v / DRAG.v)² like pushing through more grass per second; caps a car flat out on grass ~85 km/h.
 export const DRAG = { fade: 2, v: 18 };
+// Self-aligning steering (caster): with a light hand on the wheel the fronts turn toward where the
+// front axle is travelling, which is how a slide gets caught. Only the countersteer direction (the
+// front axle's velocity pointing against the yaw) is followed, faded in from vFrom to vTo m/s and
+// over rFull rad/s of yaw, and the driver's own input takes over as it grows: at full input the
+// driver gets exactly the lock asked for.
+export const ALIGN = { vFrom: 3, vTo: 8, rFull: 0.15 };
 
 // --- small vector helpers on {x,y,z} ---
 const v3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
@@ -149,12 +155,11 @@ export class Vehicle {
         else { const t = thr; thr = brk; brk = t; }
       }
       if (d.gear > 0 && d.shiftT <= 0) {
-        const rpm = rpmOf(d);
+        // Downshifts go by road speed, not engine rpm: the engine sags while the clutch is open,
+        // which used to cascade 3-2-1 in a quarter second and lock the driven wheels.
+        const rpm = rpmOf(d), road = roadRpm(d, this.wheels);
         if (rpm > c.redline * 0.94 && d.gear < c.gears.length && thr > 0.1) shift(d, +1);
-        else if (d.gear > 1) {
-          const lower = rpm * c.gears[d.gear - 2] / c.gears[d.gear - 1];
-          if (lower < c.redline * 0.80 && rpm < c.redline * 0.48) shift(d, -1);
-        }
+        else if (d.gear > 1 && road < c.redline * 0.48 && roadRpm(d, this.wheels, d.gear - 1) < c.redline * 0.80) shift(d, -1);
       }
     }
     if (this.assist) {
@@ -181,9 +186,21 @@ export class Vehicle {
     this.out.throttle = thr; this.out.brake = brk;
   }
 
-  steerAngles() {
+  // Front-wheel angle (rad, + = left): the driver's lock plus the self-aligning countersteer.
+  // vF, vL: front-axle velocity along the body's forward / left axes; yawRate: rad/s, + = left.
+  steerDelta(vF, vL, yawRate) {
     const c = this.cfg, s = this.input.steer;
-    const delta = s * c.maxLock;
+    let delta = s * c.maxLock;
+    const free = Math.atan2(vL, Math.max(vF, 1e-3));   // wheel angle for zero front slip
+    if (vF > ALIGN.vFrom && free * yawRate < 0) {
+      const w = clamp01((vF - ALIGN.vFrom) / (ALIGN.vTo - ALIGN.vFrom)) * clamp01(Math.abs(yawRate) / ALIGN.rFull);
+      delta += (1 - Math.abs(s)) * w * Math.max(-c.maxLock, Math.min(c.maxLock, free));
+    }
+    return Math.max(-c.maxLock, Math.min(c.maxLock, delta));
+  }
+
+  steerAngles(delta) {
+    const c = this.cfg;
     if (Math.abs(delta) < 1e-4) return [0, 0];
     const Rr = c.wheelbase / Math.tan(Math.abs(delta));
     const inner = Math.atan(c.wheelbase / (Rr - c.track / 2)), outer = Math.atan(c.wheelbase / (Rr + c.track / 2));
@@ -199,7 +216,8 @@ export class Vehicle {
     const U = qrot(q, v3(0, 1, 0)), F = qrot(q, v3(0, 0, 1));
     const down = mul(U, -1);
     const pv = (pt) => add(v, cross(av, sub(pt, p)));
-    const steer = this.steerAngles();
+    const vFront = pv(add(p, qrot(q, v3(0, 0, this.wheels[0].local.z))));
+    const steer = this.steerAngles(this.steerDelta(dot(vFront, F), dot(vFront, qrot(q, v3(1, 0, 0))), dot(av, U)));
 
     // Pass 1: rays and compressions.
     const snow = this.snow();
@@ -278,7 +296,7 @@ export class Vehicle {
         if (w.contact && w.fz > 0) {
           const cy = 0.3 * w.mC / DT;
           const cx = Math.min(cy, 0.4 * I / (r * r * hs));
-          const res = tireStep(w.st, w.omega * r - fr.vx, fr.vy, fr.vx, w.fz, w.surf, hs, cx, cy);
+          const res = tireStep(w.st, w.omega * r - fr.vx, fr.vy, fr.vx, w.fz, w.surf, hs, cx, cy, w.front ? 1 : c.rearAp);
           fx = res.fx; fy = res.fy; w.kappa = res.kappa; w.alpha = res.alpha; w.rho = res.rho;
         } else { w.st.dx *= 0.9; w.st.dy *= 0.9; w.kappa = 0; w.alpha = 0; w.rho = 0; }
         const troll = w.contact ? w.surf.crr * w.fz * r * Math.tanh(w.omega * 2) : 0;

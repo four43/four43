@@ -51,8 +51,9 @@ for (const car of ['awd', 'rwd']) {
   });
 
   for (const [surf, lo, hi] of car === 'awd'
-    ? [['tarmac', 0.95, 1.05], ['hardpack', 0.75, 0.90], ['gravel', 0.68, 0.80], ['packed', 0.64, 0.76], ['ice', 0.44, 0.56]]
-    : [['tarmac', 0.95, 1.05], ['gravel', 0.66, 0.80]]) {
+    // Loose surfaces top out in a drift since R5-4: plowing tires out-grip ~0.71 g grip driving.
+    ? [['tarmac', 0.95, 1.05], ['hardpack', 0.75, 0.90], ['gravel', 0.68, 0.87], ['packed', 0.64, 0.84], ['ice', 0.44, 0.56]]
+    : [['tarmac', 0.95, 1.05], ['gravel', 0.66, 0.87]]) {
     test(`${car} skidpad ${surf}`, () => {
       // Closed-loop driver on a 40 m circle: throttle holds a target speed, steer holds the radius.
       // Sweep target speed upward and record the best steady lateral g.
@@ -190,10 +191,79 @@ test('rwd slide control on a power-oversteer exit', () => {
     return worst * 180 / Math.PI;
   };
   for (const surf of ['hardpack', 'gravel']) {
-    check(`sim body slip ${surf} (spins)`, maxBodySlip(false, surf), 90, 180, '°');
-    check(`assisted body slip ${surf}`, maxBodySlip(true, surf), 10, 60, '°');
+    // Self-aligning steering (R5-2) catches some of it even in Sim, but Sim still slides much
+    // further than Assisted, which trims the power.
+    const sim = maxBodySlip(false, surf), assisted = maxBodySlip(true, surf);
+    check(`sim body slip ${surf}`, sim, 35, 180, '°');
+    check(`assisted body slip ${surf}`, assisted, 10, 60, '°');
+    check(`assisted / sim body slip ${surf}`, assisted / sim, 0, 0.75);
   }
 });
+
+// --- Round 5: slides (2026-10-18) ---
+
+// Car at speed v0 m/s on gravel in a matched gear, moving at body slip beta0 (rad) with yaw rate
+// yaw0 (rad/s); returns per-step samples of body slip (rad) and yaw rate after calling fn.
+const slideRun = (car, surf, { v0 = 20, beta0 = 0, yaw0 = 0, gear = 2, secs = 2.5, fn }) => {
+  const sim = mk(car, surf, { pos: { x: 0, y: 0.6, z: -60 } });
+  run(sim, 1);
+  const c = sim.car, b = c.body;
+  b.setLinvel({ x: v0 * Math.sin(beta0), y: 0, z: v0 * Math.cos(beta0) }, true);
+  b.setAngvel({ x: 0, y: yaw0, z: 0 }, true);
+  for (const w of c.wheels) w.omega = v0 * Math.cos(beta0) / c.cfg.radius;
+  c.dt.gear = gear; c.dt.we = c.wheels[2].omega * c.cfg.drive.gears[gear - 1] * c.cfg.drive.final;
+  const out = [];
+  run(sim, secs, (s, t) => {
+    fn && fn(s.car, t);
+    const v = b.linvel(), q = b.rotation(), d = 2 * Math.atan2(q.y, q.w) - Math.atan2(v.x, v.z);
+    out.push({ t, beta: Math.atan2(Math.sin(d), Math.cos(d)), r: b.angvel().y, car: s.car });
+  });
+  return out;
+};
+
+for (const car of ['awd', 'rwd']) {
+  test(`${car} auto downshifts keep the wheels rolling (R5-1)`, () => {
+    // Light braking from 90 km/h in Auto: each downshift is one gear at a time, and the blip
+    // matches revs so the driven wheels never slip past the tire's peak.
+    const sim = mk(car, 'gravel', { pos: { x: 0, y: 0.6, z: -80 } });
+    run(sim, 1);
+    for (let i = 0; i < 20 / DT && sim.car.speed < 25; i++) { sim.car.input.throttle = 1; sim.step(); }
+    let g = sim.car.gear, tLast = -1, minGap = 99, worst = 0, shifts = 0;
+    run(sim, 8, (s, t) => {
+      const c = s.car; c.input.throttle = 0; c.input.brake = c.speed > 3 ? 0.3 : 0;
+      if (c.gear !== g) { if (tLast >= 0) minGap = Math.min(minGap, t - tLast); tLast = t; g = c.gear; shifts++; }
+      for (const w of c.wheels) if (w.contact && w.drive !== 0) worst = Math.max(worst, -w.kappa / w.surf.kp);
+    });
+    check('downshifts', shifts, 2, 4);
+    check('time between downshifts (s)', minGap, 0.4, 99, ' s');
+    check('worst driven-wheel lock / peak slip', worst, 0, 0.8);
+  });
+
+  test(`${car} understeers in the linear range (R5-3)`, () => {
+    // Gentle steady steer at 72 km/h on gravel: the fronts run a larger slip angle than the rears.
+    const out = slideRun(car, 'gravel', { secs: 2, gear: 3, fn: (c) => { c.input.steer = 0.06; c.input.throttle = 0.25; } });
+    const w = out[out.length - 1].car.wheels;
+    const aF = (Math.abs(w[0].alpha) + Math.abs(w[1].alpha)) / 2, aR = (Math.abs(w[2].alpha) + Math.abs(w[3].alpha)) / 2;
+    check('front / rear slip angle', aF / aR, car === 'awd' ? 1.7 : 1.35, 3); // was 1.43 / 1.21
+  });
+
+  test(`${car} recovers from a yaw kick hands-off (R5-2, R5-3)`, () => {
+    // 60 °/s yaw kick at 72 km/h, no steering input: the self-aligning fronts countersteer
+    // and the car straightens without building a slide (was 9–12° and 1.5 s or never before round 5).
+    const out = slideRun(car, 'gravel', { yaw0: 1.05 });
+    const worst = Math.max(...out.map((o) => Math.abs(o.beta)));
+    const settled = out.find((o) => o.t > 0.1 && out.every((p) => p.t < o.t || Math.abs(p.r) < 0.05))?.t ?? 99;
+    check('peak body slip (deg)', worst * 180 / Math.PI, 0, 7.5, '°');
+    check('yaw rate settled under 3 °/s by (s)', settled, 0, 1.0, ' s');
+  });
+
+  test(`${car} sideways slide scrubs on gravel (R5-4)`, () => {
+    // 30° slide at 72 km/h, coasting, no steering: the plowing tires kill the sideways speed.
+    const out = slideRun(car, 'gravel', { beta0: 30 * Math.PI / 180 });
+    const t = out.find((o) => Math.abs(o.beta) < 5 * Math.PI / 180)?.t ?? 99;
+    check('body slip under 5° by (s)', t, 0, 0.95, ' s'); // was 1.06 / 1.27
+  });
+}
 
 const fails = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - fails}/${results.length} passed`);

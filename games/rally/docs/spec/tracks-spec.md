@@ -227,7 +227,8 @@ World = {
     (gravel 184); coasting from 80 km/h 0.55 g average over 2 s (gravel 0.13, tarmac 0.12 —
     engine braking); half throttle on flat grass settles ~55 km/h. Generated loop `v1`,
     leaving the road square at 60 km/h into the bumpy grass: lifting off it is under 35 km/h in
-    0.9–1.9 s; at half throttle it is at 43–50 km/h after 4 s (the bumps cost ~5–10 km/h);
+    0.9–1.9 s; at half throttle it is at 43–50 km/h after 4 s (the bumps cost ~5–10 km/h; since
+    `rally-spec.md` R5 the car runs straighter over them, 45–55 km/h, check limit 57);
     min body up·y 0.93. The requested "half throttle under 35 km/h within 4 s" conflicts with
     an 80–90 km/h top speed: half throttle in 2nd pushes ~0.45 g, about what the cap needs at
     85 km/h, so any drag curve meeting both is nearly flat and bogs the car down from rest.
