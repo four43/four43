@@ -198,11 +198,12 @@ the button.
 
 - **Keyboard:** W/S or ↑/↓ throttle/brake (ramped), A/D or ←/→ steer (ease-in, faster
   return-to-centre, snaps through centre), Space handbrake, Q/E shift, R reset (on a track: back
-  onto the road), Shift+R restart (a timed run: a new countdown), Esc or P pause (or close the
-  settings sheet), Enter Drive on the title / Retry on the results card, C camera, F3 or `` ` ``
-  wheel debug. Keys typed into the seed field don't drive.
-- **Gamepad:** left stick steer (8 % deadzone, slight expo), RT/LT throttle/brake, A handbrake
-  (and Drive / Retry on menus), RB/LB shift, Y reset, X camera, Start pause.
+  onto the road), Shift+R restart (a timed run: a new countdown), Esc or P pause, C camera, F3 or
+  `` ` `` wheel debug. Keys typed into the seed field don't drive. In menus: arrows move, Enter
+  selects, Esc goes back (R6).
+- **Gamepad:** left stick steer (8 % deadzone, slight expo), RT/LT throttle/brake, A handbrake,
+  RB/LB shift, Y reset, X camera, Start pause. In menus: D-pad or stick move one step per push, A
+  selects, B or Start go back, LB/RB change the highlighted option (R6).
 - Driving input reaches the car from Ready on (the engine revs on the line while held); menus
   give it none. Resets and shifts only act while running or after the finish.
 - **Touch** (shown on `pointer: coarse`): a floating steering slider in the left half that zeroes
@@ -287,6 +288,8 @@ mobile test uses the Chromium in `~/.cache/ms-playwright`).
 
 ## Known issues
 
+- **No pad text entry:** the menu navigator skips the seed field, so a controller can only change the
+  seed with the dice button (lion-hawk spec §10 "Pad text entry").
 - **Livery not applied:** `repaint()` in `render.js` is defined but never called, so cars show
   Kenney's stock paint (the AWD car is green, not its configured blue).
 - Fresh-snow rendering is unchecked on a phone/iPad: a 148k-vertex displaced mesh (drawn twice
@@ -455,3 +458,27 @@ transient. Headless probes found one bug and three missing pieces of physics.
   re-blessed (same checkpoints, the 20 s drive ends 0.6–1.7 m further on). `test/feel.mjs --check`:
   stage times within ±3 %; grass coast from 80 km/h 0.55 → 0.47 g (no more downshift lock-ups adding
   braking; `verge.mjs` band 0.3–0.75 g); its off-road samples were already outside tolerance before R5.
+
+## Round 6: controller menus (2026-10-18)
+
+Request: every menu navigable with a controller. Built as an engine feature (lion-hawk menu navigation,
+U-7–U-10; research and decisions in lion-hawk `docs/research-menu-navigation.md`).
+
+- **R6-1 Menus.** Title, settings, pause and results are modal menus that own the input while on top
+  (`nav` in `src/game/overlays.js`): the D-pad, stick or arrow keys move focus one step per push with no
+  wrap, A/Enter select, LB/RB step the highlighted option row. Focus opens on Drive, Resume and Retry,
+  and returns to where it was when a menu on top closes.
+- **R6-2 Back.** B, Esc and Start go back: settings closes, pause resumes, results goes to the main menu
+  (same as its Menu button); the title has no back.
+- **R6-3 Pause.** Start or Esc open pause while driving (ready, countdown, running) through the menu's
+  `nav.open`; P still presses the `pause` action, and the touch chip still taps it.
+- **R6-4 A is no longer `confirm`** on the pad (and Enter no longer presses it): inside a menu the
+  navigator owns them, which fixes A on a focused title option also starting the run (#16). The
+  `confirm` action stays for tests and bots.
+- **R6-5 Prompts.** Drive shows the A glyph, Resume and Menu the B glyph, in the art of the pad in use
+  (Xbox, PlayStation, Steam Deck, generic) or the keyboard; hidden on touch and mouse.
+- **Validation:** `flow.test.mjs` back/open/modal checks headless; `e2e.browser.mjs` walks the title,
+  settings, drive, pause and resume with the harness's fake pad (the test machine's controllers never
+  reach a test); mobile 797/797. `lh-alloc` warms 2000 steps (JIT tier-up under parallel load reached
+  the measured half at 600; 40000 steps showed no growth); `looks.test.mjs` follows the engine's
+  texel-snapped shadow box.

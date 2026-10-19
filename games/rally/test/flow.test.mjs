@@ -184,3 +184,20 @@ test('the stage state never holds the scene ctx (serialisable state, 2d carry-ov
   h.fill('title.seed', 'ctx2'); // a rebuild through ctx.load still works
   h.until(x => x.state().phase === 'title' && x.state().seed === 'ctx2', { maxSeconds: 5, message: 'rebuilt' });
 });
+
+// Menu navigation (lion-hawk U-9, rally-spec R6): Back and Open are commands, so the flow is testable headless.
+test('menus: Back from each overlay, and Start/Esc opening pause only while driving', () => {
+  const args = { settings: { mode: 'stage', seed: 'n1' } }, h = headless(game(), { args }), cmd = (t, d) => { h.engine.command(t, d); h.step(2); };
+  for (const o of ['title', 'pause', 'results', 'settings']) assert.equal(h.engine.game.scenes[o].nav.modal, true, o);
+  cmd('lh.back'); assert.deepEqual(h.scene.overlays, ['title'], 'the title has no Back');
+  cmd('lh.open', { name: 'pause' }); assert.deepEqual(h.scene.overlays, ['title'], 'no pause over the title');
+  h.tap('title.settings'); h.step(1); assert.deepEqual(h.scene.overlays, ['title', 'settings']);
+  cmd('lh.back'); assert.deepEqual(h.scene.overlays, ['title'], 'Back closes settings');
+  h.tap('title.drive'); running(h);
+  cmd('lh.open', { name: 'pause' }); assert.deepEqual(h.scene.overlays, ['pause'], 'Start/Esc open pause while driving');
+  assert.equal(h.engine.input.gated, true, 'the menu owns the pad');
+  cmd('lh.back'); assert.deepEqual(h.scene.overlays, [], 'Back resumes'); assert.equal(h.state().phase, 'running');
+  h.jump('stage', 'results', {}, args); h.step(1); assert.deepEqual(h.scene.overlays, ['results']);
+  cmd('lh.back'); h.untilLoaded({ maxSteps: 120 });
+  assert.equal(h.state().phase, 'title', 'Back from results is the main menu'); assert.deepEqual(h.scene.overlays, ['title']);
+});

@@ -1,6 +1,10 @@
 // The overlays over the stage scene (lion-hawk [S-3], field notes #7, #23): title (the menu over the live scene, the car
 // idling held on the line), pause (the only one that pauses), results (the finished car keeps rolling) and settings.
 // Control ids are the test ids (U-1): title.drive, pause.resume, results.retry, settings.close.
+// Menu navigation (lion-hawk U-9, rally-spec R6): every overlay is a modal menu that owns the input while it is on top;
+// B/Esc/Start go Back (pause resumes, results goes to the main menu, settings closes; the title has no Back), and
+// Start/Esc open pause while driving.
+import { DRIVING } from './stage.js';
 const settingsOpen = e => e.scene.overlays.includes('settings');
 
 // A settings choice: pick(id, label, values, when) with values as plain values or { value, label }; the value is the label
@@ -11,6 +15,7 @@ const choices = (u, api) => (id, label, values, when) => u.choice({ id, label, w
 
 export function makeOverlays(api) {
   const title = {
+    nav: { modal: true, initial: 'title.drive' },
     ui(u) {
       const pick = choices(u, api);
       pick('mode', 'Mode', ['freeDrive', 'stage', 'timeAttack']);
@@ -28,6 +33,7 @@ export function makeOverlays(api) {
   };
   const pause = {
     pauses: true, // #23: pause is this overlay, not a sub-state
+    nav: { modal: true, initial: 'pause.resume', back: e => e.close('pause'), open: { button: 'start', key: 'escape', when: e => DRIVING.has(e.scene.state.phase) } },
     ui(u) {
       u.button({ id: 'resume', label: 'Resume', action: e => e.close('pause') });
       u.button({ id: 'restart', label: 'Restart', action: e => api.restart(e), when: e => !e.scene.state.pad });
@@ -37,6 +43,7 @@ export function makeOverlays(api) {
     step(e) { if (e.input.snapshot.pause.pressed && !settingsOpen(e)) e.close('pause'); },
   };
   const results = {
+    nav: { modal: true, initial: 'results.retry', back: e => api.toTitle(e) },
     ui(u) {
       u.button({ id: 'retry', label: 'Retry', action: e => api.restart(e) });
       u.button({ id: 'newSeed', label: 'New seed', action: e => api.newSeedRun(e) });
@@ -45,6 +52,7 @@ export function makeOverlays(api) {
     step(e) { if (e.input.snapshot.confirm.pressed && !settingsOpen(e)) api.restart(e); },
   };
   const settings = {
+    nav: { modal: true, back: e => e.close('settings') },
     ui(u) {
       const pick = choices(u, api);
       pick('surface', 'Surface', ['tarmac', 'hardpack', 'gravel', 'snow', 'ice'], e => e.scene.state.pad);

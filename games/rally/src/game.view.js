@@ -77,14 +77,13 @@ function overlayHalves() {
       doc.getElementById('pause').hidden = false;
       doc.getElementById('restartBtn').hidden = !s.world?.track;
       doc.getElementById('lapList').innerHTML = lapTable(s); // paused: the laps don't change while the card is up
-      view.focus('pause.resume'); // #46
     },
     exit(engine, view) { view.doc.getElementById('pause').hidden = true; },
   };
 
   let shown = null; // the result the card shows
   const results = {
-    enter(engine, view) { view.doc.getElementById('results').hidden = false; shown = null; view.focus('results.retry'); results.frame(engine, 0, view); },
+    enter(engine, view) { view.doc.getElementById('results').hidden = false; shown = null; results.frame(engine, 0, view); }, // focus: nav.initial (U-9)
     exit(engine, view) { view.doc.getElementById('results').hidden = true; shown = null; },
     frame(engine, alpha, view) {
       const r = engine.scene.state.result, doc = view.doc;

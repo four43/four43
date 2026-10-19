@@ -124,3 +124,37 @@ test('desktop: a hidden page pauses a timed run but not free drive; a seed edit 
     assert.deepEqual((await free.scene()).overlays, []);
   } finally { await free.close(); }
 });
+
+// Menu navigation with a controller (lion-hawk U-7–U-10, rally-spec R6): the harness's fake pad (never the machine's).
+test('desktop: a gamepad walks the title, opens and leaves settings, drives, pauses with Start and resumes with B', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: SETTINGS });
+  const focused = () => game.page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
+  const push = async (state, steps = 0) => { await game.pad(state); await game.frames(); await game.pad({}); await game.frames(); if (steps) await game.step(steps); };
+  try {
+    await expectState(game, 'phase', 'title');
+    await game.pad({}); await game.frames();
+    assert.equal(await focused(), 'title.drive', 'the title opens on Drive');
+    await push({ left: true }); assert.equal(await focused(), 'title.settings');
+    await push({ a: true }); assert.deepEqual((await game.scene()).overlays, ['title', 'settings']);
+    assert.match(await focused(), /^settings\./, 'focus moves into the sheet');
+    const picked = row => game.page.evaluate(r => document.querySelector(`[data-testid^="settings.${r}."][aria-pressed="true"]`)?.getAttribute('data-testid'), row);
+    await game.page.evaluate(() => document.querySelector('[data-testid="settings.units.mph"]').focus()); // onto the Units row
+    const before = await picked('units');
+    await push(before === 'settings.units.mph' ? { rb: true } : { lb: true });
+    assert.notEqual(await picked('units'), before, 'RB/LB step the focused option row');
+    assert.equal(await focused(), await picked('units'), 'focus follows the new option');
+    await push({ b: true }, 1); assert.deepEqual((await game.scene()).overlays, ['title'], 'B closes the sheet');
+    assert.equal(await focused(), 'title.settings', 'focus comes back to Settings');
+    assert.equal(await game.page.evaluate(() => document.documentElement.dataset.lhInput), 'pad');
+    assert.match(await game.page.locator('#driveBtn img.glyph').getAttribute('src'), /^data:image\/svg\+xml,/, 'the A prompt shows for a pad');
+    await push({ right: true }); assert.equal(await focused(), 'title.drive');
+    await push({ a: true }); await expectState(game, 'phase', 'ready');
+    await game.until(s => s.phase === 'running', { maxSteps: 2000 });
+    await push({ start: true }, 1); assert.deepEqual((await game.scene()).overlays, ['pause'], 'Start pauses');
+    assert.equal(await focused(), 'pause.resume');
+    await push({ b: true }, 1); assert.deepEqual((await game.scene()).overlays, [], 'B resumes');
+    await expectState(game, 'phase', 'running');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});

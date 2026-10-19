@@ -2,6 +2,7 @@
 // the ease ramps, the pad with its expo stick, the touch steering slider and the pedal/chip buttons. The feel is
 // the removed Controls' arithmetic, moved: the engine merges the sources (largest value wins, #29; every pad, #30).
 import { bindKeyboard, bindGamepad, bindStick, bindHold } from 'lion-hawk/view';
+import { bindGlyphs } from 'lion-hawk/kits/glyphs/view';
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 
@@ -30,18 +31,19 @@ export const KEYS = {
   a: ['steer', 1], arrowleft: ['steer', 1], d: ['steer', -1], arrowright: ['steer', -1],
   w: ['throttle', 1], arrowup: ['throttle', 1], s: ['brake', 1], arrowdown: ['brake', 1], ' ': ['handbrake', 1],
   q: 'shiftDown', e: 'shiftUp', r: 'reset', 'shift+r': 'resetAll', c: 'camera', f3: 'debug', '`': 'debug',
-  escape: 'pause', p: 'pause', enter: 'confirm',
+  p: 'pause', // Esc opens pause through the menu's nav.open, and is Back in every menu (lion-hawk U-9)
 };
 // Pedal keys ease in and out (per second) towards 0 or 1 (dt capped by the engine, #44); the handbrake is on/off.
 export const pedalRamp = (rise, fall) => (v, t, dt) => t > v ? Math.min(t, v + rise * dt) : Math.max(t, v - fall * dt);
 export const RAMPS = { steer: steerRamp, throttle: pedalRamp(5, 8), brake: pedalRamp(6, 9) };
 
-// Standard mapping: left stick with a slight expo, triggers, A = handbrake and confirm (#16), bumpers shift,
-// Y reset, X camera, Start pause.
+// Standard mapping: left stick with a slight expo, triggers, A = handbrake, bumpers shift, Y reset, X camera. In menus the
+// navigator owns the pad (A selects, B/Start go Back, LB/RB step an option) and Start opens pause (nav.open), so A is no
+// longer also `confirm` (#16: A on a focused title option would have started the run too).
 export const PAD = {
   deadZone: 0.08,
   axes: { 0: ['steer', -1, v => 0.35 * v * Math.abs(v) + 0.65 * v] },
-  buttons: { 7: ['throttle', 1], 6: ['brake', 1], 0: [['handbrake', 1], 'confirm'], 5: 'shiftUp', 4: 'shiftDown', 3: 'reset', 2: 'camera', 9: 'pause' },
+  buttons: { 7: ['throttle', 1], 6: ['brake', 1], 0: ['handbrake', 1], 5: 'shiftUp', 4: 'shiftDown', 3: 'reset', 2: 'camera' },
 };
 
 // Touch buttons (bindHold, which keeps focus off the button so Space/Enter stay the handbrake/confirm keys, #42): pedals
@@ -59,5 +61,6 @@ export function devices(doc) {
       base: $('#steerBase'), knob: $('#steerKnob'), doc }),
   ];
   for (const [sel, action] of HOLDS) out.push(e => bindHold(e, $(sel), action));
+  out.push(e => bindGlyphs(e, { doc })); // the A/B prompts on menu buttons follow the input in use (lion-hawk U-10)
   return out;
 }
