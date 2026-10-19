@@ -40,10 +40,12 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
   // R-1 (the old main.js's guard on the card): a screen that fails to open is hidden and its control tapped, as the child would,
   // so the overlay closes and the train is not held by a screen nobody can see (the engine's fallback button is unstyled, under #c)
   let ui = null; // the view's UI (adopt)
+  // lion-hawk U-7: a screen's plain buttons (swatches, pages, rows) are menu candidates of its overlay
+  const scope = (view, sel, name) => view.doc.getElementById('ui')?.querySelector(sel)?.setAttribute('data-lh-nav-scope', name);
   const half = (show, done, more = {}) => ({
     enter(e, view) {
       engine = e; ui = view.ui; if (!e.scene.state.progress) return;
-      try { show(menusOf(view), e, progressOf(e), view); view.ui.adopt(); }
+      try { show(menusOf(view), e, progressOf(e), view); view.ui.adopt(); scope(view, '.screen', done.split('.')[0]); }
       catch (err) {
         console.warn(`screen ${done} failed to open`, err); try { menus?.hide(); } catch (e2) { console.warn('screen hide', e2); }
         try { e.ui.tryTap(done); } catch (e2) { console.warn(done, e2); }
@@ -80,7 +82,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
       enter(e, view) {
         engine = e; const s = e.scene.state; if (!s.settings) return;
         menusOf(view).openParent(s.settings, s.seed, { guest: s.net?.role === 'guest', bed: { choice: s.bed.choice, left: minutesLeft(s.bed, Date.now()), phase: s.bed.phase } }); // M-19
-        view.ui.adopt();
+        view.ui.adopt(); scope(view, '.parent:not(.mp)', 'parent');
       },
       exit() { menus?.closeParent(); },
     },
@@ -88,7 +90,7 @@ export function menuHalves(pics, net = null, { make = createMenus } = {}) {
     // M-29..M-36 (parity #23–#25): the Multiplayer panel over the farm, drawn from the session (net/session.js). Closing it ends a
     // code check or a join prompt (its client closes); a room goes on
     multiplayer: {
-      enter(e, view) { engine = e; ui = view.ui; const session = net?.session; if (!session) return; menusOf(view).openMultiplayer(session); },
+      enter(e, view) { engine = e; ui = view.ui; const session = net?.session; if (!session) return; menusOf(view).openMultiplayer(session); scope(view, '.parent.mp', 'multiplayer'); },
       exit() { try { net?.session?.cancel(); } catch (err) { console.warn('multiplayer cancel', err); } menus?.closeMultiplayer(); },
     },
     // the session changed (net/session.js onChange): the open panel redraws

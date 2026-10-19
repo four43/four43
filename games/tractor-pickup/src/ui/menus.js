@@ -59,7 +59,8 @@ const paintBtnSvg = () => `<svg viewBox="0 0 80 80" aria-hidden="true"><defs>${R
 export function createMenus(root, { icons, art, tractorPic, onNewFarm, onSettings, onClearStickers, onPaint, onHats, onStickers, onPlace, onUnplace, onBookSeen, onBedtime, onParentDone, onMpDraw, onMpDone, netlog = null }) {
   let screen = null;
   const close = () => { screen?.remove(); screen = null; };
-  const open = cls => { close(); screen = el('screen ' + cls, 'div', root); return screen; };
+  // a screen swapped in place (the start screen's book) keeps the overlay its screen belongs to (lion-hawk U-7 nav scope)
+  const open = cls => { const sc = screen?.getAttribute('data-lh-nav-scope'); close(); screen = el('screen ' + cls, 'div', root); if (sc) screen.setAttribute('data-lh-nav-scope', sc); return screen; };
   const pic = (parent, cls, html, fn, label) => { const b = el('pic ' + cls, 'button', parent); b.innerHTML = html; b.setAttribute('aria-label', label); b.addEventListener('click', e => { e.stopPropagation(); fn(); }); return b; };
   const slot = (parent, cls, html, id, label) => { const b = el('pic ' + cls, 'button', parent); b.type = 'button'; b.innerHTML = html; b.dataset.lhSlot = id; b.setAttribute('aria-label', label); return b; };
   const go = (parent, id) => slot(parent, 'go', goSvg(), id, 'Go');

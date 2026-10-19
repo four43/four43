@@ -306,3 +306,35 @@ test('desktop: a new farm while asleep stays asleep; the night layer and its wak
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
+
+// Menu navigation with a controller (lion-hawk U-7, U-9): the harness's fake pad. The paint screen's swatches are plain
+// buttons (not registered controls) in its nav scope; B closes; a 2 s Start hold is the parent menu's child lock.
+test('desktop: a gamepad walks the paint screen, B closes it, and a 2 s Start hold opens the parent menu', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: ARGS });
+  const where = () => game.page.evaluate(() => { const a = document.activeElement; return a ? { id: a.getAttribute('data-testid'), inPaint: !!a.closest('.screen.paint'), scope: a.closest('[data-lh-nav-scope]')?.getAttribute('data-lh-nav-scope') ?? null } : null; });
+  const push = async state => { await game.pad(state); await game.frames(); await game.pad({}); await game.frames(); };
+  try {
+    await game.pad({}); await game.frames();
+    await game.tap('farm.paint'); await game.step(1); await expectState(game, 'mode', 'menu');
+    await game.frames();
+    const first = await where();
+    assert.equal(first?.scope, 'paint', 'focus lands in the paint screen');
+    await push({ right: true });
+    const next = await where();
+    assert.equal(next?.scope, 'paint'); assert.notDeepEqual(next, null);
+    await push({ b: true }); await game.step(1);
+    assert.deepEqual((await game.scene()).overlays, []); await expectState(game, 'mode', 'drive');
+    // this page renders slowly under SwiftShader (frames of ~0.7 s), so only a short press and a long hold are timed here;
+    // the exact 2 s boundary is the engine's menuNav test
+    await push({ start: true }); await game.step(1);
+    assert.deepEqual((await game.scene()).overlays, [], 'a short Start press is not the child lock');
+    await game.pad({ start: true }); await game.frames(1);
+    await game.page.waitForTimeout(2600); await game.frames(); await game.step(1);
+    assert.deepEqual((await game.scene()).overlays, ['parent'], 'a 2 s Start hold opens the parent menu');
+    await game.pad({}); await game.frames();
+    await push({ b: true }); await game.step(1);
+    assert.deepEqual((await game.scene()).overlays, []);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});

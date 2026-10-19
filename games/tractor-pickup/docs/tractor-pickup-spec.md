@@ -450,6 +450,7 @@ Point to go (changed in version 1.10, after review 3). The stick points where th
 | C-4 | Keyboard | W/A/S/D and the arrow keys are stick directions: W is up, D is right, W and D together are up-right. S alone reverses (C-8). |
 | C-5 | Gamepad | The left stick. Button A is the horn: each press fires the horn once, and each gamepad has its own button state. When the game drives with no start screen, the first stick move starts the trip (F-11), as a touch does. |
 | C-6 | Horn | A large horn button at the bottom right. The gamepad A button and the H key also work. A loud bulb-horn "HONK-honk" sound (S-7). All animals look at the tractor. Some animals come (A-11). The riders sing (S-8). |
+| C-12 | Menus with a gamepad or keys | Every screen (start, show, sticker card, paint, sticker book, parent menu, Multiplayer, sleep) works with a gamepad or the keys (Lion Hawk menu navigation, U-7 to U-10). The D-pad, the left stick or the arrow keys move the highlight one step for each push. Button A or Enter pushes the lit button; for a hold button (skip, wake), hold A. Button B, Esc or Start closes the paint screen, the sticker book, the parent menu and the Multiplayer panel. A 2 s hold of Start opens the parent menu, as the 2 s hold of the gear does (P-1). While a screen is open, the stick and the horn do not drive. The seed box and the room code box cannot be typed with a gamepad (open item). |
 
 The inputs are Lion Hawk engine devices (`src/devices.js`): the stick is `bindStick`, the keys `bindKeyboard`, the gamepad `bindGamepad` and the horn button `bindHold`. The stick, the keys and the left pad stick all go through one map that turns the screen stick into a world direction using the chase camera's heading (C-1). The holds (the gear, the show's skip and the wake button) are engine hold controls on wall time.
 
@@ -516,7 +517,7 @@ All items in this section are accepted for the first version.
 
 ## 10. Parent menu
 
-The parent menu uses the game's button style: large rounded buttons with thick brown edges that move down when pressed. In each row, the selected choice is lit in gold. Every choice applies at once: there is no Apply button. The red X at the top right of the panel (U-7) closes it. The menu has four parts, in this order: Bedtime, Power, Voice and Music, Farm.
+A grown-up opens the parent menu with a 2 s hold of the gear, or with a 2 s hold of Start on a gamepad (C-12). The parent menu uses the game's button style: large rounded buttons with thick brown edges that move down when pressed. In each row, the selected choice is lit in gold. Every choice applies at once: there is no Apply button. The red X at the top right of the panel (U-7) closes it. The menu has four parts, in this order: Bedtime, Power, Voice and Music, Farm.
 
 | ID | Setting | Values | Default |
 |---|---|---|---|
