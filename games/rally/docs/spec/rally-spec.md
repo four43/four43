@@ -1,6 +1,6 @@
 # Rally Sim — Spec
 
-Status: **0.3.1, live at https://four43.com/exp/rally/** (2026-10-10). Reverse-documented from the
+Status: **0.5.0, live at https://four43.com/exp/rally/** (2026-10-19). Reverse-documented from the
 first-round source (`rally-sim-src.zip`), then playtest rounds 2–5 (sections at the end, newest
 last). Generated tracks, worlds and the game loop are specified in `tracks-spec.md`; plans live in
 `docs/plans/`. The sections below describe the current game; the round sections record what each

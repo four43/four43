@@ -1,8 +1,8 @@
 # Tractor Pickup: Design Specification
 
-Version: 1.12 (after review 5)
-Date: 7 October 2026
-Game version: 1.8.0
+Version: 1.13 (controller menus, C-12)
+Date: 19 October 2026
+Game version: 1.10.0
 Published path: `/exp/tractor-pickup/`
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the technical names (TN) and technical verbs (TV).
 Status of items: Each design item has an ID (for example, **[C-1]**). All items in this document are accepted for the first version. Items marked **Phase 2** in section 14 are accepted but come after version 1.8.
