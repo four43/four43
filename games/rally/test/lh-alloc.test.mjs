@@ -8,6 +8,8 @@ await R.init();
 
 const DRIVE = () => ({ throttle: 1, steer: 0.3, brake: 0, handbrake: 0 });
 test('zero retained allocation over 10000 steps of driving', () => {
-  const r = checks.zeroAlloc(game(), { steps: 10000, warm: 600, input: DRIVE, args: { pad: true } });
+  // warm 2000 (default 600): with menu navigation (lion-hawk 0.12) JIT tier-up under --test-concurrency=4 load can land
+  // in the measured half (65-77 KB "retained" at warm 600, 18 KB at 3000, negative at 6000; 40000 steps showed no growth)
+  const r = checks.zeroAlloc(game(), { steps: 10000, warm: 2000, input: DRIVE, args: { pad: true } });
   assert.ok(r.ok, `retained ${r.growth} B over ${r.steps} steps`);
 });

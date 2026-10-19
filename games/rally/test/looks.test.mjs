@@ -15,8 +15,11 @@ test('each look sets the old sky, fog, hemisphere, sun intensity and sun offset'
     assert.equal(scene.background.getHex(), new THREE.Color(sky).getHex(), name); assert.equal(scene.fog.color.getHex(), scene.background.getHex(), name);
     assert.deepEqual([scene.fog.near, scene.fog.far], name.startsWith('pad-') ? [60, 330] : [150, 700], name);
     assert.equal(L.hemi.intensity, low ? 0.85 : 1.1, name); assert.equal(L.sun.intensity, low ? 3.6 : 2.4, name);
-    assert.deepEqual(L.sun.position.toArray(), [p.x + off[0], p.y + off[1], p.z + off[2]], name);
-    assert.deepEqual(L.sun.target.position.toArray(), [p.x, p.y, p.z], name);
+    // lion-hawk 0.12: follow() snaps the shadow box to whole texels (no shimmer), so the target sits within a texel of
+    // the car while the sun's offset from it stays exact
+    const t = L.sun.target.position, sp = L.sun.position;
+    for (const [i, k] of [[0, 'x'], [1, 'y'], [2, 'z']]) assert.ok(Math.abs(sp[k] - t[k] - off[i]) < 1e-9, `${name} offset ${k}`);
+    assert.ok(Math.hypot(t.x - p.x, t.y - p.y, t.z - p.z) < 0.5, `${name} target near the car`);
   }
   assert.equal(L.hemi.color.getHex(), new THREE.Color(0xdfeaf2).getHex());
 });
