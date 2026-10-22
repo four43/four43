@@ -14,11 +14,11 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 test('T-25: player state survives a respawn: after a new farm the paint stays and each seat possesses its new train (review focus)', async () => {
   const w = await engineWorld({ seed: 21, guests: 1 }); w.seconds(1);
   const g = w.guests[0]; g.sync.setPaint(PAINTS[3]); w.seconds(1);
-  const before = g.game.tractor.e;
+  const before = g.game.tractor.e.id; // ids, never entities (AssertionError's inspect walks into Rapier)
   w.host.engine.command('farm.new', {}); w.seconds(3);
-  assert.notEqual(g.game.tractor.e, before, 'the guest built the new farm');
+  assert.notEqual(g.game.tractor.e.id, before, 'the guest built the new farm');
   for (const d of w.devs) assert.deepEqual([entry(d, 2).coat, entry(d, 2).trim], [PAINTS[3].body, PAINTS[3].trim], d.name);
-  for (const d of w.devs) assert.equal(d.engine.controllerOf(0).pawn, d.game.tractor.e, `${d.name} drives its new train`);
+  for (const d of w.devs) assert.equal(d.engine.controllerOf(0).pawn?.id, d.game.tractor.e.id, `${d.name} drives its new train`);
 });
 
 test('T-25: player state survives a rejoin: the reloaded guest gets number 2 and its lh.player record back (N-23, review focus)', async () => {
