@@ -158,3 +158,24 @@ test('desktop: a gamepad walks the title, opens and leaves settings, drives, pau
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
+
+test('desktop: rumble reaches seat 0\'s pads while driving; a pause stops them (R7, R8-2, lion-hawk C-14)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: { 'rally-sim-settings': { v: 5, mode: 'freeDrive', world: 'loop', seed: 'e2e3', rumble: 'full' } } });
+  try {
+    await game.tap('title.drive'); await game.until(s => s.phase === 'running', { maxSteps: 2000 });
+    await game.pad(0, { x: true }); await game.frames(); await game.pad(0, {}); await game.frames(); // a press pairs the pad to seat 0
+    await game.seconds(2, { throttle: 1 }); await game.frames();
+    const on = c => c.op === 'playEffect' && c.params.strongMagnitude + c.params.weakMagnitude > 0;
+    assert.ok((await game.haptics(0)).calls.some(on), 'the stage rumbles the pad');
+    // render is 'auto': frames between a count and the key press may still rumble, so the counts are taken around the pause, not before it
+    const m = (await game.haptics(0)).calls.length; // up to here: driving
+    await game.page.keyboard.press('Escape'); await game.frames(); await game.step(1); await game.frames(); await game.frames();
+    assert.deepEqual((await game.scene()).overlays, ['pause']);
+    await game.frames(3); // the pause is on: the engine's stop has started, and Rally sends nothing more
+    const n = (await game.haptics(0)).calls.length;
+    assert.ok((await game.haptics(0)).calls.slice(m).some(c => c.op === 'reset'), 'the pause stops it (a reset since Escape)');
+    await game.frames(5);
+    assert.ok(!(await game.haptics(0)).calls.slice(n).some(on), 'nothing is sent while paused');
+  } finally { await game.close(); }
+});

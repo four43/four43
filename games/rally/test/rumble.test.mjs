@@ -206,31 +206,36 @@ test('jump landing: a touchdown after a flight pounds both motors flat out, repl
 });
 
 const fakePad = () => {
-  const calls = [];
-  const actuator = { playEffect: (type, p) => { calls.push(p.strongMagnitude + p.weakMagnitude > 0 ? ['play', p] : ['zero']); return Promise.resolve('preempted'); },
+  const calls = [], stops = [], h = { paused: false, stop: r => { stops.push(r); } };
+  const actuator = { playEffect: (type, p) => { calls.push(p.strongMagnitude + p.weakMagnitude > 0 ? ['play', { ...p }] : ['zero']); return Promise.resolve('preempted'); },
     reset: () => { calls.push(['reset']); return Promise.resolve(); } };
-  return { calls, out: rumbleOut({ getGamepads: () => [null, { index: 1, vibrationActuator: actuator }, { index: 2, id: 'no rumble' }] }) };
+  // lp.pads: live Gamepads only (no null slots); one without an actuator (Firefox) is skipped
+  return { calls, stops, h, out: rumbleOut({ pads: () => [{ index: 1, vibrationActuator: actuator }, { index: 2, id: 'no rumble' }], haptics: () => h }) };
 };
 
-test('rumbleOut: dual-rumble to pads with an actuator; a stop repeats a zero effect + reset for a while, then goes quiet', () => {
-  const { calls, out } = fakePad();
-  out.stop();
-  assert.deepEqual(calls.map(c => c[0]), ['zero', 'reset'], "a pad's first sight clears whatever the previous page left playing");
-  calls.length = 0; out.stop(); assert.equal(calls.length, 0, 'then quiet');
+test('rumbleOut: one engine stop per transition, exit always; nothing is sent while a pausing overlay is open (lion-hawk C-14, review focus)', () => {
+  const { calls, stops, h, out } = fakePad();
+  out.stop('menu');
+  assert.deepEqual([calls, stops], [[], []], "nothing sent: nothing to stop; a pad's first sight is the engine's reset now");
   out.send({ strong: 0.5, weak: 0.25 });
   assert.equal(calls[0][0], 'play'); assert.equal(calls[0][1].strongMagnitude, 0.5); assert.equal(calls[0][1].weakMagnitude, 0.25);
   assert.ok(calls[0][1].duration >= 50);
-  calls.length = 0;
-  for (let i = 0; i < 60; i++) out.stop();
-  const stops = calls.filter(c => c[0] === 'reset').length;
-  assert.ok(stops >= 10 && stops <= 30, `${stops} repeated stops`);
-  assert.ok(calls.every(c => c[0] !== 'play'));
-  calls.length = 0; out.kill(); assert.deepEqual(calls.map(c => c[0]), ['zero', 'reset'], 'kill stops at once');
-  assert.doesNotThrow(() => rumbleOut({ getGamepads: () => [] }).send({ strong: 1, weak: 1 }));
+  out.stop('menu'); out.stop('menu'); out.stop('finish');
+  assert.deepEqual(stops, ['menu'], 'once per transition: the engine repeats its own zero + reset for 20 frames');
+  assert.ok(calls.every(c => c[0] !== 'reset'), 'Rally resets nothing itself on a stop');
+  out.stop('exit'); assert.deepEqual(stops, ['menu', 'exit'], 'the stage exit always stops');
+  calls.length = 0; h.paused = true; out.send({ strong: 1, weak: 1 });
+  assert.deepEqual(calls, [], 'paused: no effect is sent (spec C-14)');
+  h.paused = false; out.send({ strong: 1, weak: 1 }); assert.equal(calls.length, 1, 'sends again after the pause');
+  calls.length = 0; out.kill();
+  assert.deepEqual(calls, [['zero'], ['reset']], "kill (the ?rumble lab's pagehide, no engine there): one zero effect + reset on each pad with an actuator (B1)");
+  assert.deepEqual(stops, ['menu', 'exit'], 'kill is not an engine stop');
+  assert.doesNotThrow(() => rumbleOut({ pads: () => [] }).send({ strong: 1, weak: 1 }));
+  assert.doesNotThrow(() => { const o = rumbleOut({ pads: () => undefined }); o.send({ strong: 1, weak: 1 }); o.stop('exit'); }, 'no seat yet, no haptics (autoStop off)');
 });
 
-test('rumbleOut: silent gaps between pulses (ABS) never reset, so a queued pulse is never cut; a long quiet does stop', () => {
-  const { calls, out } = fakePad();
+test('rumbleOut: silent gaps between pulses (ABS) never reset, so a queued pulse is never cut; a long quiet is one zero + reset', () => {
+  const { calls, stops, out } = fakePad();
   out.send({ strong: 0.8, weak: 0 }); calls.length = 0;
   for (let k = 0; k < 10; k++) { for (let i = 0; i < 3; i++) out.send({ strong: 0.8, weak: 0 }); for (let i = 0; i < 3; i++) out.send({ strong: 0, weak: 0 }); }
   assert.equal(calls.filter(c => c[0] === 'reset').length, 0, 'no reset inside a pulse train');
@@ -238,7 +243,8 @@ test('rumbleOut: silent gaps between pulses (ABS) never reset, so a queued pulse
   assert.equal(calls.filter(c => c[0] === 'play').length, 30);
   calls.length = 0;
   for (let i = 0; i < 40; i++) out.send({ strong: 0, weak: 0 });
-  assert.ok(calls.filter(c => c[0] === 'reset').length >= 10, 'a quarter second of quiet while driving becomes a stop');
+  assert.equal(calls.filter(c => c[0] === 'reset').length, 1, 'a quarter second of quiet while driving ends with one zero + reset');
+  assert.deepEqual(stops, [], 'not an engine stop: no menu, finish or exit');
 });
 
 test('road noise: one master gain over every surface, not the events', () => {

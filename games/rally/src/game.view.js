@@ -111,7 +111,8 @@ function overlayHalves() {
 
 // rumblePicks: the ?rumble lab's saved picks (main.js reads them from storage), else the defaults in defs/rumble.js.
 export function rallyView({ save = () => {}, rumblePicks } = {}) {
-  const rumble = createRumble(rumblePicks), pads = rumbleOut(); // rally-spec R7
+  let seat0 = null, haptics = null; // per enter: seat 0 (lion-hawk C-5; Rally has one) and view.haptics (C-14)
+  const rumble = createRumble(rumblePicks), pads = rumbleOut({ pads: () => seat0?.pads, haptics: () => haptics }); // rally-spec R7, R8-2
   let hud = null, ghud = null, els = null, off = null, unlisten = null;
   let seen = null, toast = null; // per enter: what the view last reflected; the toast { text, until } (engine time)
   let cur = null; // the stage state the GameHud adapter reads
@@ -136,6 +137,7 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
   const stage = {
     enter(engine, view) {
       const doc = view.doc, win = doc.defaultView;
+      seat0 = view.localPlayers[0]; haptics = view.haptics;
       renderer ??= new Renderer(view.gfx);
       // The models: view sync draws the car once its GLB is in, and the pad view's cones wait for them (Renderer.setWorld).
       loaded ??= view.assets.preload(MODELS).then(() => { doc.getElementById('loading')?.remove(); });
@@ -154,23 +156,17 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
       });
       // Leaving the page mid-run pauses a timed run only (iOS app switch, tab change; tracks-spec): not free drive or the pad.
       // Through the Pause chip, so its `when` decides (#45).
-      const hidden = () => {
-        if (doc.visibilityState !== 'hidden') return;
-        pads.kill(); // frames stop while hidden, so nothing else would stop the pad (rally-spec R7)
-        if (engine.scene.state?.mode?.clock) engine.ui.tryTap('stage.pause');
-      };
+      // The engine stops the pads on hide, blur and pagehide (lion-hawk C-14); Rally only pauses a timed run here.
+      const hidden = () => { if (doc.visibilityState === 'hidden' && engine.scene.state?.mode?.clock) engine.ui.tryTap('stage.pause'); };
       doc.addEventListener('visibilitychange', hidden);
-      // A refresh or navigation mid-rumble: stop the pad before the page goes, or it can keep the last effect running.
-      const leaving = () => pads.kill();
-      win.addEventListener('pagehide', leaving); win.addEventListener('beforeunload', leaving);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
-        info: () => ({ ...view.gfx.info() }) };
-      off = () => { doc.removeEventListener('visibilitychange', hidden); win.removeEventListener('pagehide', leaving); win.removeEventListener('beforeunload', leaving); };
+        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length) };
+      off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },
     exit(engine, view) {
       unlisten?.(); unlisten = null; off?.(); off = null; seen = null; cur = null; toast = null;
-      pads.kill();
+      pads.stop('exit'); seat0 = null; haptics = null;
       for (const c of STAGE_CLASSES) view.doc.body.classList.remove(c);
       if (els) els.toast.hidden = true;
     },
@@ -216,8 +212,8 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
       hud.update(s.sim.car);
       // Rumble only while driving (ready, countdown, running: not past the finish) with nothing on top (any overlay or a
       // hidden tab stops it) and the stage drawn.
-      const driving = DRIVING.has(s.phase) && ov.length === 0 && doc.visibilityState !== 'hidden' && seen.s === s;
-      if (driving) pads.send(rumble.update(s.sim.car, Math.min(0.1, view.dt), STRENGTH[st.rumble] ?? 1)); else pads.stop();
+      const driving = DRIVING.has(s.phase) && ov.length === 0 && seen.s === s; // a hidden page renders no frames (the engine stopped the pads)
+      if (driving) pads.send(rumble.update(s.sim.car, Math.min(0.1, view.dt), STRENGTH[st.rumble] ?? 1)); else pads.stop(s.phase === 'finished' ? 'finish' : 'menu');
       ghud.update(hudGame);
     },
   };

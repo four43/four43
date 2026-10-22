@@ -91,8 +91,9 @@ function loadPicks(storage, key) {
 
 export function rumbleLab(doc, { storage = null, key = 'rally-rumble-picks', getGamepads } = {}) {
   const win = doc.defaultView, picks = loadPicks(storage, key);
-  const mix = createRumble(picks), pads = rumbleOut({ getGamepads });
   const getPads = getGamepads ?? (() => win.navigator.getGamepads?.() ?? []);
+  // the lab runs no engine (no seat, no view.haptics): it sends to every connected pad, and its pagehide kill() zeroes them (rally-spec R8-2)
+  const mix = createRumble(picks), pads = rumbleOut({ pads: () => [...getPads()].filter(Boolean) });
   const ui = { speed: 70, depth: 0.5, under: 'gravel', sel: 'gravel', holds: new Set(), seq: -1, padPrev: [] };
 
   const style = doc.createElement('style'); style.textContent = CSS; doc.head.append(style);
