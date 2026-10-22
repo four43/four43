@@ -16,11 +16,10 @@ export const PAINT_NAMES = [...START_PAINTS, ...NEW_PAINTS];
 // M-50: the tables are lion-hawk schemas (#91): the same checks as before, one declaration each, and the engine port can take them as they are (T6)
 export const PAINT = F.obj({ body: F.oneOf(PAINT_NAMES), trim: F.oneOf(PAINT_NAMES) }), IDS = F.list(F.uint(2, MAX_ID), MAX_IDS);
 export const TO_HOST = {
-  hello: { v: F.uint(1, NET_VERSION, NET_VERSION), paint: PAINT }, claim: { ids: IDS }, release: { ids: IDS }, delivered: { ids: IDS },
+  claim: { ids: IDS }, release: { ids: IDS }, delivered: { ids: IDS },
   tree: { id: F.uint(2, MAX_ID) }, regrow: {}, horn: {}, help: {}, paint: { paint: PAINT },
 };
-export const TO_GUEST = { // M-24: the herd, the trees and the players come as replicated objects (kinds.js), not in these messages
-  welcome: { v: F.uint(1, NET_VERSION, NET_VERSION), seed: F.uint(4), farm: F.uint(4), you: F.uint(1, MAX_PLAYERS, 2), next: F.uint(2, MAX_ID + 1) }, // M-27: the same game version, as a guest's hello; farm: which farm of this host (a new farm may have the same seed); next: the host's herd size (the guest's id guard)
+export const TO_GUEST = { // M-24: the join is the engine's (N-19); the farm is game state, the players player state (lh.player, lh.game); the herd, trees and trains are replicated objects (kinds.js)
   tree: { id: F.uint(2, MAX_ID) }, regrow: {}, horn: { n: F.uint(1, MAX_PLAYERS, 1) }, help: { id: F.id() },
 };
 // a checked message is a copy; extra keys are dropped
@@ -32,3 +31,9 @@ export const checkFromGuest = check(TO_HOST), checkFromHost = check(TO_GUEST);
 export const fitsJson = m => JSON.stringify(m)?.length <= MAX_JSON; // M-50: checked before anything else reads the message
 export const chunks = ids => { const out = []; for (let i = 0; i < ids.length; i += MAX_IDS) out.push(ids.slice(i, i + MAX_IDS)); return out; };
 export { createRate, createWarnOnce } from 'lion-hawk/sim'; // M-44, M-50: the engine's, for wall-time rate limits and once-per-kind warnings
+// [N-22] Tractor's player state on the engine's lh.player record (beside its seat, away, active and join): the paints (coat: the
+// body paint, M-2; the host writes them from a guest's paint message), barn (this player's show has the barn, M-71) and quiet
+// (the host's silence watchdog says that device stopped, M-39; away is the engine's, from the server)
+export const PLAYER_FIELDS = { coat: F.oneOf(PAINT_NAMES), trim: F.oneOf(PAINT_NAMES), barn: F.bool(), quiet: F.bool() };
+// [N-22] Tractor's game state on lh.game: the host's farm (M-1, M-19): its seed, its number (from 1; 0 = no farm yet) and its herd size (the guests' id guard)
+export const GAME_FIELDS = { seed: F.uint(4), farm: F.uint(4), next: F.uint(2, MAX_ID + 1) };

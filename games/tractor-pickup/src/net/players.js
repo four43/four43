@@ -6,7 +6,6 @@
 // placed in this World's copy of the owner's car (placeCarried).
 import { CAR_SLOTS } from '../sim/slots.js';
 
-export const SEND = { key: 2000 }; // ms: the host repeats its welcome with this cadence (M-19); the engine sends the replicated records
 export const START_PAINT = { body: 'red', trim: 'yellow' };
 const yawQ = q => Math.atan2(1 - 2 * (q.y * q.y + q.z * q.z), 2 * (q.x * q.z - q.w * q.y)); // the chassis heading (+x forward)
 const local = { x: 0, y: 0, z: 0 }, place = { x: 0, y: 0, z: 0, yaw: 0, riding: true, flying: false, hat: 'none' };

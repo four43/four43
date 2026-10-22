@@ -16,6 +16,7 @@ export { FARM_EVENTS };
 export const initPhysics = () => R.init();
 
 import { ACTIONS } from './sim/actions.js';
+import { PLAYER_FIELDS, GAME_FIELDS } from './net/protocol.js';
 export { ACTIONS }; // #81 (sim/actions.js)
 
 // JSON-safe summary for tests and the hook (#28: the createGame object stays in ctx.state, never here).
@@ -54,6 +55,7 @@ export function tractorGame({ clock } = {}) {
   });
   return defineGame({
     id: 'tractor-pickup', sim: { hz: 60, maxCatchUp: 3, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm', // hz: the physics step (DT)
+    player: PLAYER_FIELDS, gameState: GAME_FIELDS, // [N-22] lh.player and lh.game (plan 5)
     defs: { materials: MATERIALS, models: PHYS }, physics: { rapier: R, ...PHYSICS },
     scenes: { farm, sandbox, ...makeOverlays() }, commands: { ...makeCommands(api), ...netCommands(api) }, net: netConfig(), state, debug,
   });

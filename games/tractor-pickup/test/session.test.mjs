@@ -5,7 +5,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { createSession, parseRoomInput, roomName, joinUrl, ERRORS, signalServer } from '../src/net/session.js';
 import { qrSvg } from '../src/ui/qr.js';
 import { emitter } from '../src/net/link.js';
-import { testGame } from './helpers/world.mjs';
+import { createPlayers } from '../src/net/players.js';
 import { NET_VERSION } from '../src/net/protocol.js';
 // D-4: let queued promises and immediate callbacks run, with no wall-clock wait
 const flush = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
@@ -39,9 +39,11 @@ function fakeHandshake({ peekResult, failCreate = 0, failCode = 'network', failJ
     kick(id) { if (failControl) return Promise.reject(new HandshakeError(failControl)); this.kicked = id; return Promise.resolve(); }, leave() { if (this.closed) return; this.left = true; this.closed = true; this.emit('closed', 'left'); } });
   return { Handshake, HandshakeError, made };
 }
-const setup = (fh, extra = {}) => { let game = testGame({ seed: 5, power: 'medium' }), changes = 0;
-  const s = createSession({ Handshake: fh.Handshake, getGame: () => game, onFarm: (seed, n) => (game = testGame({ seed, power: 'medium', player: n })), getPaint: () => ({ body: 'red', trim: 'yellow' }), onChange: () => changes++, retryMs: 5, ...extra });
-  return { s, get game() { return game; }, get changes() { return changes; } };
+// the engine path's bind (the only path since lion-hawk 0.13, plan 5): a stand-in bound sync per room with the syncs' you and players
+const setup = (fh, extra = {}) => { let changes = 0; const made = [];
+  const bind = ({ role }) => { const y = { you: role === 'host' ? 1 : 0, players: createPlayers() }; made.push(y); return { sync: () => y, close(then) { then?.(); } }; };
+  const s = createSession({ Handshake: fh.Handshake, bind, getPaint: () => ({ body: 'red', trim: 'yellow' }), onChange: () => changes++, retryMs: 5, ...extra });
+  return { s, made, get changes() { return changes; } };
 };
 
 test('host: makes a public room for 4 with the game version and relay for far players; shows name, link and players (M-31, M-27, M-48)', async () => {
@@ -115,7 +117,7 @@ test('host: a failure that is not retried closes the client; a bad room code is 
   }
 });
 test('host: when the host sync cannot be made the room is left and nothing is kept', async () => {
-  const fh = fakeHandshake(), t = setup(fh, { getGame: () => { throw new Error('no game'); } });
+  const fh = fakeHandshake(), t = setup(fh, { bind: () => { throw new Error('no game'); } });
   await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.other); assert.equal(t.s.sync, null); assert.equal(t.s.view().code, null);
   assert.ok(fh.made[0].room.left, 'room left'); assert.ok(fh.made[0].closed, 'client closed');
 });
@@ -151,7 +153,7 @@ test('join: no welcome 10 s after joining says the farm cannot be reached; still
   ctx.mock.timers.tick(100); await flush();
   assert.equal(t.s.view().state, 'joined'); assert.equal(t.s.view().error, ERRORS.noFarm); assert.equal(ERRORS.noFarm, "Can't connect to the farm.");
   const r = fh.made.at(-1).room, peer = Object.assign(emitter(), { id: 'h', open: true, send: () => true }); r.peers.set('h', peer); r.emit('peer', peer);
-  peer.emit('message', { t: 'welcome', v: NET_VERSION, seed: 9, farm: 0, you: 2, players: [{ n: 1, paint: { body: 'red', trim: 'yellow' }, away: false }], herd: [], trees: [], next: 0 }, { reliable: true });
+  t.made.at(-1).you = 2; // the engine's net.welcome numbered this page (N-19)
   const c = t.changes; t.s.before(1); assert.equal(t.s.view().error, null, 'connected after all'); assert.ok(t.changes > c, 'the panel redraws');
   t.s.leave(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, null);
   const fh2 = fakeHandshake({ peekResult: { players: 1 } }), t2 = setup(fh2, { welcomeMs: 20 });

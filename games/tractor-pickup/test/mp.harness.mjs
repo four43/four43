@@ -1,7 +1,8 @@
 // test/mp.harness.mjs — two (or more) games in one process over the in-memory hub (M-52). No tests here.
 import { encodeFrame, decodeFrame, createRegistry } from 'lion-hawk/sim';
-import { ANIMAL, TRAIN, KINDS, animalRecord } from '../src/net/kinds.js';
+import { ANIMAL, TRAIN, animalRecord } from '../src/net/kinds.js';
 import { MAX_PLAYERS } from '../src/net/protocol.js';
+import { tractorGame } from '../src/game.sim.js';
 import { HELD } from '../src/sim/herd.js';
 import { engineWorld } from './mp.engine.harness.mjs';
 export { moveTrain } from './train.mjs';
@@ -75,11 +76,11 @@ export function blackout(w, s, inputs) { w.hub.drop = (from, to, d) => d instanc
 
 // a device goes quiet (its page sleeps, 3l: the engine sends its frames, so the hub drops them): nothing from it reaches the others until
 // the returned function is called. ahead: hand-made frames stamped ahead of the hub clock (sendAnimals, trainFrame) still pass
-const REG = createRegistry(KINDS, { maxSender: MAX_PLAYERS });
+let REG = null; // the engine's kinds (with lh.player and lh.game), made at the first ahead check
 export function quiet(w, dev, { ahead = false, json = false } = {}) { // json: its JSON messages still go
   const id = dev.net.id, prev = w.hub.drop;
   w.hub.drop = (from, to, d) => {
-    if (from === id) { if (!(d instanceof ArrayBuffer)) return !json; if (!ahead) return true; try { return !(decodeFrame(d.slice(0), REG)?.time > w.now); } catch { return true; } }
+    if (from === id) { if (!(d instanceof ArrayBuffer)) return !json; if (!ahead) return true; try { REG ??= createRegistry(tractorGame().net.kinds, { maxSender: MAX_PLAYERS }); return !(decodeFrame(d.slice(0), REG)?.time > w.now); } catch { return true; } }
     return prev ? prev(from, to, d) : false;
   };
   return () => { w.hub.drop = prev; };

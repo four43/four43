@@ -1,10 +1,10 @@
-// Tractor's replicated kinds (M-22) as World entity records (lion-hawk 3l, N-8, N-9). Host kinds: animal, tree, player (bodiless; a
+// Tractor's replicated kinds (M-22) as World entity records (lion-hawk 3l, N-8, N-9). Host kinds: animal, tree (the players are the engine's lh.player, plan 5) (bodiless; a
 // guest holds each one's last record in e.rec). Owner kind: train, on the tractor entity, driven on the other devices (user decision
 // 2026-10-13; Task 23 fills its spawn and apply). Field precisions are 1.8's (M-66); F.body() is the engine's at the same steps.
 import { F, kind } from 'lion-hawk/sim';
 import { TYPES, HELD } from '../sim/herd.js';
 import { ACTIONS } from '../sim/actions.js';
-import { PAINT_NAMES, MAX_PLAYERS, MAX_ID } from './protocol.js';
+import { MAX_PLAYERS, MAX_ID } from './protocol.js';
 import { HATS } from '../sim/progress.js';
 import { slotIndex } from '../sim/slots.js';
 import { spawnTrainDesc, attachRemoteTrain, applyTrainRecord } from '../sim/trains.js';
@@ -31,9 +31,6 @@ export const ANIMAL = kind({ name: 'animal', code: 1, authority: 'host', remote:
   newer: (old, rec) => rec.epoch >= old.epoch }); // M-26: lower ownership number, older data
 export const TREE = kind({ name: 'tree', code: 2, authority: 'host', remote: 'view', max: LIMIT.trees, idMin: 0, idMax: LIMIT.trees - 1, send: { hz: 15, key: 2 },
   fields: { state: F.oneOf(['standing', 'broken', 'growing']) }, record: (e, out) => { out.state = e.tree.state; return out; }, spawned: (e, world, rec) => keep(e, rec), apply: keep });
-export const PLAYER = kind({ name: 'player', code: 3, authority: 'host', remote: 'view', max: MAX_PLAYERS, idMin: 1, idMax: MAX_PLAYERS, send: { hz: 15, key: 2 },
-  fields: { coat: F.oneOf(PAINT_NAMES), trim: F.oneOf(PAINT_NAMES), away: F.bool(), join: F.uint(1), barn: F.bool() }, // coat: the body paint ('body' is reserved for F.body, 3i); join: which joining of that number; barn: this player's show has the barn (M-71)
-  record: (e, out) => { const p = e.player; out.coat = p.paint.body; out.trim = p.paint.trim; out.away = !!p.away; out.join = p.join ?? 0; out.barn = !!p.barn; return out; }, spawned: (e, world, rec) => keep(e, rec), apply: keep });
 export const RIDER = F.obj({ id: F.uint(2, MAX_ID), slot: F.uint(1, 11), flying: F.bool(), x: XZ, y: Y, z: XZ, yaw: F.angle(), hat: F.oneOf(HAT_LIST) }); // hat: the one its owner put on it (M-60)
 const BODY = { range: LIMIT.coord, height: LIMIT.height };
 // the train's record fields on the local tractor entity (1.8's players.js trainRecord, moved): written in place after each step while it
@@ -65,4 +62,4 @@ function trainApply(e, rec) {
   if (!applyTrainRecord(e, rec)) return;
   if (e.coverage) e.coverage.dirt = e.dirt[0]; if (e.trailer?.coverage) e.trailer.coverage.dirt = e.dirt[1]; if (e.wagon?.coverage) e.wagon.coverage.dirt = e.dirt[2];
 }
-export const KINDS = [ANIMAL, TREE, PLAYER, TRAIN];
+export const KINDS = [ANIMAL, TREE, TRAIN];

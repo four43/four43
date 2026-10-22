@@ -27,7 +27,7 @@ export function netFacade(engine, { isHost, id, hostId }) {
 const tags = (table, side) => Object.fromEntries(Object.keys(table).map(t => [t, `${side}.${t}`]));
 export const netConfig = (kinds = KINDS) => ({
   kinds, world: true,
-  join: 'manual', // plan 3 B3 stopgap until the engine join (plan 5 Task 9)
+  join: 'engine', maxPlayers: MAX_PLAYERS, maxSeats: 1, // [N-19] the engine's join: guests get 2..4, one tractor per page; rejoinSeconds stays 60 (B6)
   maxSender: MAX_PLAYERS, maxJson: MAX_JSON, maxFrame: MAX_FRAME,
   rates: { host: { reliable: RATE.perSec, fast: RATE.perSec, reliableFrames: RATE.guestKeys }, guest: { reliable: RATE.perSec, fast: RATE.guestFast } },
   wire: { toHost: tags(TO_HOST, 'host'), toGuest: tags(TO_GUEST, 'guest') }, codec: 'json',
@@ -40,7 +40,7 @@ const PEER_ARGS = { peerLeft: d => [d.id, d.reason], closed: d => [d.reason], ho
 
 // api: the farm's (guestFarm; clock overrides the syncs' wall clock: tests only)
 export function netCommands(api) {
-  const { clock } = api, warn = createWarnOnce(), registry = createRegistry(KINDS, { maxSender: MAX_PLAYERS });
+  const { clock } = api, warn = createWarnOnce(); let registry = null; // the engine's kinds (with lh.player, lh.game), made at the first frame
   const live = ctx => { const n = ctx?.name === 'farm' ? ctx.state.net : null; return n?.sync ? n : null; };
   // M-44: a sync error never stops the step; n.at is the message's arrival on the port's clock, the syncs' wall clock while it is handled
   const at = (n, t, what, fn) => { n.at = t; try { fn(); } catch (err) { warn(what, err); } finally { n.at = null; } };
@@ -58,7 +58,7 @@ export function netCommands(api) {
       const s = ctx.state, old = live(ctx);
       if (old) { old.facade.send = old.facade.leave = () => {}; try { old.sync.close(); } catch (err) { warn('net close', err); } end(e, old); }
       const host = d.role === 'host', n = s.net = { role: d.role, sync: null, facade: netFacade(e, { isHost: host, id: d.id, hostId: d.hostId }), at: null };
-      const o = { game: s.game, world: e.world, net: n.facade, paint: s.progress.paint, clock: clock ?? (() => n.at ?? e.time.wall) }; // N-4
+      const o = { engine: e, game: s.game, world: e.world, net: n.facade, paint: s.progress.paint, clock: clock ?? (() => n.at ?? e.time.wall) }; // N-4
       n.sync = host ? createHostSync(o) : createGuestSync({ ...o, onFarm: (seed, you) => { api.guestFarm(e, ctx, seed, you); return null; } }); // #80: the welcome waits for farmReady
       if (host) localTrain(e.world, s.game, 1); // the host is player 1 (3i); a guest's train joins at its welcome
     },
@@ -69,7 +69,7 @@ export function netCommands(api) {
       if (n.role === 'host') try { n.sync.close(); } catch (err) { warn('net close', err); }
       end(e, n); // M-41: the guest sync has gone on alone
     },
-    'net.frame': (e, d, ctx) => { const n = live(ctx); if (n) at(n, d.at, 'net message', () => n.sync.frame(d.from, frameFromJson(d.frame, registry), d.reliable)); }, // #78: the engine applied it already; the sync watches
+    'net.frame': (e, d, ctx) => { const n = live(ctx); if (n) { registry ??= createRegistry(e.game.net.kinds, { maxSender: MAX_PLAYERS }); at(n, d.at, 'net message', () => n.sync.frame(d.from, frameFromJson(d.frame, registry), d.reliable)); } }, // #78: the engine applied it already; the sync watches
     ...schemaed(TO_HOST, 'host'), ...schemaed(TO_GUEST, 'guest'),
     // the panel's Leave or Stop: the guest's leave goes out through the outbox (its close calls net.leave); a host leaves the room too
     'net.close': (e, d, ctx) => {

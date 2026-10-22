@@ -12,7 +12,7 @@ const world = (o = {}) => mp(tractorGame(), { peers: 2, ...o, argsOf: i => ({ se
   beforeStep: p => { p.engine.scene.state.raw ??= { thr: 0, steer: 0, horn: false }; } });
 const st = p => p.engine.scene.state;
 
-test('a guest gets the welcome as a command and builds the host farm through ctx.load (M-1, M-24, #80)', () => {
+test('a guest gets the engine\'s welcome and builds the host farm (lh.game) through ctx.load (M-1, M-24, #80)', () => {
   const w = world(); w.seconds(0.5);
   const g = w.guests[0]; assert.equal(st(g).game.farm.seed, 21); assert.equal(st(g).net.sync.you, 2); assert.equal(st(g).gen, 2);
   const p = spawnPoint(st(g).game.farm, 2); assert.ok(Math.hypot(st(g).game.tractor.x - p.x, st(g).game.tractor.z - p.z) < 0.5);
@@ -22,7 +22,7 @@ test('the guest\'s commands are plain JSON: decoded frames and schema-checked me
   const w = world({ record: true }); w.seconds(1);
   const tape = w.guests[0].h.tape(); assert.deepEqual(JSON.parse(JSON.stringify(tape)), tape);
   const ops = tape.log.flatMap(x => x.ops ?? []).filter(o => o[0] === 'command').map(o => o[1]);
-  for (const t of ['net.open', 'net.peer', 'guest.welcome', 'net.frame']) assert.ok(ops.includes(t), t);
+  for (const t of ['net.open', 'net.peer', 'net.welcome', 'net.frame']) assert.ok(ops.includes(t), t);
 });
 test('a guest boop is claimed and granted through commands (M-13, M-14)', () => {
   const w = world(); w.seconds(1);

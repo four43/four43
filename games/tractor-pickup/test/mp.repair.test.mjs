@@ -1,9 +1,8 @@
 // test/mp.repair.test.mjs — repair after lost messages (M-56..M-58, M-53 loss tests)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mpWorld, free, single, inFrontOf, countCalls, STILL, PAINTS, settle, disagreements, blackout, trainFrame, parked, hostFarm } from './mp.harness.mjs';
+import { mpWorld, free, single, inFrontOf, STILL, PAINTS, settle, disagreements, blackout, trainFrame, parked, hostFarm } from './mp.harness.mjs';
 import { REPAIR_MS } from '../src/net/host.js';
-import { NET_VERSION } from '../src/net/protocol.js';
 import { createLoad } from '../src/sim/slots.js';
 import { CAPACITY } from '../src/sim/game.js';
 
@@ -82,18 +81,17 @@ test('everything lost for a second while two guests boop under a far network: al
   assert.ok(disagreements(w).length > 0, 'the devices disagree after the loss');
   assert.deepEqual(settle(w, 3), []);
 });
-test('a lost new-farm welcome: the host sends the welcome with each keyframe, so the guest is on the new farm within 3 s; a guest in its show is not rebuilt twice (M-19, M-58)', async () => {
+test('a lost new-farm record: lh.game comes in each host keyframe, so the guest is on the new farm within 3 s; a guest in its show is not rebuilt twice (M-19, M-58, N-22)', async () => {
   const w = await mpWorld({ seed: 97, guests: 2 }); w.seconds(1);
   const [g, s] = w.guests; s.game.mode = 'show';
-  w.hub.drop = (from, to, d) => to === g.net.id && d?.t === 'welcome'; // the new farm's welcome to g is lost
-  hostFarm(w, 98); w.seconds(0.2); w.hub.drop = null;
-  assert.equal(g.game.farm.seed, 97, 'the welcome is lost'); assert.ok(disagreements(w).some(x => x.startsWith('guest1: farm')), 'the devices disagree after the loss');
+  w.blackout(0.4, { kinds: ['lh.game'] }); hostFarm(w, 98); w.seconds(0.2); // the new farm's record is lost (the blackout spans hostFarm's steps and the 0.2 s)
+  assert.equal(g.game.farm.seed, 97, 'the record is lost'); assert.ok(disagreements(w).some(x => x.startsWith('guest1: farm')), 'the devices disagree after the loss');
   const t0 = w.now; let k = 0; while (g.game.farm.seed !== 98 && k++ < 180) w.step(1);
   assert.equal(g.game.farm.seed, 98); assert.ok(w.now - t0 <= 3000, `on the new farm after ${(w.now - t0).toFixed(0)} ms`);
-  const built = g.game; w.seconds(2.5); assert.equal(s.game.farm.seed, 97, 'the show guest waits'); assert.equal(g.game, built, 'a repeated welcome does not build the farm again');
+  const built = g.game; w.seconds(2.5); assert.equal(s.game.farm.seed, 97, 'the show guest waits'); assert.equal(g.game, built, 'a repeated record does not build the farm again');
   s.game.mode = 'drive'; w.step(2); // the guest's farm lands one step after the welcome on the engine path (#80, parity row 23)
   const sb = s.game; assert.equal(sb.farm.seed, 98, 'after its show');
-  w.seconds(4.5); assert.equal(s.game, sb, 'built once: the welcomes that came during the show do not build it again');
+  w.seconds(4.5); assert.equal(s.game, sb, 'built once: the records that came during the show do not build it again');
   assert.deepEqual(settle(w, 3), []);
 });
 test('a lost delivered: the guest sends it again at the next keyframe, so the animals walk into the barn on the host and are never free again (M-6, M-16, M-56)', async () => {
@@ -116,16 +114,6 @@ test('a lost paint: the guest sends it again at the next keyframe (M-2, M-56)', 
   g.sync.setPaint({ body: 'green', trim: 'pink' }); w.seconds(0.2); w.hub.drop = null;
   assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[2 - 1], 'lost');
   w.seconds(2.5); assert.deepEqual(w.host.sync.players.map.get(2).paint, { body: 'green', trim: 'pink' });
-});
-test('a lost hello: the guest says it again every 2 s until it has its welcome; the host takes one hello only (M-24, M-50)', async () => {
-  const w = await mpWorld({ seed: 101, join: false }), hellos = [];
-  w.hub.drop = (from, to, d) => { if (d?.t === 'hello') hellos.push(w.now); return d?.t === 'hello' && hellos.length === 1; }; // the first is lost
-  const g = w.addGuest(); w.seconds(1.5); assert.equal(g.sync.you, 0, 'no welcome yet');
-  w.seconds(1); assert.equal(g.sync.you, 2); assert.equal(g.game.farm.seed, 101); assert.equal(hellos.length, 2);
-  const handled = countCalls(w.host.sync, 'hello');
-  g.net.send(w.host.net.id, { t: 'hello', v: NET_VERSION, paint: { body: 'pink', trim: 'pink' } }, true); w.seconds(4);
-  assert.equal(handled(), 1); assert.deepEqual(w.host.sync.players.map.get(2).paint, PAINTS[1], 'a second hello changes nothing');
-  assert.equal(hellos.length, 3, 'only the one sent by hand: no more hellos once welcomed'); assert.deepEqual(settle(w, 3), []);
 });
 test('a tree broken through its record (its tree message lost) breaks quietly: no burst, no gibs (M-17, M-56)', async () => {
   const w = await mpWorld({ seed: 102 }); w.seconds(1);
