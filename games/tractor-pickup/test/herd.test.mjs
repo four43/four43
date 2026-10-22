@@ -150,17 +150,17 @@ test('a respawn reuses the slot of an animal gone for GONE_KEEP: a long game kee
 test('a reused slot is a new animal with a higher ownership number; a slot gone for less than GONE_KEEP is kept (M-26)', () => {
   const h = createHerd({ rng: makeRng(36), env }), a = h.free().find(x => x.home === 'route' && !x.hidden && x.type !== 'chick'), n = h.animals.length;
   a.epoch = 7; a.state = 'gone'; run(h, GONE_KEEP - 1); h.toBarn([h.free().find(x => x.home === 'route' && !x.hidden && x !== a)]); h.respawn();
-  assert.equal(h.animals[a.id], a, 'gone for less than GONE_KEEP: not reused'); assert.equal(h.animals.length, n + 2, 'new slots for both');
+  assert.ok(h.animals[a.id] === a, 'gone for less than GONE_KEEP: not reused'); assert.equal(h.animals.length, n + 2, 'new slots for both');
   run(h, 2); const b = h.free().find(x => x.home === 'route' && !x.hidden); h.toBarn([b]); h.respawn();
   const c = h.animals[a.id];
-  assert.notEqual(c, a, 'a new object: whoever still holds the old one sees it gone'); assert.equal(a.state, 'gone');
+  assert.ok(c !== a, 'a new object: whoever still holds the old one sees it gone'); assert.equal(a.state, 'gone');
   assert.equal(c.id, a.id); assert.ok(c.epoch > 7, 'a late claim answer or record for the old animal is older'); assert.ok(h.free().includes(c));
 });
 test('a reused slot is nobody\'s leader any more', () => {
   const h = createHerd({ rng: makeRng(37), env }), hen = h.animals.find(a => a.type === 'chicken' && h.animals.some(c => c.leader === a.id));
   hen.state = 'gone'; for (const c of h.animals) if (c.leader === hen.id) { c.state = 'idle'; } // a chick that lost its hen but kept the id
   run(h, GONE_KEEP + 1); h.toBarn([h.free().find(x => x.home === 'route' && !x.hidden && x.type !== 'chick')]); h.respawn();
-  assert.notEqual(h.animals[hen.id], hen); assert.ok(!h.animals.some(c => c.leader === hen.id && c !== h.animals[hen.id]), 'no chick follows the new animal');
+  assert.ok(h.animals[hen.id] !== hen, "the hen slot holds a new animal"); assert.ok(!h.animals.some(c => c.leader === hen.id && c !== h.animals[hen.id]), 'no chick follows the new animal');
 });
 test('ensure never reuses a slot: the host owns the ids', () => {
   const h = createHerd({ rng: makeRng(38), env }), n = h.animals.length; h.animals[3].state = 'gone'; run(h, GONE_KEEP + 1);
@@ -174,7 +174,7 @@ test('a horn or a help call during a dodge hop lets the hop finish on the ground
   for (let i = 0; i < 12; i++) h.step(1 / 60, { tractor: far }); // mid-hop
   assert.ok(a.y > 0);
   h.horn(t); assert.equal(a.state, 'dodge');
-  const helped = h.callHelp(t); assert.notEqual(helped, a);
+  const helped = h.callHelp(t); assert.ok(helped !== a, "help came from another animal");
   run(h, 1);
   assert.equal(a.y, 0); assert.notEqual(a.state, 'dodge');
 });

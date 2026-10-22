@@ -76,9 +76,9 @@ test('a room lost by the server ends joining and hosting (closed reason lost, M-
   const fh = fakeHandshake({ peekResult: { players: 1 } }), t = setup(fh);
   t.s.openJoin(); await t.s.submitCode('K7MX2'); await t.s.confirmJoin(); assert.equal(t.s.view().state, 'joined');
   const r = fh.made.at(-1).room; r.closed = true; r.emit('closed', 'lost');
-  assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.sync, null); assert.ok(fh.made.at(-1).closed);
+  assert.equal(t.s.view().state, 'idle'); assert.ok(t.s.sync === null, "no sync"); assert.ok(fh.made.at(-1).closed);
   const fh2 = fakeHandshake(), t2 = setup(fh2); await t2.s.host(); assert.equal(t2.s.view().state, 'hosting');
-  fh2.made[0].room.closed = true; fh2.made[0].room.emit('closed', 'lost'); assert.equal(t2.s.view().state, 'idle'); assert.equal(t2.s.sync, null);
+  fh2.made[0].room.closed = true; fh2.made[0].room.emit('closed', 'lost'); assert.equal(t2.s.view().state, 'idle'); assert.ok(t2.s.sync === null, "no sync");
 });
 test('join errors become panel text (M-32, M-27)', async () => {
   for (const code of ['not_found', 'bad_key', 'full', 'locked', 'version_mismatch', 'rate_limited', 'closed']) {
@@ -112,13 +112,13 @@ test('host: a failure that is not retried closes the client; a bad room code is 
   await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.rate_limited); assert.ok(fh.made[0].closed, 'client closed');
   for (const roomCode of ['k0', '<b>X</b>', 'K7MX2/../x']) {
     const fh2 = fakeHandshake({ roomCode }), t2 = setup(fh2); await t2.s.host();
-    assert.equal(t2.s.view().state, 'idle', roomCode); assert.equal(t2.s.view().error, ERRORS.other); assert.equal(t2.s.view().url, null); assert.equal(t2.s.sync, null);
+    assert.equal(t2.s.view().state, 'idle', roomCode); assert.equal(t2.s.view().error, ERRORS.other); assert.equal(t2.s.view().url, null); assert.ok(t2.s.sync === null, "no sync");
     assert.ok(fh2.made[0].room.left, 'room left'); assert.ok(fh2.made[0].closed, 'client closed');
   }
 });
 test('host: when the host sync cannot be made the room is left and nothing is kept', async () => {
   const fh = fakeHandshake(), t = setup(fh, { bind: () => { throw new Error('no game'); } });
-  await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.other); assert.equal(t.s.sync, null); assert.equal(t.s.view().code, null);
+  await t.s.host(); assert.equal(t.s.view().state, 'idle'); assert.equal(t.s.view().error, ERRORS.other); assert.ok(t.s.sync === null, "no sync"); assert.equal(t.s.view().code, null);
   assert.ok(fh.made[0].room.left, 'room left'); assert.ok(fh.made[0].closed, 'client closed');
 });
 test('host: Cancel while the room is being made shows no error afterwards', async () => {

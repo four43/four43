@@ -60,8 +60,8 @@ test('a clear of the stickers empties them and closes the parent menu and the bo
 test('a new farm builds through ctx.load from farm.new and clears the old farm off the World (P-8, S-6)', () => {
   const h = headless(tractorGame(), { args: { seed: 14, started: true, settings: { seed: 99 } } }), s = h.engine.scene.state, old = s.game, serial = h.world.serial;
   h.command('farm.new', {}).step(1); assert.equal(h.engine.loading.active, true);
-  h.untilLoaded(); assert.notEqual(h.world.serial, serial, 'world.clear() ran'); assert.equal(old.tractor.e.body, undefined, 'the old tractor is gone');
-  assert.notEqual(s.game, old); assert.equal(s.game.farm.seed, 99); assert.equal(s.gen, 2); assert.equal(s.game.world, h.world);
+  h.untilLoaded(); assert.notEqual(h.world.serial, serial, 'world.clear() ran'); assert.ok(old.tractor.e.body === undefined, 'the old tractor is gone');
+  assert.ok(s.game !== old, 'a new game was built'); assert.equal(s.game.farm.seed, 99); assert.equal(s.gen, 2); assert.ok(s.game.world === h.world, 'the game shares the harness world');
   assert.equal(h.events.of('farm').at(-1).seed, 99); assert.equal(s.started, true);
   h.command('farm.new', {}).command('farm.new', {}).step(1); h.untilLoaded(); h.untilLoaded(); assert.equal(s.gen, 4, 'the second request waited for the first');
 });

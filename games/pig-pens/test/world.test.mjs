@@ -9,7 +9,7 @@ test('entities: 48 pigs, a dog, 11 birds, a fox, a tractor, the ground and one o
   assert.equal(h.find('pig').length, 48); assert.equal(h.find('dog').length, 1); assert.equal(h.find('bird').length, 11);
   assert.equal(h.find('fox').length, 1); assert.equal(h.find('tractor').length, 1); assert.equal(h.find('obstacles').length, 1);
   assert.equal(h.find('ground').length, 1); assert.equal(h.find('gate').length, 0); assert.equal(h.find('food').length, 0);
-  assert.equal(sim.pigs[0], h.find('pig')[0]); // the pig record is the entity (E-4)
+  assert.ok(sim.pigs[0] === h.find('pig')[0], "the pig record is the entity"); // the pig record is the entity (E-4)
   assert.equal(h.world.materialOf(sim.pigs[0].colliders[0].collider.handle), 'pet');
   assert.deepEqual(h.world.audit(), []); // every collider on the engine's combine rules
 });
@@ -29,7 +29,7 @@ test('a shut gate is one gate entity; opening it despawns it; no pig crosses a s
 test('a snack is an entity until eaten; then no pig holds its id', () => {
   const sim = farmSim({ pigs: 48, seed: 6 }), h = sim.h; sim.step(300);
   const pen = sim.lay.pens[5], f = sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx, pen.cz);
-  assert.equal(h.find('food').length, 1); assert.equal(h.get(f.id), f);
+  assert.equal(h.find('food').length, 1); assert.ok(h.get(f.id) === f, "get returns the food entity");
   h.until(() => !h.get(f.id), { maxSteps: 60 * 60, message: 'the snack is eaten or trampled' });
   assert.equal(sim.pigs.filter(p => p.snack === f.id).length, 0); assert.equal(h.find('food').length, 0);
 });
@@ -42,7 +42,7 @@ test('grabbing swaps a pig onto the grip material and settling swaps it back (wo
 });
 test('the tractor drives on the vehicle kit (lion-hawk/kits/vehicle) and the kit writes the wheel part poses', () => {
   const sim = farmSim({ pigs: 24, seed: 2 }); assert.ok(sim.tractor.car?.controller, 'tractor.car from createVehicle');
-  assert.equal(sim.tractor.vc, sim.tractor.car.controller);
+  assert.ok(sim.tractor.vc === sim.tractor.car.controller, 'vc is the car controller');
   const { e, car, W } = sim.tractor;
   assert.deepEqual(Object.keys(e.partXf), ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'], 'the wheels name their GLB nodes');
   sim.step(60);

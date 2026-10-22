@@ -32,14 +32,14 @@ test('host with bind: the room link goes to bind as the host; sync reads its get
   const s = createSession({ Handshake, bind, getPaint: () => ({ body: 'red', trim: 'yellow' }) });
   await s.host();
   assert.equal(calls.length, 1); assert.equal(calls[0].role, 'host'); assert.equal(calls[0].transport.isHost, true); assert.equal(calls[0].transport.id, 'h');
-  assert.equal(s.sync, null, 'no sync until the step after the bind (2f delta)'); assert.equal(s.inRoom, true);
+  assert.ok(s.sync === null, 'no sync until the step after the bind (2f delta)'); assert.equal(s.inRoom, true);
   assert.deepEqual(s.view().players.map(p => [p.n, p.you]), [[1, true]], 'the host shows itself before its sync exists');
   calls[0].sync = { you: 1, players: players([{ n: 2, paint: { body: 'blue', trim: 'red' }, away: false, peer: 'g1' }]) };
-  assert.equal(s.sync, calls[0].sync);
+  assert.ok(s.sync === calls[0].sync, "the session shares the bound sync");
   assert.deepEqual(s.view().players.map(p => p.n), [1, 2], 'the player list reads the sim sync');
   s.stopHosting();
   assert.equal(s.view().state, 'idle'); assert.equal(calls[0].closes, 1, 'net.close goes to the engine');
-  assert.equal(s.sync, null, 'the session lets go of the getter at once'); calls[0].then(); await flush();
+  assert.ok(s.sync === null, 'the session lets go of the getter at once'); calls[0].then(); await flush();
 });
 test('host with bind: the room is left only after close says the leave went out', async () => {
   const Handshake = fakeHandshake(), { bind, calls } = fakeBind(); let hs = null;

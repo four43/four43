@@ -37,7 +37,7 @@ test('a remote train turns its own wheels: the kit on the driven replica writes 
 test('the train leaves with its owner: three bodies and two joints are freed', async () => {
   const w = await engineWorld({ seed: 41 }); w.seconds(3);
   const hw = w.host.engine.world, n0 = hw.stats.bodies; w.hub.leave(w.guests[0].net.id, 'left'); w.seconds(2);
-  assert.equal(hw.stats.bodies, n0 - 3); assert.equal(remote(w.host, w.guests[0].engine.world.net.self), undefined);
+  assert.equal(hw.stats.bodies, n0 - 3); assert.ok(remote(w.host, w.guests[0].engine.world.net.self) === undefined, "the guest entity is gone on the host");
 });
 import { createRiderPoses } from '../src/view/riders.js';
 test('the view draws another player\'s riders in that train\'s cars (read-only, from the train entity)', async () => {

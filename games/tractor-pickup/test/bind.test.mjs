@@ -25,7 +25,7 @@ for (const role of ['host', 'guest']) {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const h = headless(tractorGame(), { args: ARGS }), log = [], tr = recorded(endpoint(role), log);
     const b = bindPort(h.engine, { role, transport: tr, clock: () => h.engine.time.wall });
-    assert.equal(b.sync(), null, 'no sync until the step after the bind');
+    assert.ok(b.sync() === null, 'no sync until the step after the bind');
     h.step(1); assert.ok(b.sync(), 'net.open made the sim sync'); assert.equal(h.engine.scene.state.net.role, role);
     const bound = tr.listeners; assert.ok(bound > 1, 'the port listens');
     b.close(() => log.push('then'));
@@ -34,7 +34,7 @@ for (const role of ['host', 'guest']) {
     h.step(1);
     assert.deepEqual(log, ['leave', 'then'], 'the leave went out on the transport before then()');
     assert.equal(tr.listeners, 1, "the port let go of the transport (bindPort's own 'closed' stays)");
-    assert.equal(h.engine.scene.state.net.role, 'solo'); assert.equal(b.sync(), null);
+    assert.equal(h.engine.scene.state.net.role, 'solo'); assert.ok(b.sync() === null);
     t.mock.timers.tick(2000); h.step(3);
     assert.deepEqual(log, ['leave', 'then'], 'then() ran exactly once (the 1 s fallback was cleared)');
   });
@@ -50,7 +50,7 @@ test('a page that does not step: the 1 s fallback lets go and calls then() once;
 test('a bind before the farm waits: the port is made only once the farm is the main scene', () => {
   const h = headless(tractorGame(), { scene: 'sandbox', args: ARGS }), log = [], tr = recorded(endpoint('host'), log);
   const b = bindPort(h.engine, { role: 'host', transport: tr, clock: () => h.engine.time.wall });
-  h.step(3); assert.equal(tr.listeners, 0, 'no port on the sandbox'); assert.equal(b.sync(), null);
+  h.step(3); assert.equal(tr.listeners, 0, 'no port on the sandbox'); assert.ok(b.sync() === null);
   h.go('farm', ARGS); h.step(1); assert.equal(h.engine.scene.name, 'farm'); assert.ok(tr.listeners > 1, 'the port is made after the step the farm arrived');
   h.step(1); assert.ok(b.sync(), 'its net.open made the sync'); assert.equal(h.engine.scene.state.net.role, 'host');
 });
@@ -59,7 +59,7 @@ test('a room that closes by itself lets go of the transport; a later close calls
   const h = headless(tractorGame(), { args: ARGS }), log = [], tr = recorded(g, log);
   const b = bindPort(h.engine, { role: 'guest', transport: tr, clock: () => h.engine.time.wall }); h.step(1); assert.ok(b.sync());
   hub.leave(g.id, 'kicked'); hub.tick(0); h.step(1);
-  assert.equal(b.sync(), null); assert.equal(tr.listeners, 1, 'the port let go');
+  assert.ok(b.sync() === null); assert.equal(tr.listeners, 1, 'the port let go');
   b.close(() => log.push('then')); assert.deepEqual(log, ['then']);
 });
 

@@ -367,7 +367,7 @@ test('the room closes: the guest goes on alone on the same farm, keeps its rider
   { const p = g.game.tractorWorld({ x: 2.5, y: 0, z: 0 }, {}); ha.x = ga.x = p.x; ha.z = ga.z = p.z; ha.state = ga.state = 'idle'; ha.timer = ga.timer = 99; }
   w.seconds(3); assert.equal(g.game.load.landed(), 1);
   const game = g.game; w.hub.leave(w.host.net.id, 'left'); w.seconds(0.2);
-  assert.equal(g.sync.alone, true); assert.equal(g.game, game, 'nothing made again');
+  assert.equal(g.sync.alone, true); assert.ok(g.game === game, 'nothing made again');
   assert.equal(game.herd.remote, false); assert.equal(game.claims, false); assert.equal(game.load.landed(), 1, 'the rider stays (R-4)');
   assert.ok(g.events.some(e => e.type === 'alone')); assert.ok(g.events.some(e => e.type === 'playerGone' && e.n === 1));
   const x0 = game.herd.free().map(a => [a.x, a.z]); w.seconds(5);
@@ -577,7 +577,7 @@ test('a slot the host reuses reaches the guest as the new animal (G-3, M-26)', a
   old.state = 'gone'; old.epoch = 3; w.seconds(GONE_KEEP + 1); // gone long enough on the host; the guest dropped its record
   assert.equal(g.game.herd.animals[old.id].state, 'elsewhere');
   const n = H.animals.length; H.respawn(); const b = H.animals[old.id];
-  assert.notEqual(b, old); assert.equal(H.animals.length, n, 'the slot was reused');
+  assert.ok(b !== old, "a new animal took the slot"); assert.equal(H.animals.length, n, 'the slot was reused');
   w.seconds(2.5); // a keyframe
   const gb = g.game.herd.animals[old.id];
   assert.equal(gb.type, b.type); assert.ok(free(g.game, gb), `free on the guest, here ${gb.state}`); assert.equal(gb.epoch, b.epoch);

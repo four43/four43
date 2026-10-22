@@ -10,6 +10,6 @@ test('Sim.dispose frees the world and the car; a second dispose is a no-op', asy
   await R.init();
   const st = normalizeSettings({}), sim = benchSim({ car: st.car, surface: st.surface, assist: st.assist });
   sim.dispose();
-  assert.equal(sim.phys, null); assert.equal(sim.car, null);
+  assert.ok(sim.phys === null, "no physics yet"); assert.ok(sim.car === null, "no car yet");
   sim.dispose();
 });

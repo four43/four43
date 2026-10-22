@@ -10,7 +10,7 @@ const fakeCtx = () => ({ state: 'running', currentTime: 0, sampleRate: 8000, cre
 test('attach builds on the service context; the game\'s own bus goes into the service master', () => {
   const ctx = fakeCtx(), master = node(); const into = []; const bus = node(); ctx.createGain = () => bus; bus.connect = d => { into.push(d); };
   const s = new Sound(); s.attach({ ctx, master, unlocked: true, onUnlock() {} });
-  assert.equal(s.ctx, ctx); assert.equal(into[0], master, 'the game bus goes into the service master first'); assert.equal(typeof s.unlock, 'undefined');
+  assert.ok(s.ctx === ctx, "the service shares its context"); assert.ok(into[0] === master, 'the game bus goes into the service master first'); assert.equal(typeof s.unlock, 'undefined');
 });
 test('the entry no longer listens for gestures, page hide or pageshow to drive audio', () => {
   const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');

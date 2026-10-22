@@ -45,7 +45,7 @@ test('partGeometry: pet parts are node-local, as 2.1.0 drew them (the anim table
 test('the pig skin is the compiler\'s instanced coverage material with the eyelid patch', () => {
   const m = pigSkin(mc), key = m.customProgramCacheKey();
   assert.match(key, /COVERAGE/); assert.match(key, /x:eyelids/); assert.ok('COVERAGE_INSTANCED' in m.defines);
-  assert.equal(pigSkin(mc), m, 'cached: one material for every pig part');
+  assert.ok(pigSkin(mc) === m, 'cached: one material for every pig part');
 });
 test('the dog and the fox carry their clips for AnimationMixer', () => {
   for (const k of ['dog', 'fox']) assert.deepEqual(['idle', 'walk', 'run'].filter(c => !assets.get(k).clips.some(x => x.name === c)), [], k);

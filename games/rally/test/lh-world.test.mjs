@@ -34,8 +34,8 @@ test('groups keep today\'s bits: ground 1, prop 2, car 4, ray 8 (Review Focus 2)
 test('the stage builds its Sim on the engine\'s World and steps it from the schedule', () => {
   const h = headless(game(), { args: { pad: true } });
   const s = h.engine.scene.state;
-  assert.equal(s.sim.lh, h.engine.world);
-  assert.equal(s.sim.phys, h.engine.world.rapier);
+  assert.ok(s.sim.lh === h.engine.world, "sim.lh is the engine world");
+  assert.ok(s.sim.phys === h.engine.world.rapier, "sim.phys is the engine rapier");
   const text = JSON.stringify(h.engine.schedule());
   assert.ok(text.indexOf('rally.vehicle') < text.indexOf('lh.physics.step'), text);
   assert.ok(text.indexOf('lh.physics.step') < text.indexOf('rally.after'), text);
@@ -63,7 +63,7 @@ test('during a track rebuild neither Rapier nor Rally\'s systems step (3c CI-16)
 test('pad ground and features are one fixed ground entity with rally-ground colliders (√f, Multiply; M-9)', () => {
   const sim = benchSim({ car: 'awd', cones: false });
   const e = sim.world.groundEntity, c = e.colliders[0].collider;
-  assert.equal(sim.world.groundCollider, c);
+  assert.ok(sim.world.groundCollider === c, "the ground collider is the world one");
   assert.ok(e.colliders.length >= 1 + 2 + 8 + 1, 'ground, 2 ramps, 8 humps, slope');
   for (const { material } of e.colliders) assert.equal(material, 'rally-ground');
   assert.equal(c.friction(), Math.fround(MATERIALS.collider('rally-ground').friction));
@@ -86,7 +86,7 @@ test('untouched marker posts stay asleep after spawn and after reset (Review Foc
   const sim = benchSim({ world: new TrackWorld(generateTrack('markers', { kind: 'loop', style: 'flowing' })), car: 'awd' });
   const posts = sim.world.props.filter(p => p.kind === 'marker');
   assert.ok(posts.length > 50);
-  for (const p of posts) { assert.equal(p.body, p.e.body); assert.ok(p.e.tags.has('marker')); }
+  for (const p of posts) { assert.ok(p.body === p.e.body, "post body is the entity body"); assert.ok(p.e.tags.has('marker')); }
   sim.car.reset({ x: 1e4, y: 50, z: 1e4 }, 0); // far from every post
   for (let i = 0; i < 2 * HZ; i++) sim.step();
   const awake = () => posts.filter(p => !p.body.isSleeping()).length;
@@ -119,7 +119,7 @@ test('pad reset puts cones home, stopped', () => {
 test('the car is a World entity with cars.js mass and inertia (massProps, D3) and car-group colliders', () => {
   for (const id of ['awd', 'rwd']) {
     const sim = benchSim({ car: id, cones: false }), car = sim.car, cfg = CARS[id];
-    assert.equal(car.body, car.e.body); assert.ok(car.e.tags.has('car')); assert.equal(car.e.model, cfg.model);
+    assert.ok(car.body === car.e.body, "car body is the entity body"); assert.ok(car.e.tags.has('car')); assert.ok(car.e.model === cfg.model, "car model is the config model");
     assert.ok(Math.abs(car.body.mass() - cfg.mass) < 1e-6 * cfg.mass, `${id} mass ${car.body.mass()}`);
     const I = car.body.principalInertia();
     assert.deepEqual([I.x, I.y, I.z].map(Math.round).sort(), [cfg.inertia.x, cfg.inertia.y, cfg.inertia.z].sort()); // Rapier sorts the principal axes
@@ -134,7 +134,7 @@ test('the car is a World entity with cars.js mass and inertia (massProps, D3) an
 test('changing car despawns the old body; reset places the car stopped', () => {
   const sim = benchSim({ car: 'awd', cones: false }), old = sim.car.e;
   sim.setCar('rwd');
-  assert.equal(sim.lh.get(old.id), undefined);
+  assert.ok(sim.lh.get(old.id) === undefined, "the old entity is gone");
   sim.car.body.setLinvel({ x: 3, y: 0, z: 0 }, true);
   sim.car.reset({ x: 10, y: 1, z: 20 }, Math.PI / 2);
   const t = sim.car.body.translation(), v = sim.car.body.linvel();
@@ -144,7 +144,7 @@ test('changing car despawns the old body; reset places the car stopped', () => {
 test('the track uses the terrain kit: materialAt, blendAt and heightAt agree with Rally\'s generator', () => {
   const track = generateTrack('t2', { kind: 'loop' }), sim = benchSim({ world: new TrackWorld(track), car: 'awd' });
   const w = sim.world, L = track.layout;
-  assert.equal(w.groundEntity, w.terrain.entity);
+  assert.ok(w.groundEntity === w.terrain.entity, "ground entity is the terrain entity");
   assert.equal(sim.lh.materialOf(w.groundCollider.handle), 'rally-ground');
   assert.match(w.materialAt(L.x[40], L.z[40]), /^rally-(tarmac|hardpack|gravel|packed|ice)$/);
   assert.match(w.materialAt(L.x[40] + 30 * Math.cos(L.heading[40]), L.z[40] - 30 * Math.sin(L.heading[40])), /^rally-(grass|snowbank|sand|mud)$/);
@@ -156,7 +156,7 @@ const qmul = (a, b) => ({ x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, y: a
 const axis = (x, y, z, t) => ({ x: x * Math.sin(t / 2), y: y * Math.sin(t / 2), z: z * Math.sin(t / 2), w: Math.cos(t / 2) });
 test('the car is drawn by view sync: model, wheel part poses (hub in the body frame, Ry(steer) Rx(spin)), seeded at spawn', () => {
   const sim = benchSim({ car: 'awd', cones: false }), car = sim.car, e = car.e, c = car.cfg;
-  assert.equal(e.model, c.model); assert.equal(e.draw, undefined); // view sync draws the model; render.js carView shapes it
+  assert.ok(e.model === c.model, "same model"); assert.ok(e.draw === undefined, "no draw"); // view sync draws the model; render.js carView shapes it
   assert.deepEqual(Object.keys(e.partXf), WHEEL_PARTS);
   car.wheels.forEach((w, i) => { // before any step: both halves at the static compression, so a first render has wheels on hubs
     const hub = [w.local.x, w.local.y - Math.max(0, c.travel - car.staticComp), w.local.z], prev = sim.lh.partXfPrev(e, WHEEL_PARTS[i]);

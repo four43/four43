@@ -23,7 +23,7 @@ test('the train runs on the vehicle kit: wheels touch the ground, the controller
   const { world, step } = testWorld(); addGround(world);
   const t = createTractor(world, { x: 0, z: 0, yaw: 0 }), tr = createTrain(world, t);
   step(90, () => { t.setInput(0, 0); t.step(DT); tr.step(DT, { parked: true }); });
-  assert.equal(t.vc, t.car.controller); assert.ok(t.car.wheels.every(w => w.inContact));
+  assert.ok(t.vc === t.car.controller, 'vc is the car controller'); assert.ok(t.car.wheels.every(w => w.inContact));
   for (const c of tr.cars) assert.ok(c.car.wheels.every(w => w.inContact), `car ${c.index}`);
   const slip = TP.slip; TP.slip = slip * 2;
   try { step(1, () => { t.setInput(1, 0); t.step(DT); tr.step(DT, { parked: false }); }); assert.ok(Math.abs(t.vc.wheelFrictionSlip(0) - TP.slip) < 1e-5); }

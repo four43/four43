@@ -44,7 +44,7 @@ test('yard props weigh the old setMass values: bale 150, cone 2, barrel 25 kg', 
 test('a broken tree\'s trunk stops colliding and a regrown one collides again (one entity each, bushes bodiless)', () => {
   const { world } = testWorld(); addGround(world);
   const T = createTrees(world, [{ kind: 'tree', x: 0, z: 10, r: 1.5 }, { kind: 'bush', x: 5, z: 10, r: 0.9 }]), [tree, bush] = T.list;
-  assert.equal(tree.e.colliders.length, 1); assert.equal(bush.e.body, undefined);
+  assert.equal(tree.e.colliders.length, 1); assert.ok(bush.e.body === undefined, "a bush has no body");
   const c = tree.e.colliders[0].collider; assert.equal(c.isEnabled(), true);
   T.breakById(0); assert.equal(c.isEnabled(), false); assert.equal(tree.solid, false);
   T.regrowById(0); assert.equal(c.isEnabled(), true); assert.equal(tree.solid, true);

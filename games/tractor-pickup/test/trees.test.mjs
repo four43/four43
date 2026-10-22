@@ -62,7 +62,7 @@ test('a fast tractor breaks a tree once, loses little speed and drives on uprigh
   }
   assert.ok(passed, 'did not pass through the tree');
   assert.equal(events.filter(e => e.type === 'treeBreak').length, 1);
-  const ev = events.find(e => e.type === 'treeBreak'); assert.equal(ev.tree, tree); assert.ok(ev.dir.x > 0.99 && ev.speed >= TREE.breakSpeed);
+  const ev = events.find(e => e.type === 'treeBreak'); assert.ok(ev.tree === tree, "the event names the tree"); assert.ok(ev.dir.x > 0.99 && ev.speed >= TREE.breakSpeed);
   assert.equal(tree.state, 'broken'); assert.equal(tree.solid, false);
   for (let i = 0; i < 60; i++) tick(1);
   const { u } = quatAxes(t.body.rotation()); assert.ok(u.y > 0.9, `tilted ${u.y}`);

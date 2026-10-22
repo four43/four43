@@ -17,7 +17,7 @@ test('mirrorHost: one entity per live animal; trees gain a net part; ids are Wor
   const g = testGame({ seed: 31 }), w = g.world; mirrorHost(w, g);
   const live = g.herd.animals.filter(a => a.state !== 'gone');
   assert.equal(net(w, 'animal').length, live.length);
-  for (const e of net(w, 'animal')) { assert.equal(e.animal, g.herd.animals[e.netId]); assert.ok(e.netId >= 0 && e.netId <= MAX_ID); }
+  for (const e of net(w, 'animal')) { assert.ok(e.animal === g.herd.animals[e.netId], "the entity carries the herd animal"); assert.ok(e.netId >= 0 && e.netId <= MAX_ID); }
   assert.equal(net(w, 'tree').length, g.trees.list.length); assert.ok(g.trees.list.every(t => t.e.netId === t.id && t.e.net === 'tree'));
   const ids = w.with('net').map(e => e.id); assert.equal(new Set(ids).size, ids.length);
 });

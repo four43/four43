@@ -220,7 +220,7 @@ test('presets put the farm in a known state without stepping (S-5)', () => {
   h.jump('farm', 'tool', { name: 'hose' }, ARGS); assert.equal(h.state().tool, 'hose');
   h.jump('farm', 'selected', { kind: 'pig', i: 3 }, ARGS); assert.deepEqual(h.state().selected, { kind: 'pig', i: 3 });
   h.jump('farm', 'driving', {}, ARGS); assert.equal(h.state().driving, true); assert.equal(h.state().selected, null);
-  assert.equal(h.engine.game.debug(h.engine).sim, h.engine.scene.state.sim);
+  assert.ok(h.engine.game.debug(h.engine).sim === h.engine.scene.state.sim, 'debug sim is the scene sim');
 });
 
 test('Drive: Get out wins over the stick in the same step; horn and E do nothing on foot', () => {
