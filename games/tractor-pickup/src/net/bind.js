@@ -8,7 +8,8 @@ import { createPort } from 'lion-hawk/net';
 // (2f delta), then calls then(); a room that closes by itself (the host left, kicked) lets go the same way. A page that does not
 // step (hidden) gives up waiting after 1 s: the outbox is dropped at the next step with no port, and then() leaves the room.
 // transport: a net, or a function that makes it when the port is made (the test bridge replays its early events to the first listener)
-export function bindPort(engine, { role, transport, clock }) {
+// key: the page's claimed peer key (N-18; main.js awaits claimPeerKey()); without it the port makes one
+export function bindPort(engine, { role, transport, clock, key }) {
   let port = null, done = false, waiting = null;
   const ready = () => engine.scene.name === 'farm' && !!engine.scene.state?.game;
   const release = then => {
@@ -17,7 +18,7 @@ export function bindPort(engine, { role, transport, clock }) {
     let t = 0; const off = engine.onStep(() => { off(); clearTimeout(t); p.close(); then?.(); });
     t = setTimeout(() => { off(); p.close(); then?.(); }, 1000);
   };
-  const open = () => { const t = typeof transport === 'function' ? transport() : transport; port = createPort(engine, { transport: t, role, clock }); t.on('closed', () => { done = true; release(); }); };
+  const open = () => { const t = typeof transport === 'function' ? transport() : transport; port = createPort(engine, { transport: t, role, clock, key }); t.on('closed', () => { done = true; release(); }); };
   if (ready()) open(); else waiting = engine.onStep(() => { if (!done && ready()) { waiting(); waiting = null; open(); } });
   return {
     sync: () => done ? null : engine.scene.state?.net?.sync ?? null, // 2f delta: null until the step after the bind

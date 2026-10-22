@@ -62,3 +62,11 @@ test('a room that closes by itself lets go of the transport; a later close calls
   assert.equal(b.sync(), null); assert.equal(tr.listeners, 1, 'the port let go');
   b.close(() => log.push('then')); assert.deepEqual(log, ['then']);
 });
+
+test('the page\'s claimed key reaches the host through bindPort (N-18; main.js awaits claimPeerKey before binding)', () => {
+  const hub = createMemoryHub(), H = headless(tractorGame(), { args: ARGS }), G = headless(tractorGame(), { args: { ...ARGS, seed: 15 } });
+  bindPort(H.engine, { role: 'host', transport: hub.host(), clock: () => hub.now });
+  bindPort(G.engine, { role: 'guest', transport: hub.join(), clock: () => hub.now, key: [7, 7, 7, 7] });
+  for (let i = 1; i <= 60; i++) { hub.tick(i * 1000 / 60); H.step(1); G.step(1); }
+  assert.deepEqual(H.world.net.bindings.get(2)?.key, [7, 7, 7, 7]);
+});

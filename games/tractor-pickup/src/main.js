@@ -5,7 +5,7 @@
 // G5: the Multiplayer panel's session binds a joined Handshake room to the engine through a port (#75); ?lag=, ?signal= and ?r=
 // as the old main.js; the netlog; ?lh-bridge=host|guest (tests, with ?lh-test) binds lion-hawk/playwright's Node bridge instead.
 import { boot } from 'lion-hawk/view';
-import { bridgeTransport, parseLag } from 'lion-hawk/net';
+import { bridgeTransport, claimPeerKey, parseLag } from 'lion-hawk/net';
 import { bindPort } from './net/bind.js';
 import { Handshake } from './net/handshake.js';
 import { createNetLog, loggedTransports } from './net/netlog.js';
@@ -62,13 +62,14 @@ async function start() {
   // panel's states, errors, the M-31 retry and the M-33 close. Real rooms stamp on performance.now(); the test bridge on the
   // engine's wall time, as the tests step it by hand (real time would trip the rate limits)
   if (net) {
+    const key = await claimPeerKey(); // [N-18] before any port: a duplicated tab gets a key of its own
     const role = q.has('lh-test') ? q.get('lh-bridge') : null, bridged = role === 'host' || role === 'guest';
     const clock = bridged ? () => engine.time.wall : () => performance.now();
     const log = netlog.log, lag = bridged ? null : parseLag(q.get('lag')), signal = signalServer(q.get('signal'), location.origin); // M-28; M-48: only a local server or this origin
     net.session = createSession({ Handshake, server: signal, lag, log, transports: loggedTransports(log), getPaint: () => engine.scene.state?.progress?.paint ?? START_PAINT,
-      bind: ({ role: r, transport }) => bindPort(engine, { role: r, transport, clock }), onChange: () => net.refresh?.() });
+      bind: ({ role: r, transport }) => bindPort(engine, { role: r, transport, clock, key }), onChange: () => net.refresh?.() });
     engine.onStep(() => net.session.poll()); // the welcome's log line; a late welcome clears the panel's text
-    if (bridged) bindPort(engine, { role, transport: () => bridgeTransport(), clock }); // tests: the page is in the Node hub's room from the start
+    if (bridged) bindPort(engine, { role, transport: () => bridgeTransport(), clock, key }); // tests: the page is in the Node hub's room from the start
     const linkCode = parseRoomInput(q.get('r')); // M-34: a QR link opens the join prompt
     if (q.has('r')) { const u = new URL(location.href); u.searchParams.delete('r'); history.replaceState(null, '', u); } // a reload does not ask again
     if (linkCode) { engine.command('multiplayer.open', {}); net.session.openJoin(); net.session.submitCode(linkCode); }

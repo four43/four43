@@ -33,5 +33,8 @@ export async function engineWorld({ seed = 21, guests = 1, link = {}, join = tru
   const step = (n = 1, inp = []) => { inputs = inp; try { w0.step(n); } finally { inputs = []; } };
   const seconds = (s, inp) => step(Math.round(s * 60), inp);
   const addGuest = () => device(w0.addPeer());
-  return { hub: w0.hub, blackout: (s, o) => w0.blackout(s, o), host: devs[0], get guests() { return devs.slice(1); }, devs, step, seconds, addGuest, get now() { return w0.now; } };
+  return { hub: w0.hub, blackout: (s, o) => w0.blackout(s, o), host: devs[0], get guests() { return devs.slice(1); }, devs, step, seconds, addGuest,
+    drop: d => { w0.drop(devs.indexOf(d)); }, // [T-22] the page vanishes (the hub reports peerLeft)
+    rejoin: d => { const i = devs.indexOf(d); w0.rejoin(i); const p = w0.peers[i]; d.engine = p.engine; d.h = p.h; d.net = p.net; p.engine.events.on(e => { d.events.push(e); }); return d; }, // a reload: a new engine and transport, the same key
+    get now() { return w0.now; } };
 }
