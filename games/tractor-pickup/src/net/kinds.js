@@ -3,7 +3,7 @@
 // 2026-10-13; Task 23 fills its spawn and apply). Field precisions are 1.8's (M-66); F.body() is the engine's at the same steps.
 import { F, kind } from 'lion-hawk/sim';
 import { TYPES, HELD } from '../sim/herd.js';
-import { DRIVE } from '../sim/actions.js';
+import { ACTIONS } from '../sim/actions.js';
 import { PAINT_NAMES, MAX_PLAYERS, MAX_ID } from './protocol.js';
 import { HATS } from '../sim/progress.js';
 import { slotIndex } from '../sim/slots.js';
@@ -53,8 +53,9 @@ export function trainFields(game, e) {
 }
 export const TRAIN = kind({ name: 'train', code: 4, authority: 'owner', remote: 'driven', max: 1, idMin: 1, idMax: MAX_PLAYERS, send: { hz: 20, key: 2 },
   tune: { snapAt: 1.5, nudge: 6, smoothMs: 150 },
-  fields: { body: F.body(BODY), trailer: F.body(BODY), wagon: F.body(BODY), input: F.actions(DRIVE), mode: F.oneOf(MODES), full: F.bool(),
+  fields: { body: F.body(BODY), trailer: F.body(BODY), wagon: F.body(BODY), input: F.actions(ACTIONS), mode: F.oneOf(MODES), full: F.bool(),
     dirt: F.list(F.fixed(0, 1, 1 / 100), 3, 3), riders: F.list(RIDER, LIMIT.riders) }, // M-68 dirt in its own field (F.body carries none)
+  // input: the owner seat's stick (plan 5: the train is its pawn)
   spawn: rec => spawnTrainDesc(rec),
   spawned: (e, world, rec) => { keep(e, rec); attachRemoteTrain(e, world); trainApply(e, rec); }, // also the CI-15 respawn after a guest's world.clear()
   apply(e, rec, world, s) { trainApply(e, rec); keep(e, rec, world, s); } });

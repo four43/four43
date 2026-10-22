@@ -36,9 +36,11 @@ export function netStore(world) { // never cache what it returns across a world.
 // the local train becomes this player's net entity while a session runs (#77: the number is the game's; 3i sets self)
 export function localTrain(world, game, you) {
   if (!you || !game?.tractor) return; const e = game.tractor.e;
-  e.input ??= { thr: 0, steer: 0, turn: 0 }; e.mode ??= 'drive'; e.full ??= false; e.dirt ??= [0, 0, 0]; e.riders ??= [];
+  e.mode ??= 'drive'; e.full ??= false; e.dirt ??= [0, 0, 0]; e.riders ??= [];
   if (e.net && e.netId === you) return;
   if (e.net) world.remove(e, 'net');
+  // [I-4], [C-3]: a net-made input in the train kind's shape (buttons as booleans); seat 0's lh.possess fills its keys each step
+  e.input = { goX: 0, goZ: 0, goBack: false, horn: false };
   e.netId = you; e.owner = you; world.add(e, 'net', 'train');
 }
 export function dropLocalTrain(world, game) { const e = game?.tractor?.e; if (e?.net && world && !world.disposed) world.remove(e, 'net'); }

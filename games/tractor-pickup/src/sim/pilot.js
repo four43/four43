@@ -45,3 +45,12 @@ export function createPilot() {
     },
   };
 }
+// The inverse of drive() for a tractor-frame { thr, steer } (the raw seam: tests and debug.drive): the world-frame stick that the
+// pilot turns back into the same thr and steer at this yaw, so another peer's pilot drives the replica alike (plan 5). Exact for
+// |steer| <= 1 (the wanted heading is within PILOT.fullErr, so full speed and no turn help); thr 0 gives no stick.
+export function stickOf(yaw, thr, steer, out) {
+  const m = Math.min(1, Math.abs(thr));
+  if (m === 0) { out.goX = out.goZ = 0; out.goBack = false; return out; }
+  const back = thr < 0, want = back ? yaw + Math.PI - steer / PILOT.gain : yaw + steer / PILOT.gain;
+  out.goX = m * Math.sin(want); out.goZ = m * Math.cos(want); out.goBack = back; return out;
+}

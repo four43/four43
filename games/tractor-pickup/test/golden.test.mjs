@@ -14,7 +14,7 @@ const inputAt = i => i < 120 ? STILL : i < 600 ? { thr: 1, steer: Math.sin(i / 6
 const body = b => ({ p: b.translation(), q: b.rotation(), v: b.linvel() });
 const snapshot = g => ({ mode: g.mode, landed: g.load.landed(), tractor: body(g.tractor.body), cars: g.train.cars.map(c => body(c.body)),
   animals: g.herd.animals.map(a => ({ id: a.id, type: a.type, state: a.state, x: a.x, z: a.z })) });
-const gameEvents = h => h.events.filter(e => !FARM_EVENTS.has(e.type) && e.type !== 'scene' && e.type !== 'overlay').map(e => `${e.step}:${e.type}`);
+const gameEvents = h => h.events.filter(e => !FARM_EVENTS.has(e.type) && e.type !== 'scene' && e.type !== 'overlay' && !e.type.startsWith('controller.')).map(e => `${e.step}:${e.type}`);
 
 function drive() {
   const h = headless(tractorGame(), { args: ARGS }), s = h.engine.scene.state, trail = [];

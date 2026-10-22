@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPilot, PILOT } from '../src/sim/pilot.js';
+import { createPilot, PILOT, stickOf } from '../src/sim/pilot.js';
 
 const R = Math.PI / 180, wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 const at = (deg, m = 1) => ({ x: Math.sin(deg * R) * m, y: Math.cos(deg * R) * m }); // stick angle: 0 up, +90 right
@@ -85,4 +85,12 @@ test('closed loop: from a standstill, stick behind-left turns the tractor left i
 test('turn help: with no help the tractor turns less in the same time', () => {
   const turn = help => { const k = TP.turnHelp; TP.turnHelp = help; try { const { t, run } = drive(); run(1, { x: 0, y: 0 }); let n = 0, prev = t.yaw; run(2, at(-135), () => { n += wrap(t.yaw - prev); prev = t.yaw; }); return n; } finally { TP.turnHelp = k; } };
   const a = turn(TP.turnHelp), b = turn(0); assert.ok(a > b * 1.3, `with help ${(a / R).toFixed(0)} deg, without ${(b / R).toFixed(0)} deg`);
+});
+test('stickOf is drive()\'s inverse for a tractor-frame thr and steer (the raw seam, plan 5)', () => {
+  const p = createPilot(), o = {};
+  for (const yaw of [0, 1, -2.5]) for (const [thr, steer] of [[1, 0], [0.6, 0.2], [0.7, -1], [-0.5, 0.3], [-1, -1]]) {
+    stickOf(yaw, thr, steer, o); const d = p.drive(o.goX, o.goZ, o.goBack, yaw, 5);
+    assert.ok(Math.abs(d.thr - thr) < 1e-9 && Math.abs(d.steer - steer) < 1e-9, `yaw ${yaw} thr ${thr} steer ${steer}: got ${d.thr} ${d.steer}`);
+  }
+  assert.deepEqual(stickOf(1, 0, 0.5, {}), { goX: 0, goZ: 0, goBack: false }, 'no throttle, no stick');
 });

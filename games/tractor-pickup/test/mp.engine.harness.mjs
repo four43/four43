@@ -1,6 +1,7 @@
 // test/mp.engine.harness.mjs — mpWorld on the engine path (lion-hawk 2f T7, #75, #88): each device is a headless engine running
 // tractorGame(), bound to one in-memory hub by a port (lion-hawk/test mp(), [T-11]), so every message reaches the syncs as a
-// command at the next step. It is mpWorld (mp.harness.mjs re-exports it). No tests here.
+// command at the next step. It is mpWorld (mp.harness.mjs re-exports it). No tests here. An input with goX is a stick for seat 0's
+// controller; one with thr is the raw seam.
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mp } from 'lion-hawk/test';
 import { tractorGame } from '../src/game.sim.js';
@@ -26,7 +27,8 @@ export async function engineWorld({ seed = 21, guests = 1, link = {}, join = tru
   };
   const w0 = mp(tractorGame({ clock: clock ?? undefined }), { peers: join ? 1 + guests : 1, link, clock: clock ?? undefined,
     argsOf: i => ({ seed: i ? 1000 + i : seed, started: true, trip: false, progress: progressOf(i) }), // a guest's own solo farm until the welcome
-    beforeStep: (p, i) => { const d = devs[i]; seen[i](); p.engine.scene.state.raw = (typeof inputs === 'function' ? inputs(d, i) : inputs[i]) || STILL; } });
+    beforeStep: (p, i) => { const d = devs[i]; seen[i](); const inp = (typeof inputs === 'function' ? inputs(d, i) : inputs[i]) || STILL;
+      if ('goX' in inp) { p.engine.scene.state.raw = null; p.engine.input.set(inp); } else p.engine.scene.state.raw = inp; } }); // a world-frame stick goes through seat 0's controller (C-2); { thr, steer } is the raw seam
   for (const p of w0.peers) device(p);
   const step = (n = 1, inp = []) => { inputs = inp; try { w0.step(n); } finally { inputs = []; } };
   const seconds = (s, inp) => step(Math.round(s * 60), inp);

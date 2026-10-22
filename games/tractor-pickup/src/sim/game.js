@@ -85,7 +85,6 @@ export function createGame(world, { seed, power = 'medium', player = 1 }) {
         if (l.x > 0 && d < best && Math.abs(Math.atan2(l.z, l.x)) < AIM.cone) { best = d; assist = Math.max(-AIM.max, Math.min(AIM.max, -Math.atan2(l.z, l.x) * AIM.gain)); } }
       tractor.setAssist(tractor.fwd > 0.5 && drive.onTarget !== false ? assist : 0); // C-11: only when nearly on the wanted heading
       tractor.hold = game.mode !== 'drive'; tractor.setInput(drive.thr, drive.steer, drive.turn || 0); tractor.step(DT);
-      if (tractor.e.net) { const I = tractor.e.input; I.thr = tractor.inThr; I.steer = tractor.inSteer; I.turn = tractor.inTurn; } // N-13: what the others step this train with
       train.step(DT, { parked: tractor.hold || (Math.abs(drive.thr) < 0.05 && tractor.speed < 0.3) });
       events.push(...trees.step(DT, bodies, game.mode === 'drive')); // trees first: a broken trunk's collider is gone before contact resolves
     },

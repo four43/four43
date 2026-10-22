@@ -7,7 +7,7 @@
 // While `raw` drives it nothing here touches the game, so the scene steps exactly the createGame the phase-0 goldens drive.
 import { createGame } from '../sim/game.js';
 import { createSandbox } from '../sim/sandbox.js';
-import { createPilot } from '../sim/pilot.js';
+import { createPilot, stickOf } from '../sim/pilot.js';
 import { createTrip } from '../sim/trip.js';
 import { newRider } from '../sim/slots.js';
 import { quatAxes } from '../sim/tractor.js';
@@ -39,7 +39,11 @@ export const moveTrain = (g, x, z, yaw, { ground = false } = {}) => {
 // Input (C-1, C-2, C-8, #81): `raw` (goldens, the mp harness) or the world-frame stick through the pilot, into the reused stepIn.
 function readInput(e, s) {
   const r = s.raw, o = s.stepIn;
-  if (r) { o.thr = r.thr; o.steer = r.steer; o.turn = r.turn ?? 0; o.onTarget = r.onTarget !== false; o.horn = !!r.horn; return o; } // as game.step reads a plain input
+  if (r) { // as game.step reads a plain input; a train in a session also carries the matching stick, for the other peers' pilots (stickOf)
+    o.thr = r.thr; o.steer = r.steer; o.turn = r.turn ?? 0; o.onTarget = r.onTarget !== false; o.horn = !!r.horn;
+    const t = s.game.tractor; if (t.e.net) { const I = t.e.input; stickOf(t.yaw, r.thr, r.steer, I); I.horn = o.horn; }
+    return o;
+  }
   const I = e.input.snapshot, t = s.game.tractor, p = s.pilot.drive(I.goX, I.goZ, I.goBack.down, t.yaw, t.speed);
   o.thr = p.thr; o.steer = p.steer; o.turn = p.turn; o.onTarget = p.onTarget; o.horn = I.horn.pressed;
   return o;
@@ -65,6 +69,7 @@ export function makeFarm({ clock = null } = {}) { // clock: the syncs' wall cloc
   // Builds this scene's farm (main.js build, sim half): hats (W-4), the bedtime phase (E-5) and the start mode (F-11).
   function build(e, s, seed, power, player) {
     s.game = createGame(e.world, { seed, power, player }); s.stepped = false; s.seed = seed; s.gen++; s.sfx = freshSfx();
+    e.controllerOf(0)?.possess(s.game.tractor.e); // [C-2]: the train is seat 0's pawn; lh.possess copies the stick into its e.input each step (N-13 sends it)
     s.game.wearHats(wornHats(s.progress));
     s.game.lastDrive = s.bed.phase === 'last';
     s.game.mode = s.started ? (s.bed.phase === 'asleep' ? 'sleep' : 'drive') : hasPaintChoice(s.progress) ? 'start' : 'drive';

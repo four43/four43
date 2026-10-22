@@ -26,7 +26,9 @@ export function netFacade(engine, { isHost, id, hostId }) {
 // engine's World net part replicates the kinds (NET_VERSION 4)
 const tags = (table, side) => Object.fromEntries(Object.keys(table).map(t => [t, `${side}.${t}`]));
 export const netConfig = (kinds = KINDS) => ({
-  kinds, world: true, maxSender: MAX_PLAYERS, maxJson: MAX_JSON, maxFrame: MAX_FRAME,
+  kinds, world: true,
+  join: 'manual', // plan 3 B3 stopgap until the engine join (plan 5 Task 9)
+  maxSender: MAX_PLAYERS, maxJson: MAX_JSON, maxFrame: MAX_FRAME,
   rates: { host: { reliable: RATE.perSec, fast: RATE.perSec, reliableFrames: RATE.guestKeys }, guest: { reliable: RATE.perSec, fast: RATE.guestFast } },
   wire: { toHost: tags(TO_HOST, 'host'), toGuest: tags(TO_GUEST, 'guest') }, codec: 'json',
 });

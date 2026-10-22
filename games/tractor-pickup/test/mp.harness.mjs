@@ -33,9 +33,9 @@ export const quietWarn = fn => { const warn = console.warn, warned = []; console
 export const sendAnimals = (w, to, records, { key = false, time = w.now + 1 } = {}) => w.host.net.send(to.net.id, encodeFrame({ key, sender: 1, time, groups: [{ kind: ANIMAL, records }] }), key);
 export const trainFrame = (sender, id, rec, time) => encodeFrame({ key: false, sender, time, groups: [{ kind: TRAIN, records: [[id, rec]] }] });
 export const animalRec = o => ({ type: 'pig', golden: false, hidden: false, home: 'route', state: 'free', owner: 0, epoch: 0, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle', leader: null, line: 0, ...o });
-// a hand-made train record (NET_VERSION 4: three F.body() fields, a batched input, the dirt list)
+// a hand-made train record (NET_VERSION 5: three F.body() fields, a batched stick input, the dirt list)
 const still = (x, y, z) => ({ p: { x, y, z }, q: { x: 0, y: 0, z: 0, w: 1 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 } });
-export const parked = (x, z) => ({ body: still(x, 1, z), trailer: still(x - 4, 1, z), wagon: still(x - 8, 1, z), input: { s: 1, list: [{ thr: 0, steer: 0, turn: 0 }] },
+export const parked = (x, z) => ({ body: still(x, 1, z), trailer: still(x - 4, 1, z), wagon: still(x - 8, 1, z), input: { s: 1, list: [{ goX: 0, goZ: 0, goBack: false, horn: false }] },
   mode: 'drive', full: false, dirt: [0, 0, 0], riders: [] });
 // M-58: what a guest shows that the host does not (empty: all devices agree). Per guest that is not alone:
 // - every host animal: gone on the host -> gone, not drawn (elsewhere) or missing here; held by this guest -> held here (fly, ride, show);

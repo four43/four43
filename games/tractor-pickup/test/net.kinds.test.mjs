@@ -9,8 +9,8 @@ import { NET_VERSION, MAX_ID } from '../src/net/protocol.js';
 
 const net = (w, kind) => w.with('net').filter(e => e.net === kind);
 const roster = () => [{ n: 1, paint: { body: 'red', trim: 'yellow' }, away: false, join: 0, barn: false }];
-test('NET_VERSION 4 and four kinds with today\'s codes and id ranges', () => {
-  assert.equal(NET_VERSION, 4);
+test('NET_VERSION 5 and four kinds with today\'s codes and id ranges', () => {
+  assert.equal(NET_VERSION, 5);
   assert.deepEqual(KINDS.map(k => [k.name, k.code]), [['animal', 1], ['tree', 2], ['player', 3], ['train', 4]]);
   assert.equal(TRAIN.authority, 'owner'); assert.equal(TRAIN.remote, 'driven'); assert.equal(ANIMAL.remote, 'view');
 });
