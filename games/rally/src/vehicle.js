@@ -21,6 +21,10 @@ export const DRAG = { fade: 2, v: 18 };
 // over rFull rad/s of yaw, and the driver's own input takes over as it grows: at full input the
 // driver gets exactly the lock asked for.
 export const ALIGN = { vFrom: 3, vTo: 8, rFull: 0.15 };
+// Suspension jolt (rally-spec R7-6), for the controller rumble only: each wheel keeps a decaying peak of its compression
+// speed (m/s), so a landing or a bump between two rendered frames is still there when the view reads it. Hitting the
+// bump stop adds `stop`. Nothing in the physics reads it.
+export const JOLT = { decay: Math.exp(-Math.LN2 / (0.05 * 240)), stop: 1.5 }; // half-life 50 ms at the 240 Hz chassis step
 
 // --- small vector helpers on {x,y,z} ---
 const v3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
@@ -73,7 +77,7 @@ export class Vehicle {
                   -c.comHeight + c.radius + (c.travel - xs), front ? zF : zR),
         rc: front ? c.rcF : c.rcR,
         omega: 0, st: { dx: 0, dy: 0 }, x: 0, xPrev: 0, contact: false, wasContact: false,
-        fz: 0, fs: 0, fx: 0, fy: 0, kappa: 0, alpha: 0, rho: 0, steer: 0, spin: 0,
+        fz: 0, fs: 0, fx: 0, fy: 0, kappa: 0, alpha: 0, rho: 0, steer: 0, spin: 0, jolt: 0,
         surf: surfaceOfKey('gravel'), center: v3(), point: v3(), normal: v3(0, 1, 0), drive: 0,
       });
     }
@@ -123,7 +127,7 @@ export class Vehicle {
 
   reset(pos, yaw) {
     this.lh.place(this.e, { at: [pos.x, pos.y, pos.z] }, { yaw }); // wakes it and zeroes its velocities (E-8)
-    for (const w of this.wheels) { w.omega = 0; w.st.dx = w.st.dy = 0; w.wasContact = false; }
+    for (const w of this.wheels) { w.omega = 0; w.st.dx = w.st.dy = 0; w.wasContact = false; w.jolt = 0; }
     this.dt.we = this.cfg.drive.idle * 2 * Math.PI / 60; this.dt.gear = 1; this.dt.shiftT = 0;
   }
 
@@ -256,6 +260,7 @@ export class Vehicle {
     // Pass 2: suspension forces with anti-roll bars.
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i];
+      w.jolt *= JOLT.decay;
       if (!w.contact) { w.fs = 0; w.fz = 0; w.xPrev = 0; continue; }
       let xd;
       if (w.wasContact) xd = (w.x - w.xPrev) / DT;
@@ -264,6 +269,8 @@ export class Vehicle {
       const x = Math.min(w.x, c.travel);
       let fs = w.k * x + (xd > 0 ? w.cBump : w.cReb) * xd;
       const bs = c.travel - 0.04;               // progressive bump stop, last 4 cm
+      if (xd > w.jolt) w.jolt = xd;
+      if (w.x > bs && xd > 0) w.jolt = Math.max(w.jolt, xd + JOLT.stop);
       if (w.x > bs) fs += 2.0e6 * (w.x - bs) ** 2;
       if (w.x > c.travel) fs += 30 * w.k * (w.x - c.travel); // bottomed out
       const mate = this.wheels[i ^ 1];

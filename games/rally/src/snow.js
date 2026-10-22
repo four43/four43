@@ -28,7 +28,7 @@ export const W_MAX = 65535;                   // stored wear for ice (16 bit so 
 
 // Surfaces a tire can see in snow: fresh (still full height), then packed blending to ice.
 const blend = (a, b, t, name) => {
-  const s = { name };
+  const s = { name, ids: [a.id, b.id], w: t }; // ids/w: what it blends (the rumble mixer reads them)
   for (const k of ['mu', 'C', 'kp', 'ap', 'crr', 'drag', 'plow']) s[k] = a[k] + (b[k] - a[k]) * t;
   s.B = Math.tan(Math.PI / (2 * s.C));
   return s;

@@ -59,6 +59,7 @@ export function makeOverlays(api) {
       pick('assist', 'Assist', [{ value: true, label: 'On' }, { value: false, label: 'Off' }]); // test ids stay settings.assist.true|false
       pick('units', 'Units', ['mph', 'kmh']);
       pick('gearbox', 'Gearbox', ['auto', 'manual']);
+      pick('rumble', 'Rumble', ['off', 'light', 'full']);
       u.button({ id: 'close', label: 'Done', action: e => e.close('settings') });
     },
     step(e) { if (e.input.snapshot.pause.pressed) e.close('settings'); }, // Esc closes the sheet before the pause menu

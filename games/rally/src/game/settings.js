@@ -3,7 +3,8 @@ import { MODES } from './modes.js';
 
 export const SETTINGS_V = 5;
 export const DEFAULTS = { car: 'awd', surface: 'gravel', assist: false, gearbox: 'auto', mode: 'freeDrive', world: 'loop',
-  theme: 'summer', obstacles: 'mild', style: 'twisty', units: 'mph' };
+  theme: 'summer', obstacles: 'mild', style: 'twisty', units: 'mph',
+  rumble: 'full' }; // rumble: the controller rumble's strength (off | light | full; view-only, rally-spec R7)
 
 export function normalizeSettings(saved = {}) {
   const s = { ...DEFAULTS, ...saved, v: SETTINGS_V };

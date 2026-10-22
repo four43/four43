@@ -11,15 +11,19 @@ import { makeBests, memoryStore } from './game/bests.js';
 import { normalizeSettings } from './game/settings.js';
 
 const SAVE_KEY = 'rally-sim-settings';
+const RUMBLE_KEY = 'rally-rumble-picks'; // the ?rumble lab's picks (rally-spec R7)
 const storage = (() => { try { return globalThis.localStorage ?? null; } catch { return null; } })(); // blocked storage throws on access
 const load = () => { try { return JSON.parse(storage?.getItem(SAVE_KEY)) || {}; } catch { return {}; } };
 const save = s => { try { storage?.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ } };
+const rumblePicks = () => { try { return JSON.parse(storage?.getItem(RUMBLE_KEY)) || undefined; } catch { return undefined; } };
 
 async function start() {
-  await R.init();
   const q = new URLSearchParams(location.search);
+  // ?rumble: the rumble lab instead of the game (rally-spec R7): feel each scenario's patterns and pick one.
+  if (q.has('rumble')) { (await import('./rumbleLab.js')).rumbleLab(document, { storage, key: RUMBLE_KEY }); return; }
+  await R.init();
   // #35: a random engine seed so first visits get different tracks; ?seed= and ?lh-test still win inside boot.
-  const { engine } = boot(defineGame({ ...rallySpec({ bests: makeBests(storage ?? memoryStore()) }), physics: rallyPhysics(R) }), rallyView({ save }), {
+  const { engine } = boot(defineGame({ ...rallySpec({ bests: makeBests(storage ?? memoryStore()) }), physics: rallyPhysics(R) }), rallyView({ save, rumblePicks: rumblePicks() }), {
     args: { settings: normalizeSettings(load()), pad: q.has('pad') },
     seed: (Math.random() * 2 ** 32) >>> 0,
     devices: devices(document), canvas: document.getElementById('view'),

@@ -7,6 +7,10 @@ import MANIFEST from '../baked/manifest.json';
 import { Renderer, RENDER, carView } from './render.js';
 import { Hud } from './ui.js';
 import { GameHud, fmtTime, fmtDelta, deltaClass } from './menus.js';
+import { createRumble } from './rumble.js';
+import { rumbleOut } from './rumbleOut.js';
+import { STRENGTH } from './defs/rumble.js';
+import { DRIVING } from './game/stage.js';
 
 export const HELP = {
   freeDrive: 'Drive at your own pace: no clock. Knock the markers over, try the jumps.',
@@ -105,7 +109,9 @@ function overlayHalves() {
   return { title, pause, results, settings };
 }
 
-export function rallyView({ save = () => {} } = {}) {
+// rumblePicks: the ?rumble lab's saved picks (main.js reads them from storage), else the defaults in defs/rumble.js.
+export function rallyView({ save = () => {}, rumblePicks } = {}) {
+  const rumble = createRumble(rumblePicks), pads = rumbleOut(); // rally-spec R7
   let hud = null, ghud = null, els = null, off = null, unlisten = null;
   let seen = null, toast = null; // per enter: what the view last reflected; the toast { text, until } (engine time)
   let cur = null; // the stage state the GameHud adapter reads
@@ -148,15 +154,23 @@ export function rallyView({ save = () => {} } = {}) {
       });
       // Leaving the page mid-run pauses a timed run only (iOS app switch, tab change; tracks-spec): not free drive or the pad.
       // Through the Pause chip, so its `when` decides (#45).
-      const hidden = () => { if (doc.visibilityState === 'hidden' && engine.scene.state?.mode?.clock) engine.ui.tryTap('stage.pause'); };
+      const hidden = () => {
+        if (doc.visibilityState !== 'hidden') return;
+        pads.kill(); // frames stop while hidden, so nothing else would stop the pad (rally-spec R7)
+        if (engine.scene.state?.mode?.clock) engine.ui.tryTap('stage.pause');
+      };
       doc.addEventListener('visibilitychange', hidden);
+      // A refresh or navigation mid-rumble: stop the pad before the page goes, or it can keep the last effect running.
+      const leaving = () => pads.kill();
+      win.addEventListener('pagehide', leaving); win.addEventListener('beforeunload', leaving);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
         info: () => ({ ...view.gfx.info() }) };
-      off = () => { doc.removeEventListener('visibilitychange', hidden); };
+      off = () => { doc.removeEventListener('visibilitychange', hidden); win.removeEventListener('pagehide', leaving); win.removeEventListener('beforeunload', leaving); };
     },
     exit(engine, view) {
       unlisten?.(); unlisten = null; off?.(); off = null; seen = null; cur = null; toast = null;
+      pads.kill();
       for (const c of STAGE_CLASSES) view.doc.body.classList.remove(c);
       if (els) els.toast.hidden = true;
     },
@@ -200,6 +214,10 @@ export function rallyView({ save = () => {} } = {}) {
         renderer.updateCamera(s.sim, Math.min(0.1, view.dt)); // #19: 0 for hook renders (no camera motion, no snap)
       }
       hud.update(s.sim.car);
+      // Rumble only while driving (ready, countdown, running: not past the finish) with nothing on top (any overlay or a
+      // hidden tab stops it) and the stage drawn.
+      const driving = DRIVING.has(s.phase) && ov.length === 0 && doc.visibilityState !== 'hidden' && seen.s === s;
+      if (driving) pads.send(rumble.update(s.sim.car, Math.min(0.1, view.dt), STRENGTH[st.rumble] ?? 1)); else pads.stop();
       ghud.update(hudGame);
     },
   };

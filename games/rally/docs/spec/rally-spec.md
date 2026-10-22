@@ -40,6 +40,10 @@ timing, bests) is specified there too (Phase 2).
 | `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
 | `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
+| `src/rumble.js` | Rumble mixer (R7): the wheels → two motor levels (surface texture, slide onset, wheelspin, lock-up); pure |
+| `src/rumbleOut.js` | Sends the levels to every pad's `vibrationActuator` (`dual-rumble`); a no-op where unsupported |
+| `src/rumbleLab.js` | The `?rumble` lab: feel and pick each scenario's pattern on a real pad |
+| `src/defs/rumble.js` | Rumble patterns (A/B/C per scenario), the default `PICKS`, the setting's `STRENGTH` |
 | `src/devices.js` | Input devices on the engine: keyboard ramps, pad curves, the touch steering slider and pedals; the engine merges the sources |
 | `src/game.sim.js` | `defineGame`: `ACTIONS`, the `stage` main scene and the `title` / `pause` / `results` / `settings` overlays, presets, `game.state` and `game.debug` (no DOM, no three.js) |
 | `src/game.view.js` | `defineView`: the view halves of those scenes (renderer, camera, HUD, cards) over `engine.scene.state` |
@@ -482,3 +486,82 @@ U-7–U-10; research and decisions in lion-hawk `docs/research-menu-navigation.m
   reach a test); mobile 797/797. `lh-alloc` warms 2000 steps (JIT tier-up under parallel load reached
   the measured half at 600; 40000 steps showed no growth); `looks.test.mjs` follows the engine's
   texel-snapped shadow box.
+
+## Round 7: controller rumble (2026-10-19)
+
+Request: rumble that differs per surface, with a distinct feel when the car starts to slide and when
+wheels lose traction, plus a small page for choosing between options per scenario. Tested target: an
+Xbox pad in Brave/Chrome on Linux, so two body motors (`strong` left/low, `weak` right/high) and no
+trigger rumble.
+
+- **R7-1 Mixer** (`src/rumble.js`, pure, once per rendered frame). Layers summed per motor, clamped:
+  - *Surface*: each touching wheel is a quarter of its surface's pattern (blends split by their `ids`/`w`,
+    which `blendSurface` and the snow wear blends now carry). Speed s = (|v| − 1) / 24, clamped 0..1 (full at
+    90 km/h): hum and wave follow s^1.6 and grain taps come s² as often; below s = 0.5 the taps lengthen (up
+    to 3×) and move onto the strong motor. Slow is a dull, occasional thud (gravel ≈ 1 tap/s at 20 km/h),
+    and the picked texture comes in with speed (playtest 2026-10-19: the first √s ramp was much too bumpy
+    when slow). From 50 km/h the car planes over the small bumps (playtest 2026-10-19: more speed must not
+    mean more rumble): the surface's level and its tap rate both fade linearly to 0.35 by 120 km/h, so the texture
+    peaks around 70 km/h; the slow end is unchanged; impacts and landings don't fade.
+    Airborne or stopped is silent.
+  - *Slide onset*: rear |α| / ap ≥ 1.15 above 4 m/s; ends below 0.85 (hysteresis: a held drift doesn't
+    re-fire). The onset plays the pattern's `hit` once, then a sustain growing with depth to 2.5.
+  - *Wheelspin*: driven wheels' κ / kp ≥ 1.3 with throttle on, on the weak motor.
+  - *Braking* (foot brake on, above 1 m/s; with the handbrake on only the fronts count, so a handbrake turn
+    is not a lock-up). Warn before the lock, as Forza's and F1's trigger rumble do (research 2026-10-19:
+    those games rumble at the limit, before the tyre breaks loose; pedal rumble that only fires after a
+    lock is called a gimmick). *Brake limit*: the worst wheel's −κ / kp from 0.75 up to 1 (its peak) plays
+    light ticks that quicken towards the peak. *Lock-up*: from 1.1 it hands over to heavy ABS-style pulses
+    on the strong motor (10 Hz; real ABS is ~5–20 Hz, and the pad's motors blur above ~10) and goes back to
+    the warning the frame the wheel rolls under the peak (1.0), so release and re-squeeze can be felt.
+- **R7-2 Patterns** (`src/defs/rumble.js`): layers `hum`, `wave`, `grain`, `hit`; three options per
+  scenario (8 surfaces: tarmac, dirt, gravel, grass, sand, mud, snow (packed and snowbank), ice; 4 events:
+  slide, wheelspin, brake limit, lock-up, suspension impact, jump landing).
+  `road` in PICKS is a master gain over every surface (0.4; playtest 2026-10-19: road noise was annoying and
+  hid the brake pulses), a slider in the lab.
+  Shipped picks (chosen in the lab on an Xbox pad, 2026-10-19, second round): road ×0.4 over tarmac A ×0.4,
+  dirt A ×1.15, gravel C ×0.5, grass A ×0.3, sand A, mud C ×0.55, snow B ×0.65, ice C; slide A ×0.35,
+  wheelspin C ×0.1, brake limit B (rising buzz), lock-up B (ABS pulses, 7 Hz, both motors); then impact C
+  (slam) ×1.5 and landing A.
+- **R7-3 Output** (`src/rumbleOut.js`): `playEffect('dual-rumble', 120 ms)` re-sent every frame to
+  every pad with an actuator. Rumble only in the driving phases (ready, countdown, running; not after the
+  finish line) with no overlay open and the tab visible. Chromium runs `reset()` at once but queues effects,
+  so a reset can cancel the effect sent a frame earlier; hence two kinds of quiet:
+  - *Gap* (driving, both levels ~0, e.g. between ABS pulses): one zero-magnitude effect, queued behind the
+    pulse, never a reset (playtest 2026-10-19: resets in the gaps ate the lock-up pulses whenever the road
+    was silent; the lab always had gravel underneath, so it worked there). Over ~¼ s it becomes a stop.
+  - *Stop* (menus, pause, finish; `kill()` on hidden tab, `pagehide`/`beforeunload`, stage exit): zero effect
+    plus `reset()`, repeated for 20 frames (playtest 2026-10-19: still rumbling in menus and after a
+    refresh). A pad's first sight on a page gets one too, clearing anything the previous page left playing.
+- **R7-6 Suspension impacts** (playtest 2026-10-19: big hits, like a jump landing or lumpy grass, should be felt,
+  not only small chatter). Each wheel keeps `jolt`, a decaying peak (half-life 50 ms) of its compression speed in
+  m/s, plus 1.5 on the bump stop (`JOLT` in `vehicle.js`; nothing in the physics reads it). Without the peak, a
+  landing's compression is over in ~33 ms, and a frame could miss it. The mixer fires a hit when the worst wheel's
+  jolt rises (by 0.2 since the last frame) past 1.3 m/s, at most every 0.15 s, sized (1.3 → 5 m/s) and growing if
+  still rising in its first frames. A respawn settling peaks ~1.1 (no hit); a 1.5 m drop ~4.4, 3 m ~7.1; grass
+  verge bumps at 36 km/h gave ~4 hits/s up to 4.7. A big landing stays over the threshold longer than the
+  cooldown as it decays; the rising rule keeps it one hit (a 2 m drop: one 0.2 s hit, then the real bounce). Its
+  own pick and gain (`impact`), not under `road`. Patterns' `hit` gained `scale`/`lenK` (sized by the level),
+  `delay`, and lists of hits.
+- **R7-7 Jump landings** (playtest 2026-10-19: landings were "very weak"; a jump landing should basically max out
+  the controller). Size alone can't tell a landing from a grass lump (verge bumps reach 4.7 m/s; a 2 m drop ~6.5),
+  but time in the air can. The first touchdown after ≥ 0.2 s with every wheel off the ground is a *landing*,
+  replacing that touchdown's impact, sized by the flight (0.2 → 0.7 s) or the jolt (1.3 → 3.5 m/s), whichever is
+  bigger, never under 0.75 (`floor`). Default (A): both motors at 1.0 for 0.3–0.5 s, then a heavy tail on the
+  strong motor. Browser, dropping the car: 1 m and 2 m both gave ~0.48 s with both motors flat out; 0.3 m (a short
+  flight) stays an impact. Its own pick and gain (`landing`).
+- **R7-4 Setting**: Rumble Off / Light (×0.5) / Full (default) in the settings sheet (`settings.rumble.*`).
+- **R7-5 Lab** (`?rumble` on the game page, dev server or site): a card per scenario with options A–C,
+  gain, and Hold; global speed, event depth and the surface under events; a 16 s sequence (launch spin,
+  gravel, slide, tarmac, threshold braking (to the limit, hold, lock, release, back to the limit), lumpy
+  grass, a jump landing, snow, ice); live motor meters and event chips. Pad: D-pad
+  up/down picks a card, left/right its option, hold A plays. Picks save to `localStorage`
+  (`rally-rumble-picks`), and the game reads them on load, so the lab's choices can be tried on a stage;
+  Export gives the JSON for `PICKS`.
+- **Known gap**: with Assist on, ABS scales brake torque only down to 10 %, which still locks on low-grip
+  surfaces (grass: wheels cycling 2.4–4× peak slip), so assisted braking there feels like lock-up pulses, not
+  the limit warning.
+- **Validation**: `test/rumble.test.mjs` (coverage of materials, silence, surface contrast, picks and
+  gain, blends, slide hysteresis (fails with hysteresis removed), crawl, spin vs lock motors and pedals,
+  the output against a fake actuator). In a browser with a fake pad: rumble streams while driving and
+  pause sends one reset. The feel itself is yours to judge on a real pad.

@@ -29,7 +29,7 @@ export function blendSurface(cache, A, B, q) {
   let e = cache.get(key);
   if (!e) {
     const w = q / 10;
-    e = { id: null, name: `${A.name}→${B.name}` };
+    e = { id: null, name: `${A.name}→${B.name}`, ids: [A.id, B.id], w }; // ids/w: what it blends (the rumble mixer reads them)
     for (const k of BLEND_KEYS) e[k] = A[k] + (B[k] - A[k]) * w;
     e.B = Math.tan(Math.PI / (2 * e.C));
     cache.set(key, e);
