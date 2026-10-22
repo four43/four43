@@ -4,7 +4,7 @@
 import { boot } from 'lion-hawk/view';
 import { pigPensGame, initPhysics } from './game.sim.js';
 import { pigPensView } from './game.view.js';
-import { devices } from './devices.js';
+import { devices, useSeats } from './devices.js';
 
 const $ = id => document.getElementById(id);
 
@@ -12,10 +12,11 @@ async function start() {
   await initPhysics();
   const q = new URLSearchParams(location.search), canvas = $('c');
   const shading = ['physical', 'standard', 'lambert'].includes(q.get('shading')) ? q.get('shading') : 'lambert';
-  boot(pigPensGame(), pigPensView({ tilt: q.get('tilt') !== '0', shading }), {
+  const { view } = boot(pigPensGame(), pigPensView({ tilt: q.get('tilt') !== '0', shading }), {
     canvas, args: { pigs: +q.get('pigs') || 48 }, seed: 1, devices: devices(document),
     timer: q.has('fps') ? () => performance.now() : undefined,
   });
+  useSeats(view, document); // lion-hawk C-5, C-10: keys, drive pad and horn through the 'farm' context
   const failed = window.engine?.errors?.[0]; if (failed) throw new Error(failed.message); // the view could not start (WebGL)
 }
 start().catch(err => { const l = $('loading'); if (l) l.textContent = 'Could not start: ' + err.message; console.error(err); });

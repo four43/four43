@@ -1,7 +1,7 @@
 // Pig Pens' input devices on the engine (lion-hawk 2e P6/P7, #5, #52, #53, #54): the tools are `tool` commands from
 // bindPointer on #c; the keyboard, the fixed thumb pad and the horn feed actions. at() sends camera rays, never hits,
 // so the sim does all the picking and a replay reproduces it.
-import { bindPointer, bindKeyboard, bindStick, bindHold } from 'lion-hawk/view';
+import { bindPointer, bindStick, bindHold } from 'lion-hawk/view';
 import { PRESS, TAP, LIFT } from './game/farm.js';
 import { rig } from './view/rig.js';
 
@@ -37,15 +37,27 @@ export const KEYS = {
   a: ['steer', 1], arrowleft: ['steer', 1], d: ['steer', -1], arrowright: ['steer', -1],
 };
 
-// Device factories for boot({ devices }).
+// lion-hawk 0.13 (C-5, C-10): the keys, the fixed drive pad (#53) and the horn are the 'farm' mapping context on the seat's controller
+// (touch(e) gets its { input, command }). No gamepad entry: Pig Pens reads no pad, as before.
+export function farmContext(doc) {
+  const $ = id => doc.getElementById(id);
+  return {
+    keys: { all: { bindings: KEYS } },
+    touch: e => [
+      // the fixed drive pad (#53): deflects from its own centre, travel 36% of its width, no dead zone (main.js stickMove)
+      bindStick(e, { root: $('stick'), base: $('stick'), knob: $('knob'), origin: 'centre', x: ['steer', -1], y: ['throttle', 1],
+        radius: () => $('stick').getBoundingClientRect().width * 0.36, deadZone: 0, edge: 0, doc }),
+      bindHold(e, $('horn'), 'horn'),
+    ],
+  };
+}
+// One player: any pad joins seat 0 (and binds nothing); the context starts there.
+export function useSeats(view, doc) {
+  view.context('farm', farmContext(doc));
+  return view.seats({ max: 1, join: () => 0, contexts: ['farm'] });
+}
+// Device factories for boot({ devices }): the tools are `tool` commands (toolAt reads the scene state), not a seat's input.
 export function devices(doc) {
   const $ = id => doc.getElementById(id);
-  return [
-    e => bindPointer(e, { surface: $('c'), type: 'tool', at: toolAt(e), filter: { button: [0] }, press: PRESS, tap: TAP, uncapped: true, doc }),
-    e => bindKeyboard(e, KEYS, { target: doc.defaultView, doc }),
-    // the fixed drive pad (#53): deflects from its own centre, travel 36% of its width, no dead zone (main.js stickMove)
-    e => bindStick(e, { root: $('stick'), base: $('stick'), knob: $('knob'), origin: 'centre', x: ['steer', -1], y: ['throttle', 1],
-      radius: () => $('stick').getBoundingClientRect().width * 0.36, deadZone: 0, edge: 0, doc }),
-    e => bindHold(e, $('horn'), 'horn'),
-  ];
+  return [e => bindPointer(e, { surface: $('c'), type: 'tool', at: toolAt(e), filter: { button: [0] }, press: PRESS, tap: TAP, uncapped: true, doc })];
 }

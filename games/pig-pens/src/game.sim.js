@@ -2,7 +2,7 @@
 // extras. Never touches three.js or the DOM. The caller initialises Rapier (`await R.init()`) before createEngine/boot (#6);
 // the engine creates the World per scene (S-3) on Pig Pens' materials, baked sidecars and collision groups.
 import R from '@dimforge/rapier3d-compat';
-import { defineGame, actions, axis, button } from 'lion-hawk/sim';
+import { defineGame, actions, axis, button, F } from 'lion-hawk/sim';
 import MATERIALS from './defs/materials.js';
 import PHYS from '../baked/phys.json' with { type: 'json' };
 import { DT, GROUPS } from './sim.js';
@@ -44,6 +44,8 @@ export function pigPensGame() {
   });
   return defineGame({
     id: 'pig-pens', sim: { hz: 1 / DT, maxCatchUp: 4, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm',
+    // [T-25] state homes (lion-hawk §2.2): the basket is player 1's; day or night and the pigs in each of the 8 regions are the farm's
+    player: { eggs: F.uint(2) }, gameState: { night: F.bool(), pens: F.list(F.uint(1), 8, 8) },
     defs: { materials: MATERIALS, models: PHYS },
     physics: { rapier: R, gravity: [0, -9.81, 0], groups: GROUPS }, // GROUPS' order is 2.1.0's collision bits (D9: the game passes Rapier)
     scenes: { farm }, state, debug,
