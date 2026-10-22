@@ -177,5 +177,22 @@ test('desktop: rumble reaches seat 0\'s pads while driving; a pause stops them (
     assert.ok((await game.haptics(0)).calls.slice(m).some(c => c.op === 'reset'), 'the pause stops it (a reset since Escape)');
     await game.frames(5);
     assert.ok(!(await game.haptics(0)).calls.slice(n).some(on), 'nothing is sent while paused');
+    // Rally's own stop: results is no pausing overlay, so only Rally's pads.stop (view.haptics.stop) can start the engine's stop rounds
+    await game.page.waitForFunction(() => !window.__rallyView.stopping(), null, { timeout: 5000 }); // the pause's own rounds have run out
+    await game.jump('stage', 'results', { time: 100, best: 101 }, { settings: { mode: 'stage', seed: 'e2e2' } });
+    const stopped = await game.page.evaluate(() => new Promise(res => { let n = 0; const tick = () => (window.__rallyView.stopping() ? res(true) : ++n > 3 ? res(false) : requestAnimationFrame(tick)); tick(); }));
+    assert.equal(stopped, true, 'a game moment that does not pause (results) calls view.haptics.stop itself');
+  } finally { await game.close(); }
+});
+
+test('desktop: the drive context: W drives, and two pads are one player (lion-hawk C-5, C-10, review focus)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: { 'rally-sim-settings': { v: 5, mode: 'freeDrive', world: 'loop', seed: 'e2e2' } } });
+  try {
+    await game.tap('title.drive'); await game.until(s => s.phase === 'running', { maxSteps: 2000 });
+    await game.page.keyboard.down('w'); await frames(game); await game.seconds(1.5); await game.page.keyboard.up('w');
+    assert.ok((await game.state()).speed > 1, 'W drives through the context');
+    await game.pad(0, { x: true }); await game.pad(1, { x: true }); await game.frames(); await game.pad(0, {}); await game.pad(1, {}); await game.frames();
+    assert.deepEqual(await game.page.evaluate(() => window.__rallyView.seats()), [2], 'one seat holds both pads');
   } finally { await game.close(); }
 });

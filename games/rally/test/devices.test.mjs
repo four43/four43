@@ -3,7 +3,7 @@
 // game's maxFrame (0.1 s), so the ramps take dt as given.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RAMPS } from '../src/devices.js';
+import { RAMPS, KEYS, PAD, devices, driveContext, useSeats } from '../src/devices.js';
 import { game } from './helpers/bench.mjs';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
@@ -22,4 +22,19 @@ test('steer ramp takes dt as given; the engine caps it at maxFrame 0.1 s', () =>
   assert.equal(game().sim.maxFrame, 0.1);
   const v = RAMPS.steer(0, 1, 0.1, {});
   near(v, 0.1 * (1.2 + 3 * (0.1 / 0.35)));
+});
+
+test('device setup is the drive context (lion-hawk C-5, C-10): keys with the ramps, any pad, the touch controls; one seat takes every pad (review focus)', () => {
+  const doc = { defaultView: { innerWidth: 800 }, querySelector: () => null };
+  const ctx = driveContext(doc);
+  assert.equal(ctx.keys.all.bindings, KEYS); assert.equal(ctx.keys.all.ramps, RAMPS);
+  assert.equal(ctx.pads.length, 1); assert.equal(ctx.pads[0].bindings, PAD);
+  for (const p of [{ mapping: 'standard', id: 'Xbox' }, { mapping: '', id: 'G29 wheel' }]) assert.equal(ctx.pads[0].match(p), true, `#30: ${p.id} drives`);
+  assert.equal(typeof ctx.touch, 'function');
+  const calls = [], view = { context: (n, d) => calls.push(['context', n, d]), seats: o => { calls.push(['seats', o]); return []; } };
+  useSeats(view, doc);
+  assert.deepEqual(calls.map(c => c[0]), ['context', 'seats']); assert.equal(calls[0][1], 'drive');
+  const o = calls[1][1]; assert.equal(o.max, 1); assert.deepEqual(o.contexts, ['drive']);
+  assert.equal(o.join({ kind: 'pad', index: 3, id: 'x' }), 0, 'a second pad joins seat 0, not seat 1');
+  assert.equal(devices(doc).length, 1, 'boot keeps only the glyph prompts: a keyboard or pad device beside the context would bind twice');
 });

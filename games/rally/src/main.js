@@ -6,7 +6,7 @@ import { defineGame } from 'lion-hawk/sim';
 import { boot } from 'lion-hawk/view';
 import { rallySpec, rallyPhysics } from './game.sim.js';
 import { rallyView } from './game.view.js';
-import { devices } from './devices.js';
+import { devices, useSeats } from './devices.js';
 import { makeBests, memoryStore } from './game/bests.js';
 import { normalizeSettings } from './game/settings.js';
 
@@ -23,11 +23,12 @@ async function start() {
   if (q.has('rumble')) { (await import('./rumbleLab.js')).rumbleLab(document, { storage, key: RUMBLE_KEY }); return; }
   await R.init();
   // #35: a random engine seed so first visits get different tracks; ?seed= and ?lh-test still win inside boot.
-  const { engine } = boot(defineGame({ ...rallySpec({ bests: makeBests(storage ?? memoryStore()) }), physics: rallyPhysics(R) }), rallyView({ save, rumblePicks: rumblePicks() }), {
+  const { engine, view } = boot(defineGame({ ...rallySpec({ bests: makeBests(storage ?? memoryStore()) }), physics: rallyPhysics(R) }), rallyView({ save, rumblePicks: rumblePicks() }), {
     args: { settings: normalizeSettings(load()), pad: q.has('pad') },
     seed: (Math.random() * 2 ** 32) >>> 0,
     devices: devices(document), canvas: document.getElementById('view'),
   });
+  useSeats(view, document); // lion-hawk C-5, C-10: one player; keys, every pad and touch through the 'drive' context (rally-spec R8-1)
   const debug = () => engine.game.debug(engine);
   // ?debug=<screen>&mode=&n= on a phone: jump straight to a screen (the stage presets).
   if (q.get('debug')) debug().screen(q.get('debug'), { mode: q.get('mode') || undefined, n: Number(q.get('n')) || undefined });

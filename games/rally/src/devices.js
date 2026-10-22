@@ -1,7 +1,7 @@
 // Rally's input devices on the engine (lion-hawk 2c-rally R5, spec R4; field notes #13–#17, #29, #30): the keyboard with
 // the ease ramps, the pad with its expo stick, the touch steering slider and the pedal/chip buttons. The feel is
-// the removed Controls' arithmetic, moved: the engine merges the sources (largest value wins, #29; every pad, #30).
-import { bindKeyboard, bindGamepad, bindStick, bindHold } from 'lion-hawk/view';
+// the removed Controls' arithmetic, moved: the engine merges the sources (largest value wins, #29; every pad, #30); since lion-hawk 0.13 they are the 'drive' mapping context (rally-spec R8-1).
+import { bindStick, bindHold } from 'lion-hawk/view';
 import { bindGlyphs } from 'lion-hawk/kits/glyphs/view';
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -51,16 +51,24 @@ export const PAD = {
 const HOLDS = [['#gasBtn', 'throttle'], ['#brakeBtn', 'brake'], ['#hbBtn', 'handbrake'], ['#upBtn', 'shiftUp'], ['#dnBtn', 'shiftDown'],
   ['#resetBtn', 'resetHold'], ['#camBtn', 'camera'], ['#dbgBtn', 'debug']];
 
-// Device factories for boot({ devices }).
-export function devices(doc) {
+// lion-hawk 0.13 (C-5, C-10): the keyboard, the pads and the touch controls are the 'drive' mapping context, bound by the engine
+// onto the seat's controller; touch(e) gets the seat's { input, command }. #30: any pad drives, so the one entry matches every pad.
+export function driveContext(doc) {
   const win = doc.defaultView, $ = s => doc.querySelector(s);
-  const out = [
-    e => bindKeyboard(e, KEYS, { target: win, doc, ramps: RAMPS }),
-    e => bindGamepad(e, PAD),
-    e => bindStick(e, { root: $('#steerZone'), x: ['steer', -1], axis: 'x', radius: () => steerRange(win.innerWidth), deadZone: 0, edge: 20,
-      base: $('#steerBase'), knob: $('#steerKnob'), doc }),
-  ];
-  for (const [sel, action] of HOLDS) out.push(e => bindHold(e, $(sel), action));
-  out.push(e => bindGlyphs(e, { doc })); // the A/B prompts on menu buttons follow the input in use (lion-hawk U-10)
-  return out;
+  return {
+    keys: { all: { bindings: KEYS, ramps: RAMPS } },
+    pads: [{ match: () => true, bindings: PAD }],
+    touch: e => [
+      bindStick(e, { root: $('#steerZone'), x: ['steer', -1], axis: 'x', radius: () => steerRange(win.innerWidth), deadZone: 0, edge: 20,
+        base: $('#steerBase'), knob: $('#steerKnob'), doc }),
+      ...HOLDS.map(([sel, action]) => bindHold(e, $(sel), action)),
+    ],
+  };
 }
+// Rally has one player: every pad joins seat 0 (two pads still drive one car, #29, #30) and the context starts there.
+export function useSeats(view, doc) {
+  view.context('drive', driveContext(doc));
+  return view.seats({ max: 1, join: () => 0, contexts: ['drive'] });
+}
+// Device factories for boot({ devices }): only what is not a seat's input. The A/B prompts on menu buttons follow the input in use (U-10).
+export function devices(doc) { return [e => bindGlyphs(e, { doc })]; }

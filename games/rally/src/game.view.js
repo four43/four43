@@ -161,7 +161,7 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
       doc.addEventListener('visibilitychange', hidden);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
-        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length) };
+        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping };
       off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },
     exit(engine, view) {
@@ -210,8 +210,8 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
         renderer.updateCamera(s.sim, Math.min(0.1, view.dt)); // #19: 0 for hook renders (no camera motion, no snap)
       }
       hud.update(s.sim.car);
-      // Rumble only while driving (ready, countdown, running: not past the finish) with nothing on top (any overlay or a
-      // hidden tab stops it) and the stage drawn.
+      // Rumble only while driving (ready, countdown, running: not past the finish) with nothing on top (a pausing overlay or a
+      // hidden tab is the engine's stop) and the stage drawn.
       const driving = DRIVING.has(s.phase) && ov.length === 0 && seen.s === s; // a hidden page renders no frames (the engine stopped the pads)
       if (driving) pads.send(rumble.update(s.sim.car, Math.min(0.1, view.dt), STRENGTH[st.rumble] ?? 1)); else pads.stop(s.phase === 'finished' ? 'finish' : 'menu');
       ghud.update(hudGame);
