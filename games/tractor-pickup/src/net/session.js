@@ -31,11 +31,11 @@ const errText = e => ERRORS[e?.code] || ERRORS.other, joinText = e => e?.code ==
 // bind (lion-hawk 2g G5, the engine path): bind({ role, transport }) → { sync: () => the sim's sync or null, close(then) }. With it, a
 // joined room's link goes to the engine (a port) instead of a sync made here: `sync` reads the getter (null until the step after
 // the bind), and Stop or Leave call close, which ends the sim's sync (net.close) and calls then() once its leave has gone out.
-// Without it the session makes and steps the sync itself (the old main.js's path, removed in lion-hawk 2g G7; session.test.mjs still covers it).
+// bind is required: the session no longer makes or steps a sync itself (the old main.js path was removed in lion-hawk 2g G7).
 export function createSession({ Handshake, server = SERVER, lag = null, getPaint, onChange = () => {}, retryMs = 10000, welcomeMs = 10000, log = () => {}, transports = {}, bind = null }) {
   if (typeof bind !== 'function') throw new Error('session: bind is required (the engine path; lion-hawk 0.13)');
   let welcomed = false, hs = null, room = null, sync = null, bound = null, state = 'idle', error = null, code = null, info = null, retry = 0, stuck = false, waitT = 0; // stuck: joined, no welcome after welcomeMs
-  const cur = () => bound ? bound.sync() : sync; // the sync the panel reads: the sim's on the engine path
+  const cur = () => bound ? bound.sync() : null; // the sync the panel reads: the sim's, through the bind
   const unstick = () => { clearTimeout(waitT); stuck = false; };
   let said = '';
   const changed = () => { const k = `${state}${error ? ' error: ' + error : ''}`; if (k !== said) { said = k; log('panel', k); } try { onChange(); } catch (e) { console.warn(e); } };
