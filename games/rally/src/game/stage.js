@@ -12,6 +12,8 @@ import { bestKey } from './bests.js';
 import { MODES } from './modes.js';
 import { normalizeSettings, newSeed } from './settings.js';
 
+const MS_MAX = 0xffffffff, ms = t => Math.max(0, Math.min(MS_MAX, Math.round(t * 1000))); // [T-25] lap times in ms on player 1's record
+
 export const READY_T = 0.8, COUNT_T = 3, LOAD_HOLD = 0.05, RESULTS_AFTER = 1.5, RESET_HOLD = 0.6;
 export const DRIVING = new Set(['ready', 'countdown', 'running']);
 const START_Y = 0.6;          // CoM above the road when placed
@@ -30,7 +32,7 @@ export function makeStage({ bests = null }) {
 
   function setPhase(e, s, phase) {
     if (phase === s.phase) return;
-    const from = s.phase; s.phase = phase;
+    const from = s.phase; s.phase = phase; e.gameState.phase = phase; // [T-25] the session's phase is game state
     e.emit('state', { state: phase, from });
   }
 
@@ -126,6 +128,7 @@ export function makeStage({ bests = null }) {
           bestSplits: s.best?.splits ?? [] };
         if (isBest) { s.best = { time: s.time, splits: s.splits.slice() }; bests?.put(runKey(s), s.best); }
         setPhase(e, s, 'finished');
+        e.players[0].finish = ms(s.time); // [T-25] player 1 (Rally has one seat)
         s.resultsIn = RESULTS_AFTER; // #22: the results card on engine time, not setTimeout
         e.emit('finish', { ...s.result });
         break;
@@ -136,6 +139,7 @@ export function makeStage({ bests = null }) {
         const lap = { n: s.laps.length + 1, time: t, valid: ev.valid, prev, delta: prev === null ? null : t - prev, isBest };
         if (isBest) { s.best = { lap: t, splits: s.splits.slice() }; bests?.put(runKey(s), s.best); }
         s.laps.push(lap);
+        const p = e.players[0], t1 = ms(t); p.lastLap = t1; if (ev.valid && (p.bestLap === 0 || t1 < p.bestLap)) p.bestLap = t1; // [T-25] this session's laps
         s.lapTime = 0; s.splits = [];
         e.emit('lap', { ...lap });
         break;

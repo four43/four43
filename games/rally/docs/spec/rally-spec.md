@@ -565,3 +565,21 @@ trigger rumble.
   gain, blends, slide hysteresis (fails with hysteresis removed), crawl, spin vs lock motors and pedals,
   the output against a fake actuator). In a browser with a fake pad: rumble streams while driving and
   pause sends one reset. The feel itself is yours to judge on a real pad.
+
+## Round 8: local players (lion-hawk 0.13, 2026-10-21)
+
+- **R8-1 Devices are a mapping context.** `src/devices.js` declares the `drive` context (the keyboard with its ramps, every pad
+  with the expo stick, the touch slider and buttons); `useSeats(view, doc)` turns on one seat that every pad joins, so two pads
+  still drive one car (#30). `boot({ devices })` keeps only the glyph prompts.
+- **R8-2 Rumble on the seat's pads.** `rumbleOut` sends to `view.localPlayers[0].pads` and stops through `view.haptics.stop()`:
+  `'menu'` (title, settings, results, pause), `'finish'` and `'exit'` (the stage exits), once per transition. Nothing is sent
+  while `view.haptics.paused`. The engine stops the pads on page hide, blur and `pagehide` and resets a pad the first time it
+  sees it (lion-hawk C-14), so Rally no longer does. A quarter second of quiet while driving still ends with one zero effect
+  plus reset (R7's gap rule). The `?rumble` lab runs no engine: it sends to every connected pad and zeroes them on `pagehide`
+  (`rumbleOut`'s `kill()`).
+- **R8-3 State homes** (lion-hawk §2.2, [T-25]): the last lap, this session's best lap and the stage finish time (ms) are
+  player 1's player state (`engine.players[0]`: `lastLap`, `bestLap`, `finish`); the run's phase is game state
+  (`engine.gameState.phase`). The stage writes them where it changes them; `s.phase` stays the HUD's copy.
+  Deferred (lion-hawk §2.2's worked example for Rally, partly built): the splits, the countdown and the track seed stay in the
+  stage state for now; they move to player or game state when Rally has a second player or a net part.
+- Follow-up after this round: the "almost slip" brake warning in the left trigger (`trigger-rumble`).

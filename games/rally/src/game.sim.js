@@ -1,7 +1,7 @@
 // Rally's sim half (lion-hawk phase 2c, [S-1]…[S-5]): actions, the `stage` main scene with title/pause/results/settings
 // overlays, the autopilot policy, the JSON-safe state and the debug extras. Never touches three.js or the DOM.
 // The entry and tests pass Rapier in (`rallyGame({ rapier })`, D9), initialised (`await R.init()`) before createEngine/boot (#6).
-import { defineGame, actions, axis, button } from 'lion-hawk/sim';
+import { defineGame, actions, axis, button, F } from 'lion-hawk/sim';
 import { HZ } from './sim.js';
 import MATERIALS from './defs/materials.js';
 import PHYS from '../baked/phys.json' with { type: 'json' };
@@ -16,6 +16,11 @@ export const ACTIONS = actions({
   shiftUp: button(), shiftDown: button(), reset: button(), resetAll: button(), resetHold: button(),
   camera: button(), debug: button(), pause: button(), confirm: button(),
 });
+// [T-25] where Rally's state lives (lion-hawk spec §2.2, rally-spec R8-3): lap times are player 1's player state (they outlive the
+// car); the run's phase is game state. Times in ms, 0 = none yet.
+export const PLAYER_STATE = { lastLap: F.uint(4), bestLap: F.uint(4), finish: F.uint(4) };
+export const GAME_STATE = { phase: F.oneOf(['title', 'loading', 'ready', 'countdown', 'running', 'finished']) };
+
 
 // JSON-safe summary for tests and the hook (#28: the Sim stays in ctx.state, never here).
 function state(e) {
@@ -58,7 +63,7 @@ export function rallySpec({ bests = makeBests() } = {}) {
     count: (n = 3) => e.emit('count', { n }),
   });
   return {
-    id: 'rally', sim: { hz: HZ, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, start: 'stage',
+    id: 'rally', sim: { hz: HZ, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, player: PLAYER_STATE, gameState: GAME_STATE, start: 'stage',
     defs: { materials: MATERIALS, models: PHYS },
     scenes: { stage, title, pause, results, settings }, policies: { autopilot: autopilotPolicy }, state, debug,
   };
