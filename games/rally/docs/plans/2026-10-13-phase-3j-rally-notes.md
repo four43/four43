@@ -36,7 +36,7 @@ Rally 0.4.0 runs fully on lion-hawk 0.10 (phase-3):
 - Task 8: cones are a 33-point convex hull (apex and a 32-point ring), because the phase 3 collider shapes have no `cone`. They appear only on the pad, which is in neither golden.
 - Task 8: the "posts asleep" test allows 1e-3 m, not 1e-6. A post falls for one step of gravity (about 1e-4 m) before the World puts it back to sleep, as the old afterStep did.
 - Task 9: the inertia test compares sorted principal values. Rapier sorts the principal axes when a collider sits off the centre of mass, before and after the port alike (the tensor is the same).
-- `// lh-allow:` lines (the done-when test requires the waiver on the same line as the code): src/vehicle.js:95 (massProps, D3: the cars.js mass and inertia) and src/vehicle.js:214 (the wheel raycast, L-1).
+- `// lh-allow:` lines (the done-when test requires the waiver on the same line as the code): src/vehicle.js:105 (massProps, D3: the cars.js mass and inertia) and src/vehicle.js:236 (the wheel raycast, L-1).
 
 - Task 10: the done-when rules ban `density:` / `density =` anywhere outside the registry, so the track setting `density` (mild/wild) is now `obstacles` (its UI label). Settings v5 migrates a saved `density`; bests keys are unchanged (they join values). The pad texture's speck `density` is `specks`.
 - Task 10: the Rapier import is allowed only in a file that calls `defineGame`, and the sim tree may not import Rapier. So `game.sim.js` exports `rallySpec({ bests })` (the spec without physics), and `src/main.js` calls `defineGame({ ...rallySpec(), physics: rallyPhysics(R) })`. Tests use `rallyGame({ rapier })`, which does the same.
