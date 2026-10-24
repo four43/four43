@@ -14,7 +14,7 @@ import { importsOf, jsFiles } from './helpers/scan.mjs';
 const games = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
 // The integrator adds a game here in the commit that merges its phase 3 plan (3m Task 18).
 export const MIGRATED = ['pig-pens', 'rally', 'tractor-pickup'];
-const VERSION = { rally: '0.4.0', 'pig-pens': '2.2.0', 'tractor-pickup': '1.9.0' };
+const VERSION = { rally: '0.6.0', 'pig-pens': '2.3.0', 'tractor-pickup': '1.11.0' };
 const NOTES = { rally: '2026-10-13-phase-3j-rally-notes.md', 'pig-pens': '2026-10-13-phase-3k-pigpens-notes.md', 'tractor-pickup': '2026-10-13-phase-3l-tractor-notes.md' };
 const MATERIALS = join('src', 'defs', 'materials.js');
 // Banned everywhere in game code, including the material registry.

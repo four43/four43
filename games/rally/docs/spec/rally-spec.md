@@ -566,7 +566,7 @@ trigger rumble.
   the output against a fake actuator). In a browser with a fake pad: rumble streams while driving and
   pause sends one reset. The feel itself is yours to judge on a real pad.
 
-## Round 8: local players (lion-hawk 0.13, 2026-10-21)
+## Round 8: local players (0.6.0, lion-hawk 0.13, 2026-10-21)
 
 - **R8-1 Devices are a mapping context.** `src/devices.js` declares the `drive` context (the keyboard with its ramps, every pad
   with the expo stick, the touch slider and buttons); `useSeats(view, doc)` turns on one seat that every pad joins, so two pads

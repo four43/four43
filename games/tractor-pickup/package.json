@@ -1,7 +1,7 @@
 {
   "name": "tractor-pickup",
   "private": true,
-  "version": "1.10.0",
+  "version": "1.11.0",
   "type": "module",
   "scripts": {
     "test": "node --test --test-concurrency=4 test/",
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
-    "lion-hawk": "github:four43/lion-hawk-engine#v0.12.0",
+    "lion-hawk": "github:four43/lion-hawk-engine#v0.13.0",
     "qrcode-generator": "^1.5.2",
     "three": "^0.186.0"
   },

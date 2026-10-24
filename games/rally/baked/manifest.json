@@ -5,25 +5,29 @@
       "glb": "models/cone.glb",
       "anim": null,
       "bytes": 4304,
-      "sha256": "123f3ca9e5f7df7e016e41ba82b8a41b81025b395d84a3e19c8be6433cf2ff67"
+      "sha256": "123f3ca9e5f7df7e016e41ba82b8a41b81025b395d84a3e19c8be6433cf2ff67",
+      "options": "136c68da753499fe"
     },
     "hatchback-sports": {
       "glb": "models/hatchback-sports.glb",
       "anim": null,
       "bytes": 23096,
-      "sha256": "3d81e22bf43e970923534929ebfc107db78eefbc11dd027cd08943280ebbb188"
+      "sha256": "3d81e22bf43e970923534929ebfc107db78eefbc11dd027cd08943280ebbb188",
+      "options": "8b12a8323d0428d5"
     },
     "sedan-sports": {
       "glb": "models/sedan-sports.glb",
       "anim": null,
       "bytes": 24260,
-      "sha256": "b3ebff4fe9a85197f72dcfd137a450731dc694f1649cab5baa397f49f6e71cdd"
+      "sha256": "b3ebff4fe9a85197f72dcfd137a450731dc694f1649cab5baa397f49f6e71cdd",
+      "options": "8b12a8323d0428d5"
     },
     "wheel-racing": {
       "glb": "models/wheel-racing.glb",
       "anim": null,
       "bytes": 5780,
-      "sha256": "025b1b7fbb1cc58d15583d0a3cc6e757265db5628070bf76f2a4721a667e7524"
+      "sha256": "025b1b7fbb1cc58d15583d0a3cc6e757265db5628070bf76f2a4721a667e7524",
+      "options": "8be0911da597a463"
     }
   }
 }
