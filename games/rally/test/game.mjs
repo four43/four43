@@ -185,8 +185,11 @@ await test('game stage', () => {
 
   // Second run, the same: splits now have deltas; a slower or equal time isn't a new best.
   retry(h);
-  h.step(1, 'autopilot'); // one extra step in ready shifts the autopilot's phase, so run 2 is a different time from run 1
-  const ev2 = play(h, { until: finished });
+  // run 2 idles half a second after Go, so it is a different (slower) time (a held car is at rest at Go, so extra steps in
+  // ready no longer change the run since R11)
+  const ev2 = play(h, { until: (h) => h.state().phase === 'running' });
+  for (let i = 0; i < 0.5 / DT; i++) h.step(1, {});
+  ev2.push(...play(h, { until: finished }));
   const sp = ev2.filter((e) => e.type === 'split');
   check('second run splits have deltas', sp.filter((e) => e.delta !== null).length, sp.length, sp.length);
   const fin2 = ev2.find((e) => e.type === 'finish');

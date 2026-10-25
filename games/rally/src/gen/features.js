@@ -1,24 +1,19 @@
 // Obstacles along the road (spec tracks T-4): kickers, crests, whoops, tabletops on straight-ish
 // stretches, and bermed hairpins. Features are pure data; profileOffset / bermBank evaluate their
-// shapes analytically so terrain, rendering and the autopilot all agree on them.
+// shapes analytically so terrain, rendering and the autopilot all agree on them. Whoops are only a
+// stretch here: their ridges are 2D road bumps (gen/bumps.js, rally spec R11), not a profile.
 
 const DEG = Math.PI / 180;
 // Mild ranges from the spec; `wild` scales heights by WILD_HEIGHT.
 export const FEATURE_RANGES = {
   kicker: { height: [1, 1.5], lipS: [8, 10], landS: [20, 40], recS: [15, 25] },
   crest: { height: [2, 4], length: [30, 50] },
-  whoops: { count: [4, 8], height: [0.25, 0.45], pitch: [6.5, 8] },
+  whoops: { count: [4, 10], pitch: [5, 6] }, // the stretch: count × pitch m; bumps.js lays its ridges
   tabletop: { height: [1, 1.5], upS: [7, 10], topS: [10, 20], downS: [8, 14] },
   berm: { angle: [10 * DEG, 18 * DEG] },
 };
 const WEIGHTS = [['kicker', 3], ['whoops', 3], ['crest', 2], ['tabletop', 2]];
 const WILD_HEIGHT = 1.4, WILD_PACK = 1.6;
-// Whoops must clear the hull: with wheels in two troughs 2.4 m apart (the wheelbase), the ridge
-// between them stands h·sin²(π·1.2/pitch) above them; keep that under the car's ~0.2 m clearance.
-export const WHOOPS_RIDGE_MAX = 0.15;
-// ...and their faces (steepest slope π·h/pitch) must stay climbable by the front overhang (~13°),
-// which wild's ×1.4 heights broke: cap the height outright.
-export const WHOOPS_MAX_H = 0.5;
 const RUN_UP = 60, RUN_OUT = 40, MAX_K = 1 / 120; // straight-ish stretch around a feature
 // Twisty layouts rarely run 160 m at |κ| ≤ 1/120, so there the run-up is 40 m and the run-out
 // 30 m; whoops and tabletops (ridden slowly, no flight) may sit on mild bends (|κ| ≤ 1/60), and
@@ -49,9 +44,8 @@ function makeFeature(type, s0, r, hk) {
     }
     case 'crest': { const height = rg('height') * hk, length = rg('length'); return { type, s0, s1: s0 + length, height, length }; }
     case 'whoops': {
-      const count = r.int(R.count[0], R.count[1]), pitch = rg('pitch'), ridge = Math.sin(Math.PI * 1.2 / pitch) ** 2;
-      const height = Math.min(rg('height') * hk, WHOOPS_RIDGE_MAX / ridge, WHOOPS_MAX_H);
-      return { type, s0, s1: s0 + count * pitch, count, height, pitch };
+      const count = r.int(R.count[0], R.count[1]), pitch = rg('pitch');
+      return { type, s0, s1: s0 + count * pitch, count, pitch };
     }
     case 'tabletop': {
       const height = rg('height') * hk, upS = rg('upS'), topS = rg('topS'), downS = rg('downS');
@@ -122,7 +116,6 @@ function offset(f, u) {
       return -h * (1 - halfCos((u - f.landS) / f.recS));
     }
     case 'crest': return h * (1 - Math.cos(2 * Math.PI * u / f.length)) / 2;
-    case 'whoops': { const v = Math.sin(Math.PI * u / f.pitch); return h * v * v; }
     case 'tabletop': {
       if (u < f.upS) return h * smooth(u / f.upS);
       if (u < f.upS + f.topS) return h;
@@ -132,10 +125,10 @@ function offset(f, u) {
   return 0;
 }
 
-// Metres added to the road height at s (berms add none).
+// Metres added to the road height at s (berms and whoops add none: whoops are road bumps).
 export function profileOffset(features, s) {
   let y = 0;
-  for (const f of features) if (f.type !== 'berm' && s >= f.s0 && s <= f.s1) y += offset(f, s - f.s0);
+  for (const f of features) if (f.type !== 'berm' && f.type !== 'whoops' && s >= f.s0 && s <= f.s1) y += offset(f, s - f.s0);
   return y;
 }
 

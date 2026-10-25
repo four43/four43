@@ -1,6 +1,6 @@
 // Obstacles and terrain generators (spec tracks T-3, T-4). Run: node test/gen-terrain.mjs [filter]
 import { rng } from '../src/gen/rng.js';
-import { placeFeatures, profileOffset, bermBank, FEATURE_RANGES, WHOOPS_RIDGE_MAX, WHOOPS_MAX_H } from '../src/gen/features.js';
+import { placeFeatures, profileOffset, bermBank, FEATURE_RANGES } from '../src/gen/features.js';
 import { generateTerrain, heightAt, BUMPS } from '../src/gen/terrain.js';
 
 const only = process.argv[2];
@@ -159,8 +159,8 @@ test('features: dimensions', () => {
   check('kicker height 1-1.5, lip 8-10, landing 20-40', +(S.kicker.height[0] === 1 && S.kicker.height[1] === 1.5 && S.kicker.lipS[0] === 8 &&
     S.kicker.lipS[1] === 10 && S.kicker.landS[0] === 20 && S.kicker.landS[1] === 40), 1, 1);
   check('crest 2-4 m over 30-50 m', +(S.crest.height[0] === 2 && S.crest.height[1] === 4 && S.crest.length[0] === 30 && S.crest.length[1] === 50), 1, 1);
-  check('whoops 4-8 x 0.25-0.45 m, 6.5-8 m apart', +(S.whoops.count[0] === 4 && S.whoops.count[1] === 8 && S.whoops.height[0] === 0.25 &&
-    S.whoops.height[1] === 0.45 && S.whoops.pitch[0] === 6.5 && S.whoops.pitch[1] === 8), 1, 1);
+  check('whoops stretch 4-10 x 5-6 m (R11: the ridges are road bumps)', +(S.whoops.count[0] === 4 && S.whoops.count[1] === 10 &&
+    S.whoops.pitch[0] === 5 && S.whoops.pitch[1] === 6 && !('height' in S.whoops)), 1, 1);
   check('tabletop 1-1.5 m, top 10-20 m', +(S.tabletop.height[0] === 1 && S.tabletop.height[1] === 1.5 && S.tabletop.topS[0] === 10 && S.tabletop.topS[1] === 20), 1, 1);
 });
 
@@ -186,8 +186,8 @@ test('features: profile shapes', () => {
   check('tabletop top flat', Math.abs(profileOffset([tt], tt.s0 + tt.upS + 1) - profileOffset([tt], tt.s0 + tt.upS + tt.topS - 1)), 0, 1e-6);
   check('tabletop top / height', profileOffset([tt], tt.s0 + tt.upS + tt.topS / 2) / tt.height, 0.999, 1.001);
   const wh = find('whoops');
-  let peaks = 0; for (let s = wh.s0; s <= wh.s1; s += 0.1) { const a = profileOffset([wh], s - 0.1), b = profileOffset([wh], s), c = profileOffset([wh], s + 0.1); if (b > a && b >= c) peaks++; }
-  check('whoops offset peaks = count', peaks - wh.count, 0, 0);
+  let whMax = 0; for (let s = wh.s0; s <= wh.s1; s += 0.1) whMax = Math.max(whMax, Math.abs(profileOffset([wh], s)));
+  check('whoops add no profile (R11: ridges are road bumps)', whMax, 0, 0);
   for (const f of [kk, cr, tt, wh]) {
     check(`${f.type} offset 0 outside [s0, s1]`, Math.abs(profileOffset([f], f.s0 - 5)) + Math.abs(profileOffset([f], f.s1 + 5)), 0, 1e-9);
     check(`${f.type} bermBank 0`, Math.abs(bermBank([f], (f.s0 + f.s1) / 2)), 0, 0);
@@ -376,11 +376,11 @@ test('terrain: off-road bumps', () => {
 
 test('terrain: obstacles in road[]', () => {
   const L = LAYOUTS.straight;
-  let kk = null, wh = null, seedK, seedW;
+  let kk = null, wh = null, seedK;
   for (let k = 0; k < 200 && !(kk && wh); k++) {
     const fs = feats(L, 'ob' + k, 'mild');
     if (!kk) { kk = fs.find((f) => f.type === 'kicker'); seedK = 'ob' + k; }
-    if (!wh) { wh = fs.find((f) => f.type === 'whoops'); seedW = 'ob' + k; }
+    if (!wh) wh = fs.find((f) => f.type === 'whoops');
   }
   {
     const fs = feats(L, seedK, 'mild'), t = generateTerrain(L, fs, rng(seedK).fork('terrain'), {});
@@ -389,13 +389,6 @@ test('terrain: obstacles in road[]', () => {
     const rise = t.road[lip - 1] - t.road[Math.round(kk.s0)];
     check('kicker rises to the lip in road[] (m)', rise, 0.5 * kk.height, 2 * kk.height + 1.5);
     check('kicker drop behind the lip in road[] (m)', t.road[lip - 1] - t.road[lip + 3], 0.6 * kk.height, 3 * kk.height);
-  }
-  {
-    const fs = feats(L, seedW, 'mild'), t = generateTerrain(L, fs, rng(seedW).fork('terrain'), {});
-    let peaks = 0;
-    for (let i = Math.ceil(wh.s0) + 1; i < Math.floor(wh.s1); i++) if (t.road[i] > t.road[i - 1] && t.road[i] >= t.road[i + 1]) peaks++;
-    // sampled at 1 m, so a ridge may straddle two samples; allow the count exactly
-    check(`whoops local maxima in road[] (count ${wh.count}, pitch ${wh.pitch.toFixed(2)})`, peaks, wh.count, wh.count);
   }
 });
 
@@ -416,17 +409,6 @@ test('feature counts (report)', () => {
     for (const seed of SEEDS) for (const f of feats(L, seed, obstacles)) { c[f.type] = (c[f.type] || 0) + 1; n++; }
     console.log(`  ${name} ${obstacles}: ${(n / SEEDS.length).toFixed(1)}/seed ${JSON.stringify(c)}`);
   }
-});
-
-test('whoops clear the hull', () => {
-  // Wheels in two troughs a wheelbase (2.4 m) apart: the ridge between must stay under the hull.
-  let worst = 0, seen = 0;
-  for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const obstacles of ['mild', 'wild'])
-    for (const f of feats(L, seed, obstacles)) if (f.type === 'whoops') { seen++; worst = Math.max(worst, f.height * Math.sin(Math.PI * 1.2 / f.pitch) ** 2); }
-  check(`worst whoops ridge between wheels over ${seen} sections (m)`, worst, 0, WHOOPS_RIDGE_MAX + 1e-9, ' m');
-  let tallest = 0;
-  for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const f of feats(L, seed, 'wild')) if (f.type === 'whoops') tallest = Math.max(tallest, f.height);
-  check('tallest wild whoops (m)', tallest, 0, WHOOPS_MAX_H + 1e-9, ' m');
 });
 
 const failed = results.filter((r) => !r.ok);

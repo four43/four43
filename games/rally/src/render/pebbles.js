@@ -12,6 +12,7 @@ import { rng } from '../gen/rng.js';
 import { noise2 } from '../gen/noise.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { groove } from '../gen/wear.js';
+import { heightAt } from '../gen/terrain.js';
 
 const PEB = {
   shapes: 10, chunk: 4, radius: 34, fade: [20, 31], move: 1.5, evict: 90,
@@ -117,9 +118,9 @@ export class Pebbles {
       const cl = (0.25 + 0.75 * smooth(-0.5, 0.6, this.noise(s / 6, d / 3))) * (1 - 0.9 * g) * (1 + 1.5 * b); // above 1 on a berm: as dense as the chunk allows
       if (keep > dens / top * cl) continue;
       const rad = cfg.size[0] * (cfg.size[1] / cfg.size[0]) ** (u ** 1.4); // mostly small, the odd big one
-      const h = L.heading[i], ch = Math.cos(h), shh = Math.sin(h), bank = Math.tan(lerp(T.bank));
+      const h = L.heading[i], ch = Math.cos(h), shh = Math.sin(h);
       const x = lerp(L.x) + d * ch, z = lerp(L.z) - d * shh;
-      const y = lerp(T.road) + bank * d + this.lift - PEB.sink * 0.6 * rad * sy;
+      const y = heightAt(T, x, z) + this.lift - PEB.sink * 0.6 * rad * sy;
       const cy = Math.cos(yaw), sny = Math.sin(yaw), w = rad * sx, l = rad * sz, j = n * 16;
       m[j] = cy * w; m[j + 1] = 0; m[j + 2] = -sny * w; m[j + 3] = 0;
       m[j + 4] = 0; m[j + 5] = rad * sy; m[j + 6] = 0; m[j + 7] = 0;

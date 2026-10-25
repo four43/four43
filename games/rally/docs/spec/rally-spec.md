@@ -42,6 +42,7 @@ timing, bests) is specified there too (Phase 2).
 | `src/render/roadSurface.js` | Road and ground shading (R10): photo texture arrays, edges, wear marks, cracks, dashes, puddles, ice, spill; `extend()` patches on `rally-road` / `rally-ground` |
 | `src/render/pebbles.js` | Loose stones on dirt and gravel (R10-6): ten pebble shapes, instanced, per 4 m road chunk near the camera |
 | `src/gen/edges.js`, `src/gen/wear.js` | The road's edges (physics + shader) and its driven lines (shader marks + pebbles), per layout sample |
+| `src/gen/bumps.js` | Road bumps (R11): scattered humps and short ridges, and the whoops' ridge sets, in road space; stamped into the heightfield |
 | `pwa/road-*.jpg`, `pwa/ground-*.jpg` | Surface photos (ambientCG, CC0): colour 1024², normal xy + roughness 512² |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
 | `src/rumble/` | Rumble channels (R9): engine, suspension, body, aid, and the mix → `{ strong, weak, left, right }`; pure |
@@ -726,4 +727,32 @@ short, varied wear marks instead of lines; puddles only on the flat; a better gr
 - **Validation**: `test/edges.test.mjs` (edges bounded, varied, calmer on tarmac, continuous; surface lookup flips at the
   edge on both sides; wear inside the edges, inside of bends, a second line in places, groove/berm profile). Headless
   track, wild, verge, markers and game suites pass with the moving edge. Render tests: all worlds draw, no errors.
+
+## Round 11: road bumps (2026-10-25)
+
+Request (playtest): the whoops were too big and tossed the car; instead many smaller bumps and ridges of varied size,
+angle and width across the track; ridges are fine as long as they can be ridden.
+
+- **R11-1 Bumps** (`gen/bumps.js`, pure, `track.bumps`; sorted arrays: centre s, d, long-axis rotation, half-lengths,
+  height). Raised-cosine domes over ellipses in road space; where they overlap, the tallest plus a third of the rest
+  (a sum stacked them into walls). Faded out from |d| 4.5 m to 5.5 m (the flat shoulder's end). Nothing narrower than
+  0.9 m half-length, so the 1 m heightfield can carry it.
+- **R11-2 Scatter**: per 10 m of road, area × per-surface density × a roughness from noise (~70 m rough and smooth
+  stretches, 0.25–1.75×): /m² tarmac 0.012, dirt 0.06, gravel 0.07, packed 0.045, ice 0.03. Half-length 0.9–3 m
+  (mostly small), elongation 1–4 (round hump to short ridge), any angle, height 1.5–3.5 cm per m of half-length ×
+  the surface scale (tarmac 0.4, ice 0.5, packed 0.8), cap 9 cm. Centres to 1 m past the edge. None within 10 m before /
+  15 m after a kicker, crest or tabletop (jump faces and landings stay graded: a bumpy landing threw the autopilot off a
+  wild tabletop).
+- **R11-3 Ridge sets**: a `whoops` feature is now only a stretch (count 4–10 × 5–6 m; no profile, `profileOffset`
+  ignores it). In it, ridges 3.5–7 m apart, each across the road at a set angle (±30°) ± 10°, 0.9–1.6 m thick, 1.5–4.5 m
+  half-width, offset ±1.5 m, 6–16 cm tall (cap 17 cm).
+- **R11-4 Wild**: ×1.5 bumps, ×1.15 heights (×1.4 put the car in the air 0.3–0.7 s over a ridge set).
+- **R11-5 Stamping**: `generateTerrain(…, { roadBumps })` adds `bumpsAt(s, d)` to the road target in the flattened
+  band; the road profile `road[]` (spawn, recovery, autopilot) stays without them. The ribbon now samples the
+  heightfield (`heightAt`) every 0.5 m across, and pebbles sit on it, so the wheels ride what is drawn.
+- **Validation**: `test/bumps.test.mjs` (sorted, capped, representable, varied sizes / elongations / angles, steepest
+  face < 20°, tarmac far smoother, ridge sets inside whoops stretches, the heightfield carries the bumps). Ride probe
+  (autopilot forced through 15/23 ridge sets on 4 stages): mild at 54, 79, 101 km/h no airtime, up.y ≥ 0.994; wild at most
+  a 0.07 s hop, up.y ≥ 0.965. Track, wild, game, verge, markers suites pass; goldens re-blessed (the stage surface
+  changed); `test/game.mjs` run 2 now idles 0.5 s after Go to differ from run 1 (a held car is at rest at Go).
 

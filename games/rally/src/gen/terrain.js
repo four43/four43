@@ -3,6 +3,7 @@
 // small bumps on the ground away from the road so the verge is rough going.
 import { noise2, fbm } from './noise.js';
 import { profileOffset, bermBank } from './features.js';
+import { bumpsAt } from './bumps.js';
 
 const DEG = Math.PI / 180;
 const MAX_GRADE = 0.1195;          // a hair under 12 % so Float32 storage can't tip it over
@@ -32,8 +33,9 @@ function maxGrade(p, closed, ds) {
   return g;
 }
 
-// flatten: false gives the natural ground (hills + bumps everywhere); bumps: false leaves them out.
-export function generateTerrain(layout, features, r, { margin = 150, flatten = true, bumps = true } = {}) {
+// flatten: false gives the natural ground (hills + bumps everywhere); bumps: false leaves them out. roadBumps: gen/bumps.js
+// humps and ridges on the road (R11), stamped with it.
+export function generateTerrain(layout, features, r, { margin = 150, flatten = true, bumps = true, roadBumps = null } = {}) {
   const { n, closed, ds, x: X, z: Z, curvature: K, bounds: B } = layout;
   const big = noise2(r.fork('hills').int(0, 0x7fffffff)), fine = noise2(r.fork('detail').int(0, 0x7fffffff));
   const hills = (x, z) => 25 * fbm(big, x, z, { octaves: 4, scale: 400 }) + fbm(fine, x, z, { octaves: 2, scale: 25 });
@@ -100,7 +102,8 @@ export function generateTerrain(layout, features, r, { margin = 150, flatten = t
     else { if (i > 0) proj(i - 1, i, px, pz); if (i < n - 1) proj(i, i + 1, px, pz); }
     if (seg.dist >= REACH) continue;
     const t = seg.t, rh = road[seg.a] + (road[seg.b] - road[seg.a]) * t, bk = bank[seg.a] + (bank[seg.b] - bank[seg.a]) * t;
-    const target = rh + Math.tan(bk) * seg.d, bp = bump(px, pz), base = heights[c] - bp;
+    const rb = roadBumps ? bumpsAt(roadBumps, (seg.a + t) * ds, seg.d, closed ? n * ds : 0) : 0;
+    const target = rh + Math.tan(bk) * seg.d + rb, bp = bump(px, pz), base = heights[c] - bp;
     const u = seg.dist <= FLAT ? 0 : (seg.dist - FLAT) / BLEND, w = 1 - u * u * (3 - 2 * u);
     const v = Math.min(1, Math.max(0, (seg.dist - BUMPS.from) / (BUMPS.to - BUMPS.from)));
     heights[c] = base + (target - base) * w + bp * v * v * (3 - 2 * v);

@@ -17,8 +17,8 @@ import { Pebbles } from './pebbles.js';
 const DROP = [0, 0.35, 0.9];      // coarse LODs sink under the road ribbon so they never poke through it
 const ROAD_LIFT = 0.03;
 // Road ribbon offsets across (m, + = left): out to the flat shoulder's edge (gen/terrain.js FLAT), so the shader draws the
-// road's edge and its spill onto the ground; denser where the ground colour ramps (the shoulder tint, 4.5–7 m).
-const ACROSS = [5.5, 4.75, 4, 3, 1.5, 0, -1.5, -3, -4, -4.75, -5.5];
+// road's edge and its spill onto the ground; every 0.5 m, so it follows the road bumps (R11) in the 1 m heightfield.
+const ACROSS = Array.from({ length: 23 }, (_, k) => 5.5 - k * 0.5);
 // Verge cover: scattered per 8 m world cell (deterministic per cell, cached), kept to cells within
 // RADIUS of the camera; the instance buffer is only rewritten when the camera changes cell.
 // Tufts shrink into the ground between FADE[0] and FADE[1] so the edge of the patch never pops.
@@ -193,7 +193,7 @@ export class TrackView {
     this.terrainMesh.update(this.focus); // the first update is unbudgeted: the spawn's chunks are there on frame one
   }
 
-  // Road ribbon (R10-2): ACROSS vertices per 1 m sample, out to the flat shoulder. Its vertex colours are the terrain's own
+  // Road ribbon (R10-2, R11): ACROSS vertices per 1 m sample, out to the flat shoulder, on the heightfield. Its vertex colours are the terrain's own
   // (colorAt) and its ground is drawn by the terrain's function, so where the shader draws ground the ribbon meets the
   // terrain without a seam. Per vertex for the shader: aRoad (offset across, distance along), aEdge (the track's
   // half-widths, left and right: the physics edge), the section blend as weights per road surface (aSurfA, aSurfB) and
@@ -205,12 +205,12 @@ export class TrackView {
     const road = new Float32Array(nv * 2), edge = new Float32Array(nv * 2), surfA = new Float32Array(nv * 4), surfB = new Float32Array(nv);
     const c = [0, 0, 0], wt = new Float32Array(ROAD_SURFACES.length);
     for (let i = 0; i < n; i++) {
-      const s = i * L.ds, h = L.heading[i], ch = Math.cos(h), sh = Math.sin(h), tb = Math.tan(T.bank[i]), ny = Math.cos(T.bank[i]);
+      const s = i * L.ds, h = L.heading[i], ch = Math.cos(h), sh = Math.sin(h), ny = Math.cos(T.bank[i]);
       const at = roadSurfaceAt(surfaces, s);
       wt.fill(0); wt[surfaceSlot(at.road)] += 1 - at.t; wt[surfaceSlot(at.next?.road ?? at.road)] += at.t;
       for (let k = 0; k < m; k++) {
         const v = i * m + k, d = ACROSS[k], x = L.x[i] + d * ch, z = L.z[i] - d * sh;
-        pos[v * 3] = x; pos[v * 3 + 1] = T.road[i] + tb * d + ROAD_LIFT; pos[v * 3 + 2] = z;
+        pos[v * 3] = x; pos[v * 3 + 1] = heightAt(T, x, z) + ROAD_LIFT; pos[v * 3 + 2] = z; // the heightfield's own triangles: what the wheels ride
         this.terrainOpts.colorAt(x, z, c, ny);
         col[v * 3] = c[0]; col[v * 3 + 1] = c[1]; col[v * 3 + 2] = c[2];
         wr[v * 4] = wear.c1[i]; wr[v * 4 + 1] = wear.a1[i]; wr[v * 4 + 2] = wear.c2[i]; wr[v * 4 + 3] = wear.a2[i];
