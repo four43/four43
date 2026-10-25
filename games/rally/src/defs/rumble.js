@@ -54,6 +54,14 @@ export const PARAMS = {
   mix: {
     drive: 1.5,      // soft clip: tanh(x · drive) / tanh(drive)
   },
+  // Sending (R9-4). Every effect is a write to the pad, and a Bluetooth pad drains them slower than 60 a second: one per
+  // frame queued up below the page, so it kept rumbling through a pause and after the window closed (playtest 2026-10-25).
+  send: {
+    minMs: 50,       // ms: at most one write this often (a level change waits for it)
+    keepMs: 150,     // ms: a steady level is re-sent this often
+    durMs: 250,      // ms: each effect's length: outlasts keepMs, and a lost stop ends by itself
+    delta: 0.04,     // a motor must move by this much to count as a change
+  },
 };
 
 // Slider ranges for the tuning panel: [min, max, step] per parameter name (surfaces share theirs).
@@ -67,6 +75,7 @@ export const RANGES = {
   near: [0.3, 1.5, 0.05], rearm: [0.2, 1.5, 0.05], lock: [0.8, 3, 0.05], unlock: [0.5, 3, 0.05],
   kickAmp: [0, 1, 0.05], kickLen: [0.02, 0.3, 0.01], nearAmp: [0, 1, 0.05], pulseHz: [3, 15, 0.5], amp: [0, 1, 0.05],
   drive: [0.5, 4, 0.1],
+  minMs: [16, 200, 1], keepMs: [50, 500, 10], durMs: [100, 1000, 10], delta: [0, 0.2, 0.01],
 };
 
 // The Rumble setting's master gain.

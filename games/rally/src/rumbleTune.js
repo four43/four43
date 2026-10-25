@@ -75,10 +75,13 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   }
   const mix = el('section', {}, [el('div', { className: 'head' }, [el('h2', { textContent: 'mix' })])]);
   group(P.mix, mix);
+  // the write budget (R9-4): how often effects go to the pad; a Bluetooth pad queues writes it can't keep up with
+  const send = el('section', {}, [el('div', { className: 'head' }, [el('h2', { textContent: 'send' })])]);
+  group(P.send, send);
   const text = el('textarea', { readOnly: true, hidden: true });
   const exp = el('button', { textContent: 'Export' });
   exp.addEventListener('click', () => { text.hidden = false; text.value = `export const PARAMS = ${JSON.stringify(P, null, 2)};`; text.select(); });
-  root.append(mix, el('section', {}, [exp, text]));
+  root.append(mix, send, el('section', {}, [exp, text]));
   doc.head.append(style); doc.body.append(root);
 
   let raf = 0;

@@ -112,7 +112,7 @@ function overlayHalves() {
 // rumble: the mixer (rally-spec R9; main.js makes it from the ?rumble panel's saved params, so the panel can drive it).
 export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {}) {
   let seat0 = null, haptics = null; // per enter: seat 0 (lion-hawk C-5; Rally has one) and view.haptics (C-14)
-  const pads = rumbleOut({ pads: () => seat0?.pads, haptics: () => haptics, fold: () => rumble.params.aid.fold }); // rally-spec R7, R8-2, R9-4
+  const pads = rumbleOut({ pads: () => seat0?.pads, haptics: () => haptics, fold: () => rumble.params.aid.fold, send: () => rumble.params.send }); // rally-spec R7, R8-2, R9-4
   let impulse = 0; // N·s: the car's contact impulses since the last frame (R9-3)
   let hud = null, ghud = null, els = null, off = null, unlisten = null;
   let seen = null, toast = null; // per enter: what the view last reflected; the toast { text, until } (engine time)

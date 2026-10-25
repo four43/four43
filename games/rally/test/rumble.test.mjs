@@ -155,58 +155,76 @@ test('mix: the channels add per motor through a soft clip, × the setting; a mut
   assert.equal(live.update(car({ rpm: 6000, throttle: 1, speed: 0 }), DT).weak, 0);
 });
 
-// A pad actuator that records calls; triggers: it lists 'trigger-rumble'.
-const fakePad = (triggers = false) => {
-  const calls = [], stops = [], h = { paused: false, stop: r => stops.push(r) };
+// A pad actuator that records calls; triggers: it lists 'trigger-rumble'. clock.t is the time (ms) rumbleOut sees.
+const fakePad = (triggers = false, send = PARAMS.send) => {
+  const calls = [], stops = [], h = { paused: false, stop: r => stops.push(r) }, clock = { t: 0 };
   const actuator = { effects: triggers ? ['dual-rumble', 'trigger-rumble'] : ['dual-rumble'],
     playEffect: (type, p) => { const on = p.strongMagnitude + p.weakMagnitude + (p.leftTrigger ?? 0) + (p.rightTrigger ?? 0) > 0; calls.push(on ? ['play', type, { ...p }] : ['zero', type]); return Promise.resolve('preempted'); },
     reset: () => { calls.push(['reset']); return Promise.resolve(); } };
   // lp.pads: live Gamepads only (no null slots); one without an actuator (Firefox) is skipped
-  return { calls, stops, h, out: rumbleOut({ pads: () => [{ index: 1, vibrationActuator: actuator }, { index: 2, id: 'no rumble' }], haptics: () => h, fold: () => 0.5 }) };
+  const out = rumbleOut({ pads: () => [{ index: 1, vibrationActuator: actuator }, { index: 2, id: 'no rumble' }], haptics: () => h, fold: () => 0.5, send: () => send, now: () => clock.t });
+  // frames(n, m): n frames at 60 Hz, each sending m (or m(i))
+  const frames = (n, m) => { for (let i = 0; i < n; i++) { clock.t += 1000 / 60; out.send(typeof m === 'function' ? m(i) : m); } };
+  return { calls, stops, h, out, clock, frames };
 };
 const M = (strong = 0, weak = 0, left = 0, right = 0) => ({ strong, weak, left, right });
+const writes = calls => calls.length; // every playEffect and reset is a write to the pad
 
 test('rumbleOut: trigger pads get all four motors in one trigger-rumble; others get dual-rumble with the triggers folded onto weak', () => {
   const t = fakePad(true);
-  t.out.send(M(0.5, 0.2, 0.7, 0.1));
+  t.frames(1, M(0.5, 0.2, 0.7, 0.1));
   assert.equal(t.calls[0][1], 'trigger-rumble');
   assert.deepEqual([t.calls[0][2].strongMagnitude, t.calls[0][2].weakMagnitude, t.calls[0][2].leftTrigger, t.calls[0][2].rightTrigger], [0.5, 0.2, 0.7, 0.1]);
-  assert.ok(t.calls[0][2].duration >= 50);
   const d = fakePad(false);
-  d.out.send(M(0.5, 0.2, 0.7, 0.1));
+  d.frames(1, M(0.5, 0.2, 0.7, 0.1));
   assert.equal(d.calls[0][1], 'dual-rumble');
   assert.equal(d.calls[0][2].leftTrigger, undefined);
   assert.ok(Math.abs(d.calls[0][2].weakMagnitude - (0.2 + 0.7 * 0.5)) < 1e-9, 'the bigger trigger × fold onto weak');
-  d.calls.length = 0; d.out.send(M(0, 0, 0.3, 0)); assert.equal(d.calls[0][0], 'play', 'the aid alone is enough to play');
-  // A gap's zero effect is the pad's own kind, so it queues behind (and replaces) a trigger effect.
-  t.calls.length = 0; t.out.send(M()); assert.deepEqual(t.calls, [['zero', 'trigger-rumble']]);
+  const a = fakePad(false); a.frames(1, M(0, 0, 0.3, 0)); assert.equal(a.calls[0][0], 'play', 'the aid alone is enough to play');
+});
+
+// Playtest 2026-10-25 (Bluetooth Xbox pad, trigger-rumble): one effect per frame queued up below the page, so the pad kept
+// rumbling through a pause and after the window closed. Every effect is a write to the pad: they are budgeted.
+test('rumbleOut: a steady level is a keep-alive, not a write per frame; each effect outlasts the gap to the next', () => {
+  const { calls, frames } = fakePad(true);
+  frames(60, M(0.3, 0.1));
+  assert.ok(writes(calls) <= Math.ceil(1000 / PARAMS.send.keepMs) + 1, `${writes(calls)} writes in 1 s of a steady level`);
+  assert.ok(calls.every(c => c[2].duration > PARAMS.send.keepMs + 1000 / 60), 'no gap between keep-alives');
+  assert.ok(calls.every(c => c[2].duration <= 300), 'and short: a lost stop ends by itself within 0.3 s');
+});
+
+test('rumbleOut: a level changing every frame is capped at one write per minMs', () => {
+  const { calls, frames } = fakePad(true);
+  frames(60, i => M(0.1 + 0.8 * (i % 2), 0));
+  assert.ok(writes(calls) <= Math.ceil(1000 / PARAMS.send.minMs) + 1, `${writes(calls)} writes in 1 s`);
+  const ramp = fakePad(true); ramp.frames(60, i => M(i / 60, 0));
+  assert.ok(writes(ramp.calls) <= Math.ceil(1000 / PARAMS.send.minMs) + 1);
+  assert.ok(Math.abs(ramp.calls.at(-1)[2].strongMagnitude - 1) < 0.1, 'the latest level gets through');
+});
+
+test('rumbleOut: ABS pulses (8 Hz) keep their on and off; a quiet is one zero effect and no reset', () => {
+  const { calls, frames } = fakePad(true);
+  frames(60, i => M(0, 0, (i * 8 / 60) % 1 < 0.5 ? 0.9 : 0)); // 8 pulses
+  assert.equal(calls.filter(c => c[0] === 'zero').length, 8, 'each pulse ends with a zero');
+  assert.ok(calls.filter(c => c[0] === 'play').length >= 8);
+  assert.equal(calls.filter(c => c[0] === 'reset').length, 0, 'no reset: a reset writes too, and cancels a queued pulse');
+  calls.length = 0;
+  frames(60, M());
+  assert.ok(writes(calls) <= 1, 'a long quiet writes nothing more');
 });
 
 test('rumbleOut: one engine stop per transition, exit always; nothing is sent while a pausing overlay is open (lion-hawk C-14)', () => {
-  const { calls, stops, h, out } = fakePad(true);
+  const { calls, stops, h, out, frames } = fakePad(true);
   out.stop('menu');
   assert.deepEqual([calls, stops], [[], []], "nothing sent: nothing to stop; a pad's first sight is the engine's reset");
-  out.send(M(0.5, 0.25));
+  frames(1, M(0.5, 0.25));
   out.stop('menu'); out.stop('menu'); out.stop('finish');
-  assert.deepEqual(stops, ['menu'], 'once per transition: the engine repeats its own zero + reset for 20 frames');
+  assert.deepEqual(stops, ['menu'], 'once per transition');
   assert.ok(calls.every(c => c[0] !== 'reset'), 'Rally resets nothing itself on a stop');
   out.stop('exit'); assert.deepEqual(stops, ['menu', 'exit'], 'the stage exit always stops');
-  calls.length = 0; h.paused = true; out.send(M(1, 1, 1, 1));
+  calls.length = 0; h.paused = true; frames(5, M(1, 1, 1, 1));
   assert.deepEqual(calls, [], 'paused: no effect is sent (spec C-14)');
-  h.paused = false; out.send(M(1, 1, 1, 1)); assert.equal(calls.length, 1, 'sends again after the pause');
+  h.paused = false; frames(1, M(1, 1, 1, 1)); assert.equal(calls.length, 1, 'sends at once after the pause');
   assert.doesNotThrow(() => rumbleOut({ pads: () => [] }).send(M(1, 1)));
   assert.doesNotThrow(() => { const o = rumbleOut({ pads: () => undefined }); o.send(M(1, 1)); o.stop('exit'); }, 'no seat yet, no haptics (autoStop off)');
-});
-
-test('rumbleOut: silent gaps between pulses (ABS) never reset, so a queued pulse is never cut; a long quiet is one zero + reset', () => {
-  const { calls, stops, out } = fakePad(true);
-  out.send(M(0, 0, 0.8)); calls.length = 0;
-  for (let k = 0; k < 10; k++) { for (let i = 0; i < 3; i++) out.send(M(0, 0, 0.8)); for (let i = 0; i < 3; i++) out.send(M()); }
-  assert.equal(calls.filter(c => c[0] === 'reset').length, 0, 'no reset inside a pulse train');
-  assert.equal(calls.filter(c => c[0] === 'zero').length, 10, 'each gap ends its pulse with one queued zero effect');
-  assert.equal(calls.filter(c => c[0] === 'play').length, 30);
-  calls.length = 0;
-  for (let i = 0; i < 40; i++) out.send(M());
-  assert.equal(calls.filter(c => c[0] === 'reset').length, 1, 'a quarter second of quiet while driving ends with one zero + reset');
-  assert.deepEqual(stops, [], 'not an engine stop: no menu, finish or exit');
 });

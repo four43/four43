@@ -634,8 +634,12 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   engine's `contact` events whose `a` or `b` is the car's entity id and passes them to the body channel that frame.
 - **R9-4 Output** (`src/rumbleOut.js`). A pad whose actuator lists `'trigger-rumble'` in `effects` gets one
   `trigger-rumble` effect per frame: `strongMagnitude`, `weakMagnitude`, `leftTrigger`, `rightTrigger`. Any other pad gets
-  `dual-rumble`, with the aid folded in: weak += max(left, right) × `aid.fold`. R7-3's gap rule (a zero effect, then a
-  stop after ~¼ s of quiet) counts all four levels. Stops are the engine's (R8-2: pause, blur, hide, `pagehide`, first
+  `dual-rumble`, with the aid folded in: weak += max(left, right) × `aid.fold`.
+  **Write budget** (playtest 2026-10-25, Bluetooth pad: an effect per frame queued up below the page, and the pad kept
+  rumbling through a pause and after the window closed; the queue is the writes, not the durations). `PARAMS.send`: a
+  change of `delta` in any motor goes out at most every `minMs` (50), a steady level is re-sent every `keepMs` (150) as an
+  effect `durMs` (250) long, and a quiet is one zero effect; no reset (it is a write, and cancels a queued pulse). Steady
+  ~7 writes/s, at most 20 (ABS at 8 Hz: 16). Replaces R7-3's every-frame send and gap rule. Stops are the engine's (R8-2: pause, blur, hide, `pagehide`, first
   sight; Rally's `menu`, `finish`, `exit`). **lion-hawk change (C-14):** a stop also sends a zero `trigger-rumble` to pads
   that list it, so a trigger effect queued a frame earlier cannot outlive the `reset()`.
 - **R9-5 Tuning panel** (`?rumble` on the game page; desktop only, `src/rumbleTune.js`). The game runs as usual with a
