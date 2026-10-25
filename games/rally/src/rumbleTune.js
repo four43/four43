@@ -26,7 +26,7 @@ const CSS = `
 #rumbleTune button:hover { background: #4a5c62; }
 #rumbleTune textarea { width: 100%; height: 160px; font: 11px monospace; color: #e8eeec; background: #142024; border: 1px solid #3a4a50; }
 `;
-const MOTORS = ['strong', 'weak', 'left', 'right'];
+const MOTORS = ['strong', 'weak', 'left']; // the right trigger is unused (rally-spec R9-1)
 
 // The plain sliders per channel: [path in the channel's params, label, help, invert]. invert: the slider's right end is
 // the parameter's low end, so right is always "more" of what the label says. Everything else is under Advanced.
@@ -47,14 +47,12 @@ const LAYOUT = {
     ['dvOn', 'Ignore light taps', 'the smallest knock that is felt'],
     ['decay', 'Impact length', 'how long a hit rumbles'],
   ] },
-  aid: { title: 'Driving aid (triggers)', simple: [
+  aid: { title: 'Brake aid (left trigger)', simple: [
     ['pedal', 'Pedal needed', 'how far you press before the aid listens'],
     ['brake.near', 'Brake: warning at', 'how close to locking the warning starts (1 = the limit)'],
     ['brake.nearAmp', 'Brake: warning', 'strength of the warning before a lock'],
     ['brake.amp', 'Brake: ABS pulses', 'strength of the pulses once a wheel locks'],
     ['brake.pulseHz', 'Brake: ABS speed', 'pulses per second'],
-    ['traction.amp', 'Wheelspin: pulses', 'strength of the pulses while the wheels spin'],
-    ['traction.pulseHz', 'Wheelspin: speed', 'pulses per second'],
   ] },
 };
 const SURFACE_HELP = 'bump height on this surface';
@@ -108,7 +106,7 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   root.append(el('h1', { textContent: 'Rumble tuning' }), outs.box, info, sends);
 
   const chanMeters = {};
-  const used = { engine: ['weak'], suspension: ['strong', 'weak'], body: ['strong', 'weak'], aid: ['left', 'right'] };
+  const used = { engine: ['weak'], suspension: ['strong', 'weak'], body: ['strong', 'weak'], aid: ['left'] };
   for (const ch of CHANNELS) {
     const mute = el('input', { type: 'checkbox' }), reset = el('button', { textContent: 'Reset' });
     mute.addEventListener('change', () => { rumble.mute[ch] = mute.checked; });
@@ -142,7 +140,7 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
     const st = doc.defaultView.__rallyView?.rumble?.(), a = rumble.aid(), list = pads() ?? [];
     const fx = list.map(p => { const v = p?.vibrationActuator; if (!v) return 'no actuator'; try { return `lists ${v.effects ? Array.from(v.effects).join(', ') : 'nothing'}`; } catch { return 'effects unreadable'; } });
     const mode = st ? (st.triggers ? 'sending trigger-rumble' : 'trigger-rumble rejected: dual-rumble') : '';
-    info.textContent = `brake: ${a.brake.locked ? 'PULSE' : a.brake.near ? 'near' : '–'} · traction: ${a.traction.locked ? 'PULSE' : a.traction.near ? 'near' : '–'} · pads: ${fx.length ? fx.join(' | ') : 'none paired (press a button)'}${mode ? ` · ${mode}` : ''}`;
+    info.textContent = `brake: ${a.brake.locked ? 'PULSE' : a.brake.near ? 'near' : '–'} · pads: ${fx.length ? fx.join(' | ') : 'none paired (press a button)'}${mode ? ` · ${mode}` : ''}`;
     // the writes (rumbleOut's stats, through the stage view's seam): per second, and how they ended
     const t = performance.now();
     if (st && t - rate.t >= 1000) { rate.n = st.writes - rate.w; rate.w = st.writes; rate.t = t; }

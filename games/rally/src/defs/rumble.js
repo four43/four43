@@ -1,7 +1,7 @@
 // Controller rumble parameters (rally-spec R9-2): one object per channel, physical units, tuned in the ?rumble panel
 // (src/rumbleTune.js) and exported back here. Tuned on a Bluetooth Xbox pad 2026-10-25 (engine, suspension, aid pedal and fold, send). Pure data; the channels live in src/rumble/. An Xbox pad has two body motors,
 // `strong` (left, low and heavy) and `weak` (right, high and buzzy), and on some pads (Bluetooth in Chromium) a motor in
-// each trigger: `left` (brake) and `right` (throttle). Every level is 0..1 before the mix.
+// each trigger: `left` (the brake aid) and `right` (unused: wheelspin there fired all the time). Every level is 0..1 before the mix.
 export const PARAMS = {
   // The engine (R9-1): weak motor only, a light constant presence that follows the revs.
   engine: {
@@ -46,10 +46,9 @@ export const PARAMS = {
   // a kick on crossing `near` (again only after falling under `rearm`), a level rising to the peak, and past `lock` pulses
   // at pulseHz (≤ 10: the motors blur above) until x is back under `unlock`.
   aid: {
-    pedal: 0.5,     // pedal travel before the aid listens
+    pedal: 0.25,     // pedal travel before the aid listens
     fold: 1,       // pads without trigger motors: the aid's share added onto the weak motor
-    brake: { near: 0.75, rearm: 0.65, lock: 1.1, unlock: 1.0, kickAmp: 0.8, kickLen: 0.1, nearAmp: 0.35, pulseHz: 8, amp: 0.9 },
-    traction: { near: 1.0, rearm: 0.85, lock: 1.3, unlock: 1.1, kickAmp: 0.6, kickLen: 0.1, nearAmp: 0.25, pulseHz: 10, amp: 0.6 },
+    brake: { near: 0.7, rearm: 0.65, lock: 1.1, unlock: 1.0, kickAmp: 0.8, kickLen: 0.16, nearAmp: 0.15, pulseHz: 5.5, amp: 0.1 },
   },
   mix: {
     drive: 1.5,      // soft clip: tanh(x · drive) / tanh(drive)

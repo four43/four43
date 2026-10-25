@@ -192,7 +192,7 @@ test('desktop: ?rumble opens the tuning panel beside the game; a slider edits th
   try {
     await game.page.waitForSelector('#rumbleTune input[type=range]');
     const sections = await game.page.$$eval('#rumbleTune section h2', hs => hs.map(h => h.textContent));
-    assert.deepEqual(sections, ['Engine', 'Road', 'Impacts', 'Driving aid (triggers)']);
+    assert.deepEqual(sections, ['Engine', 'Road', 'Impacts', 'Brake aid (left trigger)']);
     assert.ok(await game.page.$$eval('#rumbleTune details summary', s => s.some(e => e.textContent === 'Advanced: mix and send')), 'the mix and the write budget are under Advanced');
     await game.page.$eval('#rumbleTune input[type=range]', el => { el.value = String(Number(el.min)); el.dispatchEvent(new Event('input', { bubbles: true })); });
     const saved = await game.page.evaluate(() => JSON.parse(localStorage.getItem('rally-rumble-tune')));

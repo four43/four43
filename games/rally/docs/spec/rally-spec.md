@@ -615,15 +615,18 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
     mass (m/s), start a hit of size `clamp01((Δv − dvOn) / (dvFull − dvOn))`, decaying with half-life `decay` ×
     (1 + 0.5 · size) s; the level is the largest live hit (up to 8 kept), on strong and `weakShare` of it on weak.
     Markers, walls, a roll onto the roof and the floor bottoming out all come through here.
-  - *Aid* (`aid.js`) → left trigger (brakes) and right trigger (traction). Brakes: foot brake above `pedal` and
-    |v| above 1 m/s; the worst wheel's −κ / kp (with the handbrake on, fronts only). From `near` to 1 (its peak) a
-    *kick*: a short tap (`kickLen` s at `kickAmp`) on crossing `near`, then a level rising `nearAmp` × depth. Past
-    `lock` (hysteresis back at 1.0) *pulses*: square wave at `absHz` (≤ 10 Hz), `absAmp`. Traction: the same on the
-    right trigger from the driven wheels' κ / kp with throttle above `pedal`. A rear-axle slide is not an aid event.
+  - *Aid* (`aid.js`) → left trigger (brakes) only. Foot brake above `pedal` and |v| above 1 m/s; the worst wheel's
+    −κ / kp (with the handbrake on, fronts only). From `near` to 1 (its peak) a *kick*: a short tap (`kickLen` s at
+    `kickAmp`) on crossing `near` (re-armed under `rearm`), then a level rising `nearAmp` × depth. Past `lock` (back
+    under `unlock`) *pulses*: square wave at `pulseHz` (≤ 10 Hz), `amp`. The right trigger is unused: a wheelspin aid
+    there (the same machine on the driven wheels' κ / kp) fired all the time and didn't help (playtest 2026-10-25), and
+    was removed. A rear-axle slide is not an aid event.
   - *Mix* (`index.js`): per motor, the sum of the channels through `tanh(x · drive) / tanh(drive)` (soft clip: a big
     hit dominates without hard-clipping the rest away), × the setting's gain (R7-4: Off 0 / Light 0.5 / Full 1), with a
     per-channel mute from the panel (R9-5). Output `{ strong, weak, left, right }`.
-- **R9-2 Parameters** (`src/defs/rumble.js`): one plain object per channel, physical units (m, Hz, m/s, s), a comment
+- **R9-2 Parameters** (`src/defs/rumble.js`; tuned on a Bluetooth Xbox pad 2026-10-25: a faint engine with a strong
+  limiter buzz, gentle road texture (`gain` 0.2), big hits on the strong motor only, a soft brake warning from 0.7 of the
+  peak and light 5.5 Hz ABS pulses): one plain object per channel, physical units (m, Hz, m/s, s), a comment
   on each. Surfaces: `rough`, `spacing` and `width` per rumble surface (tarmac, dirt, gravel, grass, sand, mud, snow, ice): ice
   near zero, gravel short and sharp, sand and mud long and soft. `RANGES` gives each parameter's slider range;
   `tuneParams(saved)` lays a save over a copy of the defaults (unknown keys and non-numbers dropped). Defaults are a first guess to be tuned on a real pad.
@@ -660,8 +663,8 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
 - **Validation**: `test/rumble.test.mjs` rewritten per channel: engine rises with rpm and throttle, weak only; suspension
   silent stopped and airborne, ice ≪ gravel, the filter's level at 120 km/h below its peak (planing), a jolt adds to
   strong; body ignores Δv under `dvOn` and other entities' contacts, sizes and decays; aid kicks once on crossing
-  `near` (not again while held), pulses past `lock` at `absHz`, back to the warning under 1.0, handbrake rears ignored,
-  right trigger for spin only with throttle; mix soft-clips and mutes. `rumbleOut` against fake actuators with and
+  `near` (not again while held), pulses past `lock` at `pulseHz`, back to the warning under 1.0, handbrake rears ignored,
+  wheelspin drives nothing; mix soft-clips and mutes. The mechanism tests use their own values, not the shipped tuning. `rumbleOut` against fake actuators with and
   without `trigger-rumble`. `test/contacts.test.mjs`: driving on the flat pad gives the body no contact; a roll onto the roof
   from 1.5 m does (a few m/s). lion-hawk: a stop zeroes `trigger-rumble` where listed. On the Bluetooth pad: pause
   mid-ABS-pulse and alt-tab mid-slide stop all four motors; the feel is tuned in the panel.

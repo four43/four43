@@ -103,7 +103,9 @@ test('body: a contact sized by its velocity change, decaying, bigger lasts longe
 });
 
 test('aid, brakes: a kick crossing near, once while held; the level rises to the peak; pulses past lock until under unlock', () => {
-  const B = PARAMS.aid.brake, a = createAid(PARAMS.aid);
+  // the mechanism with its own values, not the shipped tuning
+  const B = { near: 0.75, rearm: 0.65, lock: 1.1, unlock: 1.0, kickAmp: 0.8, kickLen: 0.08, nearAmp: 0.35, pulseHz: 8, amp: 0.9 };
+  const a = createAid({ ...PARAMS.aid, pedal: 0.05, brake: B });
   const at = (x, n = 1, extra = {}) => { const f = []; for (let i = 0; i < n; i++) f.push({ ...a.update(car({ speed: 20, brake: 1, lock: x, ...extra }), DT) }); return f; };
   assert.equal(at(0.5)[0].left, 0, 'well under the peak: nothing');
   const kick = at(B.near + 0.01, 3);
@@ -119,21 +121,19 @@ test('aid, brakes: a kick crossing near, once while held; the level rises to the
   at(B.unlock - 0.02); assert.equal(a.state().brake.locked, false, 'back to the warning under the peak');
   at(B.rearm - 0.1); const again = at(B.near + 0.01)[0].left;
   assert.equal(again, B.kickAmp, 're-armed after easing off');
-  assert.equal(at(0)[0].right, 0, 'brakes never touch the right trigger');
+  assert.ok(!at(0)[0].right, 'nothing drives the right trigger');
 });
 
-test('aid: the handbrake rears are ignored, a stopped car is no lock, and wheelspin is the right trigger with the throttle only', () => {
-  const T = PARAMS.aid.traction;
+test('aid: the handbrake rears are ignored, a stopped car is no lock, and wheelspin is nothing (no right trigger)', () => {
   let a = createAid(PARAMS.aid);
   assert.equal(a.update(car({ speed: 15, brake: 1, handbrake: 1, lock: 0.3, rearLock: 4 }), DT).left, 0, 'handbrake turn');
   assert.ok(a.update(car({ speed: 15, brake: 1, handbrake: 1, lock: 1.5, rearLock: 4 }), DT).left > 0, 'a front lock still counts');
   a = createAid(PARAMS.aid);
   assert.equal(a.update(car({ speed: 0.5, brake: 1, lock: 2 }), DT).left, 0, 'stopped');
   a = createAid(PARAMS.aid);
-  assert.equal(a.update(car({ speed: 5, spin: 2 }), DT).right, 0, 'spin without the throttle (a wheel catching up) is nothing');
-  const f = []; for (let i = 0; i < 60; i++) f.push({ ...a.update(car({ speed: 5, spin: T.lock + 0.5, throttle: 1 }), DT) });
-  assert.ok(f.some(m => m.right === T.amp) && f.some(m => m.right === 0), 'wheelspin pulses the right trigger');
-  assert.equal(sum(f, 'left'), 0);
+  const f = []; for (let i = 0; i < 60; i++) f.push({ ...a.update(car({ speed: 5, spin: 3, throttle: 1 }), DT) });
+  assert.equal(sum(f, 'left'), 0, 'wheelspin is not a brake event');
+  assert.ok(f.every(m => !m.right), 'and nothing drives the right trigger');
 });
 
 test('mix: the channels add per motor through a soft clip, × the setting; a mute takes a channel out', () => {
