@@ -584,7 +584,7 @@ trigger rumble.
   stage state for now; they move to player or game state when Rally has a second player or a net part.
 - Follow-up after this round: the "almost slip" brake warning in the left trigger (`trigger-rumble`).
 
-## Round 9: physical rumble (2026-10-25)
+## Round 9: physical rumble (0.7.0, 2026-10-25)
 
 Request: rework the rumble around physical events, not canned patterns. Four sources mixed into one output: the engine,
 suspension impacts (by surface and speed), body impacts (sized by the force), and a driving aid in the triggers (a kick

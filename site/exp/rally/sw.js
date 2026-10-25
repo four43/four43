@@ -1,6 +1,6 @@
 // Offline support. The page plus every file `lion-hawk build` lists (manifest, icons, `assets/models/*`) is precached;
 // the Google Font is cached as it is first fetched.
-const CACHE = 'rally-0.6.0+lh0.13.0-b0ed67173683';
+const CACHE = 'rally-0.7.0+lh0.13.0-4665ca7ab6fe';
 const PRECACHE = ["./","assets/models/cone.glb","assets/models/hatchback-sports.glb","assets/models/sedan-sports.glb","assets/models/wheel-racing.glb","apple-touch-icon.png","icon-192.png","icon-512.png","icon.svg","manifest.webmanifest","og-image.jpg"];
 
 self.addEventListener('install', e => {
@@ -28,7 +28,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 0.6.0+lh0.13.0-b0ed67173683), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 0.7.0+lh0.13.0-4665ca7ab6fe), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
