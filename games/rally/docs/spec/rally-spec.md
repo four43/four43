@@ -39,6 +39,10 @@ timing, bests) is specified there too (Phase 2).
 | `src/render.js` | three.js renderer: lights/looks, car meshes, cameras; `setWorld` picks the world view |
 | `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
 | `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
+| `src/render/roadSurface.js` | Road and ground shading (R10): photo texture arrays, edges, wear marks, cracks, dashes, puddles, ice, spill; `extend()` patches on `rally-road` / `rally-ground` |
+| `src/render/pebbles.js` | Loose stones on dirt and gravel (R10-6): ten pebble shapes, instanced, per 4 m road chunk near the camera |
+| `src/gen/edges.js`, `src/gen/wear.js` | The road's edges (physics + shader) and its driven lines (shader marks + pebbles), per layout sample |
+| `pwa/road-*.jpg`, `pwa/ground-*.jpg` | Surface photos (ambientCG, CC0): colour 1024², normal xy + roughness 512² |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
 | `src/rumble/` | Rumble channels (R9): engine, suspension, body, aid, and the mix → `{ strong, weak, left, right }`; pure |
 | `src/rumbleOut.js` | Sends the levels to the seat's pads: `trigger-rumble` where listed, else `dual-rumble`; a no-op where unsupported |
@@ -668,3 +672,58 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   without `trigger-rumble`. `test/contacts.test.mjs`: driving on the flat pad gives the body no contact; a roll onto the roof
   from 1.5 m does (a few m/s). lion-hawk: a stop zeroes `trigger-rumble` where listed. On the Bluetooth pad: pause
   mid-ABS-pulse and alt-tab mid-slide stop all four motors; the feel is tuned in the panel.
+
+## Round 10: road and ground surfaces (2026-10-25)
+
+Request: a better-looking road and pavement, after `procedural-road-surfaces.md` (techniques for world-space procedural
+road layers), using lion-hawk's material system where possible. Playtest calls during the round: no wheel ruts (too
+neat, dead centre), no drawn stones (circles); real pebbles, bigger; photo textures (ambientCG); no blotchy patches;
+short, varied wear marks instead of lines; puddles only on the flat; a better grass.
+
+- **R10-1 Edges** (`gen/edges.js`, pure, `track.edges`). Per layout sample a half-width per side: 3.5 m + a shared wobble
+  (~25 m) + a per-side wander (~5 m), scaled per road surface (tarmac 0.15 / 0.04 m, loose up to 0.45 / 0.25 m),
+  clamped to 2.9–4.0 m (markers stand at 4.5 m). `TrackWorld.materialAt` / `blendTo` call `onRoad(edges, layout, s, d)`
+  in place of |d| ≤ 3.5, so the wheels and the shader share the edge. The shader adds up to ~±0.1 m of fine fray.
+- **R10-2 Ribbon** (`trackView.buildRoad`). Out to ±5.5 m (the flat shoulder), 11 vertices across per 1 m sample.
+  Vertex colours are the terrain's `colorAt`, and its ground part is drawn by the terrain's own function, so it meets
+  the terrain without a seam. Attributes: `aRoad` (offset, distance), `aEdge`, surface weights `aSurfA` / `aSurfB`
+  (so section blends mix presets in one shader), `aWear`. Coarse terrain LODs sink from 5.5 m to 8 m.
+- **R10-3 Road shader** (`render/roadSurface.js`, `mc.extend(rally-road, 'rally-road-surface')`). Standard PBR kept.
+  Layers: edge, photo (R10-7), broad tone drift, fine aggregate where there is no photo, tarmac cracks (thin, in some
+  stretches), centre dashes (tarmac), dirt puddles (rare, only where the ribbon is within ~2–4.5 % of level), spill onto
+  the shoulder in tongues. A height (m) bends the normal by screen-space derivatives after the photo's normal. Presets
+  live in the registry, `game.road` per road surface (`defs/materials.js`).
+- **R10-4 Ice**: procedural (no photo): crack network as normals (shallow; cracks scatter white), frost off the wear
+  marks and near the edge, Fresnel sky reflection as emissive (sky = fog colour + muted zenith; no environment map),
+  fake refraction to a dark bed 0.12 m down with red-first absorption, white fracture sheet and clustered bubbles.
+  Packed snow sparkles faintly.
+- **R10-5 Shoulder**: road material spills 0.3–1.5 m past the edge (not on ice); loose stones there are pebbles.
+- **R10-6 Pebbles** (`render/pebbles.js`): ten random low-poly stones (a jittered ring and one apex or a ridge, 5–9
+  flat-shaded triangles, seeded once for all tracks), one engine instanced mesh each, material `rally-pebble`.
+  Placed per 4 m road chunk in road space (no locator), deterministic per chunk and cached; per surface
+  `game.road.pebbles` (gravel 40 /m² road, 24 shoulder, radius 2.5–9 cm; dirt 10 / 14, 2–7 cm), noise clusters, thinned
+  in the wear band, piled beside it. Shrunk to nothing 20–31 m from the camera (the compiler's WIND feature, no sway);
+  buffers rewritten after 1.5 m of camera travel; no shadows; polygon offset in front of the road. ~11k stones in view
+  on gravel (~75k triangles).
+- **R10-7 Photos** (`pwa/road-<surface>-color.jpg` 1024², `-normal.jpg` 512² with normal x, y in red/green and roughness
+  in blue; ambientCG CC0: Asphalt025C tarmac, Ground079S dirt, Gravel040 gravel, Snow010A packed snow; Grass004 and
+  Snow005 for the verges). Loaded once per page into two `DataArrayTexture`s (a layer per surface); until then (or on
+  failure, a console warning) the procedural colours and vertex colours stand in. Anti-tiling: a random offset and
+  quarter turn per noise cell, two neighbours blended across the cell's fraction biased by colour (Quilez technique 3;
+  normal slopes turned back), plus a broad brightness drift from the same photo at 1/9 scale. Sampled with
+  `textureGrad`, so per-surface branches are safe. Each road slot's mean colour replaces its stand-in colour.
+  Shipped from `pwa/` because `lion-hawk build` copies only baked models and top-level PWA files (precached offline).
+- **R10-8 Wear** (`gen/wear.js`, `track.wear`): per sample a driven line (centre cuts to the inside of bends from
+  smoothed curvature, wanders, fades 0.35–1) and a second line in places. The shader never draws lines: it scatters short
+  tyre marks around them (four layers of 5–17 m cells; per mark its own start, length, offset, slant, width, one wheel or
+  a pair, contrast and mottling). Per surface `game.road.wear`: tint, groove depth, how much relief it flattens,
+  roughness, berm (loose ridge beside a mark). Ice marks are polished clear of frost.
+- **R10-9 Ground** (`mc.extend(rally-ground, 'rally-ground-surface')`): the verge's photo (registry `game.ground`) as
+  detail (photo / its mean) over the terrain's vertex colours, the slope surface's photo (dirt in summer, gravel in
+  winter) on steep ground; roughness kept near 1 (the photos' maps glared).
+- **Cost**: RTX 5070 Ti at 1080p, uncapped: 0.55 → 1.1 ms a frame. SwiftShader: ~1.4 s a frame (the rumble e2e's
+  frame-bound wait is 30 s). Needs an iPad check.
+- **Validation**: `test/edges.test.mjs` (edges bounded, varied, calmer on tarmac, continuous; surface lookup flips at the
+  edge on both sides; wear inside the edges, inside of bends, a second line in places, groove/berm profile). Headless
+  track, wild, verge, markers and game suites pass with the moving edge. Render tests: all worlds draw, no errors.
+

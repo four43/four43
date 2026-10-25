@@ -4,8 +4,8 @@ import { createTerrain } from 'lion-hawk/kits/terrain';
 import { materialOf, surface, blendSurface } from '../surface.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
+import { onRoad } from '../gen/edges.js';
 
-const HALF_ROAD = 3.5;
 // Posts are flat-sided like real roadside delineators: a round post rolls down the verge like a
 // pencil for ever, and damping can't stop a roll that gravity keeps feeding. Damping still stops
 // knocked posts spinning and sliding (spec R3-3). r is the visual radius.
@@ -52,15 +52,15 @@ export class TrackWorld {
     this.gateEntity = lh.spawn({ tags: ['gate-post'], body: 'fixed', colliders: posts, groups: { member: ['prop'] } });
   }
 
-  // Road within 3.5 m of the centreline, else verge (M-10: the section's own surface).
+  // Road inside the track's edge on that side (R10-1), else verge (M-10: the section's own surface).
   materialAt(x, z) {
     const t = this.track, { s, d } = t.locator.locate(x, z), r = roadSurfaceAt(t.surfaces, s);
-    return materialOf(Math.abs(d) <= HALF_ROAD ? r.road : r.verge);
+    return materialOf(onRoad(t.edges, t.layout, s, d) ? r.road : r.verge);
   }
   // The kit's blend: section a → the next section's b over the last 10 m, at weight w.
   blendTo(x, z, out) {
     const t = this.track, { s, d } = t.locator.locate(x, z);
-    const r = roadSurfaceAt(t.surfaces, s), road = Math.abs(d) <= HALF_ROAD;
+    const r = roadSurfaceAt(t.surfaces, s), road = onRoad(t.edges, t.layout, s, d);
     const a = road ? r.road : r.verge, b = r.next ? (road ? r.next.road : r.next.verge) : a;
     out.a = materialOf(a); out.b = materialOf(b); out.w = r.t;
     return out;

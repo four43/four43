@@ -179,7 +179,8 @@ test('desktop: rumble reaches seat 0\'s pads while driving; a pause stops them (
     await game.frames(5);
     assert.ok(!(await game.haptics(0)).calls.slice(n).some(on), 'nothing is sent while paused');
     // Rally's own stop: results is no pausing overlay, so only Rally's pads.stop (view.haptics.stop) can start the engine's stop rounds
-    await game.page.waitForFunction(() => !window.__rallyView.stopping(), null, { timeout: 5000 }); // the pause's own rounds have run out
+    // the pause's own rounds have run out; they advance per rendered frame, and SwiftShader draws the R10 surfaces at ~1.4 s a frame
+    await game.page.waitForFunction(() => !window.__rallyView.stopping(), null, { timeout: 30000 });
     await game.jump('stage', 'results', { time: 100, best: 101 }, { settings: { mode: 'stage', seed: 'e2e2' } });
     const stopped = await game.page.evaluate(() => new Promise(res => { let n = 0; const tick = () => (window.__rallyView.stopping() ? res(true) : ++n > 3 ? res(false) : requestAnimationFrame(tick)); tick(); }));
     assert.equal(stopped, true, 'a game moment that does not pause (results) calls view.haptics.stop itself');

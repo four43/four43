@@ -1,6 +1,6 @@
 // Rally's terrain through lion-hawk's createTerrainMesh with Rally's numbers (3j #9): the chunks cover the track, the
 // spawn's chunks are there after the first (unbudgeted) update at full detail, the coarse LODs sink under the road, and
-// the colours and detail-map uv come from Rally's callbacks.
+// the colours come from Rally's callbacks (the ground's photo is world-space, R10-9: no uv).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import R from '@dimforge/rapier3d-compat';
@@ -25,7 +25,7 @@ for (const theme of ['summer', 'winter']) {
     assert.ok(shown.length > 4, `chunks shown: ${shown.length}`);
     for (const m of shown) {
       assert.equal(m.receiveShadow, true);
-      for (const a of ['position', 'normal', 'color', 'uv']) assert.ok(m.geometry.attributes[a], a);
+      for (const a of ['position', 'normal', 'color']) assert.ok(m.geometry.attributes[a], a);
       const c = m.geometry.attributes.color.array; assert.ok(c.every(Number.isFinite) && Math.max(...c.subarray(0, 300)) > 0.01, 'coloured');
     }
     const T = track.terrain, near = shown.find(m => { const p = m.geometry.attributes.position; return Math.abs(p.getX(0) + 32 - L.x[0]) <= 40 && Math.abs(p.getZ(0) + 32 - L.z[0]) <= 40; });

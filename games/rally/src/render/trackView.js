@@ -1,5 +1,5 @@
 // Visuals for a TrackWorld (spec tracks T-9): the terrain through lion-hawk's terrain mesh (64 m chunks, three distance
-// LODs, skirts), a vertex-coloured road ribbon, instanced marker posts drawn from the transform pool, start/finish gates,
+// LODs, skirts), a procedurally shaded road ribbon (render/roadSurface.js, R10), instanced marker posts drawn from the transform pool, start/finish gates,
 // and tall grass tufts scattered on grass verges near the camera. Every material comes from the engine's compiler.
 // Interface shared with PadView: constructor(scene, world, kit), sync(sim), dispose(); plus update(camera) so LOD
 // can follow the camera rather than the car.
@@ -10,9 +10,15 @@ import { noise2 } from '../gen/noise.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
 import { rng } from '../gen/rng.js';
+import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, setSky, setGround, loadSurfaceTextures } from './roadSurface.js';
+import { VERGE } from '../gen/surfaces.js';
+import { Pebbles } from './pebbles.js';
 
-const DROP = [0, 0.35, 0.9];      // coarse LODs sink under the road so they never poke through it
-const ROAD_LIFT = 0.03, HALF = 3.5;
+const DROP = [0, 0.35, 0.9];      // coarse LODs sink under the road ribbon so they never poke through it
+const ROAD_LIFT = 0.03;
+// Road ribbon offsets across (m, + = left): out to the flat shoulder's edge (gen/terrain.js FLAT), so the shader draws the
+// road's edge and its spill onto the ground; denser where the ground colour ramps (the shoulder tint, 4.5–7 m).
+const ACROSS = [5.5, 4.75, 4, 3, 1.5, 0, -1.5, -3, -4, -4.75, -5.5];
 // Verge cover: scattered per 8 m world cell (deterministic per cell, cached), kept to cells within
 // RADIUS of the camera; the instance buffer is only rewritten when the camera changes cell.
 // Tufts shrink into the ground between FADE[0] and FADE[1] so the edge of the patch never pops.
@@ -24,12 +30,6 @@ const COVER = {
 const POST_H = 1.2, POST_W = 0.12, POST_D = 0.09; // matches TrackWorld's box collider
 
 const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // sRGB hex -> linear
-const ROAD_COL = {
-  tarmac: lin('#45484d'), hardpack: lin('#7a5d43'), gravel: lin('#9c8a6c'), packed: lin('#c9ccce'),
-  ice: lin('#b4cddc'), snow: lin('#eef2f6'), grass: lin('#5d6b3a'), snowbank: lin('#eef3f8'),
-};
-// How dark the two wheel tracks are per road surface (1 = invisible).
-const RUT = { tarmac: 0.82, hardpack: 0.8, gravel: 0.78, packed: 0.8, ice: 0.94, snow: 0.86 };
 const PAL = {
   summer: {
     a: lin('#56653a'), b: lin('#6f6c42'),          // muted green ↔ olive-brown, by large-scale noise
@@ -45,26 +45,6 @@ const PAL = {
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const mix3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
-
-// Neutral speckle multiplied over the vertex colours: detail up close, fog hides the tiling. One texture per contrast,
-// kept for the page (the compiler keys materials by map, so per-track textures would leak a material per rebuild).
-const DETAIL = new Map();
-const detailTexture = (contrast = 1) => { let t = DETAIL.get(contrast); if (!t) DETAIL.set(contrast, t = makeDetail(contrast)); return t; };
-function makeDetail(contrast) {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
-  const x = cv.getContext('2d');
-  x.fillStyle = '#ececec'; x.fillRect(0, 0, 256, 256);
-  let seed = 11;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 5000; i++) {
-    const v = Math.round(236 - contrast * (51 - Math.floor(rnd() * 70)));
-    x.fillStyle = `rgb(${v},${v},${v})`; x.globalAlpha = 0.4 + rnd() * 0.5;
-    const s = 1 + rnd() * 2.5; x.fillRect(rnd() * 256, rnd() * 256, s, s);
-  }
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  return t;
-}
 
 const BANNERS = new Map(); // one per (kind, closed): at most three for the page
 const bannerTexture = (kind, closed) => { const k = `${kind}|${closed}`; let t = BANNERS.get(k); if (!t) BANNERS.set(k, t = makeBanner(kind, closed)); return t; };
@@ -165,7 +145,7 @@ export function roadDistance(track) {
 }
 
 // lion-hawk's terrain mesh with Rally's chunk numbers (3j #9): 64 m chunks, three LODs with hysteresis, skirts, a 3 ms
-// build budget, far LOD eviction, the road sink (coarse LODs sink under the road) and the detail-map uv. colorAt: two-tone
+// build budget, far LOD eviction, and the road sink (coarse LODs sink under the road). colorAt: two-tone
 // ground by broad noise, fine variation, earth/rock on slopes (by ny), road shoulder.
 export function terrainMeshOptions(track, theme, roadDist, noise) {
   const T = track.terrain, P = PAL[theme], c = [0, 0, 0], e = [0, 0, 0];
@@ -173,7 +153,7 @@ export function terrainMeshOptions(track, theme, roadDist, noise) {
     return roadDist[(gz < 0 ? 0 : gz >= T.nz ? T.nz - 1 : gz) * T.nx + (gx < 0 ? 0 : gx >= T.nx ? T.nx - 1 : gx)] / 10; };
   return {
     chunkCells: 64, lods: [1, 2, 4], lodFar: [150, 400], hysteresis: 12, skirt: 2, visFar: 760, evict: [300, 720], budgetMs: 3, moveEps: 2,
-    drop: (x, z, lod) => { const d = dAt(x, z); return DROP[lod] && d < 7 ? DROP[lod] * (1 - smooth(4.5, 7, d)) : 0; },
+    drop: (x, z, lod) => { const d = dAt(x, z); return DROP[lod] && d < 8 ? DROP[lod] * (1 - smooth(5.5, 8, d)) : 0; },
     colorAt(x, z, out, ny) {
       const d = dAt(x, z), big = noise(x / 70, z / 70), fine = noise(x / 6.5, z / 6.5);
       mix3(c, P.a, P.b, 0.5 + 0.6 * big);
@@ -183,7 +163,6 @@ export function terrainMeshOptions(track, theme, roadDist, noise) {
       const k = 1 + 0.07 * fine;
       out[0] = c[0] * k; out[1] = c[1] * k; out[2] = c[2] * k; return out;
     },
-    attributes: { uv: { size: 2, at: (x, z, out) => { out[0] = x / 8; out[1] = z / 8; return out; } } },
   };
 }
 
@@ -194,47 +173,50 @@ export class TrackView {
     this.theme = track.theme === 'winter' ? 'winter' : 'summer'; // also the light-rig preset (render.js)
     this.root = new THREE.Group(); scene.add(this.root);
     this.noise = noise2(`${track.seed}|look`);
-    // Snow gets a softer speckle so it reads white rather than grey.
-    this.detail = detailTexture();
-    this.groundDetail = this.theme === 'winter' ? detailTexture(0.45) : this.detail;
+    // The ground's look (R10-9): the verge's photo over the vertex colours, the slope surface's on steep ground.
+    setGround(VERGE[this.theme], PAL[this.theme].slope);
+    loadSurfaceTextures().catch((e) => console.warn(e.message)); // procedural and vertex colours stand in until (or if not) loaded
     this.roadDist = roadDistance(track);
-    this.terrainMat = this.mc.get('rally-ground', { vertexColors: true, map: this.groundDetail });
-    this.terrainMesh = createTerrainMesh(world.terrain, { ...terrainMeshOptions(track, this.theme, this.roadDist, this.noise), compiler: this.mc, material: this.terrainMat });
+    this.terrainMat = groundMaterial(this.mc, this.mc.get('rally-ground', { vertexColors: true }));
+    this.terrainOpts = terrainMeshOptions(track, this.theme, this.roadDist, this.noise);
+    this.terrainMesh = createTerrainMesh(world.terrain, { ...this.terrainOpts, compiler: this.mc, material: this.terrainMat });
     this.root.add(this.terrainMesh.group);
     this.stats = this.terrainMesh.stats;
     this.camera = null;
     this.focus = { position: { x: track.spawn.x, y: 0, z: track.spawn.z } };
 
     this.buildRoad();
+    this.pebbles = new Pebbles(this.root, track, this.mc, ROAD_LIFT);
     this.buildMarkers();
     this.buildGates();
     this.buildCover();
     this.terrainMesh.update(this.focus); // the first update is unbudgeted: the spawn's chunks are there on frame one
   }
 
-  // Road ribbon: 11 vertices across (edges, shoulders of colour, two wheel tracks) per 1 m sample.
+  // Road ribbon (R10-2): ACROSS vertices per 1 m sample, out to the flat shoulder. Its vertex colours are the terrain's own
+  // (colorAt) and its ground is drawn by the terrain's function, so where the shader draws ground the ribbon meets the
+  // terrain without a seam. Per vertex for the shader: aRoad (offset across, distance along), aEdge (the track's
+  // half-widths, left and right: the physics edge), the section blend as weights per road surface (aSurfA, aSurfB) and
+  // the wear lines (aWear: centre and strength of each pair, R10-8).
   buildRoad() {
-    const { layout: L, terrain: T, surfaces } = this.track;
-    const D = [HALF, 3.1, 1.15, 0.8, 0.45, 0, -0.45, -0.8, -1.15, -3.1, -HALF];
-    const RUTW = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]; // wheel tracks at ±0.8 m
-    const EDGE = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]; // loose edges blend a little to the verge
-    const m = D.length, n = L.n, nv = n * m;
-    const pos = new Float32Array(nv * 3), col = new Float32Array(nv * 3), uv = new Float32Array(nv * 2);
-    const shoulder = PAL[this.theme].shoulder;
-    const c = [0, 0, 0], e = [0, 0, 0];
+    const { layout: L, terrain: T, surfaces, edges, wear } = this.track;
+    const m = ACROSS.length, n = L.n, nv = n * m;
+    const pos = new Float32Array(nv * 3), col = new Float32Array(nv * 3), wr = new Float32Array(nv * 4);
+    const road = new Float32Array(nv * 2), edge = new Float32Array(nv * 2), surfA = new Float32Array(nv * 4), surfB = new Float32Array(nv);
+    const c = [0, 0, 0], wt = new Float32Array(ROAD_SURFACES.length);
     for (let i = 0; i < n; i++) {
-      const s = i * L.ds, h = L.heading[i], ch = Math.cos(h), sh = Math.sin(h), tb = Math.tan(T.bank[i]);
-      const surf = roadSurfaceAt(surfaces, s);
-      mix3(c, ROAD_COL[surf.road] || ROAD_COL.gravel, ROAD_COL[surf.next?.road] || ROAD_COL[surf.road] || ROAD_COL.gravel, surf.t);
-      const rut = (RUT[surf.road] ?? 0.85) + ((RUT[surf.next?.road] ?? RUT[surf.road] ?? 0.85) - (RUT[surf.road] ?? 0.85)) * surf.t;
-      const vary = 1 + 0.06 * this.noise(L.x[i] / 9, L.z[i] / 9);
+      const s = i * L.ds, h = L.heading[i], ch = Math.cos(h), sh = Math.sin(h), tb = Math.tan(T.bank[i]), ny = Math.cos(T.bank[i]);
+      const at = roadSurfaceAt(surfaces, s);
+      wt.fill(0); wt[surfaceSlot(at.road)] += 1 - at.t; wt[surfaceSlot(at.next?.road ?? at.road)] += at.t;
       for (let k = 0; k < m; k++) {
-        const v = i * m + k, d = D[k];
-        pos[v * 3] = L.x[i] + d * ch; pos[v * 3 + 1] = T.road[i] + tb * d + ROAD_LIFT; pos[v * 3 + 2] = L.z[i] - d * sh;
-        mix3(e, c, shoulder, EDGE[k] * 0.45);
-        const f = vary * (RUTW[k] ? rut : 1) * (1 + 0.04 * this.noise(L.x[i] / 2 + d, L.z[i] / 2));
-        col[v * 3] = e[0] * f; col[v * 3 + 1] = e[1] * f; col[v * 3 + 2] = e[2] * f;
-        uv[v * 2] = (d + HALF) / 4; uv[v * 2 + 1] = s / 4;
+        const v = i * m + k, d = ACROSS[k], x = L.x[i] + d * ch, z = L.z[i] - d * sh;
+        pos[v * 3] = x; pos[v * 3 + 1] = T.road[i] + tb * d + ROAD_LIFT; pos[v * 3 + 2] = z;
+        this.terrainOpts.colorAt(x, z, c, ny);
+        col[v * 3] = c[0]; col[v * 3 + 1] = c[1]; col[v * 3 + 2] = c[2];
+        wr[v * 4] = wear.c1[i]; wr[v * 4 + 1] = wear.a1[i]; wr[v * 4 + 2] = wear.c2[i]; wr[v * 4 + 3] = wear.a2[i];
+        road[v * 2] = d; road[v * 2 + 1] = s;
+        edge[v * 2] = edges.left[i]; edge[v * 2 + 1] = edges.right[i];
+        surfA.set(wt.subarray(0, 4), v * 4); surfB[v] = wt[4];
       }
     }
     const idx = [], segs = L.closed ? n : n - 1;
@@ -245,11 +227,15 @@ export class TrackView {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute('aRoad', new THREE.BufferAttribute(road, 2));
+    geo.setAttribute('aEdge', new THREE.BufferAttribute(edge, 2));
+    geo.setAttribute('aSurfA', new THREE.BufferAttribute(surfA, 4));
+    geo.setAttribute('aSurfB', new THREE.BufferAttribute(surfB, 1));
+    geo.setAttribute('aWear', new THREE.BufferAttribute(wr, 4));
     geo.setIndex(nv > 65535 ? new THREE.BufferAttribute(new Uint32Array(idx), 1) : new THREE.BufferAttribute(new Uint16Array(idx), 1));
     geo.computeVertexNormals(); geo.computeBoundingSphere();
-    const mat = this.mc.get('rally-road', { vertexColors: true, map: this.detail });
-    mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4; // rally-road's only user
+    const mat = roadMaterial(this.mc, this.mc.get('rally-road', { vertexColors: true }));
+    mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4; // the road material's only user
     this.road = new THREE.Mesh(geo, mat); this.road.receiveShadow = true; this.road.matrixAutoUpdate = false;
     this.root.add(this.road);
   }
@@ -386,9 +372,10 @@ export class TrackView {
 
   sync(sim) {
     const p = this.camera ? this.camera.position : sim?.car?.e.xf.p;
+    if (this.scene.fog) setSky(this.scene.fog.color); // the light rig sets the fog per look; reflections follow it
     if (p) {
       this.focus.position.x = p.x; this.focus.position.z = p.z;
-      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z);
+      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z); this.pebbles.update(p.x, p.z);
     }
     const props = this.markerProps;
     if (!props.length) return;
@@ -396,12 +383,12 @@ export class TrackView {
     this.markerInst.commit();
   }
 
-  // Triangles in the visible terrain chunks (before frustum culling) plus road, markers and cover.
+  // Triangles in the visible terrain chunks (before frustum culling) plus road, pebbles, markers and cover.
   triangles() {
     let t = 0;
     for (const m of this.terrainMesh.group.children) if (m.visible) t += m.geometry.index.count / 3;
     const cover = Object.values(this.cover).reduce((a, im) => a + im.count * im.geometry.index.count / 3, 0);
-    return { terrain: t, road: this.road.geometry.index.count / 3, markers: this.markers.count * this.markers.geometry.index.count / 3, cover };
+    return { terrain: t, road: this.road.geometry.index.count / 3, pebbles: this.pebbles.triangles(), markers: this.markers.count * this.markers.geometry.index.count / 3, cover };
   }
 
   // Geometries only: the compiler owns the materials, the page keeps the textures.

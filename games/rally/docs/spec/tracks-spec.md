@@ -213,7 +213,8 @@ World = {
   transition table (summer: gravel ↔ dirt ↔ tarmac; winter: snow ↔ packed ↔ ice, occasional
   gravel). Snow sections use the `packed` physics entry in Phase 1. Verge: `grass` (summer),
   `snowbank` (winter). 10 m blend between sections (grip interpolated). `surfaceAt(x, z)` uses the
-  locator: |d| ≤ 3.5 m road, else verge. Ramps etc. are road.
+  locator: |d| within the road's edge on that side (`gen/edges.js`, rally-spec R10-1; 3.5 m
+  before Round 10), else verge. Ramps etc. are road.
   - *Surface drag* (tall grass, deep snow, sand, mud): each wheel in contact pays a force at its
     contact point against the contact point's ground-plane velocity v,
     `F = drag · Fz · tanh(v / 2 m/s) · (1 + (v / 18 m/s)²)`, once per chassis step
