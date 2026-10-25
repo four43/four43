@@ -644,7 +644,9 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   that list it, so a trigger effect queued a frame earlier cannot outlive the `reset()`.
 - **R9-5 Tuning panel** (`?rumble` on the game page; desktop only, `src/rumbleTune.js`). The game runs as usual with a
   side panel: a section per channel with a slider per parameter (surfaces in a sub-list), a mute per channel, live meters
-  per channel and for the four outputs, and the pad's `effects` (does it have triggers). Values save to `localStorage`
+  per channel and for the four outputs, and the pad's `effects` (does it have triggers). A write line: writes per second, and how
+  they ended (completed, replaced by the next, rejected, the last error), from `rumbleOut`'s stats (playtest 2026-10-25: a
+  Bluetooth pad at 22 % battery took every write and played none; over USB the game rumbled). Values save to `localStorage`
   (`rally-rumble-tune`) on change and the game reads them on load, also without `?rumble`; Reset per channel; Export gives
   the JSON for `src/defs/rumble.js`. View-only: it never writes the sim. The standalone lab (`rumbleLab.js`) is gone.
 - **Validation**: `test/rumble.test.mjs` rewritten per channel: engine rises with rpm and throttle, weak only; suspension
