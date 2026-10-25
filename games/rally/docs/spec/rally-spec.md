@@ -632,14 +632,18 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   (`BODY_CONTACT` in `vehicle.js`; resting on the roof is ~0.04), so a tuned `dvOn` never needs a respawn (the wheels are
   raycasts: normal driving never touches the body). The view takes the
   engine's `contact` events whose `a` or `b` is the car's entity id and passes them to the body channel that frame.
-- **R9-4 Output** (`src/rumbleOut.js`). A pad whose actuator lists `'trigger-rumble'` in `effects` gets one
+- **R9-4 Output** (`src/rumbleOut.js`). A pad whose actuator lists `'trigger-rumble'` in `effects` (any iterable), or
+  does not list its effects at all (then tried; a `NotSupportedError` moves that `Gamepad.id` to `dual-rumble` for the
+  page's life; playtest 2026-10-25: the bench rumbled Brave's triggers while a plain-array check folded the aid), gets one
   `trigger-rumble` effect per frame: `strongMagnitude`, `weakMagnitude`, `leftTrigger`, `rightTrigger`. Any other pad gets
   `dual-rumble`, with the aid folded in: weak += max(left, right) × `aid.fold`.
   **Write budget** (playtest 2026-10-25, Bluetooth pad: an effect per frame queued up below the page, and the pad kept
   rumbling through a pause and after the window closed; the queue is the writes, not the durations). `PARAMS.send`: a
   change of `delta` in any motor goes out at most every `minMs` (50), a steady level is re-sent every `keepMs` (150) as an
   effect `durMs` (250) long, and a quiet is one zero effect; no reset (it is a write, and cancels a queued pulse). Steady
-  ~7 writes/s, at most 20 (ABS at 8 Hz: 16). Replaces R7-3's every-frame send and gap rule. Stops are the engine's (R8-2: pause, blur, hide, `pagehide`, first
+  ~7 writes/s, at most 20 (ABS at 8 Hz: 16). Replaces R7-3's every-frame send and gap rule. Tuned 2026-10-25 to
+  `minMs` 120 / `keepMs` 120 / `durMs` 220 (~8 writes/s): ABS pulses at 8 Hz need 16 writes/s, so they blur at that budget.
+  The tests check the mechanism with their own budget and engine values, not the shipped tuning. Stops are the engine's (R8-2: pause, blur, hide, `pagehide`, first
   sight; Rally's `menu`, `finish`, `exit`). **lion-hawk change (C-14):** a stop also sends a zero `trigger-rumble` to pads
   that list it, so a trigger effect queued a frame earlier cannot outlive the `reset()`.
 - **R9-5 Tuning panel** (`?rumble` on the game page; desktop only, `src/rumbleTune.js`). The game runs as usual with a

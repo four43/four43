@@ -90,7 +90,7 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
     fill(outs.bars, rumble.out);
     for (const ch of CHANNELS) fill(chanMeters[ch], rumble.levels[ch]);
     const a = rumble.aid(), list = pads() ?? [];
-    const fx = list.map(p => p?.vibrationActuator?.effects?.join(', ') ?? 'no actuator');
+    const fx = list.map(p => { const v = p?.vibrationActuator; if (!v) return 'no actuator'; try { return v.effects ? Array.from(v.effects).join(', ') : 'effects not listed (trigger-rumble tried)'; } catch { return 'effects unreadable'; } });
     info.textContent = `brake: ${a.brake.locked ? 'PULSE' : a.brake.near ? 'near' : '–'} · traction: ${a.traction.locked ? 'PULSE' : a.traction.near ? 'near' : '–'} · pads: ${fx.length ? fx.join(' | ') : 'none paired (press a button)'}`;
     // the writes (rumbleOut's stats, through the stage view's seam): per second, and how they ended
     const st = doc.defaultView.__rallyView?.rumble?.(), t = performance.now();

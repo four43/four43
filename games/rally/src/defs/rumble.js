@@ -1,27 +1,27 @@
 // Controller rumble parameters (rally-spec R9-2): one object per channel, physical units, tuned in the ?rumble panel
-// (src/rumbleTune.js) and exported back here. Pure data; the channels live in src/rumble/. An Xbox pad has two body motors,
+// (src/rumbleTune.js) and exported back here. Tuned on a Bluetooth Xbox pad 2026-10-25 (engine, suspension, aid pedal and fold, send). Pure data; the channels live in src/rumble/. An Xbox pad has two body motors,
 // `strong` (left, low and heavy) and `weak` (right, high and buzzy), and on some pads (Bluetooth in Chromium) a motor in
 // each trigger: `left` (brake) and `right` (throttle). Every level is 0..1 before the mix.
 export const PARAMS = {
   // The engine (R9-1): weak motor only, a light constant presence that follows the revs.
   engine: {
-    idle: 0.03,      // level at idle rpm
-    redline: 0.12,   // level at the redline
-    load: 0.4,       // share felt off the throttle (1: throttle makes no difference)
-    limiterHz: 9,    // pulse rate on the rev limiter
-    limiterAmp: 0.15, // pulse level on the rev limiter
+    idle: 0.01,      // level at idle rpm
+    redline: 0.115,   // level at the redline
+    load: 1,       // share felt off the throttle (1: throttle makes no difference)
+    limiterHz: 15,    // pulse rate on the rev limiter
+    limiterAmp: 1, // pulse level on the rev limiter
   },
   // Suspension (R9-1): a synthetic road under each tyre through a spring-damper, plus the real jolts from the sim.
   suspension: {
-    hz: 18,          // natural frequency of the tyre-and-wheel spring; bumps shorter than its period are soaked up (planing)
-    zeta: 0.35,      // its damping ratio
-    full: 0.03,      // m: a bump this high at its loudest speed gives level 1
+    hz: 17.5,          // natural frequency of the tyre-and-wheel spring; bumps shorter than its period are soaked up (planing)
+    zeta: 0.5,      // its damping ratio
+    full: 0.1,      // m: a bump this high at its loudest speed gives level 1
     splitHz: 9,      // below this the motion goes to the strong motor, above it to the weak one
     release: 0.05,   // s: how fast a motor level falls back after a bump
-    gain: 0.8,       // master gain over the road texture (not the jolts)
-    joltOn: 1.3,     // m/s of wheel compression speed where a real hit starts (a respawn settle peaks ~1.1)
-    joltFull: 4,     // m/s where it is full (a 1 m drop ~4.4)
-    joltWeak: 0.6,   // the weak motor's share of a real hit (landings pound both motors)
+    gain: 0.2,       // master gain over the road texture (not the jolts)
+    joltOn: 1.7,     // m/s of wheel compression speed where a real hit starts (a respawn settle peaks ~1.1)
+    joltFull: 2.6,     // m/s where it is full (a 1 m drop ~4.4)
+    joltWeak: 0,   // the weak motor's share of a real hit (landings pound both motors)
     // Per rumble surface: bump height (m), mean distance between bumps (m), bump width along the road (m).
     // Ice is near smooth; gravel is many small sharp bumps; sand and mud are long and soft.
     surfaces: {
@@ -46,10 +46,10 @@ export const PARAMS = {
   // a kick on crossing `near` (again only after falling under `rearm`), a level rising to the peak, and past `lock` pulses
   // at pulseHz (≤ 10: the motors blur above) until x is back under `unlock`.
   aid: {
-    pedal: 0.05,     // pedal travel before the aid listens
-    fold: 0.6,       // pads without trigger motors: the aid's share added onto the weak motor
-    brake: { near: 0.75, rearm: 0.65, lock: 1.1, unlock: 1.0, kickAmp: 0.8, kickLen: 0.08, nearAmp: 0.35, pulseHz: 8, amp: 0.9 },
-    traction: { near: 1.0, rearm: 0.85, lock: 1.3, unlock: 1.1, kickAmp: 0.6, kickLen: 0.06, nearAmp: 0.25, pulseHz: 10, amp: 0.6 },
+    pedal: 0.5,     // pedal travel before the aid listens
+    fold: 1,       // pads without trigger motors: the aid's share added onto the weak motor
+    brake: { near: 0.75, rearm: 0.65, lock: 1.1, unlock: 1.0, kickAmp: 0.8, kickLen: 0.1, nearAmp: 0.35, pulseHz: 8, amp: 0.9 },
+    traction: { near: 1.0, rearm: 0.85, lock: 1.3, unlock: 1.1, kickAmp: 0.6, kickLen: 0.1, nearAmp: 0.25, pulseHz: 10, amp: 0.6 },
   },
   mix: {
     drive: 1.5,      // soft clip: tanh(x · drive) / tanh(drive)
@@ -57,9 +57,9 @@ export const PARAMS = {
   // Sending (R9-4). Every effect is a write to the pad, and a Bluetooth pad drains them slower than 60 a second: one per
   // frame queued up below the page, so it kept rumbling through a pause and after the window closed (playtest 2026-10-25).
   send: {
-    minMs: 50,       // ms: at most one write this often (a level change waits for it)
-    keepMs: 150,     // ms: a steady level is re-sent this often
-    durMs: 250,      // ms: each effect's length: outlasts keepMs, and a lost stop ends by itself
+    minMs: 120,       // ms: at most one write this often (a level change waits for it)
+    keepMs: 120,     // ms: a steady level is re-sent this often
+    durMs: 220,      // ms: each effect's length: outlasts keepMs, and a lost stop ends by itself
     delta: 0.04,     // a motor must move by this much to count as a change
   },
 };

@@ -50,7 +50,8 @@ test('parameters: every Rally tyre material has a rumble surface with numbers, e
 });
 
 test('engine: weak motor only, rising with the revs and the throttle; pulses on the limiter', () => {
-  const at = args => { const e = createEngine(PARAMS.engine); return run((c, dt) => e.update(c, dt), args, 0.5); };
+  const P = { idle: 0.03, redline: 0.12, load: 0.4, limiterHz: 9, limiterAmp: 0.15 }; // the mechanism, not the shipped tuning
+  const at = args => { const e = createEngine(P); return run((c, dt) => e.update(c, dt), args, 0.5); };
   const idle = at({ rpm: 900 }), high = at({ rpm: 6000 }), loaded = at({ rpm: 6000, throttle: 1 });
   assert.equal(mean(loaded, 'strong'), 0);
   assert.ok(mean(idle, 'weak') > 0, 'idle hums');
@@ -156,7 +157,9 @@ test('mix: the channels add per motor through a soft clip, × the setting; a mut
 });
 
 // A pad actuator that records calls; triggers: it lists 'trigger-rumble'. clock.t is the time (ms) rumbleOut sees.
-const fakePad = (triggers = false, send = PARAMS.send) => {
+// The send budget the mechanism tests use: the shipped PARAMS.send is tuning, retuned in the panel.
+const SEND = { minMs: 50, keepMs: 150, durMs: 250, delta: 0.04 };
+const fakePad = (triggers = false, send = SEND) => {
   const calls = [], stops = [], h = { paused: false, stop: r => stops.push(r) }, clock = { t: 0 };
   const actuator = { effects: triggers ? ['dual-rumble', 'trigger-rumble'] : ['dual-rumble'],
     playEffect: (type, p) => { const on = p.strongMagnitude + p.weakMagnitude + (p.leftTrigger ?? 0) + (p.rightTrigger ?? 0) > 0; calls.push(on ? ['play', type, { ...p }] : ['zero', type]); return Promise.resolve('preempted'); },
@@ -183,22 +186,51 @@ test('rumbleOut: trigger pads get all four motors in one trigger-rumble; others 
   const a = fakePad(false); a.frames(1, M(0, 0, 0.3, 0)); assert.equal(a.calls[0][0], 'play', 'the aid alone is enough to play');
 });
 
+// Playtest 2026-10-25: Brave rumbled the triggers from the ?debug=pads bench, but Rally folded the aid onto the weak motor:
+// the actuator's `effects` is not always a plain array, or not there at all. Unlisted means: try trigger-rumble, and fall
+// back to dual-rumble for that pad model if the browser rejects it.
+test('rumbleOut: an actuator that does not list its effects is tried with trigger-rumble; a rejection falls back to dual-rumble', async () => {
+  const mk = (accepts, effects) => {
+    const calls = [];
+    const a = { playEffect: (type, p) => { calls.push(type); return accepts.includes(type) ? Promise.resolve('preempted') : Promise.reject(new DOMException(`${type} unsupported`, 'NotSupportedError')); }, reset: () => Promise.resolve() };
+    if (effects !== undefined) a.effects = effects;
+    const clock = { t: 0 }, pad = { id: `pad ${accepts.join('+')} ${String(effects)}`, index: 0, vibrationActuator: a };
+    const out = rumbleOut({ pads: () => [pad], send: () => SEND, now: () => clock.t, fold: () => 1 });
+    const frames = async n => { for (let i = 0; i < n; i++) { clock.t += 1000 / 60; out.send(M(0, 0, 0.5 + 0.4 * (i % 2))); await null; } };
+    return { calls, frames, out };
+  };
+  const yes = mk(['dual-rumble', 'trigger-rumble']);
+  await yes.frames(30);
+  assert.ok(yes.calls.length > 1 && yes.calls.every(t => t === 'trigger-rumble'), 'not listed but supported: triggers');
+  const no = mk(['dual-rumble']);
+  await no.frames(30);
+  assert.equal(no.calls[0], 'trigger-rumble', 'tried once');
+  assert.ok(no.calls.length > 2 && no.calls.slice(2).every(t => t === 'dual-rumble'), `then dual-rumble: ${no.calls.join(',')}`);
+  assert.equal(no.out.stats.rejected, 1, 'the one probe shows as rejected');
+  const frozen = mk(['dual-rumble', 'trigger-rumble'], Object.freeze(['dual-rumble', 'trigger-rumble']));
+  await frozen.frames(5); assert.ok(frozen.calls.every(t => t === 'trigger-rumble'), 'a frozen array lists them');
+  const iter = mk(['dual-rumble', 'trigger-rumble'], new Set(['dual-rumble', 'trigger-rumble']));
+  await iter.frames(5); assert.ok(iter.calls.every(t => t === 'trigger-rumble'), 'any iterable list');
+  const listed = mk(['dual-rumble', 'trigger-rumble'], ['dual-rumble']);
+  await listed.frames(5); assert.ok(listed.calls.every(t => t === 'dual-rumble'), 'a list without it is believed');
+});
+
 // Playtest 2026-10-25 (Bluetooth Xbox pad, trigger-rumble): one effect per frame queued up below the page, so the pad kept
 // rumbling through a pause and after the window closed. Every effect is a write to the pad: they are budgeted.
 test('rumbleOut: a steady level is a keep-alive, not a write per frame; each effect outlasts the gap to the next', () => {
   const { calls, frames } = fakePad(true);
   frames(60, M(0.3, 0.1));
-  assert.ok(writes(calls) <= Math.ceil(1000 / PARAMS.send.keepMs) + 1, `${writes(calls)} writes in 1 s of a steady level`);
-  assert.ok(calls.every(c => c[2].duration > PARAMS.send.keepMs + 1000 / 60), 'no gap between keep-alives');
+  assert.ok(writes(calls) <= Math.ceil(1000 / SEND.keepMs) + 1, `${writes(calls)} writes in 1 s of a steady level`);
+  assert.ok(calls.every(c => c[2].duration > SEND.keepMs + 1000 / 60), 'no gap between keep-alives');
   assert.ok(calls.every(c => c[2].duration <= 300), 'and short: a lost stop ends by itself within 0.3 s');
 });
 
 test('rumbleOut: a level changing every frame is capped at one write per minMs', () => {
   const { calls, frames } = fakePad(true);
   frames(60, i => M(0.1 + 0.8 * (i % 2), 0));
-  assert.ok(writes(calls) <= Math.ceil(1000 / PARAMS.send.minMs) + 1, `${writes(calls)} writes in 1 s`);
+  assert.ok(writes(calls) <= Math.ceil(1000 / SEND.minMs) + 1, `${writes(calls)} writes in 1 s`);
   const ramp = fakePad(true); ramp.frames(60, i => M(i / 60, 0));
-  assert.ok(writes(ramp.calls) <= Math.ceil(1000 / PARAMS.send.minMs) + 1);
+  assert.ok(writes(ramp.calls) <= Math.ceil(1000 / SEND.minMs) + 1);
   assert.ok(Math.abs(ramp.calls.at(-1)[2].strongMagnitude - 1) < 0.1, 'the latest level gets through');
 });
 
