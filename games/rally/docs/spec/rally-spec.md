@@ -632,9 +632,10 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   (`BODY_CONTACT` in `vehicle.js`; resting on the roof is ~0.04), so a tuned `dvOn` never needs a respawn (the wheels are
   raycasts: normal driving never touches the body). The view takes the
   engine's `contact` events whose `a` or `b` is the car's entity id and passes them to the body channel that frame.
-- **R9-4 Output** (`src/rumbleOut.js`). A pad whose actuator lists `'trigger-rumble'` in `effects` (any iterable), or
-  does not list its effects at all (then tried; a `NotSupportedError` moves that `Gamepad.id` to `dual-rumble` for the
-  page's life; playtest 2026-10-25: the bench rumbled Brave's triggers while a plain-array check folded the aid), gets one
+- **R9-4 Output** (`src/rumbleOut.js`). Every pad is tried with `trigger-rumble`, whatever its actuator's `effects` lists;
+  a rejection moves that `Gamepad.id` to `dual-rumble` for the page's life (playtest 2026-10-25: Brave played
+  `trigger-rumble` from the `?debug=pads` bench, which never checks, while Rally, believing the list, folded the aid onto
+  the weak motor; the panel shows what the pad lists and which kind is sent). A pad that takes it gets one
   `trigger-rumble` effect per frame: `strongMagnitude`, `weakMagnitude`, `leftTrigger`, `rightTrigger`. Any other pad gets
   `dual-rumble`, with the aid folded in: weak += max(left, right) × `aid.fold`.
   **Write budget** (playtest 2026-10-25, Bluetooth pad: an effect per frame queued up below the page, and the pad kept

@@ -18,11 +18,9 @@ const MOTORS = ['strong', 'weak', 'left', 'right'];
 const ZERO_DUAL = Object.freeze({ startDelay: 0, duration: 1, strongMagnitude: 0, weakMagnitude: 0 });
 const ZERO_TRIG = Object.freeze({ startDelay: 0, duration: 1, strongMagnitude: 0, weakMagnitude: 0, leftTrigger: 0, rightTrigger: 0 });
 
-// Trigger motors: a pad that lists its effects (any iterable: Chromium's is a frozen array) is believed. One that doesn't
-// list them is tried with trigger-rumble, and a rejection (NotSupportedError) moves that pad model (Gamepad.id) to
-// dual-rumble for the page's life (playtest 2026-10-25: Brave's bench rumbled the triggers while a plain-array check
-// folded Rally's aid onto the weak motor).
-const listed = a => { try { return a.effects != null && typeof a.effects !== 'string' && a.effects[Symbol.iterator] ? Array.from(a.effects) : null; } catch { return null; } };
+// Trigger motors: every pad is tried with trigger-rumble, and a rejection moves that pad model (Gamepad.id) to dual-rumble
+// for the page's life. The actuator's `effects` list is not trusted (playtest 2026-10-25: Brave played trigger-rumble from
+// the ?debug=pads bench, which never checks, while Rally, checking the list, folded the aid onto the weak motor).
 
 // pads(): the seat's live pads this frame; haptics(): view.haptics (null when the game turned autoStop off, or before enter);
 // fold(): the triggers' share on the weak motor for pads without trigger motors; send(): PARAMS.send (both live from the
@@ -33,23 +31,23 @@ export function rumbleOut({ pads = () => NO, haptics = () => null, fold = () => 
   let at = -Infinity; // ms of the last write
   const last = { strong: 0, weak: 0, left: 0, right: 0 }; // the levels last written
   // What became of the writes, for the ?rumble panel: a rejected effect is never an error for the player, but it must show.
-  const stats = { writes: 0, complete: 0, preempted: 0, rejected: 0, lastError: '', pads: 0, live: false };
+  const stats = { writes: 0, complete: 0, preempted: 0, rejected: 0, lastError: '', pads: 0, live: false, triggers: true }; // triggers: the last pad played takes trigger-rumble
   const done = r => { if (r === 'complete') stats.complete++; else stats.preempted++; };
   const fail = e => { stats.rejected++; stats.lastError = `${e?.name ?? 'Error'}: ${e?.message ?? e}`; };
   // reused: playEffect reads its params at the call
   const dual = { startDelay: 0, duration: 250, strongMagnitude: 0, weakMagnitude: 0 };
   const trig = { startDelay: 0, duration: 250, strongMagnitude: 0, weakMagnitude: 0, leftTrigger: 0, rightTrigger: 0 };
-  const noTriggers = new Set(); // pad ids whose unlisted actuator rejected trigger-rumble
-  const triggers = (a, id) => { const l = listed(a); return l ? l.includes('trigger-rumble') : !noTriggers.has(id); };
+  const noTriggers = new Set(); // pad ids whose actuator rejected trigger-rumble
+  const triggers = id => !noTriggers.has(id);
   const call = (a, type, params, id) => {
     try {
       const p = a.playEffect(type, params);
       stats.writes++;
-      p?.then?.(done, e => { fail(e); if (type === 'trigger-rumble' && e?.name === 'NotSupportedError') noTriggers.add(id); });
+      p?.then?.(done, e => { fail(e); if (type === 'trigger-rumble') noTriggers.add(id); });
     } catch (e) { stats.writes++; fail(e); if (type === 'trigger-rumble') noTriggers.add(id); }
   };
-  const zeroEffect = (a, id) => (triggers(a, id) ? call(a, 'trigger-rumble', ZERO_TRIG, id) : call(a, 'dual-rumble', ZERO_DUAL, id));
-  const play = (a, id) => (triggers(a, id) ? call(a, 'trigger-rumble', trig, id) : call(a, 'dual-rumble', dual, id));
+  const zeroEffect = (a, id) => (triggers(id) ? call(a, 'trigger-rumble', ZERO_TRIG, id) : call(a, 'dual-rumble', ZERO_DUAL, id));
+  const play = (a, id) => ((stats.triggers = triggers(id)) ? call(a, 'trigger-rumble', trig, id) : call(a, 'dual-rumble', dual, id));
   const each = fn => {
     const list = pads() ?? NO; stats.pads = list.length;
     for (let i = 0; i < list.length; i++) { const p = list[i], a = p?.vibrationActuator; if (typeof a?.playEffect === 'function') fn(a, p.id); }

@@ -162,7 +162,7 @@ const SEND = { minMs: 50, keepMs: 150, durMs: 250, delta: 0.04 };
 const fakePad = (triggers = false, send = SEND) => {
   const calls = [], stops = [], h = { paused: false, stop: r => stops.push(r) }, clock = { t: 0 };
   const actuator = { effects: triggers ? ['dual-rumble', 'trigger-rumble'] : ['dual-rumble'],
-    playEffect: (type, p) => { const on = p.strongMagnitude + p.weakMagnitude + (p.leftTrigger ?? 0) + (p.rightTrigger ?? 0) > 0; calls.push(on ? ['play', type, { ...p }] : ['zero', type]); return Promise.resolve('preempted'); },
+    playEffect: (type, p) => { const on = p.strongMagnitude + p.weakMagnitude + (p.leftTrigger ?? 0) + (p.rightTrigger ?? 0) > 0; calls.push(on ? ['play', type, { ...p }] : ['zero', type]); return actuator.effects.includes(type) ? Promise.resolve('preempted') : Promise.reject(new DOMException(`${type} is not supported`, 'NotSupportedError')); },
     reset: () => { calls.push(['reset']); return Promise.resolve(); } };
   // lp.pads: live Gamepads only (no null slots); one without an actuator (Firefox) is skipped
   const out = rumbleOut({ pads: () => [{ index: 1, vibrationActuator: actuator }, { index: 2, id: 'no rumble' }], haptics: () => h, fold: () => 0.5, send: () => send, now: () => clock.t });
@@ -173,23 +173,26 @@ const fakePad = (triggers = false, send = SEND) => {
 const M = (strong = 0, weak = 0, left = 0, right = 0) => ({ strong, weak, left, right });
 const writes = calls => calls.length; // every playEffect and reset is a write to the pad
 
-test('rumbleOut: trigger pads get all four motors in one trigger-rumble; others get dual-rumble with the triggers folded onto weak', () => {
+test('rumbleOut: trigger pads get all four motors in one trigger-rumble; others get dual-rumble with the triggers folded onto weak', async () => {
   const t = fakePad(true);
   t.frames(1, M(0.5, 0.2, 0.7, 0.1));
   assert.equal(t.calls[0][1], 'trigger-rumble');
   assert.deepEqual([t.calls[0][2].strongMagnitude, t.calls[0][2].weakMagnitude, t.calls[0][2].leftTrigger, t.calls[0][2].rightTrigger], [0.5, 0.2, 0.7, 0.1]);
   const d = fakePad(false);
-  d.frames(1, M(0.5, 0.2, 0.7, 0.1));
-  assert.equal(d.calls[0][1], 'dual-rumble');
-  assert.equal(d.calls[0][2].leftTrigger, undefined);
-  assert.ok(Math.abs(d.calls[0][2].weakMagnitude - (0.2 + 0.7 * 0.5)) < 1e-9, 'the bigger trigger × fold onto weak');
+  d.frames(1, M(0.5, 0.2, 0.7, 0.1)); await null; await null; // the trigger-rumble try is rejected
+  assert.equal(d.calls[0][1], 'trigger-rumble', 'tried first');
+  d.clock.t += 1000; d.frames(1, M(0.5, 0.2, 0.7, 0.1));
+  const c = d.calls.at(-1);
+  assert.equal(c[1], 'dual-rumble');
+  assert.equal(c[2].leftTrigger, undefined);
+  assert.ok(Math.abs(c[2].weakMagnitude - (0.2 + 0.7 * 0.5)) < 1e-9, 'the bigger trigger × fold onto weak');
   const a = fakePad(false); a.frames(1, M(0, 0, 0.3, 0)); assert.equal(a.calls[0][0], 'play', 'the aid alone is enough to play');
 });
 
-// Playtest 2026-10-25: Brave rumbled the triggers from the ?debug=pads bench, but Rally folded the aid onto the weak motor:
-// the actuator's `effects` is not always a plain array, or not there at all. Unlisted means: try trigger-rumble, and fall
-// back to dual-rumble for that pad model if the browser rejects it.
-test('rumbleOut: an actuator that does not list its effects is tried with trigger-rumble; a rejection falls back to dual-rumble', async () => {
+// Playtest 2026-10-25: Brave rumbled the triggers from the ?debug=pads bench (which never checks), but Rally, believing the
+// actuator's `effects`, folded the aid onto the weak motor. Every pad is tried with trigger-rumble; a rejection falls back
+// to dual-rumble for that pad model.
+test('rumbleOut: every pad is tried with trigger-rumble, whatever it lists; a rejection falls back to dual-rumble', async () => {
   const mk = (accepts, effects) => {
     const calls = [];
     const a = { playEffect: (type, p) => { calls.push(type); return accepts.includes(type) ? Promise.resolve('preempted') : Promise.reject(new DOMException(`${type} unsupported`, 'NotSupportedError')); }, reset: () => Promise.resolve() };
@@ -212,7 +215,10 @@ test('rumbleOut: an actuator that does not list its effects is tried with trigge
   const iter = mk(['dual-rumble', 'trigger-rumble'], new Set(['dual-rumble', 'trigger-rumble']));
   await iter.frames(5); assert.ok(iter.calls.every(t => t === 'trigger-rumble'), 'any iterable list');
   const listed = mk(['dual-rumble', 'trigger-rumble'], ['dual-rumble']);
-  await listed.frames(5); assert.ok(listed.calls.every(t => t === 'dual-rumble'), 'a list without it is believed');
+  await listed.frames(5); assert.ok(listed.calls.every(t => t === 'trigger-rumble'), 'a list without it is not trusted: Brave plays it anyway');
+  assert.equal(listed.out.stats.triggers, true);
+  const truly = mk(['dual-rumble'], ['dual-rumble']);
+  await truly.frames(30); assert.ok(truly.calls.slice(2).every(t => t === 'dual-rumble') && truly.out.stats.triggers === false, 'a real rejection still falls back');
 });
 
 // Playtest 2026-10-25 (Bluetooth Xbox pad, trigger-rumble): one effect per frame queued up below the page, so the pad kept

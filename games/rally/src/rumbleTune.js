@@ -5,6 +5,7 @@
 import { PARAMS, RANGES } from './defs/rumble.js';
 import { CHANNELS } from './rumble/index.js';
 
+// Class names are rt-*: the game's own stylesheet has .bar (the HUD's top bars, position: fixed).
 const CSS = `
 #rumbleTune { position: fixed; top: 0; right: 0; bottom: 0; width: 340px; z-index: 99999; overflow-y: auto; pointer-events: auto;
   background: rgba(20, 30, 34, 0.94); color: #e8eeec; font: 13px/1.35 system-ui, sans-serif; padding: 10px 12px; box-sizing: border-box;
@@ -15,11 +16,13 @@ const CSS = `
 #rumbleTune .row { display: grid; grid-template-columns: 82px 1fr 52px; gap: 6px; align-items: center; }
 #rumbleTune .row input { width: 100%; } #rumbleTune .row output { text-align: right; font-variant-numeric: tabular-nums; }
 #rumbleTune details { margin: 4px 0 0 6px; } #rumbleTune summary { cursor: pointer; color: #a9b4b0; }
-#rumbleTune .meters { display: grid; grid-template-columns: 46px 1fr; gap: 2px 6px; align-items: center; margin: 4px 0; }
-#rumbleTune .bar { height: 8px; background: #2b3a40; border-radius: 2px; overflow: hidden; }
-#rumbleTune .bar > i { display: block; height: 100%; width: 0; background: #e0a43a; }
-#rumbleTune .dim { color: #a9b4b0; } #rumbleTune button { font: inherit; padding: 2px 8px; }
-#rumbleTune textarea { width: 100%; height: 160px; font: 11px monospace; }
+#rumbleTune .rt-meters { display: grid; grid-template-columns: 46px 1fr; gap: 2px 6px; align-items: center; margin: 4px 0; }
+#rumbleTune .rt-bar { height: 8px; background: #2b3a40; border-radius: 2px; overflow: hidden; }
+#rumbleTune .rt-bar > i { display: block; height: 100%; width: 0; background: #e0a43a; }
+#rumbleTune .dim { color: #a9b4b0; }
+#rumbleTune button { font: inherit; padding: 2px 10px; color: #e8eeec; background: #3a4a50; border: 1px solid #5a6c72; border-radius: 3px; cursor: pointer; }
+#rumbleTune button:hover { background: #4a5c62; }
+#rumbleTune textarea { width: 100%; height: 160px; font: 11px monospace; color: #e8eeec; background: #142024; border: 1px solid #3a4a50; }
 `;
 const MOTORS = ['strong', 'weak', 'left', 'right'];
 
@@ -35,8 +38,8 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   const sliders = []; // { obj, k, input, out } to refresh after a reset
 
   const meters = (names) => {
-    const box = el('div', { className: 'meters' }), bars = {};
-    for (const m of names) { const i = el('i'); bars[m] = i; box.append(el('span', { className: 'dim', textContent: m }), el('div', { className: 'bar' }, [i])); }
+    const box = el('div', { className: 'rt-meters' }), bars = {};
+    for (const m of names) { const i = el('i'); bars[m] = i; box.append(el('span', { className: 'dim', textContent: m }), el('div', { className: 'rt-bar' }, [i])); }
     return { box, bars };
   };
   const fill = (bars, l) => { for (const m in bars) bars[m].style.width = `${Math.round(100 * Math.min(1, l[m] ?? 0))}%`; };
@@ -89,11 +92,12 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   const tick = () => {
     fill(outs.bars, rumble.out);
     for (const ch of CHANNELS) fill(chanMeters[ch], rumble.levels[ch]);
-    const a = rumble.aid(), list = pads() ?? [];
-    const fx = list.map(p => { const v = p?.vibrationActuator; if (!v) return 'no actuator'; try { return v.effects ? Array.from(v.effects).join(', ') : 'effects not listed (trigger-rumble tried)'; } catch { return 'effects unreadable'; } });
-    info.textContent = `brake: ${a.brake.locked ? 'PULSE' : a.brake.near ? 'near' : '–'} · traction: ${a.traction.locked ? 'PULSE' : a.traction.near ? 'near' : '–'} · pads: ${fx.length ? fx.join(' | ') : 'none paired (press a button)'}`;
+    const st = doc.defaultView.__rallyView?.rumble?.(), a = rumble.aid(), list = pads() ?? [];
+    const fx = list.map(p => { const v = p?.vibrationActuator; if (!v) return 'no actuator'; try { return `lists ${v.effects ? Array.from(v.effects).join(', ') : 'nothing'}`; } catch { return 'effects unreadable'; } });
+    const mode = st ? (st.triggers ? 'sending trigger-rumble' : 'trigger-rumble rejected: dual-rumble') : '';
+    info.textContent = `brake: ${a.brake.locked ? 'PULSE' : a.brake.near ? 'near' : '–'} · traction: ${a.traction.locked ? 'PULSE' : a.traction.near ? 'near' : '–'} · pads: ${fx.length ? fx.join(' | ') : 'none paired (press a button)'}${mode ? ` · ${mode}` : ''}`;
     // the writes (rumbleOut's stats, through the stage view's seam): per second, and how they ended
-    const st = doc.defaultView.__rallyView?.rumble?.(), t = performance.now();
+    const t = performance.now();
     if (st && t - rate.t >= 1000) { rate.n = st.writes - rate.w; rate.w = st.writes; rate.t = t; }
     sends.textContent = st ? `writes ${rate.n}/s (total ${st.writes}: ${st.complete} complete, ${st.preempted} replaced, ${st.rejected} rejected) · pads ${st.pads} · ${st.live ? 'playing' : 'quiet'}${st.lastError ? ` · last error ${st.lastError}` : ''}` : 'writes: no stage yet';
     raf = doc.defaultView.requestAnimationFrame(tick);
