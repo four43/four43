@@ -648,7 +648,10 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   sight; Rally's `menu`, `finish`, `exit`). **lion-hawk change (C-14):** a stop also sends a zero `trigger-rumble` to pads
   that list it, so a trigger effect queued a frame earlier cannot outlive the `reset()`.
 - **R9-5 Tuning panel** (`?rumble` on the game page; desktop only, `src/rumbleTune.js`). The game runs as usual with a
-  side panel: a section per channel with a slider per parameter (surfaces in a sub-list), a mute per channel, live meters
+  side panel: a section per channel (Engine, Road, Impacts, Driving aid) with a few plain-language sliders and a help line
+  each (`LAYOUT`; values in their units, mm, m/s, Hz, s; some inverted so right is always "more"; hover shows the
+  parameter), Surfaces as one bump-height slider each, every other parameter under Advanced (named as in the code), the
+  mix and the write budget under one Advanced fold (playtest 2026-10-25: the raw knobs were confusing), a mute per channel, live meters
   per channel and for the four outputs, and the pad's `effects` (does it have triggers). A write line: writes per second, and how
   they ended (completed, replaced by the next, rejected, the last error), from `rumbleOut`'s stats (playtest 2026-10-25: a
   Bluetooth pad at 22 % battery took every write and played none; over USB the game rumbled). Values save to `localStorage`

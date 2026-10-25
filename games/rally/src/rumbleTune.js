@@ -1,19 +1,21 @@
-// The ?rumble tuning panel (rally-spec R9-5): the game runs as usual with a panel beside it. A section per channel with a slider
-// per parameter, a mute, its live levels and Reset; the four outputs on top with the aid's state and the pad's effects (does it
-// have trigger motors). Edits go straight into the mixer's params (the channels read them every frame) and save to storage on
+// The ?rumble tuning panel (rally-spec R9-5): the game runs as usual with a panel beside it. A section per channel with a few
+// plain-language sliders (LAYOUT), a mute, its live levels and Reset; every other parameter under Advanced. The four outputs on
+// top with the aid's state, the pad's effects and the writes. Edits go straight into the mixer's params (the channels read them every frame) and save to storage on
 // change; Export gives the JSON for src/defs/rumble.js. View-only: it never touches the sim. Desktop only.
 import { PARAMS, RANGES } from './defs/rumble.js';
 import { CHANNELS } from './rumble/index.js';
 
 // Class names are rt-*: the game's own stylesheet has .bar (the HUD's top bars, position: fixed).
 const CSS = `
-#rumbleTune { position: fixed; top: 0; right: 0; bottom: 0; width: 340px; z-index: 99999; overflow-y: auto; pointer-events: auto;
+#rumbleTune { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; z-index: 99999; overflow-y: auto; pointer-events: auto;
   background: rgba(20, 30, 34, 0.94); color: #e8eeec; font: 13px/1.35 system-ui, sans-serif; padding: 10px 12px; box-sizing: border-box;
   -webkit-user-select: auto; user-select: auto; touch-action: auto; }
 #rumbleTune h1 { font-size: 16px; margin: 0 0 6px; } #rumbleTune h2 { font-size: 14px; margin: 0; flex: 1; }
 #rumbleTune section { border-top: 1px solid #3a4a50; padding: 8px 0; }
 #rumbleTune .head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-#rumbleTune .row { display: grid; grid-template-columns: 82px 1fr 52px; gap: 6px; align-items: center; }
+#rumbleTune .row { display: grid; grid-template-columns: 128px 1fr 64px; gap: 0 6px; align-items: center; margin-top: 4px; }
+#rumbleTune .row .help { grid-column: 1 / -1; font-size: 11px; color: #a9b4b0; margin-top: -2px; }
+#rumbleTune .row.adv span:first-child { font-family: monospace; font-size: 11px; color: #a9b4b0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #rumbleTune .row input { width: 100%; } #rumbleTune .row output { text-align: right; font-variant-numeric: tabular-nums; }
 #rumbleTune details { margin: 4px 0 0 6px; } #rumbleTune summary { cursor: pointer; color: #a9b4b0; }
 #rumbleTune .rt-meters { display: grid; grid-template-columns: 46px 1fr; gap: 2px 6px; align-items: center; margin: 4px 0; }
@@ -25,6 +27,44 @@ const CSS = `
 #rumbleTune textarea { width: 100%; height: 160px; font: 11px monospace; color: #e8eeec; background: #142024; border: 1px solid #3a4a50; }
 `;
 const MOTORS = ['strong', 'weak', 'left', 'right'];
+
+// The plain sliders per channel: [path in the channel's params, label, help, invert]. invert: the slider's right end is
+// the parameter's low end, so right is always "more" of what the label says. Everything else is under Advanced.
+const LAYOUT = {
+  engine: { title: 'Engine', simple: [
+    ['idle', 'Idle hum', 'how much you feel the engine at rest'],
+    ['redline', 'Revving hum', 'how much it builds toward the redline'],
+    ['limiterAmp', 'Rev limiter', 'buzz when you hit the limiter'],
+  ] },
+  suspension: { title: 'Road', simple: [
+    ['gain', 'Road texture', 'overall strength of the surface bumps'],
+    ['hz', 'Smooth at speed', 'right: bumps fade out sooner as you go faster', true],
+    ['joltFull', 'Big hits', 'landings and potholes: right hits harder', true],
+    ['joltOn', 'Big hit threshold', 'how big a bump must be to count as a hit'],
+  ], surfaces: 'rough' },
+  body: { title: 'Impacts', simple: [
+    ['dvFull', 'Impact strength', 'right: collisions reach full strength sooner', true],
+    ['dvOn', 'Ignore light taps', 'the smallest knock that is felt'],
+    ['decay', 'Impact length', 'how long a hit rumbles'],
+  ] },
+  aid: { title: 'Driving aid (triggers)', simple: [
+    ['pedal', 'Pedal needed', 'how far you press before the aid listens'],
+    ['brake.near', 'Brake: warning at', 'how close to locking the warning starts (1 = the limit)'],
+    ['brake.nearAmp', 'Brake: warning', 'strength of the warning before a lock'],
+    ['brake.amp', 'Brake: ABS pulses', 'strength of the pulses once a wheel locks'],
+    ['brake.pulseHz', 'Brake: ABS speed', 'pulses per second'],
+    ['traction.amp', 'Wheelspin: pulses', 'strength of the pulses while the wheels spin'],
+    ['traction.pulseHz', 'Wheelspin: speed', 'pulses per second'],
+  ] },
+};
+const SURFACE_HELP = 'bump height on this surface';
+// How a value reads: [suffix, scale]; by the parameter's own name
+const UNIT = { hz: ['Hz'], splitHz: ['Hz'], limiterHz: ['Hz'], pulseHz: ['Hz'], decay: ['s'], kickLen: ['s'], release: ['s'],
+  dvOn: ['m/s'], dvFull: ['m/s'], joltOn: ['m/s'], joltFull: ['m/s'], rough: ['mm', 1000], full: ['mm', 1000], spacing: ['m'], width: ['m'],
+  minMs: ['ms'], keepMs: ['ms'], durMs: ['ms'] };
+const get = (o, path) => path.split('.').reduce((x, k) => x[k], o);
+// every leaf path of a params object
+const leaves = (o, pre = '') => Object.entries(o).flatMap(([k, v]) => (typeof v === 'object' ? leaves(v, `${pre}${k}.`) : [`${pre}${k}`]));
 
 // rumble: the mixer (src/rumble/index.js); storage/key: where the params save; pads(): seat 0's live pads
 export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
@@ -44,22 +84,24 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   };
   const fill = (bars, l) => { for (const m in bars) bars[m].style.width = `${Math.round(100 * Math.min(1, l[m] ?? 0))}%`; };
 
-  function slider(obj, k) {
-    const [min, max, step] = RANGES[k];
-    const input = el('input', { type: 'range', min, max, step, value: obj[k] }), out = el('output', { textContent: obj[k] });
-    input.addEventListener('input', () => { obj[k] = Number(input.value); out.textContent = input.value; save(); });
-    sliders.push({ obj, k, input, out });
-    return el('div', { className: 'row' }, [el('span', { textContent: k }), input, out]);
-  }
-  // A params object's sliders; nested objects (surfaces, brake/traction) fold into <details>.
-  function group(obj, box) {
-    for (const k in obj) {
-      if (typeof obj[k] === 'object') { const d = el('details', {}, [el('summary', { textContent: k })]); group(obj[k], d); box.append(d); }
-      else box.append(slider(obj, k));
-    }
+  // A slider for params[path] (path inside one channel's object). label/help: plain words, or the path itself (Advanced);
+  // invert: right is the parameter's low end. The value shows in its own units; hover the label for the parameter's name.
+  function slider(obj, path, label = path, help = '', invert = false) {
+    const parts = path.split('.'), k = parts.at(-1), owner = parts.length > 1 ? get(obj, parts.slice(0, -1).join('.')) : obj;
+    const [min, max, step] = RANGES[k], [unit = '', scale = 1] = UNIT[k] ?? [];
+    const digits = Math.max(0, -Math.floor(Math.log10(step * scale) + 1e-9));
+    const show = v => `${(v * scale).toFixed(digits)}${unit ? ` ${unit}` : ''}`;
+    const toInput = v => (invert ? min + max - v : v), fromInput = v => +(invert ? min + max - v : v).toFixed(10);
+    const input = el('input', { type: 'range', min, max, step, value: toInput(owner[k]) }), out = el('output', { textContent: show(owner[k]) });
+    input.addEventListener('input', () => { owner[k] = fromInput(Number(input.value)); out.textContent = show(owner[k]); save(); });
+    sliders.push(() => { input.value = toInput(owner[k]); out.textContent = show(owner[k]); });
+    const kids = [el('span', { textContent: label, title: path }), input, out];
+    if (help) kids.push(el('div', { className: 'help', textContent: help }));
+    return el('div', { className: help ? 'row' : 'row adv' }, kids); // adv: a raw parameter, named as in the code
   }
   const copyInto = (dst, src) => { for (const k in src) { if (typeof src[k] === 'object') copyInto(dst[k], src[k]); else dst[k] = src[k]; } };
-  const refresh = () => { for (const s of sliders) { s.input.value = s.obj[s.k]; s.out.textContent = s.obj[s.k]; } };
+  const refresh = () => { for (const r of sliders) r(); };
+  const fold = (title, kids) => el('details', {}, [el('summary', { textContent: title }), ...kids]);
 
   // The outputs, the aid's state, the pad's effects.
   const outs = meters(MOTORS), info = el('div', { className: 'dim' }), sends = el('div', { className: 'dim' });
@@ -72,19 +114,24 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
     mute.addEventListener('change', () => { rumble.mute[ch] = mute.checked; });
     reset.addEventListener('click', () => { copyInto(P[ch], PARAMS[ch]); refresh(); save(); });
     const m = meters(used[ch]); chanMeters[ch] = m.bars;
-    const sec = el('section', {}, [el('div', { className: 'head' }, [el('h2', { textContent: ch }), el('label', {}, [mute, ' mute']), reset]), m.box]);
-    group(P[ch], sec);
+    const L = LAYOUT[ch], sec = el('section', {}, [el('div', { className: 'head' }, [el('h2', { textContent: L.title }), el('label', {}, [mute, ' mute']), reset]), m.box]);
+    for (const [path, label, help, invert] of L.simple) sec.append(slider(P[ch], path, label, help, invert));
+    const shown = new Set(L.simple.map(r => r[0]));
+    if (L.surfaces) {
+      const names = Object.keys(P[ch].surfaces);
+      sec.append(fold('Surfaces', names.map(n => slider(P[ch], `surfaces.${n}.${L.surfaces}`, n[0].toUpperCase() + n.slice(1), SURFACE_HELP))));
+      for (const n of names) shown.add(`surfaces.${n}.${L.surfaces}`);
+    }
+    const rest = leaves(P[ch]).filter(path => !shown.has(path));
+    if (rest.length) sec.append(fold('Advanced', rest.map(path => slider(P[ch], path))));
     root.append(sec);
   }
-  const mix = el('section', {}, [el('div', { className: 'head' }, [el('h2', { textContent: 'mix' })])]);
-  group(P.mix, mix);
-  // the write budget (R9-4): how often effects go to the pad; a Bluetooth pad queues writes it can't keep up with
-  const send = el('section', {}, [el('div', { className: 'head' }, [el('h2', { textContent: 'send' })])]);
-  group(P.send, send);
+  // The mix's soft clip and the write budget (R9-4: how often effects go to the pad; a Bluetooth pad queues what it can't keep up with).
+  const adv = el('section', {}, [fold('Advanced: mix and send', [...leaves(P.mix).map(p => slider(P.mix, p, `mix.${p}`)), ...leaves(P.send).map(p => slider(P.send, p, `send.${p}`))])]);
   const text = el('textarea', { readOnly: true, hidden: true });
   const exp = el('button', { textContent: 'Export' });
   exp.addEventListener('click', () => { text.hidden = false; text.value = `export const PARAMS = ${JSON.stringify(P, null, 2)};`; text.select(); });
-  root.append(mix, send, el('section', {}, [exp, text]));
+  root.append(adv, el('section', {}, [exp, text]));
   doc.head.append(style); doc.body.append(root);
 
   let raf = 0;
