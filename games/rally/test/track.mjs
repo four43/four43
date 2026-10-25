@@ -1,6 +1,7 @@
 // Generated tracks as Worlds (spec tracks T-8, T-12): heightfield orientation, spawn, and an
 // autopilot driving each layout end to end. Run: node test/track.mjs [filter]
 import R from '@dimforge/rapier3d-compat';
+import { edgeAt } from '../src/gen/edges.js';
 import { benchSim } from './helpers/bench.mjs';
 import { DT } from '../src/sim.js';
 import { qrot } from '../src/vehicle.js';
@@ -114,7 +115,8 @@ for (const kind of ['loop', 'stage']) test(`t1 ${kind} world api`, () => {
   check('blend B = tan(pi / 2C)', Math.abs(m.B - Math.tan(Math.PI / (2 * m.C))), 0, 1e-9);
   check('blend cached (same object)', world.surfaceAt(p.x, p.z) === m ? 1 : 0, 1, 1);
   const off = pointAt(L, 300), h = off.yaw;
-  check('verge 5 m off the road', world.surfaceAt(off.x + 5 * Math.cos(h), off.z - 5 * Math.sin(h)) === surfaceOfKey('grass') ? 1 : 0, 1, 1);
+  const vd = edgeAt(track.edges, L, 300, 1) + 1; // 1 m past the left edge (R12: the width varies)
+  check('verge 1 m past the edge', world.surfaceAt(off.x + vd * Math.cos(h), off.z - vd * Math.sin(h)) === surfaceOfKey('grass') ? 1 : 0, 1, 1);
   let calls = 0; const t0 = performance.now();
   for (let k = 0; k < 20000; k++) { const q = pointAt(L, k % L.length); world.surfaceAt(q.x + 2, q.z); calls++; }
   check('surfaceAt cost (µs/call)', (performance.now() - t0) * 1000 / calls, 0, 5);

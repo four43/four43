@@ -4,17 +4,16 @@
 import { noise2, fbm } from './noise.js';
 import { profileOffset, bermBank } from './features.js';
 import { bumpsAt } from './bumps.js';
+import { EDGE } from './edges.js';
 
 const DEG = Math.PI / 180;
 const MAX_GRADE = 0.1195;          // a hair under 12 % so Float32 storage can't tip it over
 const BANK_MAX = 4 * DEG, BANK_K = 5.6; // rad per (1/m): 4° reached at radius 80 m
-const FLAT = 5.5, BLEND = 15;      // half-width 3.5 + 2 m shoulder, then 15 m smoothstep to the hills
-const REACH = FLAT + BLEND;        // 20.5 m: beyond this the hills are untouched
-const STAMP = Math.ceil(REACH + 0.5);
+const FLAT = 5.5, BLEND = 15;      // half-width 3.5 + 2 m shoulder (with edges: that side's edge + EDGE.shoulder), then 15 m to the hills
 // Off-road bumps: one noise octave on a 1.2 m lattice (wavelengths ~2–4 m, ≥ 2 heightfield cells),
 // soft-clipped to ±amp, amp wandering 0.10–0.16 m over ~35 m (±0.25 m dug the hull's nose in);
-// faded in from |d| 6 m to 10 m so the road, shoulder and first metres of verge stay smooth.
-export const BUMPS = { lattice: 1.2, amp: [0.1, 0.16], ampScale: 35, from: 6, to: 10 };
+// faded in from 0.5 m to 4.5 m past the flat shoulder so the road, shoulder and first metres of verge stay smooth.
+export const BUMPS = { lattice: 1.2, amp: [0.1, 0.16], ampScale: 35, from: 0.5, to: 4.5 }; // from / to: m past the flat shoulder
 
 // Moving average (radius rad) over a per-sample array; wraps for loops, clamps ends for stages.
 function boxSmooth(a, rad, closed) {
@@ -34,8 +33,9 @@ function maxGrade(p, closed, ds) {
 }
 
 // flatten: false gives the natural ground (hills + bumps everywhere); bumps: false leaves them out. roadBumps: gen/bumps.js
-// humps and ridges on the road (R11), stamped with it.
-export function generateTerrain(layout, features, r, { margin = 150, flatten = true, bumps = true, roadBumps = null } = {}) {
+// humps and ridges on the road (R11), stamped with it. edges: gen/edges.js (R12), the flat shoulder follows the road's edge.
+export function generateTerrain(layout, features, r, { margin = 150, flatten = true, bumps = true, roadBumps = null, edges = null } = {}) {
+  const REACH = (edges ? EDGE.max + EDGE.shoulder : FLAT) + BLEND, STAMP = Math.ceil(REACH + 0.5); // beyond REACH the hills are untouched
   const { n, closed, ds, x: X, z: Z, curvature: K, bounds: B } = layout;
   const big = noise2(r.fork('hills').int(0, 0x7fffffff)), fine = noise2(r.fork('detail').int(0, 0x7fffffff));
   const hills = (x, z) => 25 * fbm(big, x, z, { octaves: 4, scale: 400 }) + fbm(fine, x, z, { octaves: 2, scale: 25 });
@@ -100,12 +100,14 @@ export function generateTerrain(layout, features, r, { margin = 150, flatten = t
     seg.dist = Infinity;
     if (closed) { proj((i - 1 + n) % n, i, px, pz); proj(i, (i + 1) % n, px, pz); }
     else { if (i > 0) proj(i - 1, i, px, pz); if (i < n - 1) proj(i, i + 1, px, pz); }
-    if (seg.dist >= REACH) continue;
-    const t = seg.t, rh = road[seg.a] + (road[seg.b] - road[seg.a]) * t, bk = bank[seg.a] + (bank[seg.b] - bank[seg.a]) * t;
-    const rb = roadBumps ? bumpsAt(roadBumps, (seg.a + t) * ds, seg.d, closed ? n * ds : 0) : 0;
+    const t = seg.t, side = seg.d >= 0 ? edges?.left : edges?.right;
+    const hw = side ? side[seg.a] + (side[seg.b] - side[seg.a]) * t : FLAT - EDGE.shoulder, flat = hw + EDGE.shoulder;
+    if (seg.dist >= flat + BLEND) continue;
+    const rh = road[seg.a] + (road[seg.b] - road[seg.a]) * t, bk = bank[seg.a] + (bank[seg.b] - bank[seg.a]) * t;
+    const rb = roadBumps ? bumpsAt(roadBumps, (seg.a + t) * ds, seg.d, closed ? n * ds : 0, hw) : 0;
     const target = rh + Math.tan(bk) * seg.d + rb, bp = bump(px, pz), base = heights[c] - bp;
-    const u = seg.dist <= FLAT ? 0 : (seg.dist - FLAT) / BLEND, w = 1 - u * u * (3 - 2 * u);
-    const v = Math.min(1, Math.max(0, (seg.dist - BUMPS.from) / (BUMPS.to - BUMPS.from)));
+    const u = seg.dist <= flat ? 0 : (seg.dist - flat) / BLEND, w = 1 - u * u * (3 - 2 * u);
+    const v = Math.min(1, Math.max(0, (seg.dist - flat - BUMPS.from) / (BUMPS.to - BUMPS.from)));
     heights[c] = base + (target - base) * w + bp * v * v * (3 - 2 * v);
   }
   return terrain;

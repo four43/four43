@@ -23,9 +23,9 @@ export function generateTrack(seed, { kind = 'loop', theme = 'summer', obstacles
   const surfaces = generateSurfaces(layout, r.fork('surfaces'), { theme });
   const edges = generateEdges(layout, surfaces, r.fork('edges'));
   const bumps = generateBumps(layout, surfaces, edges, features, r.fork('bumps'), { obstacles });
-  const terrain = generateTerrain(layout, features, r.fork('terrain'), { roadBumps: bumps });
+  const terrain = generateTerrain(layout, features, r.fork('terrain'), { roadBumps: bumps, edges });
   const heightFn = (x, z) => heightAt(terrain, x, z);
-  const roadside = placeRoadside(layout, heightFn, features, r.fork('roadside'), {});
+  const roadside = placeRoadside(layout, heightFn, features, r.fork('roadside'), { edges });
   const locator = makeLocator(layout);
   const wear = generateWear(layout, surfaces, edges, r.fork('wear'));
   // Spawn on the centreline just past the start of the layout, facing along the road.

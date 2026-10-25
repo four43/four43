@@ -309,7 +309,7 @@ const FRAG_ROAD_COLOR = `{
   // the edge, in tongues (not at the ribbon's own edge)
   vec2 gxy; float grough;
   vec3 g = rsGround( w, inverseTransformDirection( normalize( vNormal ), viewMatrix ).y, diffuseColor.rgb, gx, gy, gxy, grough );
-  float sh = fEdge * ( 1.0 - smoothstep( 0.0, 0.3 + 1.2 * rsVn( w * 0.4 ), d ) ) * step( 0.0, d ) * ( 1.0 - smoothstep( 4.9, 5.4, abs( x ) ) ) * ( 1.0 - ice );
+  float sh = fEdge * ( 1.0 - smoothstep( 0.0, 0.3 + 1.2 * rsVn( w * 0.4 ), d ) ) * step( 0.0, d ) * ( 1.0 - smoothstep( 1.4, 1.9, abs( x ) - ( x >= 0.0 ? vEdge.x : vEdge.y ) ) ) * ( 1.0 - ice );
   g = mix( g, cRoad * ( 0.85 + 0.3 * sp ), sh * 0.6 );
 
   diffuseColor.rgb = mix( g, col, road );

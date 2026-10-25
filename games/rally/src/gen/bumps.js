@@ -19,7 +19,7 @@ export const BUMPS = {
   maxH: 0.09,              // m, scatter cap
   roughScale: 70,          // m, length of rough / smooth stretches
   reach: 1,                // m past the edge that scatter centres may sit (the shoulder)
-  fade: [4.5, 5.5],        // |d| over which bumps fade out (the flat shoulder ends at 5.5 m)
+  fade: [1, 2],            // m past the edge over which bumps fade out (the flat shoulder ends 2 m past it)
   jumpClear: [10, 15],     // m before / after a kicker, crest or tabletop kept free of scatter: faces and landings are graded
   // ridge sets
   // wild: more and denser, barely taller (×1.4 heights put the car in the air for 0.3–0.7 s over a ridge set)
@@ -76,11 +76,11 @@ export function generateBumps(layout, surfaces, edges, features, r, { obstacles 
 }
 
 // Height (m) the bumps add at road position (s, d): smooth raised-cosine domes over each bump's ellipse (where they
-// overlap, the tallest plus BUMPS.overlap of the rest), faded out towards the shoulder's end. Loops: s within
-// [0, length) and bumps near the seam are seen from both sides.
+// overlap, the tallest plus BUMPS.overlap of the rest), faded out towards the shoulder's end (hw: the road's half-width on
+// that side). Loops: s within [0, length) and bumps near the seam are seen from both sides.
 const acc = { top: 0, sum: 0 };
-export function bumpsAt(b, s, d, length = 0) {
-  const fd = Math.abs(d);
+export function bumpsAt(b, s, d, length = 0, hw = 3.5) {
+  const fd = Math.abs(d) - hw;
   if (!b.n || fd >= BUMPS.fade[1]) return 0;
   acc.top = 0; acc.sum = 0;
   gather(b, s, d);

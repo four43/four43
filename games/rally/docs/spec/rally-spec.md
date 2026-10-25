@@ -756,3 +756,26 @@ angle and width across the track; ridges are fine as long as they can be ridden.
   a 0.07 s hop, up.y ≥ 0.965. Track, wild, game, verge, markers suites pass; goldens re-blessed (the stage surface
   changed); `test/game.mjs` run 2 now idles 0.5 s after Go to differ from run 1 (a held car is at rest at Go).
 
+## Round 12: road width (2026-10-25)
+
+Request (playtest): vary the width of the track; it was too much the same (3.5 m ± ~0.45 m everywhere). Then: as wide as
+20 m and as narrow as 1.5 car widths (~2.6 m; the car is ~1.75 m across).
+
+- **R12-1 Width** (`gen/edges.js`): a base half-width drifting between 1.4 m (a single-car lane) and 9.5 m (a 19 m
+  road) over ~220 m, log-interpolated (so ~3.7 m, a 7 m road, is typical) through a smoothstep (so stretches sit near
+  both ends); the inside of bends widened by |κ̄| × 30 m (curvature averaged over ±15 m), up to 1.2 m; then R10-1's
+  wobble and fray. Within 35 m of a gate it is the standard 3.5 m, eased over 70 m (on loops that spans the seam, so the
+  loop closes without a step). Clamp 1.3–10 m. Where a lane is too narrow for a wear pair (R10-8), the pair sits centred.
+  Tight bends are at least two car widths (3.5 m of road): the minimum ramps from 2.6 m to 3.5 m as |κ̄| goes from a
+  radius of 80 m to 40 m, and a narrower road is widened on both sides in proportion (centre kept). Playtest: "much more
+  fun"; the minimum in tight corners was the follow-up.
+- **R12-2 What follows the edge**: markers stand 1 m past the edge on their side (`placeRoadside(…, { edges })`); the
+  terrain's flat shoulder is that side's edge + 2 m (`generateTerrain(…, { edges })`), the verge bumps fade in 0.5–4.5 m
+  past it; road bumps fade 1–2 m past the edge; the ribbon spans the two shoulders' ends (49 vertices, ≤ 0.5 m apart);
+  the shader's spill fades out 1.4–1.9 m past the edge. The terrain's road-distance grid (shoulder tint, coarse-LOD sink,
+  verge cover) is measured as if the road were 3.5 m wide (less that side's edge's excess), so they follow the real edge.
+- **Cost**: wide gravel carries more pebbles: RTX 5070 Ti 1080p, 1.63 ms a frame there (1.1 ms before R12).
+- **Validation**: `test/edges.test.mjs`: half-widths span < 1.8 m to > 7.5 m, bends of |κ̄| ≥ 1/40 at least 3.5 m wide, tight bends wider on the inside, standard
+  at the start gate, no step at a loop's seam; tarmac's local wander (against a ±12 m average) under half of loose.
+  Generator, track (its verge probe now 1 m past the edge), wild, game, verge and markers suites pass; goldens re-blessed.
+

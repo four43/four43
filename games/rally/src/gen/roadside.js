@@ -2,7 +2,8 @@
 // home positions for dynamic props (TrackWorld makes them knock-over cylinders).
 
 export const ROADSIDE = {
-  offset: 4.5,          // m from the centreline: half road width 3.5 + 1 beyond the edge
+  offset: 4.5,          // m from the centreline without edges (half road width 3.5 + 1); with edges, `past` m beyond the edge
+  past: 1,
   spacing: 25,          // m, both sides
   outsideSpacing: 12,   // m, on the outside of corners tighter than...
   tightKappa: 1 / 80,   // ...this curvature
@@ -21,8 +22,9 @@ function along(layout, s, d) {
   return { i, x: layout.x[i] + d * Math.cos(h), z: layout.z[i] - d * Math.sin(h), yaw: h };
 }
 
-// r is unused today (placement is fully determined by the layout); kept for the shared signature.
-export function placeRoadside(layout, heightFn, features = [], r = null) {
+// r is unused today (placement is fully determined by the layout); kept for the shared signature. edges (gen/edges.js,
+// R12): markers stand `past` m beyond the road's edge on their side.
+export function placeRoadside(layout, heightFn, features = [], r = null, { edges = null } = {}) {
   const C = ROADSIDE, { length, closed } = layout;
   const clear = features.filter((f) => C.clearTypes.includes(f.type));
   const blocked = (s) => clear.some((f) => s >= f.s0 && s <= f.s1);
@@ -31,7 +33,8 @@ export function placeRoadside(layout, heightFn, features = [], r = null) {
   for (const side of [1, -1]) {
     // Loops stop half a gap short of the seam so the first and last markers don't crowd.
     for (let s = 0; closed ? s < length - C.outsideSpacing / 2 : s <= length;) {
-      const p = along(layout, s, side * C.offset);
+      const i0 = along(layout, s, 0).i, off = edges ? (side > 0 ? edges.left[i0] : edges.right[i0]) + C.past : C.offset;
+      const p = along(layout, s, side * off);
       const k = layout.curvature[p.i];
       const outside = Math.abs(k) > C.tightKappa && Math.sign(k) === -side;
       if (!blocked(s)) markers.push({ x: p.x, y: heightFn(p.x, p.z), z: p.z, yaw: p.yaw, side });

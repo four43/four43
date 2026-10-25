@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { generateTrack } from '../src/gen/track.js';
 import { BUMPS, bumpsAt } from '../src/gen/bumps.js';
 import { heightAt } from '../src/gen/terrain.js';
+import { edgeAt } from '../src/gen/edges.js';
 import { roadSurfaceAt } from '../src/gen/surfaces.js';
 
 const tracks = ['b1', 'b2', 'b3', 'b4'].flatMap(seed => ['mild', 'wild'].map(obstacles => generateTrack(seed, { kind: 'loop', obstacles })));
@@ -69,14 +70,14 @@ test('bumpsAt: a bump peaks at its height at its centre, nothing past the should
   const t = tracks[0], b = t.bumps, L = t.layout;
   let checked = 0;
   for (let i = 0; i < b.n && checked < 20; i += 37) {
-    if (Math.abs(b.d[i]) > 3) continue;
-    const at = bumpsAt(b, b.s[i], b.d[i], L.n * L.ds);
+    if (Math.abs(b.d[i]) > 2.5) continue;
+    const at = bumpsAt(b, b.s[i], b.d[i], L.n * L.ds, edgeAt(t.edges, L, b.s[i], b.d[i]));
     assert.ok(at >= b.h[i] - 1e-6, `at least its own height at its centre (${at} vs ${b.h[i]})`);
     // on the heightfield: road + bank + bumps at the centre, within the 1 m grid's interpolation
     const k = Math.round(b.s[i] / L.ds) % L.n, h = L.heading[k];
     const x = L.x[k] + b.d[i] * Math.cos(h), z = L.z[k] - b.d[i] * Math.sin(h);
     const plain = t.terrain.road[k] + Math.tan(t.terrain.bank[k]) * b.d[i];
-    const expect = plain + bumpsAt(b, k * L.ds, b.d[i], L.n * L.ds);
+    const expect = plain + bumpsAt(b, k * L.ds, b.d[i], L.n * L.ds, edgeAt(t.edges, L, k * L.ds, b.d[i]));
     assert.ok(Math.abs(heightAt(t.terrain, x, z) - expect) < 0.06, `heightfield ${heightAt(t.terrain, x, z).toFixed(3)} vs ${expect.toFixed(3)}`);
     checked++;
   }

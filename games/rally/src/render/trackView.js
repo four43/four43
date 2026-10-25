@@ -12,13 +12,15 @@ import { heightAt } from '../gen/terrain.js';
 import { rng } from '../gen/rng.js';
 import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, setSky, setGround, loadSurfaceTextures } from './roadSurface.js';
 import { VERGE } from '../gen/surfaces.js';
+import { EDGE, edgeAt } from '../gen/edges.js';
 import { Pebbles } from './pebbles.js';
 
 const DROP = [0, 0.35, 0.9];      // coarse LODs sink under the road ribbon so they never poke through it
 const ROAD_LIFT = 0.03;
-// Road ribbon offsets across (m, + = left): out to the flat shoulder's edge (gen/terrain.js FLAT), so the shader draws the
-// road's edge and its spill onto the ground; every 0.5 m, so it follows the road bumps (R11) in the 1 m heightfield.
-const ACROSS = Array.from({ length: 23 }, (_, k) => 5.5 - k * 0.5);
+// Road ribbon vertices across: from the left flat shoulder's end to the right's (each side's edge + EDGE.shoulder, R12), so
+// the shader draws the road's edge and its spill onto the ground; ≤ 0.5 m apart, so it follows the road bumps (R11) in
+// the 1 m heightfield.
+const ACROSS = 1 + Math.ceil(2 * (EDGE.max + EDGE.shoulder) / 0.5);
 // Verge cover: scattered per 8 m world cell (deterministic per cell, cached), kept to cells within
 // RADIUS of the camera; the instance buffer is only rewritten when the camera changes cell.
 // Tufts shrink into the ground between FADE[0] and FADE[1] so the edge of the patch never pops.
@@ -125,18 +127,21 @@ function tuftGeometry() {
 }
 
 // Distance (dm, capped 25.5 m) from each 1 m grid point to the nearest centreline sample, for the shoulder colour and for
-// sinking coarse LODs under the road. Stamped near the road only.
+// sinking coarse LODs under the road, measured as if the road were the standard width: less that side's edge's excess
+// over EDGE.half (R12), so the shoulder tint, the sink and the verge cover follow the road's real edge. Near the road only.
 export function roadDistance(track) {
-  const T = track.terrain, L = track.layout, R = 12;
+  const T = track.terrain, L = track.layout, E = track.edges, R = 12 + EDGE.max - EDGE.half;
   const out = new Uint8Array(T.nx * T.nz).fill(255);
   for (let i = 0; i < L.n; i++) {
-    const sx = L.x[i] - T.x0, sz = L.z[i] - T.z0;
+    const sx = L.x[i] - T.x0, sz = L.z[i] - T.z0, lx = Math.cos(L.heading[i]), lz = -Math.sin(L.heading[i]); // left normal
+    const exL = E.left[i] - EDGE.half, exR = E.right[i] - EDGE.half;
     const ax = Math.max(0, Math.ceil(sx - R)), bx = Math.min(T.nx - 1, Math.floor(sx + R));
     const az = Math.max(0, Math.ceil(sz - R)), bz = Math.min(T.nz - 1, Math.floor(sz + R));
     for (let iz = az; iz <= bz; iz++) {
       const dz = iz - sz, row = iz * T.nx;
       for (let ix = ax; ix <= bx; ix++) {
-        const d = Math.min(255, Math.round(Math.hypot(ix - sx, dz) * 10));
+        const dx = ix - sx, ex = dx * lx + dz * lz >= 0 ? exL : exR;
+        const d = Math.min(255, Math.max(0, Math.round((Math.hypot(dx, dz) - ex) * 10)));
         if (d < out[row + ix]) out[row + ix] = d;
       }
     }
@@ -193,14 +198,14 @@ export class TrackView {
     this.terrainMesh.update(this.focus); // the first update is unbudgeted: the spawn's chunks are there on frame one
   }
 
-  // Road ribbon (R10-2, R11): ACROSS vertices per 1 m sample, out to the flat shoulder, on the heightfield. Its vertex colours are the terrain's own
+  // Road ribbon (R10-2, R11, R12): ACROSS vertices per 1 m sample, between the flat shoulders' ends, on the heightfield. Its vertex colours are the terrain's own
   // (colorAt) and its ground is drawn by the terrain's function, so where the shader draws ground the ribbon meets the
   // terrain without a seam. Per vertex for the shader: aRoad (offset across, distance along), aEdge (the track's
   // half-widths, left and right: the physics edge), the section blend as weights per road surface (aSurfA, aSurfB) and
   // the wear lines (aWear: centre and strength of each pair, R10-8).
   buildRoad() {
     const { layout: L, terrain: T, surfaces, edges, wear } = this.track;
-    const m = ACROSS.length, n = L.n, nv = n * m;
+    const m = ACROSS, n = L.n, nv = n * m;
     const pos = new Float32Array(nv * 3), col = new Float32Array(nv * 3), wr = new Float32Array(nv * 4);
     const road = new Float32Array(nv * 2), edge = new Float32Array(nv * 2), surfA = new Float32Array(nv * 4), surfB = new Float32Array(nv);
     const c = [0, 0, 0], wt = new Float32Array(ROAD_SURFACES.length);
@@ -209,7 +214,8 @@ export class TrackView {
       const at = roadSurfaceAt(surfaces, s);
       wt.fill(0); wt[surfaceSlot(at.road)] += 1 - at.t; wt[surfaceSlot(at.next?.road ?? at.road)] += at.t;
       for (let k = 0; k < m; k++) {
-        const v = i * m + k, d = ACROSS[k], x = L.x[i] + d * ch, z = L.z[i] - d * sh;
+        const lo = -(edges.right[i] + EDGE.shoulder), hi = edges.left[i] + EDGE.shoulder;
+        const v = i * m + k, d = hi + (lo - hi) * k / (m - 1), x = L.x[i] + d * ch, z = L.z[i] - d * sh;
         pos[v * 3] = x; pos[v * 3 + 1] = heightAt(T, x, z) + ROAD_LIFT; pos[v * 3 + 2] = z; // the heightfield's own triangles: what the wheels ride
         this.terrainOpts.colorAt(x, z, c, ny);
         col[v * 3] = c[0]; col[v * 3 + 1] = c[1]; col[v * 3 + 2] = c[2];
@@ -318,7 +324,7 @@ export class TrackView {
       if (gx < 0 || gz < 0 || gx >= T.nx || gz >= T.nz) continue;
       // Coarse distance from the 1 m road-distance grid; exact (locator) only near the road.
       let d = dist[gz * T.nx + gx] / 10;
-      if (d < COVER.fullD + 1.5) d = Math.abs(locator.locate(x, z).d);
+      if (d < COVER.fullD + 1.5) { const at = locator.locate(x, z); d = Math.abs(at.d) - (edgeAt(this.track.edges, this.track.layout, at.s, at.d) - EDGE.half); }
       if (d < COVER.minD || keep > smooth(COVER.minD, COVER.fullD, d) * 0.98 + 0.02) continue;
       const big = this.noise(x / 70, z / 70);
       mix3(c, P.a, P.b, 0.5 + 0.6 * big);

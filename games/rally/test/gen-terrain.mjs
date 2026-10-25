@@ -359,19 +359,20 @@ test('terrain: off-road bumps', () => {
   // Fade: smooth (no bumps) out to |d| 6 m, partial between, full past 10 m.
   const flat = generateTerrain(L, terr('circle').fs, rng('ter').fork('terrain'), { bumps: false });
   const r = rng('bumpfade');
+  const F = 5.5; // the flat shoulder without edges (3.5 + 2 m); the verge bumps' fade is measured past it
   let inner = 0, mid = 0, outer = 0, nO = 0;
   for (let k = 0; k < 4000; k++) {
     const i = r.int(0, L.n - 1), d = r.range(-14, 14), h = L.heading[i];
     const px = Math.round(L.x[i] + d * Math.cos(h)), pz = Math.round(L.z[i] - d * Math.sin(h));
     const p = project(L, px, pz, i, 6), c = (pz - t.z0) * t.nx + px - t.x0, ad = Math.abs(p.d);
     const dh = Math.abs(t.heights[c] - flat.heights[c]), b = Math.abs(nat.heights[c] - hl.heights[c]);
-    if (ad <= BUMPS.from) inner = Math.max(inner, dh);
-    else if (ad < BUMPS.to) mid = Math.max(mid, dh - b);
+    if (ad <= F + BUMPS.from) inner = Math.max(inner, dh);
+    else if (ad < F + BUMPS.to) mid = Math.max(mid, dh - b);
     else { outer = Math.max(outer, Math.abs(dh - b)); nO++; }
   }
-  check(`no bumps within |d| <= ${BUMPS.from} m (m)`, inner, 0, 1e-5);
+  check(`no bumps within |d| <= ${F + BUMPS.from} m (m)`, inner, 0, 1e-5);
   check(`fade zone bumps no taller than full ones (m)`, mid, -1, 1e-5);
-  check(`full bumps from |d| >= ${BUMPS.to} m (m, n=${nO})`, outer, 0, 1e-4);
+  check(`full bumps from |d| >= ${F + BUMPS.to} m (m, n=${nO})`, outer, 0, 1e-4);
 });
 
 test('terrain: obstacles in road[]', () => {

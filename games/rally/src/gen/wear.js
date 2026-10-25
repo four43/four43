@@ -5,6 +5,7 @@
 // pebbles thin out over the band the marks fall in (groove() with a wide width). Pure.
 import { noise2 } from './noise.js';
 import { roadSurfaceAt } from './surfaces.js';
+import { average } from './edges.js';
 
 export const WEAR = {
   track: 1.5, width: 0.28,          // m between the wheel lines; half-width of one line
@@ -15,19 +16,6 @@ export const WEAR = {
   surface: { tarmac: 0.7, hardpack: 1, gravel: 1, packed: 1, ice: 0.8 }, // overall strength
 };
 
-function average(a, rad, closed) {
-  const n = a.length, out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let s = 0, c = 0;
-    for (let k = -rad; k <= rad; k++) {
-      const j = closed ? (((i + k) % n) + n) % n : i + k;
-      if (j < 0 || j >= n) continue;
-      s += a[j]; c++;
-    }
-    out[i] = s / c;
-  }
-  return out;
-}
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // → { c1, a1, c2, a2 }: Float32Array(n) each; c = the pair's centre offset (m, + = left), a = its strength 0..1.
@@ -43,10 +31,11 @@ export function generateWear(layout, surfaces, edges, r) {
     const lo = -reach(edges.right[i]), hi = reach(edges.left[i]);
     const inside = Math.max(-WEAR.max, Math.min(WEAR.max, bend[i] * WEAR.apex)); // + curvature = left bend = inside is +
     const c = inside + WEAR.wander * wander(s / WEAR.wanderScale, 0.5);
-    c1[i] = Math.min(hi, Math.max(lo, c));
+    const fit = (v) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v))); // a lane too narrow for the pair: centred
+    c1[i] = fit(c);
     a1[i] = str * (0.35 + 0.65 * smooth(-0.4, 0.4, fade(s / WEAR.fadeScale, 2.5)));
     const o = other(s / WEAR.otherScale, 6.5), off = (o > 0 ? 1 : -1) * (0.55 + 0.4 * Math.abs(wander(s / 20, 8.5)));
-    c2[i] = Math.min(hi, Math.max(lo, c1[i] + off));
+    c2[i] = fit(c1[i] + off);
     a2[i] = str * 0.6 * smooth(0.15, 0.45, Math.abs(o));
   }
   return { c1, a1, c2, a2 };

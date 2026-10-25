@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateTrack } from '../src/gen/track.js';
-import { EDGE, edgeAt, onRoad } from '../src/gen/edges.js';
+import { EDGE, edgeAt, onRoad, average } from '../src/gen/edges.js';
 import { roadSurfaceAt } from '../src/gen/surfaces.js';
 
 const loop = generateTrack('edges-1', { kind: 'loop', theme: 'summer' });
@@ -31,21 +31,41 @@ test('edges: the width varies, the sides differ, neighbours stay close (no steps
     step = Math.max(step, Math.abs(left[i] - left[i - 1]), Math.abs(right[i] - right[i - 1]));
   }
   assert.ok(differ > left.length * 0.3, `sides differ at ${differ} of ${left.length} samples`);
-  assert.ok(step < 0.15, `largest step between 1 m samples ${step.toFixed(3)} m`);
+  assert.ok(step < 0.25, `largest step between 1 m samples ${step.toFixed(3)} m`);
 });
 
-test('edges: tarmac sections wander less than loose ones', () => {
+test('edges: tarmac edges wander less locally than loose ones (the base width drifts on both)', () => {
   const spread = { tarmac: [], loose: [] };
   for (const t of ['e1', 'e2', 'e3', 'e4', 'e5', 'e6'].map(s => generateTrack(s, { kind: 'loop', theme: 'summer' }))) {
+    const a = t.edges.left, m = average(a, 12, true);
     for (let i = 0; i < t.layout.n; i++) {
       const at = roadSurfaceAt(t.surfaces, i * t.layout.ds);
       if (at.t > 0) continue;
-      (at.road === 'tarmac' ? spread.tarmac : spread.loose).push(Math.abs(t.edges.left[i] - EDGE.half));
+      (at.road === 'tarmac' ? spread.tarmac : spread.loose).push(Math.abs(a[i] - m[i]));
     }
   }
   assert.ok(spread.tarmac.length > 100, 'some tarmac in the sample');
   const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
   assert.ok(mean(spread.tarmac) < mean(spread.loose) * 0.5, `tarmac ${mean(spread.tarmac).toFixed(3)} vs loose ${mean(spread.loose).toFixed(3)}`);
+});
+
+test('edges: narrow lanes and wide stretches, wider on the inside of bends, standard at the start gate (R12)', () => {
+  const half = [], inside = [], outside = [], tight = [];
+  for (const t of ['w1', 'w2', 'w3', 'w4'].map(s => generateTrack(s, { kind: 'loop' }))) {
+    const { left, right } = t.edges, K = t.layout.curvature, Kbar = average(K, 15, true);
+    for (let i = 0; i < t.layout.n; i++) {
+      half.push((left[i] + right[i]) / 2);
+      if (Math.abs(Kbar[i]) >= 1 / 40) tight.push(left[i] + right[i]);
+      if (Math.abs(K[i]) > 1 / 30) { inside.push(K[i] > 0 ? left[i] : right[i]); outside.push(K[i] > 0 ? right[i] : left[i]); }
+    }
+    const g = Math.round(40 / t.layout.ds);
+    assert.ok(Math.abs(left[g] - EDGE.half) < 0.05 && Math.abs(right[g] - EDGE.half) < 0.05, 'standard width at the start gate');
+    assert.ok(Math.abs(left[0] - left[t.layout.n - 1]) < 0.15, 'no step where the loop closes');
+  }
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  assert.ok(Math.min(...half) < 1.8 && Math.max(...half) > 7.5, `half-widths ${Math.min(...half).toFixed(2)} … ${Math.max(...half).toFixed(2)} m`);
+  assert.ok(tight.length > 50 && Math.min(...tight) >= 3.5 - 1e-4, `tight bends at least 2 car widths: narrowest ${Math.min(...tight).toFixed(2)} m`);
+  assert.ok(inside.length > 50 && mean(inside) > mean(outside) + 0.3, `tight bends: inside ${mean(inside).toFixed(2)} vs outside ${mean(outside).toFixed(2)} m`);
 });
 
 test('edgeAt: exact at samples, linear between, wraps on loops, clamps on stages', () => {
@@ -86,7 +106,8 @@ test('wear: the line cuts to the inside of bends, stays clear of the edges, fade
   let inside = 0, bends = 0;
   for (let i = 0; i < L.n; i++) {
     const outer = WEAR.track / 2 + WEAR.width;
-    for (const c of [c1[i], c2[i]]) {
+    const room = Math.min(loop.edges.left[i], loop.edges.right[i]) >= WEAR.margin + WEAR.track / 2 + WEAR.width;
+    for (const c of room ? [c1[i], c2[i]] : []) { // a single-car lane has no room for the pair: it sits centred
       assert.ok(c + outer <= loop.edges.left[i] - WEAR.margin + 1e-4 && -(c - outer) <= loop.edges.right[i] - WEAR.margin + 1e-4, `wheel lines inside the edges at ${i}`);
     }
     if (Math.abs(L.curvature[i]) > 0.02) { bends++; if (Math.sign(c1[i]) === Math.sign(L.curvature[i])) inside++; }
