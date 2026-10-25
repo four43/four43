@@ -28,13 +28,18 @@ export function rumbleOut({ pads = () => NO, haptics = () => null, fold = () => 
   let live = false, sent = false; // live: the last write was an effect, not a zero; sent: anything went out since the last stop
   let at = -Infinity; // ms of the last write
   const last = { strong: 0, weak: 0, left: 0, right: 0 }; // the levels last written
-  const quiet = () => {}; // playEffect resolves 'preempted' when the next effect replaces it; nothing to handle
+  // What became of the writes, for the ?rumble panel: a rejected effect is never an error for the player, but it must show.
+  const stats = { writes: 0, complete: 0, preempted: 0, rejected: 0, lastError: '', pads: 0, live: false };
+  const done = r => { if (r === 'complete') stats.complete++; else stats.preempted++; };
+  const fail = e => { stats.rejected++; stats.lastError = `${e?.name ?? 'Error'}: ${e?.message ?? e}`; };
+  const watch = p => { stats.writes++; p?.then?.(done, fail); };
   // reused: playEffect reads its params at the call
   const dual = { startDelay: 0, duration: 250, strongMagnitude: 0, weakMagnitude: 0 };
   const trig = { startDelay: 0, duration: 250, strongMagnitude: 0, weakMagnitude: 0, leftTrigger: 0, rightTrigger: 0 };
-  const zeroEffect = a => (triggers(a) ? a.playEffect('trigger-rumble', ZERO_TRIG) : a.playEffect('dual-rumble', ZERO_DUAL))?.catch?.(quiet);
-  const play = a => (triggers(a) ? a.playEffect('trigger-rumble', trig) : a.playEffect('dual-rumble', dual))?.catch?.(quiet);
-  const each = fn => { const list = pads() ?? NO; for (let i = 0; i < list.length; i++) { const a = list[i]?.vibrationActuator; if (typeof a?.playEffect === 'function') fn(a); } };
+  const call = (a, type, params) => { try { watch(a.playEffect(type, params)); } catch (e) { stats.writes++; fail(e); } };
+  const zeroEffect = a => (triggers(a) ? call(a, 'trigger-rumble', ZERO_TRIG) : call(a, 'dual-rumble', ZERO_DUAL));
+  const play = a => (triggers(a) ? call(a, 'trigger-rumble', trig) : call(a, 'dual-rumble', dual));
+  const each = fn => { const list = pads() ?? NO; stats.pads = list.length; for (let i = 0; i < list.length; i++) { const a = list[i]?.vibrationActuator; if (typeof a?.playEffect === 'function') fn(a); } };
 
   function stop(reason) {
     if (sent || reason === 'exit') { haptics()?.stop(reason); sent = false; }
@@ -54,11 +59,11 @@ export function rumbleOut({ pads = () => NO, haptics = () => null, fold = () => 
       trig.strongMagnitude = m.strong; trig.weakMagnitude = m.weak; trig.leftTrigger = m.left; trig.rightTrigger = m.right;
       dual.strongMagnitude = m.strong; dual.weakMagnitude = Math.min(1, m.weak + Math.max(m.left, m.right) * fold());
       each(play);
-      live = true; sent = true; at = t; return;
+      live = stats.live = true; sent = true; at = t; return;
     }
     if (!live) return;
     each(zeroEffect); // a quiet (between ABS pulses, or the car at rest): one zero effect, queued behind the last pulse
-    live = false; at = t;
+    live = stats.live = false; at = t;
   }
-  return { send, stop };
+  return { send, stop, stats };
 }

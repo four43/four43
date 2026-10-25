@@ -163,7 +163,7 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       doc.addEventListener('visibilitychange', hidden);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
-        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping };
+        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats };
       off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },
     exit(engine, view) {

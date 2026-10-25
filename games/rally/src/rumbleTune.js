@@ -59,8 +59,8 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   const refresh = () => { for (const s of sliders) { s.input.value = s.obj[s.k]; s.out.textContent = s.obj[s.k]; } };
 
   // The outputs, the aid's state, the pad's effects.
-  const outs = meters(MOTORS), info = el('div', { className: 'dim' });
-  root.append(el('h1', { textContent: 'Rumble tuning' }), outs.box, info);
+  const outs = meters(MOTORS), info = el('div', { className: 'dim' }), sends = el('div', { className: 'dim' });
+  root.append(el('h1', { textContent: 'Rumble tuning' }), outs.box, info, sends);
 
   const chanMeters = {};
   const used = { engine: ['weak'], suspension: ['strong', 'weak'], body: ['strong', 'weak'], aid: ['left', 'right'] };
@@ -85,12 +85,17 @@ export function rumbleTune(doc, { rumble, storage, key, pads = () => [] }) {
   doc.head.append(style); doc.body.append(root);
 
   let raf = 0;
+  const rate = { t: 0, w: 0, n: 0 };
   const tick = () => {
     fill(outs.bars, rumble.out);
     for (const ch of CHANNELS) fill(chanMeters[ch], rumble.levels[ch]);
     const a = rumble.aid(), list = pads() ?? [];
     const fx = list.map(p => p?.vibrationActuator?.effects?.join(', ') ?? 'no actuator');
     info.textContent = `brake: ${a.brake.locked ? 'PULSE' : a.brake.near ? 'near' : '–'} · traction: ${a.traction.locked ? 'PULSE' : a.traction.near ? 'near' : '–'} · pads: ${fx.length ? fx.join(' | ') : 'none paired (press a button)'}`;
+    // the writes (rumbleOut's stats, through the stage view's seam): per second, and how they ended
+    const st = doc.defaultView.__rallyView?.rumble?.(), t = performance.now();
+    if (st && t - rate.t >= 1000) { rate.n = st.writes - rate.w; rate.w = st.writes; rate.t = t; }
+    sends.textContent = st ? `writes ${rate.n}/s (total ${st.writes}: ${st.complete} complete, ${st.preempted} replaced, ${st.rejected} rejected) · pads ${st.pads} · ${st.live ? 'playing' : 'quiet'}${st.lastError ? ` · last error ${st.lastError}` : ''}` : 'writes: no stage yet';
     raf = doc.defaultView.requestAnimationFrame(tick);
   };
   tick();
