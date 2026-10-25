@@ -168,6 +168,7 @@ test('desktop: rumble reaches seat 0\'s pads while driving; a pause stops them (
     await game.seconds(2, { throttle: 1 }); await game.frames();
     const on = c => c.op === 'playEffect' && c.params.strongMagnitude + c.params.weakMagnitude > 0;
     assert.ok((await game.haptics(0)).calls.some(on), 'the stage rumbles the pad');
+    assert.ok((await game.haptics(0)).calls.filter(on).every(c => c.type === 'trigger-rumble'), 'the fake pad lists trigger-rumble: all four motors in one (R9-4)');
     // render is 'auto': frames between a count and the key press may still rumble, so the counts are taken around the pause, not before it
     const m = (await game.haptics(0)).calls.length; // up to here: driving
     await game.page.keyboard.press('Escape'); await game.frames(); await game.step(1); await game.frames(); await game.frames();
@@ -182,6 +183,21 @@ test('desktop: rumble reaches seat 0\'s pads while driving; a pause stops them (
     await game.jump('stage', 'results', { time: 100, best: 101 }, { settings: { mode: 'stage', seed: 'e2e2' } });
     const stopped = await game.page.evaluate(() => new Promise(res => { let n = 0; const tick = () => (window.__rallyView.stopping() ? res(true) : ++n > 3 ? res(false) : requestAnimationFrame(tick)); tick(); }));
     assert.equal(stopped, true, 'a game moment that does not pause (results) calls view.haptics.stop itself');
+  } finally { await game.close(); }
+});
+
+test('desktop: ?rumble opens the tuning panel beside the game; a slider edits the live params and saves them (R9-5)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, query: { rumble: '' }, settings: { 'rally-sim-settings': { v: 5, mode: 'freeDrive', world: 'loop', seed: 'e2e3', rumble: 'full' } } });
+  try {
+    await game.page.waitForSelector('#rumbleTune input[type=range]');
+    const sections = await game.page.$$eval('#rumbleTune section h2', hs => hs.map(h => h.textContent));
+    assert.deepEqual(sections, ['engine', 'suspension', 'body', 'aid', 'mix']);
+    await game.page.$eval('#rumbleTune input[type=range]', el => { el.value = String(Number(el.min)); el.dispatchEvent(new Event('input', { bubbles: true })); });
+    const saved = await game.page.evaluate(() => JSON.parse(localStorage.getItem('rally-rumble-tune')));
+    assert.equal(saved.engine.idle, 0, 'the first slider (engine idle) saved at its minimum');
+    await game.tap('title.drive'); await game.until(s => s.phase === 'running', { maxSteps: 2000 });
+    assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
 

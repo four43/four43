@@ -7,9 +7,9 @@ import MANIFEST from '../baked/manifest.json';
 import { Renderer, RENDER, carView } from './render.js';
 import { Hud } from './ui.js';
 import { GameHud, fmtTime, fmtDelta, deltaClass } from './menus.js';
-import { createRumble } from './rumble.js';
+import { createRumble } from './rumble/index.js';
 import { rumbleOut } from './rumbleOut.js';
-import { STRENGTH } from './defs/rumble.js';
+import { STRENGTH, PARAMS } from './defs/rumble.js';
 import { DRIVING } from './game/stage.js';
 
 export const HELP = {
@@ -109,10 +109,11 @@ function overlayHalves() {
   return { title, pause, results, settings };
 }
 
-// rumblePicks: the ?rumble lab's saved picks (main.js reads them from storage), else the defaults in defs/rumble.js.
-export function rallyView({ save = () => {}, rumblePicks } = {}) {
+// rumble: the mixer (rally-spec R9; main.js makes it from the ?rumble panel's saved params, so the panel can drive it).
+export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {}) {
   let seat0 = null, haptics = null; // per enter: seat 0 (lion-hawk C-5; Rally has one) and view.haptics (C-14)
-  const rumble = createRumble(rumblePicks), pads = rumbleOut({ pads: () => seat0?.pads, haptics: () => haptics }); // rally-spec R7, R8-2
+  const pads = rumbleOut({ pads: () => seat0?.pads, haptics: () => haptics, fold: () => rumble.params.aid.fold }); // rally-spec R7, R8-2, R9-4
+  let impulse = 0; // N·s: the car's contact impulses since the last frame (R9-3)
   let hud = null, ghud = null, els = null, off = null, unlisten = null;
   let seen = null, toast = null; // per enter: what the view last reflected; the toast { text, until } (engine time)
   let cur = null; // the stage state the GameHud adapter reads
@@ -152,6 +153,7 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
       unlisten = engine.events.on(e => {
         if (e.type === 'toast') toast = { text: e.text, until: e.seconds == null ? null : engine.time.sim + e.seconds };
         else if (e.type === 'state' && (e.state === 'title' || e.state === 'loading' || e.state === 'ready')) ghud.reset();
+        else if (e.type === 'contact') { const id = engine.scene.state?.sim?.car?.e?.id; if (id != null && (e.a === id || e.b === id)) impulse += e.impulse; }
         ghud.event(e);
       });
       // Leaving the page mid-run pauses a timed run only (iOS app switch, tab change; tracks-spec): not free drive or the pad.
@@ -213,7 +215,8 @@ export function rallyView({ save = () => {}, rumblePicks } = {}) {
       // Rumble only while driving (ready, countdown, running: not past the finish) with nothing on top (a pausing overlay or a
       // hidden tab is the engine's stop) and the stage drawn.
       const driving = DRIVING.has(s.phase) && ov.length === 0 && seen.s === s; // a hidden page renders no frames (the engine stopped the pads)
-      if (driving) pads.send(rumble.update(s.sim.car, Math.min(0.1, view.dt), STRENGTH[st.rumble] ?? 1)); else pads.stop(s.phase === 'finished' ? 'finish' : 'menu');
+      if (driving) pads.send(rumble.update(s.sim.car, Math.min(0.1, view.dt), { impulse, gain: STRENGTH[st.rumble] ?? 1 })); else pads.stop(s.phase === 'finished' ? 'finish' : 'menu');
+      impulse = 0;
       ghud.update(hudGame);
     },
   };

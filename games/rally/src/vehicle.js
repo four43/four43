@@ -25,6 +25,10 @@ export const ALIGN = { vFrom: 3, vTo: 8, rFull: 0.15 };
 // speed (m/s), so a landing or a bump between two rendered frames is still there when the view reads it. Hitting the
 // bump stop adds `stop`. Nothing in the physics reads it.
 export const JOLT = { decay: Math.exp(-Math.LN2 / (0.05 * 240)), stop: 1.5 }; // half-life 50 ms at the 240 Hz chassis step
+// Body contacts (rally-spec R9-3), for the controller rumble only: the car's colliders report contact impulses (lion-hawk
+// M-5 `contact` events) above `dv` m/s × mass per step. The wheels are raycasts, so driving never touches the body; resting
+// on the roof is ~0.04 m/s per step, under it.
+export const BODY_CONTACT = { dv: 0.1 };
 
 // --- small vector helpers on {x,y,z} ---
 const v3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
@@ -108,6 +112,7 @@ export class Vehicle {
         { shape: 'box', half: [0.72, 0.27, len * 0.5], p: [0, -c.comHeight + 0.68 + 0.27, this.zMid - 0.2], q: [0, 0, 0, 1], material: 'car-cabin' },
       ],
       groups: { member: ['car'] },
+      contacts: { min: BODY_CONTACT.dv * c.mass },
     });
     this.body = this.e.body;
     this.colliders = this.e.colliders.map((x) => x.collider);

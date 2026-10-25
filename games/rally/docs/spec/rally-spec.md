@@ -597,19 +597,23 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   - *Engine* (`engine.js`) → weak motor only. A steady level `idle` at idle rpm rising to `redline` at the cut-off,
     × (`load` + (1 − `load`) · throttle), so a revving engine under throttle is felt and a coasting one barely. On the
     limiter it pulses at `limiterHz`. It hums on the start line too (the engine runs while the car is held).
-  - *Suspension* (`suspension.js`) → strong motor for the heavy part, weak for the fine part. Per wheel in contact, a
-    synthetic road profile under the tyre: bumps of height ~`rough` (m, random ±50 %) every ~`spacing` m (random
-    spacing, exponential), so they arrive at |v| / spacing per second. Each wheel runs the profile through a
-    quarter-car filter (unsprung mass on the tyre spring, body on the suspension spring and damper, `hz` and `zeta` per
-    car-feel, not the sim's values): the output is the body-side acceleration, so slow gives separate thuds, mid speed
-    a dense rattle, and at speed the damper soaks up the fine bumps (planing comes out of the filter, no fade curve).
-    A band split sends the low part (< `splitHz`) to strong and the high part to weak. Blends split by their `ids`/`w`.
-    Real hits are added on top: the wheel's `jolt` (R7-6's decaying peak, kept) above `joltOn`, × `joltGain`, onto
-    strong. Jump landings are no longer a special case: a landing is a big jolt on every wheel at once (and a body
-    contact if it bottoms out).
-  - *Body* (`body.js`) → both motors. Each car contact's impulse as a velocity change, Δv = impulse / car mass (m/s),
-    starts a hit of size `clamp01((Δv − dvOn) / (dvFull − dvOn))`, strong motor at that size and weak at `weakShare` of
-    it, decaying with half-life `decay` × (0.5 + size) s; hits within a frame add, the level is the largest live hit.
+  - *Suspension* (`suspension.js`) → both motors. Per wheel in contact, a synthetic road under the tyre: half-cosine
+    bumps `rough` m high (random 0.5–1.5×) and `width` m long, a random (exponential) ~`spacing` m apart, so they
+    arrive at |v| / spacing per second. The road height goes through a spring-damper (`hz` 18, `zeta`: the tyre and
+    wheel), stepped at 1 kHz, and the felt motion is the wheel's vertical speed. A bump much longer than the spring's
+    period is followed (slow: a soft lift that grows with speed); around it, it hits hardest; much shorter is soaked
+    up, as its area shrinks with speed (fast: the car planes over it), so planing comes out of the filter with no fade
+    curve. The wheel's acceleration would not do: the spring passes a bump's height on at once, however short the bump
+    (the first build used it and nothing planed). Below `splitHz` the motion goes to strong, above it to weak; each
+    motor follows the peak and falls back over `release`; `full` m at its loudest speed is level 1, × `gain`. With the
+    first defaults, gravel peaks around 55 km/h and fades by 160 km/h, grass peaks higher, sand keeps rising (long
+    soft dunes), ice is near silent. Blends interpolate their two surfaces' numbers by `w`.
+    Real hits are added on top: the wheels' largest `jolt` (R7-6's decaying peak, kept) from `joltOn` to `joltFull`,
+    on strong and `joltWeak` of it on weak. Jump landings are no longer a special case: a landing is a big jolt (and a
+    body contact if it bottoms out).
+  - *Body* (`body.js`) → both motors. The frame's car contact impulses, summed, as a velocity change Δv = impulse / car
+    mass (m/s), start a hit of size `clamp01((Δv − dvOn) / (dvFull − dvOn))`, decaying with half-life `decay` ×
+    (1 + 0.5 · size) s; the level is the largest live hit (up to 8 kept), on strong and `weakShare` of it on weak.
     Markers, walls, a roll onto the roof and the floor bottoming out all come through here.
   - *Aid* (`aid.js`) → left trigger (brakes) and right trigger (traction). Brakes: foot brake above `pedal` and
     |v| above 1 m/s; the worst wheel's −κ / kp (with the handbrake on, fronts only). From `near` to 1 (its peak) a
@@ -620,11 +624,13 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
     hit dominates without hard-clipping the rest away), × the setting's gain (R7-4: Off 0 / Light 0.5 / Full 1), with a
     per-channel mute from the panel (R9-5). Output `{ strong, weak, left, right }`.
 - **R9-2 Parameters** (`src/defs/rumble.js`): one plain object per channel, physical units (m, Hz, m/s, s), a comment
-  on each. Surfaces: `rough` and `spacing` per rumble surface (tarmac, dirt, gravel, grass, sand, mud, snow, ice): ice
-  near zero, gravel short and sharp, sand and mud long and soft. Defaults are a first guess to be tuned on a real pad.
+  on each. Surfaces: `rough`, `spacing` and `width` per rumble surface (tarmac, dirt, gravel, grass, sand, mud, snow, ice): ice
+  near zero, gravel short and sharp, sand and mud long and soft. `RANGES` gives each parameter's slider range;
+  `tuneParams(saved)` lays a save over a copy of the defaults (unknown keys and non-numbers dropped). Defaults are a first guess to be tuned on a real pad.
   `SCENARIOS`, `PICKS`, the pattern player and the `rally-rumble-picks` key are gone (an old key is ignored).
-- **R9-3 Car contacts.** The car entity spawns with `contacts: { min }` (lion-hawk M-5), `min` = `body.dvOn` × mass, so
-  rolling along never fires one (the wheels are raycasts: normal driving never touches the body). The view takes the
+- **R9-3 Car contacts.** The car entity spawns with `contacts: { min }` (lion-hawk M-5), `min` = 0.1 m/s × mass per step
+  (`BODY_CONTACT` in `vehicle.js`; resting on the roof is ~0.04), so a tuned `dvOn` never needs a respawn (the wheels are
+  raycasts: normal driving never touches the body). The view takes the
   engine's `contact` events whose `a` or `b` is the car's entity id and passes them to the body channel that frame.
 - **R9-4 Output** (`src/rumbleOut.js`). A pad whose actuator lists `'trigger-rumble'` in `effects` gets one
   `trigger-rumble` effect per frame: `strongMagnitude`, `weakMagnitude`, `leftTrigger`, `rightTrigger`. Any other pad gets
@@ -642,5 +648,6 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   strong; body ignores Δv under `dvOn` and other entities' contacts, sizes and decays; aid kicks once on crossing
   `near` (not again while held), pulses past `lock` at `absHz`, back to the warning under 1.0, handbrake rears ignored,
   right trigger for spin only with throttle; mix soft-clips and mutes. `rumbleOut` against fake actuators with and
-  without `trigger-rumble`. lion-hawk: a stop zeroes `trigger-rumble` where listed. On the Bluetooth pad: pause
+  without `trigger-rumble`. `test/contacts.test.mjs`: driving on the flat pad gives the body no contact; a roll onto the roof
+  from 1.5 m does (a few m/s). lion-hawk: a stop zeroes `trigger-rumble` where listed. On the Bluetooth pad: pause
   mid-ABS-pulse and alt-tab mid-slide stop all four motors; the feel is tuned in the panel.
