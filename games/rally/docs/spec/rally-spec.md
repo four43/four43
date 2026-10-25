@@ -674,7 +674,7 @@ R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's st
   from 1.5 m does (a few m/s). lion-hawk: a stop zeroes `trigger-rumble` where listed. On the Bluetooth pad: pause
   mid-ABS-pulse and alt-tab mid-slide stop all four motors; the feel is tuned in the panel.
 
-## Round 10: road and ground surfaces (2026-10-25)
+## Round 10: road and ground surfaces (0.8.0, 2026-10-25)
 
 Request: a better-looking road and pavement, after `procedural-road-surfaces.md` (techniques for world-space procedural
 road layers), using lion-hawk's material system where possible. Playtest calls during the round: no wheel ruts (too
@@ -728,7 +728,7 @@ short, varied wear marks instead of lines; puddles only on the flat; a better gr
   edge on both sides; wear inside the edges, inside of bends, a second line in places, groove/berm profile). Headless
   track, wild, verge, markers and game suites pass with the moving edge. Render tests: all worlds draw, no errors.
 
-## Round 11: road bumps (2026-10-25)
+## Round 11: road bumps (0.8.0, 2026-10-25)
 
 Request (playtest): the whoops were too big and tossed the car; instead many smaller bumps and ridges of varied size,
 angle and width across the track; ridges are fine as long as they can be ridden.
