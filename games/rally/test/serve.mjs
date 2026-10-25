@@ -15,7 +15,8 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/s
 export async function serveRally({ entry = 'src/main.js' } = {}) {
   const out = path.join(root, 'build/e2e');
   fs.mkdirSync(out, { recursive: true });
-  const name = path.basename(entry, '.js');
+  // per process: the browser test files run in parallel, and a shared bundle could be read while another file rewrites it
+  const name = `${path.basename(entry, '.js')}.${process.pid}`;
   const bundle = path.join(out, `${name}.bundle.js`);
   await build({ entryPoints: [path.join(root, entry)], bundle: true, format: 'esm', plugins: [dedupe({ root })], loader: { '.json': 'json' }, outfile: bundle, logLevel: 'warning' });
   const js = fs.readFileSync(bundle, 'utf8');
