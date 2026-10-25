@@ -40,10 +40,10 @@ timing, bests) is specified there too (Phase 2).
 | `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
 | `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
-| `src/rumble.js` | Rumble mixer (R7): the wheels → two motor levels (surface texture, slide onset, wheelspin, lock-up); pure |
-| `src/rumbleOut.js` | Sends the levels to every pad's `vibrationActuator` (`dual-rumble`); a no-op where unsupported |
-| `src/rumbleLab.js` | The `?rumble` lab: feel and pick each scenario's pattern on a real pad |
-| `src/defs/rumble.js` | Rumble patterns (A/B/C per scenario), the default `PICKS`, the setting's `STRENGTH` |
+| `src/rumble/` | Rumble channels (R9): engine, suspension, body, aid, and the mix → `{ strong, weak, left, right }`; pure |
+| `src/rumbleOut.js` | Sends the levels to the seat's pads: `trigger-rumble` where listed, else `dual-rumble`; a no-op where unsupported |
+| `src/rumbleTune.js` | The `?rumble` tuning panel over the game: sliders, mutes and meters per channel |
+| `src/defs/rumble.js` | Rumble channel parameters (physical units), the setting's `STRENGTH` |
 | `src/devices.js` | Input devices on the engine: keyboard ramps, pad curves, the touch steering slider and pedals; the engine merges the sources |
 | `src/game.sim.js` | `defineGame`: `ACTIONS`, the `stage` main scene and the `title` / `pause` / `results` / `settings` overlays, presets, `game.state` and `game.debug` (no DOM, no three.js) |
 | `src/game.view.js` | `defineView`: the view halves of those scenes (renderer, camera, HUD, cards) over `engine.scene.state` |
@@ -583,3 +583,64 @@ trigger rumble.
   Deferred (lion-hawk §2.2's worked example for Rally, partly built): the splits, the countdown and the track seed stay in the
   stage state for now; they move to player or game state when Rally has a second player or a net part.
 - Follow-up after this round: the "almost slip" brake warning in the left trigger (`trigger-rumble`).
+
+## Round 9: physical rumble (2026-10-25)
+
+Request: rework the rumble around physical events, not canned patterns. Four sources mixed into one output: the engine,
+suspension impacts (by surface and speed), body impacts (sized by the force), and a driving aid in the triggers (a kick
+nearing the braking or traction limit, ABS-like pulses past it). Stop on pause and when the window goes. Replaces all of
+R7-1, R7-2, R7-5, R7-6 and R7-7; R7-3's send rules, R7-4's setting and R8-2's stops stay.
+
+- **R9-1 Channels** (`src/rumble/`, pure, once per rendered frame; each `create(params)` → `update(input, dt) → levels`,
+  with its own state). Inputs are the Vehicle (`rpm`, `out.throttle`, `input.brake/handbrake`, `speed`, `wheels[]`) and this
+  frame's car contacts (R9-3). Levels are 0..1.
+  - *Engine* (`engine.js`) → weak motor only. A steady level `idle` at idle rpm rising to `redline` at the cut-off,
+    × (`load` + (1 − `load`) · throttle), so a revving engine under throttle is felt and a coasting one barely. On the
+    limiter it pulses at `limiterHz`. It hums on the start line too (the engine runs while the car is held).
+  - *Suspension* (`suspension.js`) → strong motor for the heavy part, weak for the fine part. Per wheel in contact, a
+    synthetic road profile under the tyre: bumps of height ~`rough` (m, random ±50 %) every ~`spacing` m (random
+    spacing, exponential), so they arrive at |v| / spacing per second. Each wheel runs the profile through a
+    quarter-car filter (unsprung mass on the tyre spring, body on the suspension spring and damper, `hz` and `zeta` per
+    car-feel, not the sim's values): the output is the body-side acceleration, so slow gives separate thuds, mid speed
+    a dense rattle, and at speed the damper soaks up the fine bumps (planing comes out of the filter, no fade curve).
+    A band split sends the low part (< `splitHz`) to strong and the high part to weak. Blends split by their `ids`/`w`.
+    Real hits are added on top: the wheel's `jolt` (R7-6's decaying peak, kept) above `joltOn`, × `joltGain`, onto
+    strong. Jump landings are no longer a special case: a landing is a big jolt on every wheel at once (and a body
+    contact if it bottoms out).
+  - *Body* (`body.js`) → both motors. Each car contact's impulse as a velocity change, Δv = impulse / car mass (m/s),
+    starts a hit of size `clamp01((Δv − dvOn) / (dvFull − dvOn))`, strong motor at that size and weak at `weakShare` of
+    it, decaying with half-life `decay` × (0.5 + size) s; hits within a frame add, the level is the largest live hit.
+    Markers, walls, a roll onto the roof and the floor bottoming out all come through here.
+  - *Aid* (`aid.js`) → left trigger (brakes) and right trigger (traction). Brakes: foot brake above `pedal` and
+    |v| above 1 m/s; the worst wheel's −κ / kp (with the handbrake on, fronts only). From `near` to 1 (its peak) a
+    *kick*: a short tap (`kickLen` s at `kickAmp`) on crossing `near`, then a level rising `nearAmp` × depth. Past
+    `lock` (hysteresis back at 1.0) *pulses*: square wave at `absHz` (≤ 10 Hz), `absAmp`. Traction: the same on the
+    right trigger from the driven wheels' κ / kp with throttle above `pedal`. A rear-axle slide is not an aid event.
+  - *Mix* (`index.js`): per motor, the sum of the channels through `tanh(x · drive) / tanh(drive)` (soft clip: a big
+    hit dominates without hard-clipping the rest away), × the setting's gain (R7-4: Off 0 / Light 0.5 / Full 1), with a
+    per-channel mute from the panel (R9-5). Output `{ strong, weak, left, right }`.
+- **R9-2 Parameters** (`src/defs/rumble.js`): one plain object per channel, physical units (m, Hz, m/s, s), a comment
+  on each. Surfaces: `rough` and `spacing` per rumble surface (tarmac, dirt, gravel, grass, sand, mud, snow, ice): ice
+  near zero, gravel short and sharp, sand and mud long and soft. Defaults are a first guess to be tuned on a real pad.
+  `SCENARIOS`, `PICKS`, the pattern player and the `rally-rumble-picks` key are gone (an old key is ignored).
+- **R9-3 Car contacts.** The car entity spawns with `contacts: { min }` (lion-hawk M-5), `min` = `body.dvOn` × mass, so
+  rolling along never fires one (the wheels are raycasts: normal driving never touches the body). The view takes the
+  engine's `contact` events whose `a` or `b` is the car's entity id and passes them to the body channel that frame.
+- **R9-4 Output** (`src/rumbleOut.js`). A pad whose actuator lists `'trigger-rumble'` in `effects` gets one
+  `trigger-rumble` effect per frame: `strongMagnitude`, `weakMagnitude`, `leftTrigger`, `rightTrigger`. Any other pad gets
+  `dual-rumble`, with the aid folded in: weak += max(left, right) × `aid.fold`. R7-3's gap rule (a zero effect, then a
+  stop after ~¼ s of quiet) counts all four levels. Stops are the engine's (R8-2: pause, blur, hide, `pagehide`, first
+  sight; Rally's `menu`, `finish`, `exit`). **lion-hawk change (C-14):** a stop also sends a zero `trigger-rumble` to pads
+  that list it, so a trigger effect queued a frame earlier cannot outlive the `reset()`.
+- **R9-5 Tuning panel** (`?rumble` on the game page; desktop only, `src/rumbleTune.js`). The game runs as usual with a
+  side panel: a section per channel with a slider per parameter (surfaces in a sub-list), a mute per channel, live meters
+  per channel and for the four outputs, and the pad's `effects` (does it have triggers). Values save to `localStorage`
+  (`rally-rumble-tune`) on change and the game reads them on load, also without `?rumble`; Reset per channel; Export gives
+  the JSON for `src/defs/rumble.js`. View-only: it never writes the sim. The standalone lab (`rumbleLab.js`) is gone.
+- **Validation**: `test/rumble.test.mjs` rewritten per channel: engine rises with rpm and throttle, weak only; suspension
+  silent stopped and airborne, ice ≪ gravel, the filter's level at 120 km/h below its peak (planing), a jolt adds to
+  strong; body ignores Δv under `dvOn` and other entities' contacts, sizes and decays; aid kicks once on crossing
+  `near` (not again while held), pulses past `lock` at `absHz`, back to the warning under 1.0, handbrake rears ignored,
+  right trigger for spin only with throttle; mix soft-clips and mutes. `rumbleOut` against fake actuators with and
+  without `trigger-rumble`. lion-hawk: a stop zeroes `trigger-rumble` where listed. On the Bluetooth pad: pause
+  mid-ABS-pulse and alt-tab mid-slide stop all four motors; the feel is tuned in the panel.
