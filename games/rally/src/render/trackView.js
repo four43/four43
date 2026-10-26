@@ -10,7 +10,7 @@ import { noise2 } from '../gen/noise.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
 import { rng } from '../gen/rng.js';
-import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, setSky, setGround, loadSurfaceTextures } from './roadSurface.js';
+import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, setSky, setGround } from './roadSurface.js';
 import { VERGE } from '../gen/surfaces.js';
 import { EDGE, edgeAt } from '../gen/edges.js';
 import { Pebbles } from './pebbles.js';
@@ -34,7 +34,7 @@ const POST_H = 1.2, POST_W = 0.12, POST_D = 0.09; // matches TrackWorld's box co
 const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // sRGB hex -> linear
 const PAL = {
   summer: {
-    a: lin('#56653a'), b: lin('#6f6c42'),          // muted green ↔ olive-brown, by large-scale noise
+    a: lin('#445e2e'), b: lin('#66823e'),          // the tufts' greens, by large-scale noise (rally-grass's painted tones, R13)
     earth: lin('#6a5843'), rock: lin('#7a766d'),   // steep slopes
     shoulder: lin('#76694f'), slope: [0.95, 0.8],  // ny range over which slope colour takes over
   },
@@ -178,9 +178,8 @@ export class TrackView {
     this.theme = track.theme === 'winter' ? 'winter' : 'summer'; // also the light-rig preset (render.js)
     this.root = new THREE.Group(); scene.add(this.root);
     this.noise = noise2(`${track.seed}|look`);
-    // The ground's look (R10-9): the verge's photo over the vertex colours, the slope surface's on steep ground.
-    setGround(VERGE[this.theme], PAL[this.theme].slope);
-    loadSurfaceTextures().catch((e) => console.warn(e.message)); // procedural and vertex colours stand in until (or if not) loaded
+    // The ground's look (R13): the verge's painted palette.
+    setGround(VERGE[this.theme]);
     this.roadDist = roadDistance(track);
     this.terrainMat = groundMaterial(this.mc, this.mc.get('rally-ground', { vertexColors: true }));
     this.terrainOpts = terrainMeshOptions(track, this.theme, this.roadDist, this.noise);

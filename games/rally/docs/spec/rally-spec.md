@@ -39,11 +39,10 @@ timing, bests) is specified there too (Phase 2).
 | `src/render.js` | three.js renderer: lights/looks, car meshes, cameras; `setWorld` picks the world view |
 | `src/render/padView.js` | Pad visuals (ground, skidpad, ramps, humps, slope, cones) |
 | `src/render/trackView.js` | Track visuals (terrain LOD chunks, road ribbon, tall grass, markers, gates) |
-| `src/render/roadSurface.js` | Road and ground shading (R10): photo texture arrays, edges, wear marks, cracks, dashes, puddles, ice, spill; `extend()` patches on `rally-road` / `rally-ground` |
+| `src/render/roadSurface.js` | Road and ground shading (R10, R13): painted palettes, edges, wear marks, cracks, dashes, puddles, ice, spill; `extend()` patches on `rally-road` / `rally-ground` |
 | `src/render/pebbles.js` | Loose stones on dirt and gravel (R10-6): ten pebble shapes, instanced, per 4 m road chunk near the camera |
 | `src/gen/edges.js`, `src/gen/wear.js` | The road's edges (physics + shader) and its driven lines (shader marks + pebbles), per layout sample |
 | `src/gen/bumps.js` | Road bumps (R11): scattered humps and short ridges, and the whoops' ridge sets, in road space; stamped into the heightfield |
-| `pwa/road-*.jpg`, `pwa/ground-*.jpg` | Surface photos (ambientCG, CC0): colour 1024², normal xy + roughness 512² |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
 | `src/rumble/` | Rumble channels (R9): engine, suspension, body, aid, and the mix → `{ strong, weak, left, right }`; pure |
 | `src/rumbleOut.js` | Sends the levels to the seat's pads: `trigger-rumble` where listed, else `dual-rumble`; a no-op where unsupported |
@@ -778,4 +777,32 @@ Request (playtest): vary the width of the track; it was too much the same (3.5 m
 - **Validation**: `test/edges.test.mjs`: half-widths span < 1.8 m to > 7.5 m, bends of |κ̄| ≥ 1/40 at least 3.5 m wide, tight bends wider on the inside, standard
   at the start gate, no step at a loop's seam; tarmac's local wander (against a ±12 m average) under half of loose.
   Generator, track (its verge probe now 1 m past the edge), wild, game, verge and markers suites pass; goldens re-blessed.
+
+## Round 13: painted surfaces (2026-10-25)
+
+Request (playtest): the realistic photo textures (R10-7, R10-9) didn't fit the low-poly, vector look; the old flat
+noise was too simple. A simpler palette that sits with the models; Art of Rally (Funselector) is the reference.
+
+- **R13-1 Palettes** (registry): per road surface `game.road.paint` = `base`, `light`, `dark` (tone bands), `mark` (tyre
+  marks), `rim` (inside the edge), `chip` (flat stones), with `streak`, `chips`, `rimW`; per verge `game.ground` = `a`,
+  `b`, `c` (grass or snow tones), `dry`, `clump`, `earth`, `rock`, `slope` (ny range). Summer: olive greens, orange-brown
+  dirt, warm grey gravel, blue-grey tarmac; winter: blue-white snow, grey-blue packed snow, pale blue ice. Colours sit
+  darker than they read as hex: the sun and sky light lift them (the first pass read lime).
+- **R13-2 Road** (`render/roadSurface.js`): three tone bands from broad noise (soft steps, at least a pixel wide so they
+  stay crisp and don't alias), painted strokes stretched along the road in road space (thinned out with distance), flat
+  stones on gravel (a share of jittered cells as soft blobs), R10-8's short tyre marks as flat `mark` colour (no groove
+  relief), a `rim` band just inside the edge whose colour carries on into the flat tongues of spill onto the shoulder
+  (a lighter spill banded the edge tan, brown, tan), tarmac cracks (no centre dashes: playtest), dirt puddles on the flat. Ice: flat blues, lighter frosted patches off the marks, thin white cracks, a sky reflection; no
+  refraction or bubbles. No photo normals; only the cracks bend the normal.
+- **R13-4 Relief and wet** (playtest: tarmac had too many splotches; more fidelity with normals for cracks and a specular
+  map for wet areas). A height (m) bends the normal by screen-space derivatives: tarmac crack networks (warped cell
+  borders broken into segments, in some stretches, 4 mm grooves) and tar-sealed cracks (4.5 cm, darker, a little glossy);
+  dirt dried-mud cracks in dry patches (3 mm); gravel's flat stones stand 6 mm proud; fine aggregate relief per surface
+  (`relief`, 1.5–3 mm) up close. Crack antialiasing uses the pixel footprint, not fwidth, so the per-surface branches
+  stay defined. Wet patches (`wet`: tarmac 0.6, dirt 0.4, gravel 0.2): darker, roughness 0.2, a share of sky reflection,
+  a damp halo, relief filled in; on tarmac water gathers towards the edges. Tarmac's tone bands at a quarter (`tone`),
+  strokes nearly off.
+- **R13-3 Ground**: three tones in big soft-edged fields (~55 m), dry patches, small clumps (faded with distance), earth
+  then rock as the slope steepens; the terrain's vertex colours no longer colour it. The tufts' greens follow the palette.
+- **Removed**: the photo textures (`pwa/road-*.jpg`, `pwa/ground-*.jpg`, 1.7 MB), their texture arrays and loader.
 
