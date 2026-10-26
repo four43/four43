@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Engine sound lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+  --bg:#D3D8DA; --panel:#E3E6E7; --panel-2:#ECEEEF; --ink:#1B2026; --muted:#55606A;
+  --line:rgba(27,32,38,.16); --face:#22282E; --face-2:#2B3239; --face-ink:#E7EAEC; --face-dim:#8A949D;
+  --needle:#F2B705; --red:#D3262E; --accent:#1D5C96; --accent-ink:#FFFFFF; --track:#BFC5C8; --ok:#3FA36B;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#262C32; --panel:#30373E; --panel-2:#384047; --ink:#E6E9EB; --muted:#A1AAB2;
+    --line:rgba(230,233,235,.14); --face:#1A1F24; --face-2:#232A30; --face-ink:#E7EAEC; --face-dim:#7F8993;
+    --accent:#7DB1E3; --accent-ink:#0E2236; --track:#48515A;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#262C32; --panel:#30373E; --panel-2:#384047; --ink:#E6E9EB; --muted:#A1AAB2;
+  --line:rgba(230,233,235,.14); --face:#1A1F24; --face-2:#232A30; --face-ink:#E7EAEC; --face-dim:#7F8993;
+  --accent:#7DB1E3; --accent-ink:#0E2236; --track:#48515A;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 Barlow,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1260px;margin:0 auto;padding:28px 22px 48px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 32px;margin-bottom:20px}
+h1{font:700 clamp(2.2rem,5vw,3.4rem)/0.95 "Barlow Condensed","Arial Narrow",sans-serif;letter-spacing:-0.01em;margin:0}
+.lede{max-width:56ch;margin:0;color:var(--muted)}
+.bench{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.bench{grid-template-columns:minmax(0,1fr)}}
+.left{display:grid;gap:18px;min-width:0}
+.cluster{background:var(--face);color:var(--face-ink);border-radius:20px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) 62px;gap:12px}
+.cluster canvas{width:100%;display:block}
+.strip{grid-column:1 / -1;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:4px 4px 2px}
+.start{appearance:none;border:0;cursor:pointer;width:84px;height:84px;border-radius:50%;
+  background:radial-gradient(circle at 50% 38%,#3A424A 0%,#262C32 70%);color:#F3F4F5;
+  box-shadow:inset 0 0 0 3px var(--red),inset 0 0 0 7px #1A1F24,0 2px 0 rgba(0,0,0,.4);
+  font:600 0.95rem/1.05 "Barlow Condensed",sans-serif;letter-spacing:.02em;display:grid;place-items:center;text-align:center}
+.start[aria-pressed="true"]{box-shadow:inset 0 0 0 3px var(--ok),inset 0 0 0 7px #1A1F24,0 2px 0 rgba(0,0,0,.4)}
+.start:active{transform:translateY(1px)}
+.start:focus-visible,.pedal:focus-visible{outline:3px solid var(--needle);outline-offset:3px}
+.status{font:600 1.15rem/1.2 "Barlow Condensed",sans-serif}
+.hint{color:var(--face-dim);font-size:.9rem;max-width:44ch}
+.hint kbd{font:600 .8rem/1 Barlow,sans-serif;border:1px solid #4A535C;border-bottom-width:2px;border-radius:4px;padding:2px 5px;color:var(--face-ink)}
+.pedal{position:relative;border-radius:12px;background:#14181C;cursor:ns-resize;touch-action:none;overflow:hidden;min-height:200px;
+  background-image:repeating-linear-gradient(0deg,transparent 0 9px,rgba(255,255,255,.06) 9px 11px)}
+.pedal .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(to top,var(--needle),#F7D35A)}
+.pedal .lab{position:absolute;left:0;right:0;top:8px;text-align:center;font:600 .8rem/1 "Barlow Condensed",sans-serif;color:var(--face-dim);pointer-events:none;mix-blend-mode:difference}
+.pedal .pct{position:absolute;left:0;right:0;bottom:8px;text-align:center;font:600 1rem/1 "Barlow Condensed",sans-serif;color:var(--face-ink);pointer-events:none;mix-blend-mode:difference}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:640px){.duo{grid-template-columns:1fr}}
+.plot{background:var(--panel);border-radius:14px;padding:12px 14px 14px;min-width:0}
+.plot h2,.controls h2{font:600 1.2rem/1.1 "Barlow Condensed",sans-serif;margin:0 0 2px}
+.plot p{margin:0 0 8px;color:var(--muted);font-size:.88rem;line-height:1.35}
+.plot canvas{width:100%;height:180px;display:block;border-radius:8px;background:var(--face)}
+.controls{background:var(--panel);border-radius:14px;padding:6px 16px 16px}
+fieldset{border:0;border-top:1px solid var(--line);margin:0;padding:12px 0 6px}
+fieldset:first-of-type{border-top:0}
+legend{font:600 1.2rem/1 "Barlow Condensed",sans-serif;padding:10px 0 0;float:left;width:100%;margin-bottom:8px}
+legend + *{clear:both}
+.row{display:grid;grid-template-columns:7.2em minmax(0,1fr) 4.4em;align-items:center;gap:10px;margin:8px 0}
+.row label{font-size:.92rem;color:var(--muted)}
+.row output{font:600 1rem/1 "Barlow Condensed",sans-serif;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--track)}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--track)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);margin-top:-6px;border:2px solid var(--panel)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid var(--panel)}
+input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+input[type=range]:disabled{opacity:.4}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{cursor:pointer;padding:6px 11px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);font-size:.92rem;line-height:1.2;user-select:none}
+.seg input:checked + label{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+.seg.engines label small{display:block;font-size:.74rem;opacity:.75}
+.switch{display:flex;align-items:center;gap:10px;margin:8px 0;cursor:pointer;font-size:.95rem}
+.switch input{appearance:none;-webkit-appearance:none;width:40px;height:22px;border-radius:11px;background:var(--track);position:relative;cursor:pointer;flex:none;margin:0;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--panel);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(18px)}
+.switch input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{font-size:.85rem;color:var(--muted);margin:2px 0 6px;line-height:1.4}
+.mixh{font:600 1.05rem/1.2 "Barlow Condensed",sans-serif;margin:16px 0 2px}
+.mixjson{width:100%;font:500 .8rem/1.45 ui-monospace,"SF Mono",Menlo,Consolas,monospace;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;white-space:pre;overflow-x:auto}
+.mixjson:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gears .note{margin:0}
+.gears{display:flex;gap:8px;align-items:center;margin:8px 0}
+.gears button{appearance:none;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:8px;padding:7px 14px;font:600 1rem/1 "Barlow Condensed",sans-serif;cursor:pointer}
+.gears button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none !important}
+.how{margin-top:26px;background:var(--panel);border-radius:14px;padding:4px 20px}
+.how summary{cursor:pointer;font:600 1.3rem/1 "Barlow Condensed",sans-serif;padding:14px 0}
+.how summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.how .cols{columns:2 34ch;column-gap:36px;padding-bottom:16px}
+.how h3{font:600 1.05rem/1.2 "Barlow Condensed",sans-serif;margin:12px 0 2px;break-after:avoid}
+.how p{margin:0 0 8px;font-size:.95rem;break-inside:avoid}
+.err{color:var(--red);font-weight:600}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Engine sound lab</h1>
+    <p class="lede">Every sound here is synthesized live from four numbers: rpm, air charge, throttle and turbo state. No samples. Start the engine, then hold <b>Space</b> or drag the pedal.</p>
+  </header>
+
+  <div class="bench">
+    <div class="left">
+      <section class="cluster" aria-label="Instrument cluster">
+        <canvas id="gauges" aria-label="Tachometer and engine readouts"></canvas>
+        <div class="pedal" id="pedal" role="slider" tabindex="0" aria-label="Throttle pedal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="fill" id="pedalFill"></div><div class="lab">Gas</div><div class="pct" id="pedalPct">0%</div>
+        </div>
+        <div class="strip">
+          <button class="start" id="startBtn" aria-pressed="false">Start<br>engine</button>
+          <div>
+            <div class="status" id="status">Engine off</div>
+            <div class="hint" id="hint">Hold <kbd>Space</kbd> or <kbd>W</kbd> for full throttle. Drag the pedal for partial throttle.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="duo">
+        <section class="plot">
+          <h2>Operating point</h2>
+          <p>Where the engine sits in rpm × air charge. Throttle and load move you vertically; the dashed line is the most air the engine can take in at each rpm.</p>
+          <canvas id="map"></canvas>
+        </section>
+        <section class="plot">
+          <h2>Output</h2>
+          <p>Waveform (top) and spectrum, 20 Hz–10 kHz on a log scale (bottom). Watch the firing pulses stack into harmonics.</p>
+          <canvas id="scope"></canvas>
+        </section>
+      </div>
+    </div>
+
+    <form class="controls" id="controls" onsubmit="return false">
+      <fieldset>
+        <legend>Engine</legend>
+        <div class="seg engines" id="engineSeg"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Driving</legend>
+        <div class="seg" role="radiogroup" aria-label="Mode">
+          <input type="radio" name="mode" id="m-free" value="free" checked><label for="m-free">Free rev</label>
+          <input type="radio" name="mode" id="m-dyno" value="dyno"><label for="m-dyno">Dyno hold</label>
+          <input type="radio" name="mode" id="m-drive" value="drive"><label for="m-drive">Drive</label>
+        </div>
+        <p class="note" id="modeNote"></p>
+        <div class="row"><label for="thrHold">Throttle hold</label><input type="range" id="thrHold" min="0" max="100" value="0"><output id="thrHoldO">0%</output></div>
+        <div class="row" id="loadRow"><label for="load" id="loadLab">Dyno brake</label><input type="range" id="load" min="0" max="100" value="0"><output id="loadO">0%</output></div>
+        <div class="row" id="rpmRow" hidden><label for="rpmT">Held rpm</label><input type="range" id="rpmT" min="800" max="7000" step="50" value="3000"><output id="rpmTO">3000</output></div>
+        <div class="gears" id="gearRow" hidden>
+          <button type="button" id="gDown" aria-label="Shift down">Shift down (Q)</button>
+          <button type="button" id="gUp" aria-label="Shift up">Shift up (E)</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Turbo</legend>
+        <label class="switch"><input type="checkbox" id="turbo"> Turbocharger</label>
+        <div class="row"><label for="boost">Max boost</label><input type="range" id="boost" min="30" max="160" value="100"><output id="boostO">1.0 bar</output></div>
+        <div class="row"><label for="tsize">Turbo size</label><input type="range" id="tsize" min="0" max="100" value="40"><output id="tsizeO">Mid</output></div>
+        <label class="switch"><input type="checkbox" id="bov" checked> Blow-off valve</label>
+        <p class="note">With the valve off, lifting under boost makes the compressor surge and flutter instead of venting.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Exhaust</legend>
+        <div class="seg" role="radiogroup" aria-label="Muffler">
+          <input type="radio" name="muf" id="mf0" value="0"><label for="mf0">Stock muffler</label>
+          <input type="radio" name="muf" id="mf1" value="1" checked><label for="mf1">Sport</label>
+          <input type="radio" name="muf" id="mf2" value="2"><label for="mf2">Straight pipe</label>
+        </div>
+        <div class="row"><label for="pipe">Pipe length</label><input type="range" id="pipe" min="60" max="420" value="210"><output id="pipeO">2.1 m</output></div>
+        <label class="switch"><input type="checkbox" id="pops"> Overrun pops and crackle</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Listening position</legend>
+        <div class="seg" role="radiogroup" aria-label="Listening position">
+          <input type="radio" name="mic" id="mic0" value="0" checked><label for="mic0">Behind the car</label>
+          <input type="radio" name="mic" id="mic1" value="1"><label for="mic1">Engine bay</label>
+          <input type="radio" name="mic" id="mic2" value="2"><label for="mic2">In the cabin</label>
+        </div>
+        <div class="row"><label for="vol">Volume</label><input type="range" id="vol" min="0" max="100" value="60"><output id="volO">60%</output></div>
+        <h3 class="mixh" id="mixTitle">Mixer: behind the car</h3>
+        <p class="note">Each listening position keeps its own mix, in dB on top of that position’s built-in balance. Coast is the sound when you lift off: pumping puffs through the exhaust and hiss past the closed throttle.</p>
+        <div id="mixer"></div>
+        <div class="gears"><button type="button" id="mxReset">Reset this position</button></div>
+        <label class="mixh" for="mixJson" style="display:block">Mix settings for all positions</label>
+        <p class="note">Updates as you move the faders. Copy it to keep your tuning, or paste edited settings back in and press Apply. Use null for a muted layer.</p>
+        <textarea id="mixJson" class="mixjson" rows="6" spellcheck="false" aria-describedby="mxMsg"></textarea>
+        <div class="gears"><button type="button" id="mxCopy">Copy</button><button type="button" id="mxApply">Apply</button><span class="note" id="mxMsg" role="status"></span></div>
+      </fieldset>
+    </form>
+  </div>
+
+  <details class="how">
+    <summary>How the sound is made</summary>
+    <div class="cols">
+      <h3>Firing pulses</h3>
+      <p>A crank phase runs over the 720° four-stroke cycle. Each time it passes a cylinder’s firing angle, a short exhaust pressure pulse starts: a fast blowdown spike that decays over the exhaust valve’s open time. Pulse height is the air charge in that cylinder, with a little cycle-to-cycle randomness that grows at light load, which is why idle sounds lumpy and full throttle sounds solid.</p>
+      <h3>Why engines sound different</h3>
+      <p>The firing angles and which exhaust bank each cylinder feeds are the whole recipe. A crossplane V8 sends uneven 90/180/270° gaps to each bank, which is the burble. A flat-4 with unequal headers delays every other pulse by a couple of milliseconds, which is the rumble. A 45° twin fires at 0° and 405°, then waits.</p>
+      <h3>Exhaust pipe and muffler</h3>
+      <p>Each bank feeds a delay-line waveguide whose length is the pipe’s round trip at the speed of sound in hot gas, with an inverting, lossy reflection at the open end. That gives the pipe’s organ-like resonances. A low-pass muffler, a chamber resonance and soft saturation that drives harder with air charge follow.</p>
+      <h3>Load is air charge</h3>
+      <p>Acoustically, “load” means how much air is in each cylinder, the same thing an ECU calls calculated load. Throttle opening, rpm and boost set it; external load only changes how fast rpm moves for a given throttle. On the dyno you can hold rpm and sweep throttle to hear the difference.</p>
+      <h3>Intake and mechanics</h3>
+      <p>The same pulse train, band-passed around an intake resonance, plus pulse-gated airflow noise that opens up with the throttle. Small valvetrain clicks ride on each firing event. These dominate from the engine bay.</p>
+      <h3>Turbo</h3>
+      <p>Shaft speed spools toward a target set by exhaust flow, with lag set by turbo size. Whine is a tone tracking shaft speed; whoosh is filtered noise scaled by boost. The turbine also smooths exhaust pulses, so the exhaust gets darker. Lifting under boost fires a blow-off valve (a downward-swept noise burst) or, without one, compressor flutter.</p>
+      <h3>Overrun and limiter</h3>
+      <p>Closing the throttle above idle cuts fuel, but the pistons keep pumping a full cylinder of air through the exhaust on every stroke, so you hear a hollow stream of puffs plus hiss past the closed throttle, while the engine body keeps whirring with rpm. For a moment afterwards some of them fire in the exhaust instead, as pops with a crackle tail. The rev limiter cuts spark on most cycles, giving the classic stutter.</p>
+    </div>
+  </details>
+</div>
+
+<script>
+// DSP-START
+class EngineDSP {
+  static MIC = [
+    {exh:1.0, int:0.22, tur:0.5,  mech:0.3,  st:0.45, exLP:16000, cab:0},
+    {exh:0.32,int:1.0,  tur:1.15, mech:0.75, st:1.0,  exLP:1700,  cab:0},
+    {exh:0.8, int:0.5,  tur:0.35, mech:0.3,  st:0.5,  exLP:16000, cab:1}
+  ];
+  static bq(){ return {b0:1,b1:0,b2:0,a1:0,a2:0,x1:0,x2:0,y1:0,y2:0}; }
+  static set(f,type,freq,Q,sr,gainDb){
+    const w=2*Math.PI*Math.min(Math.max(freq,10),sr*0.45)/sr, c=Math.cos(w), s=Math.sin(w), al=s/(2*Q);
+    let b0,b1,b2,a0,a1,a2;
+    if(type===0){ b0=(1-c)/2; b1=1-c; b2=(1-c)/2; a0=1+al; a1=-2*c; a2=1-al; }
+    else if(type===1){ b0=al; b1=0; b2=-al; a0=1+al; a1=-2*c; a2=1-al; }
+    else { const A=Math.pow(10,(gainDb||0)/40); b0=1+al*A; b1=-2*c; b2=1-al*A; a0=1+al/A; a1=-2*c; a2=1-al/A; }
+    f.b0=b0/a0; f.b1=b1/a0; f.b2=b2/a0; f.a1=a1/a0; f.a2=a2/a0;
+  }
+  static run(f,x){ const y=f.b0*x+f.b1*f.x1+f.b2*f.x2-f.a1*f.y1-f.a2*f.y2; f.x2=f.x1; f.x1=x; f.y2=f.y1; f.y1=y; return y; }
+
+  constructor(sr){
+    this.sr=sr;
+    this.t={rpm:0,charge:0.3,throttle:0,fuelCut:1,limiter:0,popWin:0,pops:1,turbo:0,shaft:0,boostN:0,wg:0,
+            bovId:0,bovAmp:0,bovMode:1,mic:0,vol:0.6,pipe:2.1,muffler:1,on:0,starter:0,
+            mixEx:1,mixOv:1,mixIn:1,mixTu:1,mixMe:1,mixSt:1};
+    this.rpm=0; this.charge=0.3; this.thr=0; this.shaft=0; this.boostN=0; this.wg=0; this.onG=0;
+    this.phase=0;
+    this.voices=[]; for(let i=0;i<48;i++) this.voices.push({on:false,t:0,dur:1,a:0.1,amp:0,bank:0,delay:0,rasp:0});
+    this.dl=[new Float32Array(16384),new Float32Array(16384)]; this.dw=0;
+    this.N=[420,435]; this.loop=[0,0]; this.dcx=[0,0]; this.dcy=[0,0]; this.px=[0,0]; this.exLP=[0,0];
+    const B=EngineDSP.bq;
+    this.muf=[B(),B()]; this.muf2=[B(),B()]; this.body=[B(),B()]; this.cab=[B(),B()];
+    this.crack=[0,0]; this.rEnv=[0,0]; this.rLP=[0,0]; this.rHP=[0,0];
+    this.inRes=B(); this.inNz=B(); this.inEnv=0; this.inDc=0;
+    this.whPh=0; this.whoosh=B(); this.wgF=B(); this.bovF=B(); this.bovT=9; this.bovA=0; this.bovMode=1; this.lastBov=0; this.flPh=0;
+    this.clk=0; this.clkA=0; this.nPrev=0; this.stPh=0;
+    this.stG=0; this.crankD=0; this.load=0; this.lastSt=0; this.clunk=0; this.thump=0; this.thPh=0; this.arPh=0; this.mshF=0;
+    this.arLP=B(); EngineDSP.set(this.arLP,0,650,0.9,sr);
+    this.hiss=B(); EngineDSP.set(this.hiss,1,2200,1.2,sr); this.mLP=0; this.chPh=0;
+    this.stLP=B(); this.stBP=B(); this.ckBP=B(); EngineDSP.set(this.stLP,0,1600,0.8,sr); EngineDSP.set(this.stBP,1,1900,1.3,sr); EngineDSP.set(this.ckBP,1,850,2.2,sr);
+    this.tk1=B(); this.tk2=B(); EngineDSP.set(this.tk1,1,2900,9,sr); EngineDSP.set(this.tk2,1,4700,7,sr);
+    this.setEngine({angles:[0,180,360,540],banks:[0,1,0,1],header:[0,0,0,0],pulseDeg:230,gain:1,stereo:0});
+  }
+  setParams(m){ if(m && m.type==='engine') this.setEngine(m); else Object.assign(this.t,m); }
+  setEngine(e){
+    const nc=e.angles.length, cylVar=[], durVar=[];
+    for(let i=0;i<nc;i++){
+      const h=Math.sin((i+1)*12.9898+nc*78.233)*43758.5453, r=h-Math.floor(h);
+      const h2=Math.sin((i+1)*39.346+nc*11.135)*24634.6345, r2=h2-Math.floor(h2);
+      cylVar.push(1+0.16*(r-0.5)); durVar.push(1+0.12*(r2-0.5));
+    }
+    this.engine={angles:e.angles.map(a=>((a%720)+720)%720/720), banks:e.banks.slice(), header:e.header.slice(),
+                 pulseDeg:e.pulseDeg, gain:e.gain, stereo:e.stereo, cylVar, durVar};
+  }
+  fire(c){
+    const T=this.t, E=this.engine, sr=this.sr, rpm=Math.max(60,this.rpm);
+    let amp=Math.pow(this.charge,0.75)*E.cylVar[c];
+    const cv=0.05+0.25*Math.max(0,1-this.charge);
+    amp*=1+cv*(Math.random()*2-1);
+    let pop=false, burned=!(T.fuelCut>0.5);
+    if(burned && T.limiter && Math.random()<0.65) burned=false;
+    if(!burned){
+      if(T.starter) amp*=0.55;
+      else if(T.fuelCut>0.5) amp=(0.65)*(0.24+0.3*Math.min(1,this.rpm/6000))*E.cylVar[c]*(0.9+0.2*Math.random())*T.mixOv; // fuel cut: no combustion, but each piston still pumps a cylinder of air out
+      else amp*=0.2;
+      if(T.starter) this.thump=Math.max(this.thump,0.7+0.3*Math.random());
+      const pp=T.limiter?0.3:0.2*T.popWin;
+      if(T.pops && T.on && Math.random()<pp){ pop=true; amp=0.7+Math.random()*1.3; }
+    }
+    let v=null; const vs=this.voices; for(let i=0;i<vs.length;i++){ if(!vs[i].on){ v=vs[i]; break; } }
+    if(!v) return;
+    const dur=Math.max(24,E.pulseDeg*E.durVar[c]/(6*rpm)*sr*(pop?0.5:1));
+    v.on=true; v.t=0; v.dur=dur; v.a=Math.min(0.3,Math.max(0.04,(0.0016*sr)/dur));
+    v.amp=amp*E.gain; v.bank=E.banks[c];
+    v.delay=Math.floor(E.header[c]*0.001*sr+Math.random()*0.00012*sr);
+    v.rasp=pop?1.4:0.7*Math.pow(Math.min(1,(this.rpm/6000)*this.charge),0.7);
+    if(pop) this.crack[v.bank]=Math.max(this.crack[v.bank],0.5+0.7*Math.random());
+    this.clk=1; this.clkA=0.6+0.4*Math.random();
+  }
+  render(L,R,n){
+    const sr=this.sr, T=this.t, run=EngineDSP.run, set=EngineDSP.set;
+    const kSt=1-Math.exp(-1/(sr*0.03)), ckD=Math.exp(-1/(sr*0.014)), thD=Math.exp(-1/(sr*0.06)), k=1-Math.exp(-1/(sr*0.012)), kOn=1-Math.exp(-1/(sr*0.15)), cDecay=Math.exp(-1/(sr*0.04));
+    for(let off=0;off<n;off+=64){
+      const m=Math.min(64,n-off), E=this.engine;
+      const turb=T.turbo?1:0, mi=T.muffler|0;
+      const mufCut=[1300,3200,7000][mi]*(1-0.35*turb);
+      const bright=[0.15,0.5,1.0][mi]*(1-0.4*turb);
+      for(let b=0;b<2;b++){
+        set(this.muf[b],0,mufCut,0.65,sr);
+        set(this.muf2[b],0,mufCut*1.6,0.6,sr);
+        set(this.body[b],2,210/Math.max(0.6,T.pipe)*(b?0.96:1),1.4,sr,[5,3.5,2][mi]);
+      }
+      set(this.inRes,1,120+this.rpm*0.025,2.5,sr);
+      set(this.inNz,1,650+this.rpm*0.08,1.1,sr);
+      set(this.whoosh,1,1800+2800*this.shaft,0.9,sr);
+      set(this.wgF,1,2600,0.7,sr);
+      if(this.bovMode) set(this.bovF,1,900+3000*Math.exp(-this.bovT*5),1.2,sr);
+      else set(this.bovF,1,1250+300*Math.exp(-this.bovT*3),1.4,sr);
+      const mic=EngineDSP.MIC[T.mic|0]||EngineDSP.MIC[0];
+      const exA=1-Math.exp(-2*Math.PI*mic.exLP/sr);
+      if(mic.cab){ set(this.cab[0],0,750,0.75,sr); set(this.cab[1],0,750,0.75,sr); }
+      const nT0=2*T.pipe/480*sr, nT1=2*T.pipe*1.035/480*sr;
+      const ang=E.angles, nc=ang.length;
+      for(let i=0;i<m;i++){
+        this.rpm+=(T.rpm-this.rpm)*k; this.charge+=(T.charge-this.charge)*k; this.thr+=(T.throttle-this.thr)*k;
+        this.shaft+=(T.shaft-this.shaft)*k; this.boostN+=(T.boostN-this.boostN)*k; this.wg+=(T.wg-this.wg)*k;
+        this.onG+=((T.on?1:0)-this.onG)*kOn;
+        const rpm=this.rpm;
+        // crank phase over the 720° cycle; fire pulses on crossing
+        // cranking: each compression stroke loads the starter, slowing the crank just before TDC, then the trapped air pushes it on
+        const stOn=T.starter?1:0; this.stG+=(stOn-this.stG)*kSt;
+        if(stOn&&!this.lastSt) this.clunk=1;
+        this.lastSt=stOn;
+        this.crankD+=((stOn?0.38*Math.max(0,Math.min(1,1-rpm/520)):0)-this.crankD)*kSt;
+        let spd=rpm;
+        if(this.crankD>1e-4){ let sum=0;
+          for(let c=0;c<nc;c++){ let d=this.phase-(ang[c]-0.03); d-=Math.round(d); const q=d/0.065; sum+=Math.exp(-q*q); }
+          this.load=Math.min(1,sum); spd=rpm*(1-this.crankD*this.load);
+        } else this.load=0;
+        const prev=this.phase; let ph=prev+spd/120/sr;
+        if(ph>=1){ for(let c=0;c<nc;c++) if(ang[c]>prev) this.fire(c); ph-=1; for(let c=0;c<nc;c++) if(ang[c]<=ph) this.fire(c); }
+        else if(rpm>1){ for(let c=0;c<nc;c++){ const a=ang[c]; if(a>prev&&a<=ph) this.fire(c); } }
+        this.phase=ph;
+        // pulse voices
+        let p0=0,p1=0,n0=0,n1=0; const vs=this.voices;
+        for(let j=0;j<vs.length;j++){ const v=vs[j]; if(!v.on) continue;
+          if(v.delay>0){ v.delay--; continue; }
+          const x=v.t/v.dur; if(x>=1){ v.on=false; continue; }
+          const u=x/v.a, y=u*Math.exp(1-u)*(1-x);
+          const s=v.amp*y, ns=s*v.rasp;
+          if(v.bank){ p1+=s; n1+=ns; } else { p0+=s; n0+=ns; }
+          v.t++;
+        }
+        // afterfire crackle
+        for(let b=0;b<2;b++){ const c=this.crack[b]; if(c>1e-3){
+          let s=(Math.random()*2-1)*c*0.5; if(Math.random()<0.006) s+=(Math.random()<0.5?-1:1)*c*2.2;
+          if(b) p1+=s; else p0+=s; this.crack[b]*=cDecay; } }
+        const pin=p0+p1;
+        // exhaust chain per bank
+        let e0=0,e1=0; const drv=1.1+1.4*Math.min(1.6,this.charge);
+        for(let b=0;b<2;b++){
+          const x=b?p1:p0;
+          const y0=x-this.dcx[b]+0.997*this.dcy[b]; this.dcx[b]=x; this.dcy[b]=y0;
+          const d=y0-this.px[b]; this.px[b]=y0;
+          let y=y0+bright*6*d;
+          this.N[b]+=((b?nT1:nT0)-this.N[b])*0.0005;
+          const dlb=this.dl[b], ri=this.dw-this.N[b], i0=Math.floor(ri), fr=ri-i0;
+          const r0=dlb[i0&16383], r1=dlb[(i0+1)&16383];
+          this.loop[b]+=(r0+(r1-r0)*fr-this.loop[b])*0.42;
+          y=y-0.5*this.loop[b];
+          dlb[this.dw]=y;
+          // flow turbulence: band-limited (~270 Hz–1.7 kHz), envelope-smoothed, added after the pipe so it can’t ring the pipe modes
+          this.rEnv[b]+=((b?n1:n0)-this.rEnv[b])*0.02;
+          const wn=Math.random()*2-1; this.rLP[b]+=(wn-this.rLP[b])*0.2; this.rHP[b]+=(this.rLP[b]-this.rHP[b])*0.035;
+          y+=(this.rLP[b]-this.rHP[b])*this.rEnv[b]*1.6;
+          y=run(this.muf[b],y); y=run(this.muf2[b],y); y=run(this.body[b],y);
+          y=Math.tanh(y*0.45*drv);
+          this.exLP[b]+=(y-this.exLP[b])*exA;
+          if(b) e1=this.exLP[b]; else e0=this.exLP[b];
+        }
+        this.dw=(this.dw+1)&16383;
+        // intake
+        const id=pin-this.inDc; this.inDc+=id*0.002;
+        this.inEnv+=(Math.abs(id)-this.inEnv)*0.01;
+        const nz=Math.random()*2-1;
+        let intake=run(this.inRes,id)*(0.25+0.75*this.thr)*0.8;
+        intake+=run(this.inNz,nz)*this.inEnv*this.thr*Math.min(1,rpm/3500)*2.2;
+        // closed-throttle hiss: air rushing past the throttle plate into manifold vacuum
+        intake+=run(this.hiss,Math.random()*2-1)*Math.max(0,1-this.charge)*(1-this.thr)*Math.min(1,rpm/5000)*0.12*T.mixOv;
+        // mechanical + starter
+        // valvetrain tick: a short noise burst ringing two metallic resonances, varied per event, fading under combustion noise as rpm rises
+        const tex=nz*this.clk*this.clkA; this.clk*=0.96;
+        let mech=(run(this.tk1,tex)+0.6*run(this.tk2,tex))*0.2/(1+rpm/2500);
+        // engine body: rotating-mass rumble and timing-drive whir that are there whenever the engine spins, fuel or not
+        const rn=Math.min(1.4,rpm/6000); this.chPh+=rpm/60*21/sr; if(this.chPh>1) this.chPh-=1;
+        this.mLP+=(nz-this.mLP)*0.08;
+        mech+=(this.mLP*1.6+Math.sin(2*Math.PI*this.chPh)*0.12)*Math.pow(rn,1.3)*0.35;
+        let strt=0;
+        if(this.stG>1e-3){
+          // overrunning clutch: once the engine outruns the starter, the starter drops away instead of chasing rpm
+          const free=Math.max(0,Math.min(1,(380-rpm)/80)), ld=this.load;
+          // the "lug": the motor growls at its own rotation rate (~11x crank), louder and lower each time a cylinder compresses
+          this.arPh+=Math.min(spd,330)/60*11/sr; if(this.arPh>1) this.arPh-=1;
+          const s1=Math.sin(2*Math.PI*this.arPh);
+          const growl=run(this.arLP,Math.tanh(3*s1)+0.6*(2*((this.arPh*2)%1)-1)+0.25*nz);
+          // ring-gear mesh: quiet, and only gently pitch-bent so it can't swoop into a wheeze
+          this.mshF+=(Math.min(rpm,330)*(1-0.3*this.crankD*ld)/60*120-this.mshF)*0.002;
+          this.stPh+=this.mshF/sr; if(this.stPh>1) this.stPh-=1;
+          const mesh=run(this.stLP,2*this.stPh-1);
+          const comm=run(this.stBP,Math.random()*2-1);
+          strt+=(growl*0.11*(0.12+1.1*ld)+mesh*0.028*(0.6+0.4*ld)+comm*0.04*(0.4+0.6*ld))*this.stG*free;
+        }
+        if(this.clunk>1e-3){ strt+=run(this.ckBP,nz)*this.clunk*0.6+Math.sin(this.clunk*40)*this.clunk*0.15; this.clunk*=ckD; }
+        if(this.thump>1e-3){ this.thPh+=34/sr; strt+=Math.sin(2*Math.PI*this.thPh)*this.thump*0.22; this.thump*=thD; } else this.thPh=0;
+        // turbo
+        let tur=0;
+        if(turb){ const sh=this.shaft;
+          this.whPh+=(380+4400*sh)/sr; if(this.whPh>1) this.whPh-=1;
+          const w=Math.sin(2*Math.PI*this.whPh)+0.3*Math.sin(4*Math.PI*this.whPh+0.7);
+          tur+=w*sh*sh*(0.2+0.8*Math.min(1,this.thr))*0.09;
+          tur+=run(this.whoosh,nz)*sh*(0.15+this.boostN)*0.22;
+          tur+=run(this.wgF,Math.random()*2-1)*this.wg*0.12;
+        }
+        if(T.bovId!==this.lastBov){ this.lastBov=T.bovId; this.bovT=0; this.bovA=T.bovAmp; this.bovMode=T.bovMode; this.flPh=0; }
+        if(this.bovT<2.5){ const t=this.bovT, att=Math.min(1,t/0.004);
+          if(this.bovMode){ tur+=run(this.bovF,Math.random()*2-1)*this.bovA*att*Math.exp(-t/0.28)*0.9; }
+          else { const f=24*(1-0.45*Math.min(1,t)); this.flPh+=f/sr; if(this.flPh>1) this.flPh-=1;
+            const sn=Math.sin(2*Math.PI*this.flPh), am=0.5+0.5*Math.tanh(5*sn), env=this.bovA*att*Math.exp(-t/0.45);
+            tur+=run(this.bovF,Math.random()*2-1)*env*am*1.1+sn*env*0.08; }
+          this.bovT+=1/sr; }
+        // mix
+        const center=intake*mic.int*T.mixIn+mech*mic.mech*T.mixMe+tur*mic.tur*T.mixTu+strt*mic.st*T.mixSt;
+        const exG=mic.exh*T.mixEx; let l,r;
+        if(E.stereo){ l=(e0*0.82+e1*0.3)*exG+center; r=(e1*0.82+e0*0.3)*exG+center; }
+        else { const e=(e0+e1)*0.62*exG; l=e+center; r=e+center; }
+        if(mic.cab){ l=run(this.cab[0],l)*1.5; r=run(this.cab[1],r)*1.5; }
+        const g=T.vol*this.onG*1.2;
+        l=Math.tanh(l*g); r=Math.tanh(r*g);
+        if(R){ L[off+i]=l; R[off+i]=r; } else L[off+i]=(l+r)*0.5;
+      }
+    }
+  }
+}
+// DSP-END
+</script>
+
+<script>
+(()=>{
+'use strict';
+const ENGINES = {
+  i4:    {name:'Inline-4',      sub:'Even 180° firing',       angles:[0,180,360,540], banks:[0,1,0,1], header:[0,0,0,0], stereo:0,
+          idle:850, redline:7000, limiter:7200, torque:210, peakRpm:4800, inertia:0.13, pipe:2.1, pulseDeg:230, gain:1.0},
+  flat4: {name:'Flat-4',        sub:'Unequal headers',        angles:[0,180,360,540], banks:[0,1,0,1], header:[0,2.6,0,2.6], stereo:0,
+          idle:800, redline:6800, limiter:7000, torque:250, peakRpm:4200, inertia:0.14, pipe:2.3, pulseDeg:240, gain:1.05},
+  i6:    {name:'Inline-6',      sub:'Even 120° firing',       angles:[0,120,240,360,480,600], banks:[0,1,0,1,0,1], header:[0,0,0,0,0,0], stereo:0,
+          idle:750, redline:7000, limiter:7200, torque:340, peakRpm:4600, inertia:0.18, pipe:2.5, pulseDeg:235, gain:0.95},
+  v8x:   {name:'V8 crossplane', sub:'Uneven per bank',        angles:[0,90,180,270,360,450,540,630], banks:[0,1,0,0,1,0,1,1], header:[0,0,0,0,0,0,0,0], stereo:1,
+          idle:650, redline:6500, limiter:6700, torque:530, peakRpm:4400, inertia:0.24, pipe:2.7, pulseDeg:240, gain:1.15},
+  v8f:   {name:'V8 flatplane',  sub:'Even per bank',          angles:[0,90,180,270,360,450,540,630], banks:[0,1,0,1,0,1,0,1], header:[0,0,0,0,0,0,0,0], stereo:1,
+          idle:900, redline:8500, limiter:8700, torque:440, peakRpm:6200, inertia:0.16, pipe:1.9, pulseDeg:225, gain:1.0},
+  v12:   {name:'V12',           sub:'Even 60° firing',        angles:[0,60,120,180,240,300,360,420,480,540,600,660], banks:[0,1,0,1,0,1,0,1,0,1,0,1], header:Array(12).fill(0), stereo:1,
+          idle:800, redline:9000, limiter:9200, torque:620, peakRpm:6800, inertia:0.22, pipe:2.2, pulseDeg:220, gain:0.85},
+  vtwin: {name:'45° V-twin',    sub:'Fires at 0° and 405°',   angles:[0,405], banks:[0,1], header:[0,0.4], stereo:0,
+          idle:900, redline:5500, limiter:5700, torque:150, peakRpm:3200, inertia:0.10, pipe:1.4, pulseDeg:210, gain:1.45}
+};
+const CAR={mass:1200, r:0.32, final:3.9, gears:[3.5,2.1,1.45,1.1,0.88,0.72], crr:0.013, cda:0.68};
+
+// ---------- state ----------
+const S={ engineKey:'i4', mode:'free', thrHold:0, pedal:0, key:0, load:0, rpmTarget:3000,
+  turbo:false, maxBoost:1.0, tsize:0.4, bov:true, muffler:1, pipe:2.1, pops:false, mic:0, vol:0.6,
+  mixes:null };
+// default mix, in dB on top of each listening position’s built-in balance (behind, engine bay, cabin)
+const MIX_DEFAULT_DB=[
+  {ex:4.1, ov:4.1, in:2.7, tu:0,   me:-8.2,  st:0},
+  {ex:6.4, ov:7.5, in:0,   tu:3.4, me:-4.7,  st:8.7},
+  {ex:6.9, ov:9.5, in:3,   tu:9.5, me:-13.6, st:0}
+];
+const dbToGain=d=>d===null?0:Math.round(Math.pow(10,d/20)*100)/100;
+const defaultMix=i=>Object.fromEntries(Object.entries(MIX_DEFAULT_DB[i]).map(([k,d])=>[k,dbToGain(d)]));
+S.mixes=[0,1,2].map(defaultMix);
+S.mix=S.mixes[0];
+const st={ rpm:0, map:1.0, shaft:0, boost:0, wg:0, running:false, starter:false, crankT:0, fuelCut:false, limiter:false,
+  popWin:0, thrSlow:0, bovId:0, bovAmp:0, bovMode:1, bovCool:0, bovVent:0, thrEff:0, tq:0, absorb:0,
+  speed:0, gear:1, shiftT:0, lock:false, brake:0, stalled:false, trail:[], lastBovT:-9 };
+let E=ENGINES[S.engineKey];
+
+// ---------- audio ----------
+const audio={ctx:null, send:null, analyser:null, mode:''};
+async function initAudio(){
+  if(audio.ctx){ if(audio.ctx.state!=='running') await audio.ctx.resume(); return; }
+  const AC=window.AudioContext||window.webkitAudioContext;
+  const ctx=new AC({latencyHint:'interactive'});
+  const an=ctx.createAnalyser(); an.fftSize=2048; an.smoothingTimeConstant=0.55;
+  an.connect(ctx.destination);
+  let node;
+  try{
+    if(!ctx.audioWorklet) throw new Error('no worklet');
+    const src=EngineDSP.toString()+
+      "\nclass EngineProc extends AudioWorkletProcessor{constructor(){super();this.d=new EngineDSP(sampleRate);this.port.onmessage=e=>this.d.setParams(e.data);}process(i,o){const out=o[0];this.d.render(out[0],out[1]||null,out[0].length);return true;}}\nregisterProcessor('engine-dsp',EngineProc);";
+    const url=URL.createObjectURL(new Blob([src],{type:'application/javascript'}));
+    await ctx.audioWorklet.addModule(url);
+    node=new AudioWorkletNode(ctx,'engine-dsp',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+    audio.send=m=>node.port.postMessage(m); audio.mode='worklet';
+  }catch(err){
+    const dsp=new EngineDSP(ctx.sampleRate);
+    node=ctx.createScriptProcessor(1024,1,2);
+    node.onaudioprocess=ev=>{ const ob=ev.outputBuffer; dsp.render(ob.getChannelData(0),ob.getChannelData(1),ob.length); };
+    audio.send=m=>dsp.setParams(m); audio.mode='script';
+  }
+  node.connect(an);
+  audio.ctx=ctx; audio.analyser=an;
+  sendEngine();
+  if(ctx.state!=='running') await ctx.resume();
+}
+function sendEngine(){ if(audio.send) audio.send({type:'engine',angles:E.angles,banks:E.banks,header:E.header,pulseDeg:E.pulseDeg,gain:E.gain,stereo:E.stereo}); }
+function sendParams(){
+  if(!audio.send) return;
+  audio.send({ rpm:st.rpm, charge:st.map, throttle:st.thrEff, fuelCut:(st.running&&!st.fuelCut)?0:1, limiter:st.limiter?1:0,
+    popWin:st.popWin, pops:S.pops?1:0, turbo:S.turbo?1:0, shaft:st.shaft, boostN:st.boost/1.5, wg:st.wg,
+    bovId:st.bovId, bovAmp:st.bovAmp, bovMode:st.bovMode, mic:S.mic, vol:S.vol, pipe:S.pipe, muffler:S.muffler,
+    on:(st.rpm>25||st.starter)?1:0, starter:st.starter?1:0,
+    mixEx:S.mix.ex, mixOv:S.mix.ov, mixIn:S.mix.in, mixTu:S.mix.tu, mixMe:S.mix.me, mixSt:S.mix.st });
+}
+
+// ---------- physics ----------
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+const RPM_PER_RAD=60/(2*Math.PI);
+function mapRatio(area,rpm){ return clamp(area/Math.sqrt(area*area+(6.5e-5*rpm)**2),0.18,1); }
+function torqueCurve(rpm){ const d=(rpm-E.peakRpm)/E.redline; return E.torque*clamp(1-1.3*d*d,0.35,1); }
+function scaleMax(){ return Math.ceil((E.limiter+600)/1000)*1000; }
+
+function step(dt){
+  const driverThr=Math.max(S.thrHold,S.pedal,S.key);
+  let thr=driverThr;
+  if(S.mode==='drive'&&st.shiftT>0) thr=0;
+  // starter / ignition
+  if(st.starter){ st.crankT+=dt; if(st.crankT>0.55&&st.rpm>150) st.running=true; if(st.running&&st.rpm>E.idle*0.7) st.starter=false; if(st.crankT>4) st.starter=false; }
+  // idle air control
+  const idleAir=st.running?clamp(0.05+(E.idle-st.rpm)*0.00015,0,0.14):0;
+  const thrEff=Math.max(thr,idleAir); st.thrEff=thr;
+  const area=0.012+Math.pow(thrEff,1.6);
+  const pUp=1+st.boost;
+  const mapT=pUp*mapRatio(area,Math.max(st.rpm,1));
+  st.map+=(mapT-st.map)*Math.min(1,dt/0.06);
+  // fuel cut and limiter
+  if(st.running){
+    if(thr<0.02&&st.rpm>E.idle+500){ if(!st.fuelCut&&st.rpm>2500) st.popWin=1; st.fuelCut=true; }
+    if(thr>=0.03||st.rpm<E.idle+250) st.fuelCut=false;
+    if(st.rpm>E.limiter) st.limiter=true; else if(st.rpm<E.limiter-250) st.limiter=false;
+  } else { st.fuelCut=false; st.limiter=false; }
+  if(thr>0.05) st.popWin=0; else st.popWin=Math.max(0,st.popWin-dt/1.8);
+  const comb=st.running&&!st.fuelCut;
+  const Tind=comb?torqueCurve(st.rpm)*Math.max(0,(st.map-0.15)/0.85)*(st.limiter?0.15:1):0;
+  const lowR=Math.min(1,st.rpm/1000);
+  const Tfric=st.rpm>1?E.torque*(0.04+0.08*st.rpm/E.redline)+E.torque*0.15*Math.max(0,1-st.map)*lowR:0;
+  const Tstart=st.starter?E.torque*0.6*Math.max(0,1-st.rpm/320):0;
+  st.tq=Tind-Tfric;
+  // turbo
+  if(S.turbo){
+    const flow=(st.rpm/E.redline)*st.map*(comb?1:0.3)*(1.35-0.5*S.tsize);
+    const comp=1.35*S.maxBoost*st.shaft*st.shaft;
+    st.wg=clamp((comp-S.maxBoost)/(0.35*S.maxBoost),0,1);
+    const target=clamp(Math.pow(flow*1.25,1.4),0,1)*(1-0.45*st.wg);
+    let tau=target>st.shaft?0.35+1.8*S.tsize:1.0+1.5*S.tsize;
+    if(st.bovVent>0&&!S.bov&&target<st.shaft) tau*=0.5;
+    st.shaft+=(target-st.shaft)*Math.min(1,dt/tau);
+    let bT,bTau;
+    if(thrEff>0.12){ bT=Math.min(comp,S.maxBoost); bTau=0.12; }
+    else { bT=0; bTau=st.bovVent>0?(S.bov?0.06:0.5):0.35; }
+    st.boost+=(bT-st.boost)*Math.min(1,dt/bTau);
+    // blow-off detection: throttle snapped shut with boost in the pipes
+    st.thrSlow+=(thrEff-st.thrSlow)*Math.min(1,dt/0.2);
+    st.bovCool-=dt; st.bovVent-=dt;
+    if(st.thrSlow-thrEff>0.3&&st.boost>0.15&&st.bovCool<=0){
+      st.bovId++; st.bovAmp=clamp(st.boost/1.2,0.2,1.3); st.bovMode=S.bov?1:0; st.bovCool=0.6; st.bovVent=0.4; st.lastBovT=performance.now();
+    }
+  } else { st.shaft+=(0-st.shaft)*Math.min(1,dt/1.2); st.boost+=(0-st.boost)*Math.min(1,dt/0.2); st.wg=0; st.thrSlow=thrEff; }
+  // dynamics
+  if(S.mode==='dyno'){
+    if(st.running){ const tgt=clamp(S.rpmTarget,E.idle,E.limiter-100); st.rpm+=(tgt-st.rpm)*Math.min(1,dt/0.3); st.absorb=Math.max(0,Tind-Tfric); }
+    else st.rpm=Math.max(0,st.rpm+(Tstart-Tfric)/E.inertia*RPM_PER_RAD*dt);
+  } else if(S.mode==='free'){
+    const Tload=S.load*E.torque*1.1*clamp((st.rpm-E.idle*0.9)/2500,0,1);
+    st.absorb=Tload;
+    st.rpm=Math.max(0,st.rpm+(Tind+Tstart-Tfric-Tload)/E.inertia*RPM_PER_RAD*dt);
+  } else {
+    const G=CAR.gears[st.gear-1]*CAR.final, v=st.speed;
+    const grade=S.load*0.12;
+    let Fres=CAR.mass*9.81*(CAR.crr*(v>0.05?1:0)+grade)+0.5*1.2*CAR.cda*v*v;
+    const Fbrake=st.brake*CAR.mass*8;
+    const engFromWheel=v/CAR.r*RPM_PER_RAD*G;
+    if(st.shiftT>0){
+      st.shiftT-=dt; st.lock=false;
+      st.rpm=Math.max(0,st.rpm+(Tind+Tstart-Tfric)/E.inertia*RPM_PER_RAD*dt);
+      st.speed=Math.max(0,v+(-Fres-(v>0?Fbrake:0))/CAR.mass*dt);
+    } else if(st.lock){
+      const Jeq=E.inertia+CAR.mass*CAR.r*CAR.r/(G*G);
+      const Tnet=Tind+Tstart-Tfric-(Fres+(v>0?Fbrake:0))*CAR.r/G;
+      st.rpm=Math.max(0,st.rpm+Tnet/Jeq*RPM_PER_RAD*dt);
+      st.speed=st.rpm/RPM_PER_RAD/G*CAR.r;
+      if(st.rpm<E.idle*0.8) st.lock=false;
+    } else {
+      const slip=st.rpm-engFromWheel;
+      const launching=engFromWheel<E.idle;
+      const engage=launching?clamp((st.rpm-E.idle*0.9)/600,0,1):1;
+      const Tc=clamp(slip*(launching?0.6:2.0),-E.torque*1.6,E.torque*1.6)*engage;
+      st.rpm=Math.max(0,st.rpm+(Tind+Tstart-Tfric-Tc)/E.inertia*RPM_PER_RAD*dt);
+      let a=(Tc*G/CAR.r-Fres)/CAR.mass-(v>0?Fbrake/CAR.mass:0);
+      st.speed=Math.max(0,v+a*dt);
+      if(Math.abs(slip)<120&&engFromWheel>E.idle*0.85){ st.lock=true; st.rpm=engFromWheel; }
+    }
+    st.absorb=0;
+  }
+  // stall
+  if(st.running&&st.rpm<220&&!st.starter){ st.running=false; st.stalled=true; }
+}
+
+// ---------- UI wiring ----------
+const $=id=>document.getElementById(id);
+const engineSeg=$('engineSeg');
+for(const [k,e] of Object.entries(ENGINES)){
+  const id='eng-'+k;
+  engineSeg.insertAdjacentHTML('beforeend',`<input type="radio" name="eng" id="${id}" value="${k}" ${k===S.engineKey?'checked':''}><label for="${id}">${e.name}<small>${e.sub}</small></label>`);
+}
+engineSeg.addEventListener('change',e=>{ if(e.target.name!=='eng') return; setEngine(e.target.value); });
+function setEngine(k){
+  S.engineKey=k; E=ENGINES[k];
+  CAR.mass=clamp(E.torque*3.2+350,600,1750);
+  S.pipe=E.pipe; $('pipe').value=Math.round(E.pipe*100); $('pipeO').textContent=E.pipe.toFixed(1)+' m';
+  const rt=$('rpmT'); rt.min=E.idle; rt.max=E.limiter-100; S.rpmTarget=clamp(S.rpmTarget,E.idle,E.limiter-100); rt.value=S.rpmTarget; $('rpmTO').textContent=S.rpmTarget;
+  if(st.rpm>E.limiter) st.rpm=E.limiter-200;
+  st.trail=[]; sendEngine();
+}
+const MODE_NOTES={
+  free:'Engine in neutral on a brake dyno. The brake soaks up torque, so you can hear high air charge without rpm running away.',
+  dyno:'The dyno holds rpm wherever you set it. Sweep throttle at a fixed rpm to hear what air charge alone does.',
+  drive:'A car sized to the engine, with six gears and an automatic clutch. Shift with E and Q, brake with S. Lifting to shift dumps boost.'
+};
+function setMode(m){
+  S.mode=m;
+  $('rpmRow').hidden=m!=='dyno'; $('gearRow').hidden=m!=='drive'; $('loadRow').hidden=m==='dyno';
+  $('loadLab').textContent=m==='drive'?'Hill grade':'Dyno brake';
+  updateLoadOut();
+  $('modeNote').textContent=MODE_NOTES[m];
+  if(m==='drive'){ st.speed=0; st.gear=1; st.lock=false; st.shiftT=0; }
+  updateHint();
+}
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',()=>setMode(r.value)));
+function updateLoadOut(){ $('loadO').textContent=S.mode==='drive'?(S.load*12).toFixed(1)+'%':Math.round(S.load*100)+'%'; }
+function bindRange(id,fn){ const el=$(id); const h=()=>fn(+el.value); el.addEventListener('input',h); h(); }
+bindRange('thrHold',v=>{ S.thrHold=v/100; $('thrHoldO').textContent=v+'%'; });
+bindRange('load',v=>{ S.load=v/100; updateLoadOut(); });
+bindRange('rpmT',v=>{ S.rpmTarget=v; $('rpmTO').textContent=v; });
+bindRange('boost',v=>{ S.maxBoost=v/100; $('boostO').textContent=(v/100).toFixed(1)+' bar'; });
+bindRange('tsize',v=>{ S.tsize=v/100; $('tsizeO').textContent=v<34?'Small':v<67?'Mid':'Large'; });
+bindRange('pipe',v=>{ S.pipe=v/100; $('pipeO').textContent=(v/100).toFixed(1)+' m'; });
+bindRange('vol',v=>{ S.vol=v/100; $('volO').textContent=v+'%'; });
+const MIX=[['ex','Exhaust','exhaust'],['ov','Coast','coast'],['in','Intake','intake'],['tu','Turbo','turbo'],['me','Engine body','engineBody'],['st','Starter','starter']];
+const POS=[['behind','behind the car'],['engineBay','engine bay'],['cabin','in the cabin']];
+const toDb=v=>v<=0?null:Math.round(20*Math.log10(v)*10)/10;
+const dbTxt=v=>{ const d=toDb(v); return d===null?'off':Math.abs(d)<0.05?'0 dB':(d>0?'+':'−')+Math.abs(d).toFixed(1)+' dB'; };
+function mixText(){
+  const w=Math.max(...POS.map(p=>p[0].length));
+  const lines=POS.map(([key],i)=>'  '+JSON.stringify(key)+':'+' '.repeat(w-key.length+1)+'{ '+MIX.map(([k,,name])=>JSON.stringify(name)+': '+JSON.stringify(toDb(S.mixes[i][k]))).join(', ')+' }');
+  return '{\n'+lines.join(',\n')+'\n}';
+}
+const mixJson=$('mixJson'), mxMsg=$('mxMsg');
+function showMixText(){ if(document.activeElement!==mixJson) mixJson.value=mixText(); }
+function syncMix(){
+  for(const [k] of MIX){ $('mx-'+k).value=Math.round(S.mix[k]*100); $('mx-'+k+'O').textContent=dbTxt(S.mix[k]); }
+  $('mixTitle').textContent='Mixer: '+POS[S.mic][1];
+  showMixText();
+}
+for(const [k,lab] of MIX){
+  $('mixer').insertAdjacentHTML('beforeend',`<div class="row"><label for="mx-${k}">${lab}</label><input type="range" id="mx-${k}" min="0" max="400" step="1" value="100"><output id="mx-${k}O">0 dB</output></div>`);
+  $('mx-'+k).addEventListener('input',e=>{ S.mix[k]=+e.target.value/100; $('mx-'+k+'O').textContent=dbTxt(S.mix[k]); showMixText(); });
+}
+$('mxReset').addEventListener('click',()=>{ Object.assign(S.mix,defaultMix(S.mic)); syncMix(); });
+$('mxCopy').addEventListener('click',async()=>{
+  mixJson.value=mixText();
+  try{ await navigator.clipboard.writeText(mixJson.value); mxMsg.textContent='Copied'; }
+  catch(e){ mixJson.focus(); mixJson.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(_){}
+    mxMsg.textContent=ok?'Copied':'Selected. Press Ctrl+C or ⌘C to copy.'; }
+});
+$('mxApply').addEventListener('click',()=>{
+  let data; try{ data=JSON.parse(mixJson.value); }catch(e){ mxMsg.textContent='Not valid JSON: '+e.message; return; }
+  const bad=[];
+  POS.forEach(([key],i)=>{ const p=data[key]; if(!p) return;
+    for(const [k,,name] of MIX){ if(!(name in p)) continue; const d=p[name];
+      if(d===null) S.mixes[i][k]=0;
+      else if(typeof d==='number'&&isFinite(d)) S.mixes[i][k]=Math.min(4,Math.max(0,Math.round(Math.pow(10,d/20)*100)/100));
+      else bad.push(key+'.'+name); } });
+  mixJson.blur(); syncMix();
+  mxMsg.textContent=bad.length?'Applied, but skipped '+bad.join(', ')+' (use a number of dB or null).':'Applied';
+});
+mixJson.addEventListener('input',()=>{ mxMsg.textContent=''; });
+syncMix();
+$('turbo').addEventListener('change',e=>S.turbo=e.target.checked);
+$('bov').addEventListener('change',e=>S.bov=e.target.checked);
+$('pops').addEventListener('change',e=>S.pops=e.target.checked);
+document.querySelectorAll('input[name=muf]').forEach(r=>r.addEventListener('change',()=>S.muffler=+r.value));
+document.querySelectorAll('input[name=mic]').forEach(r=>r.addEventListener('change',()=>{ S.mic=+r.value; S.mix=S.mixes[S.mic]; syncMix(); }));
+function shift(d){ if(S.mode!=='drive') return; const g=clamp(st.gear+d,1,6); if(g!==st.gear){ st.gear=g; st.shiftT=0.28; st.lock=false; } }
+$('gUp').addEventListener('click',()=>shift(1)); $('gDown').addEventListener('click',()=>shift(-1));
+
+// start / stop
+const startBtn=$('startBtn');
+startBtn.addEventListener('click',async()=>{
+  try{ await initAudio(); }catch(err){ $('status').innerHTML='<span class="err">Audio could not start in this browser.</span>'; return; }
+  if(st.running||st.starter){ st.running=false; st.starter=false; st.stalled=false; }
+  else { st.starter=true; st.crankT=0; st.stalled=false; if(S.mode==='drive'){ st.lock=false; } }
+});
+function updateHint(){
+  const h=$('hint');
+  if(S.mode==='drive') h.innerHTML='Hold <kbd>Space</kbd> or <kbd>W</kbd> for gas, <kbd>S</kbd> to brake, <kbd>E</kbd>/<kbd>Q</kbd> to shift.';
+  else if(S.mode==='dyno') h.innerHTML='Hold <kbd>Space</kbd> for full throttle. <kbd>←</kbd> <kbd>→</kbd> move the held rpm.';
+  else h.innerHTML='Hold <kbd>Space</kbd> or <kbd>W</kbd> for full throttle. Drag the pedal for partial throttle.';
+}
+
+// pedal
+const pedal=$('pedal');
+let pedalId=null;
+function pedalFrom(ev){ const r=pedal.getBoundingClientRect(); S.pedal=clamp(1-(ev.clientY-r.top)/r.height,0,1); }
+pedal.addEventListener('pointerdown',ev=>{ pedalId=ev.pointerId; pedal.setPointerCapture(ev.pointerId); pedalFrom(ev); ev.preventDefault(); });
+pedal.addEventListener('pointermove',ev=>{ if(ev.pointerId===pedalId) pedalFrom(ev); });
+const pedalUp=ev=>{ if(ev.pointerId===pedalId){ pedalId=null; S.pedal=0; } };
+pedal.addEventListener('pointerup',pedalUp); pedal.addEventListener('pointercancel',pedalUp);
+pedal.addEventListener('keydown',ev=>{
+  if(ev.key==='ArrowUp'){ S.thrHold=Math.min(1,S.thrHold+0.05); syncHold(); ev.preventDefault(); }
+  if(ev.key==='ArrowDown'){ S.thrHold=Math.max(0,S.thrHold-0.05); syncHold(); ev.preventDefault(); }
+});
+function syncHold(){ $('thrHold').value=Math.round(S.thrHold*100); $('thrHoldO').textContent=Math.round(S.thrHold*100)+'%'; }
+
+// keyboard
+const held=new Set();
+function isTyping(t){ return t&&(t.tagName==='INPUT'&&t.type==='range'); }
+window.addEventListener('keydown',ev=>{
+  if(ev.target&&ev.target.tagName==='TEXTAREA') return;
+  if(ev.repeat&&ev.code!=='Space') { if(['KeyW','KeyS','ArrowUp'].includes(ev.code)) return; }
+  const code=ev.code;
+  if(code==='Space'){ held.add('gas'); ev.preventDefault(); }
+  else if(code==='KeyW'||(code==='ArrowUp'&&!isTyping(ev.target)&&ev.target!==pedal)){ held.add('gas'); ev.preventDefault(); }
+  else if(code==='KeyS'||(code==='ArrowDown'&&S.mode==='drive'&&!isTyping(ev.target)&&ev.target!==pedal)){ held.add('brake'); }
+  else if(code==='KeyE'&&!ev.repeat) shift(1);
+  else if(code==='KeyQ'&&!ev.repeat) shift(-1);
+  else if(S.mode==='dyno'&&!isTyping(ev.target)&&(code==='ArrowRight'||code==='ArrowLeft')){
+    S.rpmTarget=clamp(S.rpmTarget+(code==='ArrowRight'?250:-250),E.idle,E.limiter-100); $('rpmT').value=S.rpmTarget; $('rpmTO').textContent=S.rpmTarget; ev.preventDefault();
+  }
+  S.key=held.has('gas')?1:0; st.brake=held.has('brake')?1:0;
+});
+window.addEventListener('keyup',ev=>{
+  if(ev.target&&ev.target.tagName==='TEXTAREA') return;
+  const code=ev.code;
+  if(code==='Space'||code==='KeyW'||code==='ArrowUp'){ held.delete('gas'); if(code==='Space') ev.preventDefault(); }
+  if(code==='KeyS'||code==='ArrowDown') held.delete('brake');
+  S.key=held.has('gas')?1:0; st.brake=held.has('brake')?1:0;
+});
+window.addEventListener('blur',()=>{ held.clear(); S.key=0; st.brake=0; S.pedal=0; });
+
+// ---------- drawing ----------
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let C={};
+function readColors(){ C={face:css('--face'),face2:css('--face-2'),ink:css('--face-ink'),dim:css('--face-dim'),needle:css('--needle'),red:css('--red'),ok:css('--ok'),accent:css('--accent')}; }
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',readColors);
+const FONT='"Barlow Condensed","Arial Narrow",sans-serif';
+function fit(cv,hFn){
+  const dpr=Math.min(2,window.devicePixelRatio||1), w=cv.clientWidth, h=hFn?hFn(w):cv.clientHeight;
+  if(hFn) cv.style.height=h+'px';
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){ cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); }
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); return {c,w,h};
+}
+const gCv=$('gauges'), mCv=$('map'), sCv=$('scope');
+let gDim, mDim, sDim;
+function resize(){ gDim=fit(gCv,w=>w>520?Math.round(w*0.5):Math.round(w*0.9+16+6.4*30)); mDim=fit(mCv); sDim=fit(sCv); pedal.style.minHeight=Math.max(200,gDim.h*0.9)+'px'; }
+new ResizeObserver(resize).observe(document.body); resize();
+
+function drawGauges(){
+  const {c,w:W,h:H}=gDim; c.clearRect(0,0,W,H);
+  const wide=W/H>1.45;
+  let cx,cy,R;
+  if(wide){ R=H*0.45; cx=R+6; cy=H*0.5; } else { R=Math.min(W*0.45,(H-200)/2.1); cx=W/2; cy=R+8; }
+  const maxS=scaleMax(), a0=Math.PI*0.75, a1=Math.PI*2.25;
+  const ang=r=>a0+(a1-a0)*clamp(r/maxS,0,1.03);
+  c.fillStyle=C.face2; c.beginPath(); c.arc(cx,cy,R,0,Math.PI*2); c.fill();
+  c.lineCap='butt';
+  c.strokeStyle=C.red; c.lineWidth=R*0.07; c.beginPath(); c.arc(cx,cy,R*0.88,ang(E.redline),ang(maxS)); c.stroke();
+  for(let r=0;r<=maxS;r+=250){
+    const major=r%1000===0, half=r%500===0, a=ang(r), r0=R*0.92, r1=R*(major?0.76:half?0.82:0.86);
+    c.strokeStyle=r>=E.redline?C.red:C.ink; c.lineWidth=major?R*0.022:R*0.01;
+    c.beginPath(); c.moveTo(cx+Math.cos(a)*r0,cy+Math.sin(a)*r0); c.lineTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1); c.stroke();
+    if(major){ c.fillStyle=r>=E.redline?C.red:C.ink; c.font=`600 ${R*0.15}px ${FONT}`; c.textAlign='center'; c.textBaseline='middle';
+      c.fillText(r/1000,cx+Math.cos(a)*R*0.62,cy+Math.sin(a)*R*0.62); }
+  }
+  c.fillStyle=C.dim; c.font=`500 ${R*0.09}px ${FONT}`; c.textAlign='center'; c.fillText('rpm × 1000',cx,cy-R*0.3);
+  c.fillStyle=C.ink; c.font=`600 ${R*0.2}px ${FONT}`; c.fillText(String(Math.round(st.rpm/10)*10),cx,cy+R*0.36);
+  // lamps
+  const lamps=[['Fuel cut',st.fuelCut&&st.running,C.accent],['Limiter',st.limiter,C.red],[S.bov?'Blow-off':'Flutter',performance.now()-st.lastBovT<700,C.needle]];
+  c.font=`600 ${R*0.075}px ${FONT}`;
+  lamps.forEach(([t,on,col],i)=>{ c.fillStyle=on?col:'rgba(140,150,160,.28)'; c.fillText(t,cx+(i-1)*R*0.33,cy+R*0.72); });
+  // needle
+  const a=ang(st.rpm);
+  c.strokeStyle=C.needle; c.lineCap='round'; c.lineWidth=R*0.03;
+  c.beginPath(); c.moveTo(cx-Math.cos(a)*R*0.1,cy-Math.sin(a)*R*0.1); c.lineTo(cx+Math.cos(a)*R*0.86,cy+Math.sin(a)*R*0.86); c.stroke();
+  c.fillStyle=C.face; c.beginPath(); c.arc(cx,cy,R*0.07,0,Math.PI*2); c.fill();
+  c.strokeStyle=C.needle; c.lineWidth=R*0.02; c.stroke();
+  // readouts
+  let x0,y0,w,h;
+  if(wide){ x0=cx+R+R*0.18; y0=H*0.06; w=W-x0-4; h=H*0.88; } else { x0=8; y0=cy+R+14; w=W-16; h=H-y0-6; }
+  const rows=[
+    ['Throttle',st.thrEff,Math.round(st.thrEff*100)+'%',0,1],
+    ['Air charge',st.map/(1+1.6),st.map.toFixed(2)+' bar',0,1],
+    [st.boost>0.02||S.turbo?'Boost':'Vacuum',st.map-1,(st.map-1>=0?'+':'')+(st.map-1).toFixed(2)+' bar',-1,1.6],
+    ['Turbo speed',S.turbo?st.shaft:0,S.turbo?Math.round(st.shaft*100)+'%':'off',0,1],
+    ['Engine torque',Math.max(0,st.tq)/(E.torque*2.4),Math.round(st.tq)+' N·m',0,1]
+  ];
+  const big=S.mode==='drive'?`Gear ${st.gear}  ·  ${Math.round(st.speed*3.6)} km/h`:S.mode==='dyno'?`Absorbing ${Math.round(st.absorb)} N·m`:`Brake ${Math.round(st.absorb)} N·m`;
+  const rh=h/(rows.length+1.4), fsMin=wide?0:12;
+  c.textBaseline='alphabetic';
+  c.fillStyle=C.ink; c.textAlign='left'; c.font=`600 ${Math.min(rh*0.75,30)}px ${FONT}`; c.fillText(big,x0,y0+rh*0.85);
+  rows.forEach(([lab,val,txt,lo,hi],i)=>{
+    const y=y0+rh*(i+1.4), fs=Math.max(fsMin,Math.min(rh*0.4,17));
+    c.font=`500 ${fs}px ${FONT}`; c.fillStyle=C.dim; c.textAlign='left'; c.fillText(lab,x0,y+fs*0.2);
+    c.fillStyle=C.ink; c.textAlign='right'; c.font=`600 ${fs}px ${FONT}`; c.fillText(txt,x0+w,y+fs*0.2);
+    const by=y+fs*0.55, bh=Math.max(4,rh*0.16);
+    c.fillStyle='rgba(140,150,160,.22)'; c.fillRect(x0,by,w,bh);
+    if(lo<0){ const z=x0+w*(-lo/(hi-lo)), vx=x0+w*clamp((val-lo)/(hi-lo),0,1); c.fillStyle=val>=0?C.needle:C.accent; c.fillRect(Math.min(z,vx),by,Math.abs(vx-z),bh); c.fillStyle=C.ink; c.fillRect(z-1,by-2,2,bh+4); }
+    else { c.fillStyle=lab==='Throttle'?C.needle:C.accent; c.fillRect(x0,by,w*clamp(val,0,1),bh); }
+  });
+}
+
+function drawMap(){
+  const {c,w:W,h:H}=mDim; c.clearRect(0,0,W,H);
+  c.fillStyle=C.face; c.fillRect(0,0,W,H);
+  const pl=42,pr=8,pt=8,pb=22, maxS=scaleMax(), maxY=2.7;
+  const X=r=>pl+(W-pl-pr)*r/maxS, Y=v=>H-pb-(H-pt-pb)*v/maxY;
+  c.strokeStyle='rgba(140,150,160,.18)'; c.lineWidth=1; c.font=`500 11px ${FONT}`; c.fillStyle=C.dim;
+  c.textAlign='right'; c.textBaseline='middle';
+  for(let v=0;v<=2.5;v+=0.5){ c.beginPath(); c.moveTo(pl,Y(v)); c.lineTo(W-pr,Y(v)); c.stroke(); c.fillText(v.toFixed(1),pl-5,Y(v)); }
+  c.textAlign='center'; c.textBaseline='top';
+  for(let r=0;r<=maxS;r+=2000){ c.beginPath(); c.moveTo(X(r),pt); c.lineTo(X(r),H-pb); c.stroke(); c.fillText(r?r/1000+'k':'0',X(r),H-pb+5); }
+  c.save(); c.translate(9,(H-pb)/2); c.rotate(-Math.PI/2); c.textAlign='center'; c.fillText('bar abs',0,0); c.restore();
+  // redline shade
+  c.fillStyle='rgba(211,38,46,.12)'; c.fillRect(X(E.redline),pt,X(maxS)-X(E.redline),H-pt-pb);
+  // full-throttle line (NA and boosted)
+  const wot=boost=>{ c.beginPath(); for(let r=300;r<=maxS;r+=100){ const y=Y((1+boost)*mapRatio(1.012,r)); r===300?c.moveTo(X(r),y):c.lineTo(X(r),y);} c.stroke(); };
+  c.setLineDash([4,4]); c.strokeStyle=C.dim; wot(0);
+  if(S.turbo){ c.strokeStyle=C.needle; wot(S.maxBoost); }
+  c.setLineDash([]);
+  // trail
+  const tr=st.trail;
+  for(let i=0;i<tr.length;i++){ const p=tr[i], a=(i+1)/tr.length; c.fillStyle=`rgba(125,177,227,${a*0.7})`; c.fillRect(X(p[0])-1.5,Y(p[1])-1.5,3,3); }
+  c.fillStyle=C.needle; c.beginPath(); c.arc(X(st.rpm),Y(st.map),5,0,Math.PI*2); c.fill();
+}
+
+let tBuf=null,fBuf=null;
+function drawScope(){
+  const {c,w:W,h:H}=sDim; c.fillStyle=C.face; c.fillRect(0,0,W,H);
+  const an=audio.analyser;
+  c.strokeStyle='rgba(140,150,160,.18)'; c.beginPath(); c.moveTo(0,H*0.42); c.lineTo(W,H*0.42); c.stroke();
+  if(!an){ c.fillStyle=C.dim; c.font=`500 14px ${FONT}`; c.textAlign='center'; c.textBaseline='middle'; c.fillText('Start the engine to see the signal',W/2,H/2); return; }
+  if(!tBuf){ tBuf=new Float32Array(an.fftSize); fBuf=new Float32Array(an.frequencyBinCount); }
+  an.getFloatTimeDomainData(tBuf); an.getFloatFrequencyData(fBuf);
+  // waveform, roughly triggered on a rising zero crossing
+  let s0=0; for(let i=1;i<tBuf.length/2;i++){ if(tBuf[i-1]<0&&tBuf[i]>=0){ s0=i; break; } }
+  const n=Math.min(1024,tBuf.length-s0), mid=H*0.2, amp=H*0.18;
+  c.strokeStyle=C.needle; c.lineWidth=1.4; c.beginPath();
+  for(let i=0;i<n;i++){ const x=W*i/n, y=mid-tBuf[s0+i]*amp*1.6; i?c.lineTo(x,y):c.moveTo(x,y); } c.stroke();
+  // spectrum, log frequency
+  const sr=audio.ctx.sampleRate, binHz=sr/an.fftSize, fl=20, fh=10000, top=H*0.46, bh=H-top-14;
+  c.beginPath(); c.moveTo(0,H-14);
+  for(let x=0;x<=W;x+=2){ const f=fl*Math.pow(fh/fl,x/W), b=Math.min(fBuf.length-1,Math.round(f/binHz)); const db=clamp((fBuf[b]+100)/80,0,1); c.lineTo(x,H-14-db*bh); }
+  c.lineTo(W,H-14); c.closePath(); c.fillStyle='rgba(125,177,227,.35)'; c.fill(); c.strokeStyle=C.accent; c.lineWidth=1; c.stroke();
+  c.fillStyle=C.dim; c.font=`500 10px ${FONT}`; c.textAlign='center'; c.textBaseline='bottom';
+  [50,100,200,500,1000,2000,5000].forEach(f=>{ const x=W*Math.log(f/fl)/Math.log(fh/fl); c.fillText(f>=1000?f/1000+'k':f,x,H-1); });
+}
+
+// ---------- main loop ----------
+const statusEl=$('status'), pedalFill=$('pedalFill'), pedalPct=$('pedalPct');
+let last=performance.now(), trailT=0;
+function frame(now){
+  let dt=Math.min(0.05,(now-last)/1000); last=now;
+  const sub=Math.max(1,Math.ceil(dt/0.002)), h=dt/sub;
+  for(let i=0;i<sub;i++) step(h);
+  trailT+=dt; if(trailT>0.04){ trailT=0; st.trail.push([st.rpm,st.map]); if(st.trail.length>80) st.trail.shift(); }
+  sendParams();
+  const disp=Math.max(S.thrHold,S.pedal,S.key);
+  pedalFill.style.height=(disp*100)+'%'; pedalPct.textContent=Math.round(disp*100)+'%'; pedal.setAttribute('aria-valuenow',Math.round(disp*100));
+  const s=st.starter?'Cranking…':st.running?'Running':st.stalled?'Stalled. Press start.':'Engine off';
+  if(statusEl.textContent!==s) statusEl.textContent=s;
+  const on=st.running||st.starter;
+  if(startBtn.getAttribute('aria-pressed')!==String(on)){ startBtn.setAttribute('aria-pressed',String(on)); startBtn.innerHTML=on?'Stop<br>engine':'Start<br>engine'; }
+  drawGauges(); drawMap(); drawScope();
+  requestAnimationFrame(frame);
+}
+setMode('free'); setEngine('i4');
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
