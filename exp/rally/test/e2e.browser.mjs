@@ -33,6 +33,28 @@ test('desktop: title → Drive → countdown → running, keyboard pause and res
   } finally { await game.close(); }
 });
 
+test('desktop: the engine sound starts on the first gesture in a worklet, follows the camera and the Sound setting, and hushes under pause (R15)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: { 'rally-sim-settings': { ...SETTINGS['rally-sim-settings'], sound: 'quiet' } } });
+  const sound = () => game.page.evaluate(() => window.__rallyView.sound());
+  try {
+    await game.tap('title.drive'); // the gesture unlocks the audio (lion-hawk H-2)
+    await game.page.waitForFunction(() => window.__rallyView.sound().mode !== null);
+    const s0 = await sound();
+    assert.equal(s0.mode, 'worklet', 'the synth runs on the audio thread (lion-hawk H-5)');
+    assert.equal(s0.mic, 'behind'); assert.equal(s0.sfx, 0.4, 'Sound: Quiet'); assert.equal(s0.hushed, false);
+    await game.until(s => s.phase === 'running', { maxSteps: 2000 });
+    await game.page.keyboard.press('c'); await frames(game); await game.step(1); await frames(game);
+    assert.equal((await sound()).mic, 'bay', 'the bumper camera listens from the engine bay');
+    await game.page.keyboard.press('Escape'); await frames(game); await game.step(1); await frames(game);
+    assert.equal((await sound()).hushed, true, 'the pause freezes the sim, so the sound ducks out');
+    await game.step(1);
+    await game.page.keyboard.press('Escape'); await frames(game); await game.step(1); await frames(game);
+    assert.equal((await sound()).hushed, false);
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
 test('desktop: settings sheet, a title choice rebuilds the track, results card, Retry with Enter', async t => {
   if (skip) return t.skip(skip);
   const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: SETTINGS });

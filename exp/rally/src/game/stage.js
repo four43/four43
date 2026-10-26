@@ -252,7 +252,7 @@ export function makeStage({ bests = null }) {
     const dir = I.shiftUp.pressed ? 1 : I.shiftDown.pressed ? -1 : 0;
     if (dir) {
       if (s.settings.gearbox === 'auto') { s.settings.gearbox = 'manual'; s.sim.car.autoShift = false; s.settingsRev++; }
-      shift(s.sim.car.dt, dir);
+      shift(s.sim.car.pt, dir);
     }
   }
 

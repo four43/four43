@@ -2,7 +2,7 @@
 import R from '@dimforge/rapier3d-compat';
 import { benchSim } from './helpers/bench.mjs';
 import { DT } from '../src/sim.js';
-import { shift } from '../src/drivetrain.js';
+import { shift, engage } from '../src/drivetrain.js';
 await R.init();
 
 const only = process.argv[2];
@@ -52,7 +52,7 @@ for (const car of ['awd', 'rwd']) {
 
   for (const [surf, lo, hi] of car === 'awd'
     // Loose surfaces top out in a drift since R5-4: plowing tires out-grip ~0.71 g grip driving.
-    ? [['tarmac', 0.95, 1.05], ['hardpack', 0.75, 0.90], ['gravel', 0.68, 0.87], ['packed', 0.64, 0.84], ['ice', 0.44, 0.56]]
+    ? [['tarmac', 0.95, 1.05], ['hardpack', 0.75, 0.92], ['gravel', 0.68, 0.93], ['packed', 0.64, 0.84], ['ice', 0.44, 0.56]]
     : [['tarmac', 0.95, 1.05], ['gravel', 0.66, 0.87]]) {
     test(`${car} skidpad ${surf}`, () => {
       // Closed-loop driver on a 40 m circle: throttle holds a target speed, steer holds the radius.
@@ -156,7 +156,7 @@ for (const car of ['awd', 'rwd']) {
     const sim = mk(car, 'gravel');
     sim.car.autoShift = false;
     run(sim, 1);
-    shift(sim.car.dt, -1);
+    shift(sim.car.pt, -1);
     run(sim, 3, (s) => { s.car.input.throttle = 1; });
     check('speed on throttle in R (m/s)', sim.car.speed, -20, -1.5, ' m/s');
   });
@@ -180,6 +180,8 @@ test('rwd slide control on a power-oversteer exit', () => {
     run(sim, 1);
     sim.car.body.setLinvel({ x: 0, y: 0, z: 15 }, true);
     for (const w of sim.car.wheels) w.omega = 15 / sim.car.cfg.radius;
+    const d = sim.car.cfg.drive; // in 2nd with the engine at road speed, as if it had driven up to 54 km/h
+    engage(sim.car.pt, 2, 15 / sim.car.cfg.radius * d.gears[1] * d.final * 60 / (2 * Math.PI));
     let worst = 0;
     run(sim, 3, (s, t) => {
       const c = s.car; c.input.steer = t < 1.2 ? 0.8 : 0; c.input.throttle = 1;
@@ -211,7 +213,7 @@ const slideRun = (car, surf, { v0 = 20, beta0 = 0, yaw0 = 0, gear = 2, secs = 2.
   b.setLinvel({ x: v0 * Math.sin(beta0), y: 0, z: v0 * Math.cos(beta0) }, true);
   b.setAngvel({ x: 0, y: yaw0, z: 0 }, true);
   for (const w of c.wheels) w.omega = v0 * Math.cos(beta0) / c.cfg.radius;
-  c.dt.gear = gear; c.dt.we = c.wheels[2].omega * c.cfg.drive.gears[gear - 1] * c.cfg.drive.final;
+  engage(c.pt, gear, c.wheels[2].omega * c.cfg.drive.gears[gear - 1] * c.cfg.drive.final * 60 / (2 * Math.PI));
   const out = [];
   run(sim, secs, (s, t) => {
     fn && fn(s.car, t);

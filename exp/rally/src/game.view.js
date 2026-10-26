@@ -3,6 +3,7 @@
 // classes, settings save); R6: the title/pause/results/settings halves (field note #18, replacing the removed Menus: the engine owns the
 // adopted controls, these halves own the cards around them).
 import { defineView } from 'lion-hawk/view';
+import { createEngineSound } from 'lion-hawk/kits/vehicle/view';
 import MANIFEST from '../baked/manifest.json';
 import { Renderer, RENDER, carView } from './render.js';
 import { Hud } from './ui.js';
@@ -11,6 +12,12 @@ import { createRumble } from './rumble/index.js';
 import { rumbleOut } from './rumbleOut.js';
 import { STRENGTH, PARAMS } from './defs/rumble.js';
 import { DRIVING } from './game/stage.js';
+
+// Engine sound (rally-spec R15): the Sound setting's level for the sfx bus, the listening position per camera (chase,
+// bumper, bonnet), and the overlays that freeze the sim (the sound would hold its last note under them).
+export const SOUND = { off: 0, quiet: 0.4, full: 1 };
+const MIC = ['behind', 'bay', 'cabin'];
+const PAUSING = ['pause', 'settings'];
 
 export const HELP = {
   freeDrive: 'Drive at your own pace: no clock. Knock the markers over, try the jumps.',
@@ -154,6 +161,8 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
   let seen = null, toast = null; // per enter: what the view last reflected; the toast { text, until } (engine time)
   let cur = null; // the stage state the GameHud adapter reads
   let carHook = null, loaded = null; // the car's sync hook (once per page); the models' preload
+  let sound = null, soundPt = null, hush = null; // the engine sound and the powertrain it plays (a new car is a new one); the pause duck's release
+  const hushed = (audio, on) => { if (on && !hush) hush = audio.duck('sfx', { to: 0, attack: 0.05, release: 0.25 }); else if (!on && hush) { hush(); hush = null; } };
   // GameHud reads Game's fields; the stage state has them under the same names except phase (#22: engine clock).
   const hudGame = {
     get timed() { return !!(cur.mode?.clock && cur.world?.track); }, get state() { return cur.phase; },
@@ -184,7 +193,7 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       hud ??= new Hud(doc.body);
       ghud ??= new GameHud({ now: () => engine.time.sim });
       els ??= { toast: doc.getElementById('toast'), seedChip: doc.getElementById('seedChip') };
-      seen = { s: null, worldRev: -1, built: null, builtRev: -1, carRev: -1, settingsRev: -1, surface: null, units: null };
+      seen = { s: null, worldRev: -1, built: null, builtRev: -1, carRev: -1, settingsRev: -1, surface: null, units: null, sound: null, cam: -1 };
       toast = null; ghud.reset();
       unlisten = engine.events.on(e => {
         if (e.type === 'toast') toast = { text: e.text, until: e.seconds == null ? null : engine.time.sim + e.seconds };
@@ -199,11 +208,13 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       doc.addEventListener('visibilitychange', hidden);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
-        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats };
+        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats,
+        sound: () => ({ mode: sound?.mode ?? null, mic: MIC[seen?.cam] ?? null, sfx: view.audio.volume('sfx'), hushed: !!hush, unlocked: view.audio.unlocked }) };
       off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },
     exit(engine, view) {
       unlisten?.(); unlisten = null; off?.(); off = null; seen = null; cur = null; toast = null;
+      sound?.dispose(); sound = null; soundPt = null; hushed(view.audio, false);
       pads.stop('exit'); seat0 = null; haptics = null;
       for (const c of STAGE_CLASSES) view.doc.body.classList.remove(c);
       if (els) els.toast.hidden = true;
@@ -248,6 +259,13 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
         renderer.updateCamera(s.sim, Math.min(0.1, view.dt)); // #19: 0 for hook renders (no camera motion, no snap)
       }
       hud.update(s.sim.car);
+      // The engine sound follows the car's powertrain, the camera and the Sound setting.
+      const car = s.sim.car, audio = view.audio;
+      if (car.pt !== soundPt) { sound?.dispose(); soundPt = car.pt; sound = createEngineSound(audio, car.pt, { ...car.cfg.sound, mic: MIC[s.cam] }); seen.cam = s.cam; }
+      if (s.cam !== seen.cam) { seen.cam = s.cam; sound.mic(MIC[s.cam]); }
+      if (st.sound !== seen.sound) { seen.sound = st.sound; audio.volume('sfx', SOUND[st.sound] ?? 1); }
+      hushed(audio, ov.some(o => PAUSING.includes(o)));
+      sound.update();
       // Rumble only while driving (ready, countdown, running: not past the finish) with nothing on top (a pausing overlay or a
       // hidden tab is the engine's stop) and the stage drawn.
       const driving = DRIVING.has(s.phase) && ov.length === 0 && seen.s === s; // a hidden page renders no frames (the engine stopped the pads)

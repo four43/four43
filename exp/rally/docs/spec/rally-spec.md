@@ -28,7 +28,7 @@ timing, bests) is specified there too (Phase 2).
 |------|------|
 | `src/cars.js` | Car configs (`CARS.awd`, `CARS.rwd`) |
 | `src/tire.js` | Surface table + brush/Magic Formula tire step |
-| `src/drivetrain.js` | Engine, clutch, gearbox, diffs |
+| `src/drivetrain.js` | lion-hawk's powertrain (engine, clutch, gearbox) + Rally's diffs (R15) |
 | `src/vehicle.js` | Raycast vehicle on one Rapier body; driver aids; auto-shift; snow contact; surface drag |
 | `src/sim.js` | Fixed-step `Sim` over a World (`setWorld`, `setSurface`, `resetCar`); Rapier world is `sim.phys` |
 | `src/world/padWorld.js` | The test pad as a World (`PAD`, colliders, cones, collision groups) |
@@ -137,13 +137,16 @@ Defined in `SURFACES`: tarmac, hardpack, gravel, grass, sand, mud, snow, snowban
 (`hardpack`), Gravel, Snow and Ice; the renderer has looks for those five.
 
 ### Drivetrain (`drivetrain.js`)
-- Piecewise-linear full-throttle torque curve; engine braking scales with rpm; rev limiter cuts
-  throttle above redline; idle governor holds idle. Engine never stalls (floor ~50 rpm).
-- Implicit (backward-Euler) slipping clutch with torque capacity; auto-clutch slips from idle
-  bite and opens during shifts.
-- Gearbox: 5 forward + reverse, final drive, 0.12 s throttle-cut shift. While the clutch is open
-  the throttle **auto-blips** the engine toward the new gear's road-speed rpm (R5-1), so a
-  downshift re-engages without dragging the driven wheels.
+- Since R15 the engine, clutch and gearbox are lion-hawk's powertrain (`createPowertrain`, kit-vehicle H-6), stepped
+  once per chassis step against the driven wheels' mean spin and last step's road torque (Σ fx × r); its drive torque
+  is held through the wheel substeps. Engine model: manifold pressure, torque curve about the peak rpm, idle air,
+  friction and pumping losses (engine braking), fuel cut on the lift, a bouncing rev limiter, an optional turbo with
+  spool, wastegate and blow-off. A stall cranks it again (`pt.start()`).
+- Viscous clutch with a launch slip; the auto-clutch bites at 2.5 × idle (`bite`), so an idling car in gear doesn't
+  creep and a launch revs into the torque.
+- Gearbox: 5 forward + reverse, final drive, 0.12 s shift. While the clutch is open the throttle **auto-blips** the
+  engine toward the new gear's road-speed rpm (`blip`, R5-1) and a downshift still short of it holds the clutch open
+  up to another 0.12 s, so a downshift re-engages without dragging the driven wheels.
 - Diffs: plate LSDs (preload + power/coast ramp) per driven axle; AWD adds a viscous centre diff
   around a 50:50 split.
 
@@ -170,7 +173,8 @@ Defined in `SURFACES`: tarmac, hardpack, gravel, grass, sand, mud, snow, snowban
 |---|---|---|
 | Model | Kenney `hatchback-sports` | Kenney `sedan-sports` |
 | Mass / front weight | 1250 kg / 58 % | 1050 kg / 50 % |
-| Peak torque / redline | 362 Nm @ 4000 / 7500 | 230 Nm @ 6000 / 8000 |
+| Engine (R15) | turbo i4, ~440 Nm on full boost / 7500 | atmospheric i4, 230 Nm @ 6000 / 8000 |
+| Exhaust (sound) | sport muffler, pops | straight pipe, pops |
 | Layout | AWD, viscous centre, front + rear LSD | RWD, rear LSD |
 | Livery | blue `#2f6fd6` | yellow `#e8b323` |
 
@@ -229,9 +233,10 @@ the button.
   `title.dice`, `title.length.{micro,short,medium,long}`, `title.style.{1..5}`, `title.theme.{summer,winter}`, `title.obstacles.{1..5}`,
   `title.car.{awd,rwd}`, `title.settings`, `title.drive`; `pause.{resume,restart,settings,quit}`;
   `results.{retry,newSeed,menu}`; `settings.surface.*`, `settings.assist.{true,false}`,
-  `settings.units.{mph,kmh}`, `settings.gearbox.{auto,manual}`, `settings.close`.
+  `settings.units.{mph,kmh}`, `settings.gearbox.{auto,manual}`, `settings.rumble.{off,light,full}`,
+  `settings.sound.{off,quiet,full}`, `settings.close`.
 - The **settings sheet** (Settings in the title footer, or Settings in the pause menu): Surface
-  (pad only), Driving (Assisted / Sim), Units (mph / km/h), Gearbox (Auto / Manual), control help.
+  (pad only), Driving (Assisted / Sim), Units (mph / km/h), Gearbox (Auto / Manual), Rumble, Sound (R15), control help.
   It pops over in the centre of the screen on a scrim that dims and blurs everything under it (scene, title, pause or
   results card); a tap on the scrim closes it through `settings.close`. `settings.close` is a × in the corner with the
   mouse, touch or keys; with a pad it is a full-width (B) Back button in a footer under the scrolling options.
@@ -269,12 +274,12 @@ The physics targets, with grip as raised in Round 3:
 Per car, headless with assists off unless noted:
 - Static settle: ΣFz = mg ± 0.5 %, front share ± 1 %, static sag ± 5 %, CoM height ± 1 cm, no creep.
 - Drop test: damped heave 1.2–1.7 Hz; < 8 % residual after 1.5 cycles.
-- Skidpad steady lateral g (40 m circle): tarmac 0.95–1.05; AWD dirt 0.75–0.90; gravel 0.68–0.87
-  (RWD 0.66–0.87); AWD packed snow 0.64–0.84, ice 0.44–0.56. Loose-surface bands were 0.80 / 0.76
+- Skidpad steady lateral g (40 m circle): tarmac 0.95–1.05; AWD dirt 0.75–0.92; gravel 0.68–0.93
+  (RWD 0.66–0.87; the AWD bands were 0.90 / 0.87 before R15); AWD packed snow 0.64–0.84, ice 0.44–0.56. Loose-surface bands were 0.80 / 0.76
   before R5-4: the best steady state there is now a drift.
 - 0–100 km/h (assists on): AWD tarmac 4.2–5.0 s, gravel 4.3–5.5 s; RWD gravel 6.5–8.5 s.
 - 100–0 km/h (ABS on): tarmac 35–42 m, gravel 44–56 m; front load share rises under braking.
-- Hold on a 10 % grade with brake + handbrake: < 1 cm drift in 10 s.
+- Hold on a 10 % grade with brake + handbrake: < 1 cm drift in 10 s (brake + handbrake never selects reverse, R15).
 - Handbrake turn on gravel from 50 km/h: rear slip angle peak 30–90°, yaw change 90–270°.
 - Reverse (R2-3): holding brake from rest in Auto, or throttle in Manual R, drives backwards.
 - Assisted steering (R2-2): full lock at 72 km/h.
@@ -857,3 +862,33 @@ Length choice (micro, short, medium, long) above Track style.
   and size order hold); `e2e.browser.mjs` adds the R14 controller walk (shoulders, rail focus, View in and out of a
   run, Start drives); render 4/4; mobile 797/797.
 
+## Round 15: engine sound and lion-hawk's powertrain (0.11.0, lion-hawk 0.14.1, 2026-10-26)
+
+Request: pull in lion-hawk 0.14 and add its engine sound, with the engine's power curves and vehicle dynamics. The
+kit's `tire` backend is Rally's own tire model minus the plow, anti-roll bars, bump stops, snow and self-aligning
+steering, so the chassis, tires and diffs stay Rally's; the engine, clutch and gearbox move to the kit's powertrain,
+whose state the sound plays.
+
+- **R15-1 Powertrain.** `drivetrain.js` wraps `createPowertrain` (see Drivetrain). Cars name an `ENGINE_PRESETS`
+  layout with their own numbers (`drive.engine`, `drive.turbo`): the R5 is a turbo i4 (210 Nm base, 1 bar, size 0.2:
+  about 440 Nm on boost, a little lag), the Classic RWD an atmospheric i4 (230 Nm at 6000). `car.pt` is the powertrain;
+  `car.rpm`, `car.gear`, `car.redline`, `car.limiter` read it. `engage(pt, gear, rpm)` puts the box in gear at a given
+  rpm with no shift (reset, tests).
+- **R15-2 Engine changes it needed** (lion-hawk 0.14.1): `blip` rev-matches shifts and holds a short downshift's clutch
+  open (without it the R5-1 lock-ups came back: 2.5–3 × peak slip); `bite` moves the launch clutch's grip point (the
+  default 0.9 × idle crept the car at 1 m/s and bogged launches at ~1100 rpm); a turbo's clutch capacity counts the
+  boost (it slipped on boost).
+- **R15-3 Engine sound.** `createEngineSound` (kit-vehicle H-7) on the car's powertrain, rebuilt with the car; the
+  listening position follows the camera (chase `behind`, bumper `bay`, bonnet `cabin`); muffler and pops per car
+  (`cfg.sound`). It starts on the first gesture (the engine's audio unlock) and runs in an AudioWorklet. Under the
+  pause and settings overlays, which freeze the sim, the sfx bus ducks to 0 (the synth would hold its last note).
+- **R15-4 Sound setting.** Off / Quiet / Full (`sound`, default full) sets the sfx bus: 0, 0.4, 1. View-only, like Rumble.
+- **R15-5 Parked is not reversing.** Holding brake at a stop selects reverse only without the handbrake (the old
+  engine bogged against the brakes, which hid this).
+- **Validation:** physics 66/66 with targets moved as noted: AWD 0–100 4.88 s tarmac / 5.12 s gravel (was 4.29 /
+  4.60: the turbo builds boost through 1st), RWD gravel 7.98 s (was 7.36); downshift worst lock 0.38–0.46 × peak (was
+  0.25); the power-oversteer test now starts in 2nd at road-speed rpm (it set 54 km/h with the engine idling in 1st, so
+  it measured the clutch dragging the engine up) and Sim spins where Assisted holds 24–36°; AWD gravel skidpad 0.92 g
+  (was 0.80: the smoother torque delivery lets the test driver hold a faster drift; bands widened). Goldens
+  re-blessed (the 20 s autopilot drive ends ~10 m shorter). `e2e.browser.mjs` adds the sound walk (worklet, Quiet
+  level, bumper mic, hushed under pause).

@@ -27,7 +27,7 @@ export function createRumble(params = PARAMS) {
   const put = (k, m) => { const l = levels[k]; l.strong = m.strong ?? 0; l.weak = m.weak ?? 0; l.left = m.left ?? 0; l.right = m.right ?? 0; };
   const clip = x => { const d = params.mix.drive; return x <= 0 ? 0 : Math.min(1, Math.tanh(x * d) / Math.tanh(d)); };
 
-  // car: a Vehicle (or its shape: { speed, rpm, cfg.drive, dt.limiter, out.throttle, input, wheels }); impulse: the summed
+  // car: a Vehicle (or its shape: { speed, rpm, pt.spec, pt.state.limiter, out.throttle, input, wheels }); impulse: the summed
   // contact impulse on the car since the last frame (N·s); gain: the Rumble setting's.
   function update(car, dt, { impulse = 0, gain = 1 } = {}) {
     put('engine', engine.update(car, dt));

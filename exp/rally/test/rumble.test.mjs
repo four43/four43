@@ -20,7 +20,7 @@ function car({ surface = 'gravel', surf = null, speed = 0, rpm = 900, throttle =
   lock = 0, rearLock = lock, spin = 0, jolt = 0, air = false } = {}) {
   const s = surf ?? (surface ? surfaceOfKey(MATERIAL[surface]) : NO_SURFACE);
   return {
-    speed, rpm, cfg: { mass: 1250, drive: { idle: 900, redline: 7500 } }, dt: { limiter },
+    speed, rpm, cfg: { mass: 1250 }, pt: { spec: { idle: 900, redline: 7500 }, state: { limiter } },
     out: { throttle }, input: { brake, handbrake },
     wheels: [0, 1, 2, 3].map(i => ({
       contact: !air, front: i < 2, surf: s, drive: 100, jolt, alpha: 0,

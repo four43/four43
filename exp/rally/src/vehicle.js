@@ -3,7 +3,7 @@
 // Pure JS (no three.js) so it runs headless in Node.
 import { tireStep } from './tire.js';
 import { surfaceOfKey } from './surface.js';
-import { makeDrivetrain, driveStep, shift, rpmOf, roadRpm } from './drivetrain.js';
+import { makeDrivetrain, engage, splitDrive, shift, roadRpm, roadTorque, drivenOmega } from './drivetrain.js';
 import { SNOW } from './snow.js';
 
 export const DT = 1 / 240;     // chassis step
@@ -86,7 +86,7 @@ export class Vehicle {
       });
     }
     this.staticComp = xs;
-    this.dt = makeDrivetrain(c.drive, c.wheelInertia);
+    this.pt = makeDrivetrain(c.drive, c.wheelInertia); // lion-hawk powertrain (H-6): engine, clutch, gearbox; its state feeds the engine sound
     this.input = { steer: 0, throttle: 0, brake: 0, handbrake: 0 };
     this.out = { throttle: 0, brake: 0 };
     this.reverseHold = 0;
@@ -133,42 +133,46 @@ export class Vehicle {
   reset(pos, yaw) {
     this.lh.place(this.e, { at: [pos.x, pos.y, pos.z] }, { yaw }); // wakes it and zeroes its velocities (E-8)
     for (const w of this.wheels) { w.omega = 0; w.st.dx = w.st.dy = 0; w.wasContact = false; w.jolt = 0; }
-    this.dt.we = this.cfg.drive.idle * 2 * Math.PI / 60; this.dt.gear = 1; this.dt.shiftT = 0;
+    engage(this.pt, 1);
   }
 
   // Forward speed (m/s) along the chassis.
   get speed() { const v = this.body.linvel(); return dot(v, qrot(this.body.rotation(), v3(0, 0, 1))); }
-  get rpm() { return rpmOf(this.dt); }
-  get gear() { return this.dt.gear; }
+  get rpm() { return this.pt.state.rpm; }
+  get gear() { return this.pt.state.gear; }
+  get redline() { return this.pt.spec.redline; }
+  get limiter() { return this.pt.state.limiter; }
 
   // Driver logic: auto-shift, reverse, aids. Runs once per chassis step.
   control() {
-    const inp = this.input, d = this.dt, c = this.cfg.drive;
+    const inp = this.input, pt = this.pt, d = pt.state, c = this.cfg.drive, red = pt.spec.redline;
     const vF = this.speed;
     let thr = inp.throttle, brk = inp.brake;
     // Held on the start line (spec tracks T-20): brakes full and the clutch open, so the engine
     // revs freely but the car can't creep or pick reverse; it drops into 1st when let go.
+    if (!d.running && !d.starter) pt.start(); // a stall cranks it again
     if (this.hold) {
-      d.gear = 0; this.reverseHold = 0;
+      if (d.gear !== 0) pt.shift(0);
+      this.reverseHold = 0;
       this.out.throttle = thr; this.out.brake = 1;
       return;
     }
-    if (d.gear === 0) d.gear = 1;
+    if (d.gear === 0) { d.gear = 1; d.shiftT = 0; } // let go on the line: straight into 1st, no shift cut (the launch)
     if (this.autoShift) {
-      if (d.gear > 0 && vF < 0.5 && brk > 0.5 && thr < 0.05) {
+      if (d.gear > 0 && vF < 0.5 && brk > 0.5 && thr < 0.05 && inp.handbrake < 0.5) { // brake + handbrake is parked, not reversing
         this.reverseHold += DT;
-        if (this.reverseHold > 0.35) { d.gear = -1; this.reverseHold = 0; }
+        if (this.reverseHold > 0.35) { pt.shift(-1); this.reverseHold = 0; }
       } else this.reverseHold = 0;
       if (d.gear === -1) {
-        if (thr > 0.3 && vF > -0.5) d.gear = 1;
+        if (thr > 0.3 && vF > -0.5) pt.shift(1);
         else { const t = thr; thr = brk; brk = t; }
       }
       if (d.gear > 0 && d.shiftT <= 0) {
         // Downshifts go by road speed, not engine rpm: the engine sags while the clutch is open,
         // which used to cascade 3-2-1 in a quarter second and lock the driven wheels.
-        const rpm = rpmOf(d), road = roadRpm(d, this.wheels);
-        if (rpm > c.redline * 0.94 && d.gear < c.gears.length && thr > 0.1) shift(d, +1);
-        else if (d.gear > 1 && road < c.redline * 0.48 && roadRpm(d, this.wheels, d.gear - 1) < c.redline * 0.80) shift(d, -1);
+        const road = roadRpm(pt, c, this.wheels);
+        if (d.rpm > red * 0.94 && d.gear < c.gears.length && thr > 0.1) shift(pt, +1);
+        else if (d.gear > 1 && road < red * 0.48 && roadRpm(pt, c, this.wheels, d.gear - 1) < red * 0.80) shift(pt, -1);
       }
     }
     if (this.assist) {
@@ -295,12 +299,16 @@ export class Vehicle {
       return { cf, cl, vx: dot(vc, cf), vy: dot(vc, cl) };
     });
 
-    // Substeps: drivetrain + tires + wheel spin.
-    const hs = DT / SUB, r = c.radius, I = c.wheelInertia;
+    // The powertrain, once per step: its drive torque is held through the substeps (H-6), against last step's road torque.
+    const r = c.radius;
+    this.pt.throttle = this.out.throttle;
+    const Tshaft = this.pt.step(DT, drivenOmega(c.drive, this.wheels), roadTorque(c.drive, this.wheels, r));
+    // Substeps: diffs + tires + wheel spin.
+    const hs = DT / SUB, I = c.wheelInertia;
     const sumFx = [0, 0, 0, 0], sumFy = [0, 0, 0, 0];
     const brk = this.out.brake, hb = this.input.handbrake;
     for (let s = 0; s < SUB; s++) {
-      driveStep(this.dt, this.wheels, this.out.throttle, true, hs, this.tq);
+      splitDrive(c.drive, Tshaft, this.wheels, this.tq);
       for (let i = 0; i < 4; i++) {
         const w = this.wheels[i], fr = frames[i];
         w.drive = this.tq[i];

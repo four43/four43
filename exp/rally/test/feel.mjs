@@ -8,6 +8,7 @@ import { headless } from 'lion-hawk/test';
 import { DT, PAD } from '../src/sim.js';
 import { benchSim, game } from './helpers/bench.mjs';
 import { qrot } from '../src/vehicle.js';
+import { engage } from '../src/drivetrain.js';
 import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
 import { TrackWorld } from '../src/world/trackWorld.js';
@@ -30,8 +31,8 @@ const roll = (sim, v) => { // as test/verge.mjs: rolling at v m/s in the lowest 
   c.body.setLinvel({ x: f.x * v, y: 0, z: f.z * v }, true);
   for (const w of c.wheels) w.omega = wo;
   let g = 1;
-  while (g < dc.gears.length && wo * dc.gears[g - 1] * dc.final * 60 / (2 * Math.PI) > 0.75 * dc.redline) g++;
-  c.dt.gear = g; c.dt.we = wo * dc.gears[g - 1] * dc.final;
+  while (g < dc.gears.length && wo * dc.gears[g - 1] * dc.final * 60 / (2 * Math.PI) > 0.75 * c.redline) g++;
+  engage(c.pt, g, wo * dc.gears[g - 1] * dc.final * 60 / (2 * Math.PI));
 };
 const topSpeed = surface => { const sim = pad(surface); run(sim, 1); let top = 0; run(sim, 30, s => { s.car.input.throttle = 1; top = Math.max(top, s.car.speed * 3.6); }); return top; };
 const coast = surface => { const sim = pad(surface); run(sim, 1); roll(sim, 80 / 3.6); const v0 = sim.car.speed; run(sim, 2, s => { s.car.input.throttle = 0; }); return (v0 - sim.car.speed) / 2 / 9.81; };

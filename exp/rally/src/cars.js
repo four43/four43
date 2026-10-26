@@ -1,5 +1,6 @@
 // Car configurations. Dimensions are real-car values; the Kenney meshes are scaled
-// to fit the wheel positions, not the other way round.
+// to fit the wheel positions, not the other way round. drive.engine is a lion-hawk ENGINE_PRESETS layout (its firing
+// order and exhaust feed the engine sound) with this car's numbers on top; drive.turbo is the powertrain's turbo.
 const deg = Math.PI / 180;
 
 export const CARS = {
@@ -17,11 +18,12 @@ export const CARS = {
     brakeTorque: 6000, brakeBias: 0.58, handbrakeTorque: 1500,
     cda: 0.80,
     body: { scale: [1.45, 1.45, 1.48], color: 0x2f6fd6 },
+    sound: { muffler: 'sport', pops: true }, // createEngineSound options (view only): crackle on the lift
     drive: {
       layout: 'awd',
-      curve: [[800, 145], [1000, 158], [2500, 325], [4000, 362], [5500, 343], [6500, 310], [7500, 258], [8000, 230]],
-      idle: 900, redline: 7500, engineBrake: 55, engineInertia: 0.18,
-      clutchCap: 900, clutchVisc: 400,
+      // turbo 4: about 440 N m on full boost (from ~4000 rpm in 1st), less before the turbo spools
+      engine: { preset: 'i4', torque: 210, peakRpm: 4500, idle: 900, redline: 7500, limiter: 7700, inertia: 0.18 },
+      turbo: { maxBoost: 1.0, size: 0.2, bov: true },
       gears: [3.2, 2.2, 1.65, 1.3, 1.05], reverse: 3.2, final: 4.8, shiftTime: 0.12,
       frontSplit: 0.5, centreVisc: 150, centreCap: 400,
       frontLsd: { preload: 40, rampPower: 0.30, rampCoast: 0.20, visc: 300 },
@@ -42,11 +44,11 @@ export const CARS = {
     brakeTorque: 5000, brakeBias: 0.62, handbrakeTorque: 1400,
     cda: 0.75,
     body: { scale: [1.45, 1.45, 1.70], color: 0xe8b323 },
+    sound: { muffler: 'straight', pops: true },
     drive: {
       layout: 'rwd',
-      curve: [[800, 130], [1000, 150], [3000, 195], [5000, 220], [6000, 230], [7000, 215], [8000, 185], [8500, 160]],
-      idle: 950, redline: 8000, engineBrake: 45, engineInertia: 0.15,
-      clutchCap: 600, clutchVisc: 400,
+      // high-revving atmospheric 4: 230 N m at 6000 rpm
+      engine: { preset: 'i4', torque: 238, peakRpm: 6000, idle: 950, redline: 8000, limiter: 8200, inertia: 0.15 },
       gears: [3.4, 2.3, 1.7, 1.3, 1.05], reverse: 3.3, final: 4.3, shiftTime: 0.12,
       rearLsd: { preload: 50, rampPower: 0.40, rampCoast: 0.25, visc: 300 },
     },

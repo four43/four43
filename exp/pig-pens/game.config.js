@@ -5,7 +5,7 @@ const kit = (k, f, material) => ({ file: `${k}/${f}.glb`, rename: { materials: {
 const PET_CLIPS = ['idle', 'walk', 'run', 'eat', 'dance', 'gesture-negative'];
 
 export default {
-  id: 'pig-pens', site: 'piggie-game', outEnv: 'PIGPENS_OUT',
+  id: 'pig-pens', outEnv: 'PIGPENS_OUT',
   bake: {
     src: 'assets/models', out: 'baked',
     materials: './src/defs/materials.js',
@@ -30,5 +30,5 @@ export default {
     },
     optimise: { meshopt: true, quantize: false, weld: false, prune: true, dedupe: true },
   },
-  build: { entry: 'src/main.js', template: 'template.html', pwa: 'pwa' },
+  build: { out: '../../site/exp/piggie-game', entry: 'src/main.js', template: 'template.html', pwa: 'pwa' },
 };

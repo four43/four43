@@ -8,10 +8,10 @@ export function createEngine(p) {
   return {
     update(car, dt) {
       t += dt;
-      const d = car.cfg.drive, r = clamp01((car.rpm - d.idle) / (d.redline - d.idle));
+      const e = car.pt.spec, r = clamp01((car.rpm - e.idle) / (e.redline - e.idle));
       const thr = clamp01(car.out?.throttle ?? 0);
       out.weak = (p.idle + (p.redline - p.idle) * r) * (p.load + (1 - p.load) * thr);
-      if (car.dt?.limiter) out.weak += (t * p.limiterHz) % 1 < 0.5 ? p.limiterAmp : 0;
+      if (car.pt.state.limiter) out.weak += (t * p.limiterHz) % 1 < 0.5 ? p.limiterAmp : 0;
       return out;
     },
   };

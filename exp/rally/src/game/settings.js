@@ -6,7 +6,8 @@ export const SETTINGS_V = 6;
 // style: 1 (tight) … 5 (flowing); obstacles: 1 (mild) … 5 (frequent) (rally spec R14-3, R14-4)
 export const DEFAULTS = { car: 'awd', surface: 'gravel', assist: false, gearbox: 'auto', mode: 'freeDrive', world: 'loop',
   theme: 'summer', obstacles: 2, style: 2, length: 'medium', units: 'mph',
-  rumble: 'full' }; // rumble: the controller rumble's strength (off | light | full; view-only, rally-spec R7)
+  rumble: 'full', // rumble: the controller rumble's strength (off | light | full; view-only, rally-spec R7)
+  sound: 'full' }; // sound: the engine sound's level (off | quiet | full; view-only, rally-spec R15)
 
 export function normalizeSettings(saved = {}) {
   const s = { ...DEFAULTS, ...saved, v: SETTINGS_V };

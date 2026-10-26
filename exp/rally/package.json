@@ -1,6 +1,6 @@
 {
   "name": "rally",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Rally sim test pad (Milestone 1)",
   "scripts": {
     "dev": "lion-hawk dev",
@@ -14,7 +14,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
     "@gltf-transform/core": "^4.5.1",
-    "lion-hawk": "github:four43/lion-hawk-engine#v0.13.1",
+    "lion-hawk": "github:four43/lion-hawk-engine#v0.14.1",
     "esbuild": "^0.28.2",
     "pngjs": "^7.0.0",
     "three": "^0.186.0"

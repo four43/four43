@@ -4,7 +4,7 @@ const PETS = ['pig', 'cow', 'chick', 'bunny', 'dog', 'sheep', 'duck', 'chicken']
 const CLIPS = ['static', 'idle', 'walk', 'run', 'eat', 'dance', 'gesture-positive', 'gesture-negative'];
 const as = (from, to) => ({ rename: { materials: { [from]: to } } });
 export default {
-  id: 'tractor-pickup', site: 'tractor-pickup', outEnv: 'TRACTOR_OUT',
+  id: 'tractor-pickup', outEnv: 'TRACTOR_OUT',
   bake: {
     src: 'assets/models', out: 'baked', materials: './src/defs/materials.js',
     palette: 'vertex', paint: { base: 'chassis' },
@@ -22,5 +22,5 @@ export default {
     },
     optimise: { meshopt: true, quantize: true, weld: true, prune: true, dedupe: true },
   },
-  build: { entry: 'src/main.js', template: 'template.html', pwa: 'pwa', hooks: './build.hooks.js' },
+  build: { out: '../../site/exp/tractor-pickup', entry: 'src/main.js', template: 'template.html', pwa: 'pwa', hooks: './build.hooks.js' },
 };

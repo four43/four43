@@ -1,115 +1,70 @@
-// Drivetrain: engine inertia, slipping clutch, gearbox, and plate/viscous diffs.
-// Runs inside the wheel substep loop. Pure JS.
+// Drivetrain: lion-hawk's powertrain (engine, clutch and gearbox: kit-vehicle H-6) feeding Rally's plate/viscous diffs.
+// The powertrain steps once per chassis step and holds its drive torque for the step; the diffs split it per wheel
+// substep. Pure JS (sim-pure: the kit's sim half).
+import { createPowertrain, ENGINE_PRESETS } from 'lion-hawk/kits/vehicle';
 
 const RPM = 60 / (2 * Math.PI);
 
-export function torqueCurve(cfg, rpm) {
-  // Piecewise-linear full-throttle torque curve from cfg.curve [[rpm, Nm], ...].
-  const c = cfg.curve;
-  if (rpm <= c[0][0]) return c[0][1];
-  for (let i = 1; i < c.length; i++) {
-    if (rpm <= c[i][0]) {
-      const t = (rpm - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
-      return c[i - 1][1] + t * (c[i][1] - c[i - 1][1]);
-    }
-  }
-  return c[c.length - 1][1];
+// cfg.engine: { preset, ...overrides }: a kit preset's firing layout (the sound) with this car's numbers on top.
+export function engineOf(cfg) {
+  const { preset, ...own } = cfg.engine;
+  return { ...ENGINE_PRESETS[preset], ...own };
 }
 
+// wheelInertia: one wheel's spin inertia; the powertrain wants the driven wheels' together.
 export function makeDrivetrain(cfg, wheelInertia = 1.2) {
-  return {
-    cfg, wheelInertia,
-    we: cfg.idle / RPM,  // engine speed rad/s
-    gear: 1,             // -1 reverse, 0 neutral, 1..n
-    shiftT: 0,           // remaining shift cut time
-    clutchT: 0,          // last clutch torque (engine side)
-    engT: 0,
-    limiter: false,
-  };
+  const pt = createPowertrain({
+    engine: engineOf(cfg), turbo: cfg.turbo ?? null, gears: cfg.gears, reverse: cfg.reverse, final: cfg.final,
+    shiftTime: cfg.shiftTime, wheelInertia: (cfg.layout === 'awd' ? 4 : 2) * wheelInertia,
+    // a sequential box: the shift blips the engine to the new gear's road rpm, so a downshift re-engages without dragging
+    // the driven wheels (R5-1); the auto-clutch bites at 2.5 x idle, so an idling car in gear doesn't creep and a launch
+    // revs into the torque instead of bogging
+    blip: true, bite: 2.5,
+  });
+  return engage(pt, 1);
 }
 
-export function rpmOf(dt) { return dt.we * RPM; }
+// Put the box straight into a gear with the clutch closed and the engine running at rpm (default idle): a reset, or a
+// test's matched gear. Not a shift: no throttle cut.
+export function engage(pt, gear, rpm = pt.spec.idle) {
+  const s = pt.state;
+  s.gear = gear; s.shiftT = 0; s.rpm = rpm; s.running = true; s.stalled = false; s.starter = false;
+  return pt;
+}
 
 // Driven-wheel speed (rad/s, signed) and the engine rpm it implies in a given gear: the rpm the
-// clutch will lock at, which is what shift decisions and the downshift blip work from.
-function drivenOmega(c, w) {
+// clutch will lock at, which is what shift decisions work from.
+export function drivenOmega(c, w) {
   return c.layout === 'awd' ? (w[0].omega + w[1].omega + w[2].omega + w[3].omega) / 4 : (w[2].omega + w[3].omega) / 2;
 }
-export function roadRpm(dt, w, gear = dt.gear) {
-  return Math.abs(drivenOmega(dt.cfg, w) * gearRatio({ cfg: dt.cfg, gear })) * RPM;
+export function roadRpm(pt, c, w, gear = pt.state.gear) {
+  return Math.abs(drivenOmega(c, w) * gearRatio(c, gear)) * RPM;
 }
 
-export function gearRatio(dt) {
-  const c = dt.cfg;
-  if (dt.gear === 0) return 0;
+export function gearRatio(c, gear) {
+  if (gear === 0) return 0;
   // Reverse is a negative ratio: the wheels turn against the engine.
-  const g = dt.gear < 0 ? -c.reverse : c.gears[dt.gear - 1];
+  const g = gear < 0 ? -c.reverse : c.gears[gear - 1];
   return g * c.final;
 }
 
-// Request a shift (+1 / -1). Returns true if the shift starts.
-export function shift(dt, dir) {
-  const n = dt.cfg.gears.length;
-  let g = dt.gear + dir;
+// Request a shift (+1 / -1), skipping neutral. Returns true if the shift starts.
+export function shift(pt, dir) {
+  let g = pt.state.gear + dir;
   if (g === 0) g = dir > 0 ? 1 : -1;
-  if (g < -1 || g > n) return false;
-  dt.gear = g;
-  dt.shiftT = dt.cfg.shiftTime;
+  if (g < -1 || g > pt.gears) return false;
+  pt.shift(g);
   return true;
 }
 
-// One drivetrain substep. w: array of 4 wheel objects (FL, FR, RL, RR) with .omega.
-// Returns the drive torque on each wheel [FL, FR, RL, RR] (N·m, forward positive).
-export function driveStep(dt, w, throttle, autoClutch, h, out) {
-  const c = dt.cfg;
-  const G = gearRatio(dt);
-  if (dt.shiftT > 0) dt.shiftT -= h;
-  const shifting = dt.shiftT > 0;
+// The road's torque back on the driven wheels last step (N·m, + against drive), which lets the powertrain's clutch close.
+export function roadTorque(c, w, r) {
+  return (c.layout === 'awd' ? w[0].fx + w[1].fx + w[2].fx + w[3].fx : w[2].fx + w[3].fx) * r;
+}
 
-  // Input shaft speed seen by the clutch, from the driven wheels.
-  const wIn = drivenOmega(c, w) * G;
-
-  // Engine torque: throttle blend between full curve and engine braking, rev limiter.
-  const rpm = dt.we * RPM;
-  let thr = shifting ? 0 : throttle;
-  // Auto-blip (sequential box): with the clutch open, the throttle brings the engine up to the
-  // new gear's road speed, so a downshift doesn't re-engage onto a slow engine and drag the
-  // driven wheels into a skid. Upshifts need no blip: the target is below the engine.
-  if (shifting && G !== 0) thr = clamp((Math.abs(wIn) * RPM - rpm) / 300, 0, 1);
-  // Idle governor holds idle rpm.
-  if (rpm < c.idle) thr = Math.max(thr, Math.min(1, (c.idle - rpm) / 200));
-  dt.limiter = rpm > c.redline;
-  if (dt.limiter) thr = 0;
-  const full = torqueCurve(c, rpm);
-  const brake = c.engineBrake * (0.3 + rpm / c.redline);
-  const Te = thr * full - (1 - thr) * brake;
-  dt.engT = Te;
-
-  // Clutch engagement: auto-clutch slips below the bite rpm and during shifts.
-  let engage = 1;
-  if (G === 0 || shifting) engage = 0;
-  else if (autoClutch) {
-    const r = Math.abs(wIn) * RPM; // what engine rpm would be if locked
-    const bite = Math.min(1, Math.max(0, (rpm - c.idle * 1.05) / 900));
-    engage = r > c.idle * 1.3 ? 1 : bite;
-  }
-  // Slipping clutch: viscous-like torque capped by capacity.
-  // Implicit (backward-Euler) clutch: solves for the torque that the slip speed
-  // will see at the end of the substep, so it is stable at any stiffness even with
-  // only two driven wheels behind a short first gear.
-  const cap = c.clutchCap * engage;
-  const nI = (c.layout === 'awd' ? 4 : 2) * dt.wheelInertia;
-  const slip = dt.we - wIn;
-  let Tc = engage > 0
-    ? c.clutchVisc * (slip + h * Te / c.engineInertia) / (1 + c.clutchVisc * h * (1 / c.engineInertia + G * G / nI))
-    : 0;
-  if (Tc > cap) Tc = cap; else if (Tc < -cap) Tc = -cap;
-  dt.clutchT = Tc;
-
-  dt.we += (Te - Tc) / c.engineInertia * h;
-  if (dt.we < 50 / RPM) dt.we = 50 / RPM; // never stall in v1
-
-  const Tshaft = Tc * G; // torque at the diff input
+// Split the powertrain's drive torque (the driven wheels' together) through the diffs, from this substep's wheel spin.
+// Writes out[FL, FR, RL, RR] (N·m, forward positive).
+export function splitDrive(c, Tshaft, w, out) {
   out[0] = out[1] = out[2] = out[3] = 0;
   if (c.layout === 'awd') {
     // Centre viscous diff, 50:50 base split.

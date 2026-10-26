@@ -16,12 +16,12 @@ export class Hud {
     this.speed.textContent = v.toFixed(0);
     const g = car.gear;
     this.gear.textContent = g < 0 ? 'R' : g === 0 ? 'N' : String(g);
-    const red = car.cfg.drive.redline, frac = Math.min(1, car.rpm / red);
+    const red = car.redline, frac = Math.min(1, car.rpm / red);
     const n = this.revs.length, lit = Math.round(frac * n);
     this.revs.forEach((el, i) => {
       el.className = i < lit ? (i >= n - 2 ? 'r' : i >= n - 5 ? 'a' : 'g') : '';
     });
-    if (car.dt.limiter) this.revs.forEach((el) => (el.className = 'r'));
+    if (car.limiter) this.revs.forEach((el) => (el.className = 'r'));
     if (!this.debug.hidden) {
       car.wheels.forEach((w, i) => {
         const c = this.dbgCells[i];

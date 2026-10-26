@@ -4,7 +4,7 @@
 // checks.materials. The engine's default optimise (weld on) applies: dropping the UVs lets weld merge vertices, so the
 // parity test compares triangle counts (3d note (a)).
 export default {
-  id: 'rally', site: 'rally', outEnv: 'RALLY_OUT',
+  id: 'rally', outEnv: 'RALLY_OUT',
   bake: {
     src: 'assets/models', out: 'baked',
     materials: './src/defs/materials.js',
@@ -16,5 +16,5 @@ export default {
       cone: { rename: { materials: { colormap: 'cone' } } },
     },
   },
-  build: { entry: 'src/main.js', template: 'index.template.html', pwa: 'pwa' },
+  build: { out: '../../site/exp/rally', entry: 'src/main.js', template: 'index.template.html', pwa: 'pwa' },
 };

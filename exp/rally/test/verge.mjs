@@ -4,6 +4,7 @@ import R from '@dimforge/rapier3d-compat';
 import { benchSim } from './helpers/bench.mjs';
 import { DT, PAD } from '../src/sim.js';
 import { qrot } from '../src/vehicle.js';
+import { engage } from '../src/drivetrain.js';
 import { surfaceOfKey } from '../src/surface.js';
 import { generateTrack } from '../src/gen/track.js';
 import { heightAt } from '../src/gen/terrain.js';
@@ -28,8 +29,8 @@ const roll = (sim, v) => {
   c.body.setLinvel({ x: f.x * v, y: 0, z: f.z * v }, true);
   for (const w of c.wheels) w.omega = wo;
   let g = 1;
-  while (g < dc.gears.length && wo * dc.gears[g - 1] * dc.final * 60 / (2 * Math.PI) > 0.75 * dc.redline) g++;
-  c.dt.gear = g; c.dt.we = wo * dc.gears[g - 1] * dc.final;
+  while (g < dc.gears.length && wo * dc.gears[g - 1] * dc.final * 60 / (2 * Math.PI) > 0.75 * c.redline) g++;
+  engage(c.pt, g, wo * dc.gears[g - 1] * dc.final * 60 / (2 * Math.PI));
 };
 const topSpeed = (surface) => {
   const sim = pad(surface);
