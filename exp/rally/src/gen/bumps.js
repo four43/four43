@@ -8,6 +8,7 @@
 // The heightfield is 1 m, so nothing is shorter than ~1.8 m along its narrow axis. Pure.
 import { noise2 } from './noise.js';
 import { roadSurfaceAt } from './surfaces.js';
+import { obstacleLevel } from './levels.js';
 
 export const BUMPS = {
   // scatter: bumps per m² by road surface (× the stretch's roughness), height scale by surface
@@ -21,9 +22,10 @@ export const BUMPS = {
   reach: 1,                // m past the edge that scatter centres may sit (the shoulder)
   fade: [1, 2],            // m past the edge over which bumps fade out (the flat shoulder ends 2 m past it)
   jumpClear: [10, 15],     // m before / after a kicker, crest or tabletop kept free of scatter: faces and landings are graded
+  // obstacles level 1 … 5: scatter density × count (2 = the old mild). Heights never scale (×1.4 heights put the car in
+  // the air for 0.3–0.7 s over a ridge set; rally spec R14-4).
+  count: { 1: 0.6, 2: 1, 3: 1.25, 4: 1.5, 5: 1.8 },
   // ridge sets
-  // wild: more and denser, barely taller (×1.4 heights put the car in the air for 0.3–0.7 s over a ridge set)
-  wild: { height: 1.15, count: 1.5 },
   overlap: 0.33,           // overlapping bumps: the tallest plus this share of the rest (a sum stacked them into walls)
   ridges: { count: [4, 10], height: [0.06, 0.16], maxH: 0.17, pitch: [3.5, 7], angle: 30, jitter: 10,
     thick: [0.9, 1.6], halfWidth: [1.5, 4.5], offset: 1.5 },
@@ -32,8 +34,8 @@ const DEG = Math.PI / 180, MIN_SHORT = 0.9;
 
 // → { n, s, d, c, sn, lu, lv, h, reach } (Float32Arrays sorted by s): centre, rotation (cos, sin of the long axis from
 // the road's direction), half-lengths (lu along the long axis, lv across it), height; reach = the largest half-length.
-export function generateBumps(layout, surfaces, edges, features, r, { obstacles = 'mild' } = {}) {
-  const wild = obstacles === 'wild', hk = wild ? BUMPS.wild.height : 1, dk = wild ? BUMPS.wild.count : 1;
+export function generateBumps(layout, surfaces, edges, features, r, { obstacles = 2 } = {}) {
+  const hk = 1, dk = BUMPS.count[obstacleLevel(obstacles)];
   const rough = noise2(r.fork('rough').int(0, 0x7fffffff)), sc = r.fork('scatter'), rr = r.fork('ridges');
   const list = [], L = layout.length ?? layout.n * layout.ds;
   const add = (s, d, ang, lu, lv, h) => list.push([s, d, Math.cos(ang), Math.sin(ang), lu, lv, h]);

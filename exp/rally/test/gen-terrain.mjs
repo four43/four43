@@ -138,7 +138,7 @@ test('features: dimensions', () => {
   let bad = 0, n = 0;
   const within = (v, [lo, hi], k = 1) => v >= lo * k - 1e-9 && v <= hi * k + 1e-9;
   for (const L of Object.values(LAYOUTS)) for (const seed of SEEDS) for (const obstacles of ['mild', 'wild']) {
-    const hk = obstacles === 'wild' ? 1.4 : 1;
+    const hk = 1; // R14-4: every obstacles level keeps the mild heights ('wild' is level 4: only more of them)
     for (const f of feats(L, seed, obstacles)) {
       n++;
       const R = FEATURE_RANGES[f.type];

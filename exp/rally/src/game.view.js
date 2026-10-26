@@ -38,15 +38,33 @@ function splitTable(r) {
   }).join('')}</table>` : '';
 }
 
+// The 1 … 5 sliders (rally spec R14-2): stops below the chosen one are filled; with a pad or the keys the choice follows
+// focus along the rail (a stop the focus moves to is clicked, so the engine's choice sets it), while focus that enters
+// the rail from another row lands on the chosen stop and changes nothing.
+const sliderStops = (doc, key) => [...doc.querySelectorAll(`[data-slider="${key}"] .stops button`)];
+function bindSliders(doc) {
+  const on = ev => {
+    const el = ev.target, rail = el.closest?.('.stops'); if (!rail || el.tagName !== 'BUTTON') return;
+    const input = doc.documentElement.getAttribute('data-lh-input'); if (input !== 'pad' && input !== 'keys') return;
+    if (rail.contains(ev.relatedTarget)) { if (el.getAttribute('aria-pressed') !== 'true') el.click(); return; }
+    const chosen = rail.querySelector('button[aria-pressed="true"]');
+    if (chosen && chosen !== el) chosen.focus({ preventScroll: true, focusVisible: true });
+  };
+  doc.addEventListener('focusin', on);
+  return () => doc.removeEventListener('focusin', on);
+}
+
 // The title, pause, results and settings halves: they show and fill the cards; the controls inside are the engine's.
 function overlayHalves() {
-  let seedForm = null;
+  let seedForm = null, unbindSliders = null;
   const title = {
     seen: null,
     enter(engine, view) {
       const doc = view.doc;
-      this.seen = { mode: null, best: undefined };
-      // Go submits the seed form: never navigate; blurring the field fires its change, which the adopted field commits.
+      this.seen = { mode: null, best: undefined, style: null, obstacles: null };
+      unbindSliders?.(); unbindSliders = bindSliders(doc);
+      // Enter submits the seed form: never navigate; blurring the field fires its change, which the adopted field commits
+      // (so leaving the field commits it too).
       seedForm?.el?.removeEventListener('submit', seedForm.on); // idempotent: a second enter never adds a second listener
       seedForm = { el: doc.getElementById('seedForm'), on: ev => { ev.preventDefault(); doc.getElementById('seedInput')?.blur(); } };
       seedForm.el?.addEventListener('submit', seedForm.on);
@@ -54,6 +72,7 @@ function overlayHalves() {
     },
     exit(engine, view) {
       seedForm?.el?.removeEventListener('submit', seedForm.on); seedForm = null; this.seen = null;
+      unbindSliders?.(); unbindSliders = null;
       view.doc.activeElement?.blur?.(); // the removed play(): a focused title button must not keep Space/Enter
     },
     frame(engine, alpha, view) {
@@ -63,6 +82,13 @@ function overlayHalves() {
         seen.mode = mode;
         doc.getElementById('title').classList.toggle('free', mode === 'freeDrive');
         doc.getElementById('modeHelp').textContent = HELP[mode] ?? '';
+      }
+      for (const key of ['style', 'obstacles']) {
+        const v = s.settings[key]; if (v === seen[key]) continue;
+        seen[key] = v;
+        const stops = sliderStops(doc, key);
+        stops.forEach((el, i) => el.classList.toggle('fill', i + 1 < v));
+        stops[0]?.parentElement.style.setProperty('--at', `${(v - 0.5) * 20}%`); // the rail filled to the chosen stop's centre
       }
       const b = s.titleBest, key = b ? `${b.label}|${b.time}` : '';
       if (key !== seen.best) {

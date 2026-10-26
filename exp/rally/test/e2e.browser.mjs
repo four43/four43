@@ -75,11 +75,15 @@ test('desktop: title help and seed form, pause card, screens from data-lh-overla
     await game.until(s => s.phase === 'title' && s.mode === 'freeDrive', { maxSteps: 120 });
     assert.equal(await game.page.evaluate(() => document.getElementById('title').classList.contains('free')), true);
     assert.equal(await game.page.locator('#titleBest').textContent(), '');
-    // The seed form's Go button commits the field (through its change) and doesn't navigate.
+    // R14-1: no Go button; Enter in the seed field commits it (through its change) and doesn't navigate, and so does leaving it.
+    assert.equal(await game.page.locator('#seedForm button[type="submit"]').count(), 0);
     await game.page.locator('#seedInput').fill('gogo1');
-    await game.page.locator('#seedForm button[type="submit"]').click(); await game.render();
+    await game.page.locator('#seedInput').press('Enter'); await game.render();
     await game.until(s => s.phase === 'title' && s.seed === 'gogo1', { maxSteps: 120 });
     assert.match(game.page.url(), /lh-test/); assert.doesNotMatch(game.page.url(), /seedInput|\?.*=gogo1/);
+    await game.page.locator('#seedInput').fill('gogo2');
+    await game.page.locator('#seedInput').blur(); await game.render();
+    await game.until(s => s.phase === 'title' && s.seed === 'gogo2', { maxSteps: 120 });
 
     await game.jump('stage', 'paused', {}, { settings: { mode: 'stage', seed: 'e2e2' } });
     await game.render();
@@ -154,6 +158,48 @@ test('desktop: a gamepad walks the title, opens and leaves settings, drives, pau
     await push({ start: true }, 1); assert.deepEqual((await game.scene()).overlays, ['pause'], 'Start pauses');
     assert.equal(await focused(), 'pause.resume');
     await push({ b: true }, 1); assert.deepEqual((await game.scene()).overlays, [], 'B resumes');
+    await expectState(game, 'phase', 'running');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+// R14: the title's controller layout: LB/RB step the mode (the pad never focuses that row), the sliders follow left/right,
+// View opens and closes settings from the title and while driving (where settings pauses), Start drives.
+test('desktop: shoulders step the mode, sliders follow the D-pad, View is settings everywhere, Start drives (R14)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: { 'rally-sim-settings': { v: 5, mode: 'stage', world: 'loop', seed: 'e2e4', style: 'twisty', obstacles: 'wild' } } });
+  const focused = () => game.page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
+  const push = async (state, steps = 0) => { await game.pad(state); await game.frames(); await game.pad({}); await game.frames(); if (steps) await game.step(steps); };
+  const set = () => game.page.evaluate(() => { const s = window.engine.scene.state.settings; return [s.mode, s.style, s.obstacles]; });
+  try {
+    await expectState(game, 'phase', 'title');
+    await game.pad({}); await game.frames();
+    assert.deepEqual(await set(), ['stage', 2, 4], 'the v5 names read as levels (wild: 4)');
+    const order = await game.page.evaluate(() => [...document.querySelectorAll('#modeSeg button')].map(b => b.dataset.testid));
+    assert.deepEqual(order, ['title.mode.stage', 'title.mode.timeAttack', 'title.mode.freeDrive']);
+    assert.equal(await game.page.locator('.modeRow img[data-lh-glyph="prev"]').isVisible(), false, 'no LB prompt before a pad is used');
+    await push({ rb: true }, 1); assert.equal((await set())[0], 'timeAttack', 'RB: the next mode');
+    assert.equal(await game.page.locator('.modeRow img[data-lh-glyph="prev"]').isVisible(), true, 'LB shows for a pad');
+    await push({ rb: true }, 1); await push({ rb: true }, 1); assert.equal((await set())[0], 'freeDrive', 'no wrap');
+    await push({ lb: true }, 1); assert.equal((await set())[0], 'timeAttack');
+    assert.equal(await focused(), 'title.drive', 'the shoulders leave focus where it is');
+    for (let i = 0; i < 8; i++) await push({ up: true });
+    assert.doesNotMatch(await focused(), /^title\.mode\./, 'the pad never reaches the mode row');
+    // onto the obstacles rail from below: focus lands on the chosen stop and changes nothing; left/right then set it
+    await game.page.evaluate(() => document.querySelector('[data-testid="title.car.awd"]').focus());
+    await push({ up: true }); assert.equal(await focused(), 'title.obstacles.4');
+    assert.deepEqual((await set()).slice(1), [2, 4]);
+    await push({ left: true }, 1); await push({ left: true }, 1);
+    assert.equal(await focused(), 'title.obstacles.2'); assert.equal((await set())[2], 2, 'the choice follows focus');
+    await push({ select: true }, 1); assert.deepEqual((await game.scene()).overlays, ['title', 'settings'], 'View opens settings');
+    await push({ select: true }, 1); assert.deepEqual((await game.scene()).overlays, ['title'], 'and closes it');
+    assert.equal(await game.page.locator('#driveBtn img.glyph').getAttribute('data-lh-glyph'), 'menu', 'Drive shows Start');
+    await push({ start: true }, 1); await game.until(s => s.phase === 'ready' || s.phase === 'countdown' || s.phase === 'running', { maxSteps: 4000 });
+    await game.until(s => s.phase === 'running', { maxSteps: 4000 });
+    await push({ select: true }, 1); assert.deepEqual((await game.scene()).overlays, ['settings'], 'View opens settings while driving');
+    const t0 = await game.page.evaluate(() => window.engine.scene.state.time); await game.step(60);
+    assert.equal(await game.page.evaluate(() => window.engine.scene.state.time), t0, 'and the run stands still under it');
+    await push({ select: true }, 1); assert.deepEqual((await game.scene()).overlays, [], 'View closes it');
     await expectState(game, 'phase', 'running');
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }

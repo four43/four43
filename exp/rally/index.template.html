@@ -125,6 +125,24 @@ body.manual .shiftBtns { display: flex; }
 #sheet p { margin: 12px 0 0; font-size: 15px; color: var(--dim); line-height: 1.4; }
 body.onTrack .padOnly, body:not(.onTrack) .trackOnly { display: none; }
 .seedRow { display: flex; gap: 6px; margin: 0; }
+#diceBtn { display: grid; place-items: center; padding: 6px 12px; }
+#diceBtn svg { display: block; }
+/* LB / RB step the mode (lion-hawk nav.shoulders): their prompts flank the row while a pad is the input */
+.modeRow { display: flex; align-items: center; gap: 8px; }
+.modeRow .seg { flex: 1; }
+.glyph.shoulder { width: 2em; height: 2em; margin: 0; flex: none; }
+html:not([data-lh-input="pad"]) .glyph.shoulder { display: none; }
+/* 1 … 5 sliders (track style, obstacles): five stops on a rail, filled up to the chosen one (rally spec R14-2) */
+.slider { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--dim); }
+.slider > span { flex: none; width: 4.2em; }
+.slider > span:last-child { text-align: right; }
+.stops { flex: 1; display: flex; position: relative; height: 34px; border-radius: 17px;
+  background: linear-gradient(90deg, rgba(237,230,214,.24) var(--at, 30%), rgba(237,230,214,.08) var(--at, 30%)); }
+.stops button { flex: 1; border: 0; background: transparent; padding: 0; cursor: pointer; display: grid; place-items: center; border-radius: 17px; }
+.stops button i { width: 12px; height: 12px; border-radius: 50%; background: rgba(237,230,214,.28); transition: transform .12s, background .12s; }
+.stops button.fill i { background: rgba(237,230,214,.7); }
+.stops button[aria-pressed="true"] i { width: 20px; height: 20px; background: var(--bone); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.stops button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 .seedRow input { flex: 1; min-width: 0; font: inherit; font-size: 17px; font-weight: 600; padding: 8px 10px; border-radius: 10px;
   border: 1px solid rgba(237,230,214,.25); background: rgba(237,230,214,.08); color: var(--bone); -webkit-user-select: text; user-select: text; }
 #seedChip { cursor: default; font-variant-numeric: tabular-nums; }
@@ -279,24 +297,25 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
 <div id="title" class="menu">
   <div class="menuBody">
     <div class="titleHead"><h1>Rally <span>Sim</span></h1>
-    <div class="seg big" id="modeSeg"><button data-title="mode:freeDrive" data-lh-slot="title.mode.freeDrive">Free drive</button><button data-title="mode:stage" data-lh-slot="title.mode.stage">Stage</button><button data-title="mode:timeAttack" data-lh-slot="title.mode.timeAttack">Time attack</button></div></div>
+    <div class="modeRow"><img class="glyph shoulder" data-lh-glyph="prev" alt="LB"><div class="seg big" id="modeSeg"><button data-title="mode:stage" data-lh-slot="title.mode.stage">Stage</button><button data-title="mode:timeAttack" data-lh-slot="title.mode.timeAttack">Time attack</button><button data-title="mode:freeDrive" data-lh-slot="title.mode.freeDrive">Free drive</button></div><img class="glyph shoulder" data-lh-glyph="next" alt="RB"></div></div>
     <p class="modeHelp" id="modeHelp"></p>
     <div class="opts">
       <div class="opt freeOnly"><h3>Track</h3><div class="seg"><button data-title="world:loop" data-lh-slot="title.world.loop">Loop</button><button data-title="world:stage" data-lh-slot="title.world.stage">Stage</button></div></div>
-      <div class="opt"><h3>Seed</h3><form class="seedRow" id="seedForm"><input id="seedInput" data-lh-slot="title.seed" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed" enterkeyhint="go"><button type="button" class="chip" id="diceBtn" data-lh-slot="title.dice" aria-label="Random seed">🎲</button><button type="submit" class="chip">Go</button></form></div>
-      <div class="opt"><h3>Track style</h3><div class="seg"><button data-title="style:twisty" data-lh-slot="title.style.twisty">Twisty</button><button data-title="style:flowing" data-lh-slot="title.style.flowing">Flowing</button></div></div>
+      <div class="opt"><h3>Seed</h3><form class="seedRow" id="seedForm"><input id="seedInput" data-lh-slot="title.seed" type="text" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Track seed" enterkeyhint="go"><button type="button" class="chip" id="diceBtn" data-lh-slot="title.dice" aria-label="Random seed"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.5c2.2 0 3.4 1 4.6 2.8l2.8 4.4c1.2 1.8 2.4 2.8 4.6 2.8H21"/><path d="M3 17h3.5c1.6 0 2.7-.6 3.6-1.6M14.4 8.6c.9-1 2-1.6 3.6-1.6H21"/><path d="M18 4l3 3-3 3M18 14l3 3-3 3"/></svg></button></form></div>
+      <div class="opt"><h3>Length</h3><div class="seg"><button data-title="length:micro" data-lh-slot="title.length.micro">Micro</button><button data-title="length:short" data-lh-slot="title.length.short">Short</button><button data-title="length:medium" data-lh-slot="title.length.medium">Medium</button><button data-title="length:long" data-lh-slot="title.length.long">Long</button></div></div>
+      <div class="opt"><h3>Track style</h3><div class="slider" data-slider="style"><span>Tight</span><div class="stops"><button data-title="style:1" data-lh-slot="title.style.1" aria-label="Track style 1 of 5"><i></i></button><button data-title="style:2" data-lh-slot="title.style.2" aria-label="Track style 2 of 5"><i></i></button><button data-title="style:3" data-lh-slot="title.style.3" aria-label="Track style 3 of 5"><i></i></button><button data-title="style:4" data-lh-slot="title.style.4" aria-label="Track style 4 of 5"><i></i></button><button data-title="style:5" data-lh-slot="title.style.5" aria-label="Track style 5 of 5"><i></i></button></div><span>Flowing</span></div></div>
       <div class="opt"><h3>Theme</h3><div class="seg"><button data-title="theme:summer" data-lh-slot="title.theme.summer">Summer</button><button data-title="theme:winter" data-lh-slot="title.theme.winter">Winter</button></div></div>
-      <div class="opt"><h3>Obstacles</h3><div class="seg"><button data-title="obstacles:mild" data-lh-slot="title.obstacles.mild">Mild</button><button data-title="obstacles:wild" data-lh-slot="title.obstacles.wild">Wild</button></div></div>
+      <div class="opt"><h3>Obstacles</h3><div class="slider" data-slider="obstacles"><span>Mild</span><div class="stops"><button data-title="obstacles:1" data-lh-slot="title.obstacles.1" aria-label="Obstacles 1 of 5"><i></i></button><button data-title="obstacles:2" data-lh-slot="title.obstacles.2" aria-label="Obstacles 2 of 5"><i></i></button><button data-title="obstacles:3" data-lh-slot="title.obstacles.3" aria-label="Obstacles 3 of 5"><i></i></button><button data-title="obstacles:4" data-lh-slot="title.obstacles.4" aria-label="Obstacles 4 of 5"><i></i></button><button data-title="obstacles:5" data-lh-slot="title.obstacles.5" aria-label="Obstacles 5 of 5"><i></i></button></div><span>Frequent</span></div></div>
       <div class="opt"><h3>Car</h3><div class="seg"><button data-title="car:awd" data-lh-slot="title.car.awd">R5 4WD</button><button data-title="car:rwd" data-lh-slot="title.car.rwd">Classic RWD</button></div></div>
     </div>
   </div>
-  <div class="menuFoot"><button class="chip" id="menuBtn" data-lh-slot="title.settings">Settings</button><span id="titleBest"></span><button class="go" id="driveBtn" data-lh-slot="title.drive"><img class="glyph" data-lh-glyph="confirm" alt="">Drive</button></div>
+  <div class="menuFoot"><button class="chip" id="menuBtn" data-lh-slot="title.settings"><img class="glyph" data-lh-glyph="view" alt="">Settings</button><span id="titleBest"></span><button class="go" id="driveBtn" data-lh-slot="title.drive"><img class="glyph" data-lh-glyph="menu" alt="">Drive</button></div>
 </div>
 
 <!-- pause menu -->
 <div id="pause" class="card" hidden>
   <h2>Paused</h2>
-  <div class="cardBtns"><button class="go" id="resumeBtn" data-lh-slot="pause.resume"><img class="glyph" data-lh-glyph="back" alt="">Resume</button><button id="restartBtn" data-lh-slot="pause.restart">Restart</button><button id="setBtn" data-lh-slot="pause.settings">Settings</button><button id="quitBtn" data-lh-slot="pause.quit">Quit to menu</button></div>
+  <div class="cardBtns"><button class="go" id="resumeBtn" data-lh-slot="pause.resume"><img class="glyph" data-lh-glyph="back" alt="">Resume</button><button id="restartBtn" data-lh-slot="pause.restart">Restart</button><button id="setBtn" data-lh-slot="pause.settings"><img class="glyph" data-lh-glyph="view" alt="">Settings</button><button id="quitBtn" data-lh-slot="pause.quit">Quit to menu</button></div>
   <div id="lapList" class="cardSide"></div>
 </div>
 

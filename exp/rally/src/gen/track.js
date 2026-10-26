@@ -11,14 +11,20 @@ import { makeLocator } from './locate.js';
 import { generateEdges } from './edges.js';
 import { generateWear } from './wear.js';
 import { generateBumps } from './bumps.js';
+import { styleLevel, obstacleLevel } from './levels.js';
 
 export const ROAD_WIDTH = 7;
 
-// style: 'twisty' (rallycross-like, the default) | 'flowing' (open and fast). Flowing keeps the
-// original seed string, so its tracks are the ones seeds gave before styles existed.
-export function generateTrack(seed, { kind = 'loop', theme = 'summer', obstacles = 'mild', style = 'twisty' } = {}) {
-  const r = rng(style === 'flowing' ? `${seed}|${kind}` : `${seed}|${kind}|${style}`);
-  const layout = generateLayout(r.fork('layout'), { kind, style });
+// style: 1 (tight, rallycross-like) … 5 (open and fast); obstacles: 1 (few) … 5 (frequent); both 2 by default, old names
+// read (levels.js). Style 4 keeps the original seed string (the tracks seeds gave before styles existed) and 2 the old
+// 'twisty' one, so those tracks are unchanged; the new levels get their own.
+// length: micro | short | medium (the default, the tracks as they were) | long (rally spec R14-5).
+const seedKey = (seed, kind, style, length) => (style === 4 ? `${seed}|${kind}` : style === 2 ? `${seed}|${kind}|twisty` : `${seed}|${kind}|style${style}`) +
+  (length === 'medium' ? '' : `|${length}`);
+export function generateTrack(seed, { kind = 'loop', theme = 'summer', obstacles: ob = 2, style: sv = 2, length = 'medium' } = {}) {
+  const style = styleLevel(sv), obstacles = obstacleLevel(ob);
+  const r = rng(seedKey(seed, kind, style, length));
+  const layout = generateLayout(r.fork('layout'), { kind, style, length });
   const features = placeFeatures(layout, r.fork('features'), { obstacles, style });
   const surfaces = generateSurfaces(layout, r.fork('surfaces'), { theme });
   const edges = generateEdges(layout, surfaces, r.fork('edges'));
@@ -31,5 +37,5 @@ export function generateTrack(seed, { kind = 'loop', theme = 'summer', obstacles
   // Spawn on the centreline just past the start of the layout, facing along the road.
   const i = Math.min(10, layout.n - 1);
   const spawn = { x: layout.x[i], y: terrain.road[i] + 0.6, z: layout.z[i], yaw: layout.heading[i] };
-  return { seed, kind, style, theme, obstacles, layout, features, terrain, surfaces, edges, wear, bumps, roadside, locator, spawn, roadWidth: ROAD_WIDTH };
+  return { seed, kind, style, theme, obstacles, size: length, layout, features, terrain, surfaces, edges, wear, bumps, roadside, locator, spawn, roadWidth: ROAD_WIDTH };
 }

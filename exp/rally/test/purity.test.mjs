@@ -29,8 +29,14 @@ test('the Rally scan ignores comments but still flags code', () => {
 test('settings: normalizeSettings migrates without mutating, newSeed is a seeded 5-char id', () => {
   const saved = { v: 1, assist: true, mode: 'nope', world: 'pad' }, copy = { ...saved };
   const s = normalizeSettings(saved);
-  assert.equal(s.assist, false); assert.equal(s.mode, 'freeDrive'); assert.equal(s.world, 'loop'); assert.equal(s.v, 5);
-  assert.equal(normalizeSettings({ v: 4, density: 'wild' }).obstacles, 'wild'); assert.equal('density' in normalizeSettings({ density: 'wild' }), false);
+  assert.equal(s.assist, false); assert.equal(s.mode, 'freeDrive'); assert.equal(s.world, 'loop'); assert.equal(s.v, 6);
+  assert.equal(normalizeSettings({ v: 4, density: 'wild' }).obstacles, 4); assert.equal('density' in normalizeSettings({ density: 'wild' }), false);
+  // v6 (R14): style and obstacles are levels 1 … 5; the old names map, junk falls back to 2
+  const lv = (o) => { const n = normalizeSettings({ v: 5, ...o }); return [n.style, n.obstacles]; };
+  assert.deepEqual(lv({ style: 'twisty', obstacles: 'mild' }), [2, 2]); assert.deepEqual(lv({ style: 'flowing', obstacles: 'wild' }), [4, 4]);
+  assert.deepEqual(lv({ style: 5, obstacles: 1 }), [5, 1]); assert.deepEqual(lv({ style: 9, obstacles: 'x' }), [2, 2]); assert.deepEqual(lv({}), [2, 2]);
+  assert.equal(normalizeSettings({ v: 5 }).length, 'medium'); assert.equal(normalizeSettings({ v: 6, length: 'micro' }).length, 'micro');
+  assert.equal(normalizeSettings({ v: 6, length: 'vast' }).length, 'medium');
   assert.deepEqual(saved, copy);
   assert.match(newSeed(rng('x')), /^[0-9a-z]{5}$/);
   assert.equal(newSeed(rng('x')), newSeed(rng('x')));

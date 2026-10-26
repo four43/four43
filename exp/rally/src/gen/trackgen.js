@@ -1,12 +1,15 @@
-// Road layouts (spec tracks T-2) in two styles. Flowing: a closed loop from a Catmull-Rom ring, or
-// a point-to-point stage from a curvature program. Twisty (rallycross-like): a loop from a
-// curvature program of hairpins, switchbacks and S-bends closed by solving its straight lengths,
-// or a stage from the same program builder with tighter corners and switchback climbs. Output is
-// the spec's Layout: 1 m samples of x/z/heading/curvature, plus its style.
+// Road layouts (spec tracks T-2) at five style levels, 1 (tight) … 5 (flowing) (rally spec R14-3). Flowing (4, 5): a
+// closed loop from a Catmull-Rom ring, or a point-to-point stage from a curvature program. Tight (1–3, rallycross-like):
+// a loop from a curvature program of hairpins, switchbacks and S-bends closed by solving its straight lengths, or a
+// stage from the same program builder with tighter corners and switchback climbs (3 mixes in the flowing corners).
+// Level 2 is the old 'twisty' and 4 the old 'flowing', draw for draw. Output is the spec's Layout: 1 m samples of
+// x/z/heading/curvature, plus its style level.
 //
 // Conventions: heading 0 = +z, heading = atan2(dx, dz), + curvature = left. Travel direction is
 // (sin h, cos h); its derivative d/dh is (cos h, -sin h), so that is the left normal (where a
 // + curvature turn bends). Check: h = 0 (travel +z) gives (1, 0) = +x, the spec's left.
+
+import { styleLevel, lengthScale } from './levels.js';
 
 const KMAX = 1 / 15;       // minimum radius 15 m
 const CLEAR = 40;          // no road within 40 m ...
@@ -16,22 +19,48 @@ const TRIES = 50;
 
 const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-// Length bands (m) per style and kind.
-export const LENGTHS = {
-  flowing: { loop: [1500, 3000], stage: [3000, 6000] },
-  twisty: { loop: [1000, 2000], stage: [2500, 5000] },
+// Per style level: length bands (m) per kind; the loop builder (program = the tight curvature program, ring = the
+// Catmull-Rom ring) and its numbers; the stage's corner mix (tw: share of corners drawn tight; 1 and 0 draw nothing)
+// and numbers. Radii and lengths in m.
+const TIGHT_LEN = { loop: [1000, 2000], stage: [2500, 5000] }, FLOW_LEN = { loop: [1500, 3000], stage: [3000, 6000] };
+export const STYLES = {
+  1: { lengths: TIGHT_LEN, loop: 'program', target: [1150, 1850], hairpinsKm: 5.5, hairpinsMin: 3.5, guide: 0.45, longP: 0.15, straight: [25, 85], long: [90, 130], plain: [0.9, [16, 45], [45, 90]], sbend: [15, 32],
+    stage: { target: [2600, 4800], tw: 1, straight: [20, 90], sMax: 90, switchback: 1 / 4, fast: 0.1, corner: [15, 45], fastR: [60, 150] } },
+  2: { lengths: TIGHT_LEN, loop: 'program', target: [1150, 1850], hairpinsKm: 4, hairpinsMin: 2.5, guide: 0.5, longP: 0.3, straight: [25, 110], long: [100, 160], plain: [0.75, [18, 60], [60, 120]], sbend: [16, 40],
+    stage: { target: [2600, 4800], tw: 1, straight: [25, 120], sMax: 120, switchback: 1 / 6, fast: 0.2, corner: [15, 60], fastR: [60, 150] } },
+  3: { lengths: { loop: [1000, 2600], stage: [2500, 6000] }, loop: 'program', target: [1150, 1850], hairpinsKm: 1.5, hairpinsMin: 0.8, guide: 0.7, longP: 0.45, straight: [30, 140], long: [110, 180], plain: [0.45, [25, 70], [70, 160]], sbend: [24, 60],
+    stage: { target: [2800, 5200], tw: 0.5, straight: [30, 180], sMax: 180, switchback: 1 / 10, fast: 0.3, corner: [18, 70], fastR: [60, 180], flowR: [30, 300], sweep: [20, 150] } },
+  4: { lengths: FLOW_LEN, loop: 'ring', points: [10, 16], rad: [0.55, 1], target: [1700, 2800],
+    stage: { target: [3000, 5700], tw: 0, straight: [40, 250], sMax: 250, flowR: [15, 300], sweep: [20, 170] } },
+  5: { lengths: FLOW_LEN, loop: 'ring', points: [7, 11], rad: [0.65, 1], target: [1900, 2900],
+    stage: { target: [3200, 5800], tw: 0, straight: [60, 300], sMax: 300, flowR: [45, 320], sweep: [20, 130] } },
 };
 
-// style 'flowing': open, fast roads; 'twisty': rallycross-like, hairpins and tight S-bends.
-export function generateLayout(r, { kind = 'loop', style = 'twisty' } = {}) {
-  if (!LENGTHS[style]) throw new Error(`generateLayout: unknown style ${style}`);
-  const tw = style === 'twisty';
-  const make = kind === 'stage' ? (q) => stageAttempt(q, tw) : tw ? twistyLoopAttempt : loopAttempt;
+// style: 1 (tight, rallycross-like: hairpins and tight S-bends) … 5 (open, fast roads).
+// length: micro | short | medium | long, a scale on the style's target lengths and bands (levels.js).
+export function generateLayout(r, { kind = 'loop', style: sv = 2, length = 'medium' } = {}) {
+  const style = styleLevel(sv), st = scaled(STYLES[style], lengthScale(length));
+  const make = kind === 'stage' ? (q) => stageAttempt(q, st) : st.loop === 'program' ? (q) => twistyLoopAttempt(q, st) : (q) => loopAttempt(q, st);
   for (let k = 0; k < TRIES; k++) {
     const L = make(r.fork('try' + k));
-    if (L && valid(L, LENGTHS[style][kind === 'stage' ? 'stage' : 'loop'])) { L.style = style; return L; }
+    if (L && valid(L, st.lengths[kind === 'stage' ? 'stage' : 'loop'])) { L.style = style; L.size = length; return L; }
   }
-  throw new Error(`generateLayout: no valid ${style} ${kind} after ${TRIES} tries (seed ${r.seed})`);
+  // a seed with no layout at this length (rare: about 1 in 200 at micro or long) takes one a step nearer medium
+  const nearer = { micro: 'short', short: 'medium', long: 'medium' }[length];
+  if (nearer) return generateLayout(r.fork(`size-${nearer}`), { kind, style, length: nearer });
+  throw new Error(`generateLayout: no valid style ${style} ${kind} after ${TRIES} tries (seed ${r.seed})`);
+}
+
+// The style with its target lengths and bands × k (k = 1: the style itself).
+function scaled(st, k) {
+  if (k === 1) return st;
+  const x = ([a, b]) => [a * k, b * k], band = ([a, b]) => [a * k, b * (k < 1 ? k ** 0.7 : k)]; // short roads overrun their target more
+  const out = { ...st, target: st.target && x(st.target), lengths: { loop: band(st.lengths.loop), stage: band(st.lengths.stage) }, stage: { ...st.stage, target: x(st.stage.target) } };
+  // a ring keeps its corners per km (fewer control points on a short ring, or relaxing it kinks it); a short program
+  // loop asks for fewer hairpins (there is no room to wind them) and a wider guide
+  if (st.points) out.points = st.points.map(p => Math.max(4, Math.round(p * Math.min(1, k) ** 0.8)));
+  if (st.hairpinsMin !== undefined && k < 1) Object.assign(out, { hairpinsMin: st.hairpinsMin * k, hairpinsKm: st.hairpinsKm * (0.5 + 0.5 * k), guide: Math.min(0.8, st.guide / k ** 0.3) });
+  return out;
 }
 
 // --- validation ------------------------------------------------------------------------------
@@ -88,12 +117,12 @@ function finish(kind, closed, x, z, heading, curvature) {
 
 // --- loop ------------------------------------------------------------------------------------
 
-function loopAttempt(r) {
-  const target = r.range(1700, 2800);
-  const m = r.int(10, 16), step = 2 * Math.PI / m, rot = r.range(0, 2 * Math.PI);
+function loopAttempt(r, st) {
+  const target = r.range(...st.target);
+  const m = r.int(...st.points), step = 2 * Math.PI / m, rot = r.range(0, 2 * Math.PI);
   const cp = [];
   for (let k = 0; k < m; k++) {
-    const a = rot + step * k + r.range(-0.3, 0.3) * step, rad = r.range(0.55, 1);
+    const a = rot + step * k + r.range(-0.3, 0.3) * step, rad = r.range(...st.rad);
     cp.push([rad * Math.sin(a), rad * Math.cos(a)]);
   }
   // Clockwise vs counter-clockwise: randomise the direction of travel.
@@ -108,12 +137,14 @@ function loopAttempt(r) {
 // check, so it winds round once without crowding itself; a last corner squares the net turn to
 // exactly ±2π and the straight lengths are then solved (least change, 25–200 m) to close the
 // ring exactly. Pieces are integrated as on a stage, so curvature is continuous throughout.
-// HAIRPINS_KM: hairpins per km the picker aims for; fewer than HAIRPINS_MIN and the attempt is
-// dropped. GUIDE: guide circle length / target length. SLACK: m of road beyond target·progress
-// before only plain corners (the cheapest progress) are drawn.
-const DEG = Math.PI / 180, HAIRPINS_KM = 4, HAIRPINS_MIN = 2.5, GUIDE = 0.5, SLACK = 150, LONG_P = 0.3;
-function twistyLoopAttempt(r) {
-  const target = r.range(1150, 1850), D = r.next() < 0.5 ? 1 : -1, h0 = r.range(0, 2 * Math.PI);
+// Per style (STYLES): hairpinsKm, hairpins per km the picker aims for (fewer than hairpinsMin and the attempt is
+// dropped); guide, the guide circle length / target length; longP, the share of long straights; the straight, long,
+// plain-corner and S-bend radius ranges. SLACK: m of road beyond target·progress before only plain corners (the
+// cheapest progress) are drawn.
+const DEG = Math.PI / 180, SLACK = 150;
+function twistyLoopAttempt(r, st) {
+  const HAIRPINS_KM = st.hairpinsKm, HAIRPINS_MIN = st.hairpinsMin, GUIDE = st.guide, LONG_P = st.longP;
+  const target = r.range(...st.target), D = r.next() < 0.5 ? 1 : -1, h0 = r.range(0, 2 * Math.PI);
   const side = () => (r.next() < 0.5 ? 1 : -1);
   const hairpin = (sd) => { const R = r.range(17, 28); return corner(sd, R, r.range(150, hairpinMax(R) / DEG) * DEG); };
   // Guide circle through the start, tangent to h0; hairpins and S-bends make the road ~2× longer
@@ -149,7 +180,7 @@ function twistyLoopAttempt(r) {
   const place = (p, check = true) => {
     const pc = integrate(p), c = Math.cos(h), sn = Math.sin(h), long = r.next() < LONG_P;
     const wx = pc.dx * c + pc.dz * sn, wz = -pc.dx * sn + pc.dz * c, [gx, gz] = guide(g + 60 + progLength(p) / 2);
-    const L = Math.min(long ? 160 : 110, Math.max(long ? 100 : 25, (gx - x - wx) * sn + (gz - z - wz) * c));
+    const L = Math.min(long ? st.long[1] : st.straight[1], Math.max(long ? st.long[0] : st.straight[0], (gx - x - wx) * sn + (gz - z - wz) * c));
     const xs = [], zs = [], m = Math.round(L);
     for (let q = 1; q <= m; q++) { xs.push(x + sn * L * q / m); zs.push(z + c * L * q / m); }
     const bx = x + L * sn, bz = z + L * c;
@@ -172,8 +203,9 @@ function twistyLoopAttempt(r) {
     const u = over ? 0.8 + 0.2 * q : hp < HAIRPINS_KM * (s + 200) / 1000 ? 0.6 * q : q, sd = side();
     if (u < 0.35 || (u < 0.6 && Math.abs(e) <= 60 * DEG)) return [[...hairpin(sd), [Math.round(r.range(50, 75)), 0, 0], ...hairpin(-sd)], 2];
     if (u < 0.6) return [hairpin(se), 1];
-    if (u < 0.8) return [[...corner(sd, r.range(16, 40), r.range(40, 90) * DEG), [r.int(0, 12), 0, 0], ...corner(-sd, r.range(16, 40), r.range(40, 90) * DEG)], 0];
-    return [corner(se, r.next() < 0.75 ? r.range(18, 60) : r.range(60, 120), Math.min(110, Math.max(30, Math.abs(e) / DEG)) * DEG), 0];
+    if (u < 0.8) return [[...corner(sd, r.range(...st.sbend), r.range(40, 90) * DEG), [r.int(0, 12), 0, 0], ...corner(-sd, r.range(...st.sbend), r.range(40, 90) * DEG)], 0];
+    const [pTight, rTight, rWide] = st.plain;
+    return [corner(se, r.next() < pTight ? r.range(...rTight) : r.range(...rWide), Math.min(110, Math.max(30, Math.abs(e) / DEG)) * DEG), 0];
   };
   while (g < per - 120) {
     if (s > 2 * target) return null;
@@ -368,8 +400,8 @@ function relax(px, pz) {
 // The road is integrated from a curvature program at 1 m steps; each piece (straight, or a corner
 // with linear ramps in and out) is checked against an occupancy hash as it is laid, and a piece
 // that leaves the box or comes within 40 m of earlier road is withdrawn and redrawn.
-function stageAttempt(r, tw) {
-  const target = tw ? r.range(2600, 4800) : r.range(3000, 5700), half = BOX / 2 - 1;
+function stageAttempt(r, style) {
+  const st = style.stage, target = r.range(...st.target), half = BOX / 2 - 1;
   const a0 = r.range(0, 2 * Math.PI);
   const X = [450 * Math.sin(a0)], Z = [450 * Math.cos(a0)];
   const H = [wrapA(Math.atan2(-X[0], -Z[0]) + r.range(-0.6, 0.6))], K = [0];
@@ -422,10 +454,10 @@ function stageAttempt(r, tw) {
     if (run) return r.next() < 0.8 ? -sides[n - 1] : sides[n - 1];
     return r.next() < 0.5 ? 1 : -1;
   };
-  // Twisty: mostly 15–60 m corners up to 180°, now and then a faster one, and one corner in six
-  // is a switchback climb: 2–4 alternating hairpins on 35–70 m straights. Returns [program, last side].
+  // Tight: mostly corner-range (15–60 m at level 2) corners up to 180°, now and then a faster one, and one corner in
+  // 1/switchback is a switchback climb: 2–4 alternating hairpins on 35–70 m straights. Returns [program, last side].
   const twistyCorner = (side) => {
-    if (r.next() < 1 / 6) {
+    if (r.next() < st.switchback) {
       const n = r.int(2, 4), p = [];
       for (let k = 0; k < n; k++) {
         if (k) p.push([Math.round(r.range(35, 70)), 0, 0]);
@@ -434,9 +466,10 @@ function stageAttempt(r, tw) {
       }
       return [p, (n - 1) % 2 ? -side : side];
     }
-    const fast = r.next() < 0.2;
-    return [corner(side, fast ? r.range(60, 150) : r.range(15, 60), (fast ? r.range(30, 120) : r.range(30, 180)) * DEG), side];
+    const fast = r.next() < st.fast;
+    return [corner(side, fast ? r.range(...st.fastR) : r.range(...st.corner), (fast ? r.range(30, 120) : r.range(30, 180)) * DEG), side];
   };
+  const tight = () => st.tw === 1 || (st.tw > 0 && r.next() < st.tw); // levels 1, 2 and 4, 5 draw nothing here
   // Dead end (12 draws fail) => withdraw the previous piece too and redraw it. A small budget
   // fails hopeless attempts fast; a fresh fork is cheaper than digging out of a packed box.
   let isCorner = false, backtracks = 0;
@@ -446,11 +479,10 @@ function stageAttempt(r, tw) {
     let ok = false;
     for (let t = 0; t < 12 && !ok; t++) {
       if (isCorner) {
-        const side = pickSide(), [p, last] = tw ? twistyCorner(side) : [corner(side, r.range(15, 300), r.range(20, 170) * Math.PI / 180), side];
+        const side = pickSide(), [p, last] = tight() ? twistyCorner(side) : [corner(side, r.range(...st.flowR), r.range(...st.sweep) * Math.PI / 180), side];
         ok = lay(p); if (ok) sides.push(last);
       } else {
-        const sMax = tw ? 120 : 250;
-        ok = lay(straight(remain < 300 ? Math.min(sMax, Math.max(40, remain)) : tw ? r.range(25, 120) : r.range(40, 250)));
+        ok = lay(straight(remain < 300 ? Math.min(st.sMax, Math.max(40, remain)) : r.range(...st.straight)));
       }
     }
     if (ok) { pieces.push(start); isCorner = !isCorner; continue; }
@@ -459,7 +491,7 @@ function stageAttempt(r, tw) {
     if (isCorner) sides.pop();
   }
   if (isCorner === false) lay(straight(r.range(40, 80))); // last piece was a corner: run out straight
-  const nMax = (tw ? LENGTHS.twisty : LENGTHS.flowing).stage[1] + 1;
+  const nMax = style.lengths.stage[1] + 1;
   if (X.length > nMax) unlay(nMax);
   return finish('stage', false, X, Z, H.map(wrapA), K);
 }

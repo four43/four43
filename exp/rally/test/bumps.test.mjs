@@ -8,21 +8,28 @@ import { heightAt } from '../src/gen/terrain.js';
 import { edgeAt } from '../src/gen/edges.js';
 import { roadSurfaceAt } from '../src/gen/surfaces.js';
 
-const tracks = ['b1', 'b2', 'b3', 'b4'].flatMap(seed => ['mild', 'wild'].map(obstacles => generateTrack(seed, { kind: 'loop', obstacles })));
+const tracks = ['b1', 'b2', 'b3', 'b4'].flatMap(seed => [2, 4].map(obstacles => generateTrack(seed, { kind: 'loop', obstacles })));
 const each = (b, f) => { for (let i = 0; i < b.n; i++) f(i); };
 
 test('bumps: sorted, capped, every narrow axis ≥ 0.9 m, same seed same bumps', () => {
   for (const t of tracks) {
-    const b = t.bumps, wild = t.obstacles === 'wild';
+    const b = t.bumps;
     assert.ok(b.n > 100, `${b.n} bumps on ${t.seed} ${t.obstacles}`);
     each(b, i => {
       if (i) assert.ok(b.s[i] >= b.s[i - 1]);
       assert.ok(b.lv[i] >= 0.9 - 1e-6 && b.lu[i] >= 0.9 - 1e-6, 'narrow axis representable at 1 m');
-      assert.ok(b.h[i] > 0 && b.h[i] <= (wild ? BUMPS.ridges.maxH : BUMPS.ridges.height[1]) + 1e-6, `height ${b.h[i]}`);
+      assert.ok(b.h[i] > 0 && b.h[i] <= BUMPS.ridges.height[1] + 1e-6, `height ${b.h[i]} (no level makes them taller, R14-4)`);
     });
   }
   const again = generateTrack('b1', { kind: 'loop' });
   assert.deepEqual([...again.bumps.h], [...tracks[0].bumps.h]);
+});
+
+test('obstacles levels: more bumps from 1 to 5, the same heights', () => {
+  const at = [1, 2, 3, 4, 5].map(obstacles => generateTrack('b1', { kind: 'loop', obstacles }).bumps);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i].n > at[i - 1].n, `level ${i + 1}: ${at[i].n} bumps vs ${at[i - 1].n}`);
+  const top = (b) => Math.max(...b.h);
+  assert.ok(Math.abs(top(at[4]) - top(at[0])) < 0.05, `tallest ${top(at[0]).toFixed(3)} … ${top(at[4]).toFixed(3)} m`);
 });
 
 test('bumps: varied sizes, elongations and angles; rideable slopes', () => {

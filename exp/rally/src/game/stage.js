@@ -27,7 +27,7 @@ export function makeStage({ bests = null }) {
   // --- state helpers (each takes the stage state s) -------------------------------------------------------------
   const track = s => s.sim.world.track ?? null;
   const modeOf = s => s.pad ? MODES.freeDrive : MODES[s.settings.mode];
-  const trackKey = st => { const o = { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, obstacles: st.obstacles, style: st.style }; return JSON.stringify([st.seed, o]); };
+  const trackKey = st => { const o = { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, obstacles: st.obstacles, style: st.style, length: st.length }; return JSON.stringify([st.seed, o]); };
   const runKey = s => track(s) ? bestKey(s.mode.id, track(s), s.sim.carId) : null;
 
   function setPhase(e, s, phase) {
@@ -83,7 +83,7 @@ export function makeStage({ bests = null }) {
     const st = s.settings, key = trackKey(st);
     let world = null;
     if (!s.pad) {
-      try { world = new TrackWorld(generateTrack(st.seed, { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, obstacles: st.obstacles, style: st.style })); }
+      try { world = new TrackWorld(generateTrack(st.seed, { kind: MODES[st.mode].kind ?? st.world, theme: st.theme, obstacles: st.obstacles, style: st.style, length: st.length })); }
       catch (err) { e.emit('toast', { text: `Couldn't build that track (${err.message}). Try another seed.`, seconds: 5 }); if (s.sim) return false; }
     }
     if (!s.sim) s.sim = new Sim(e.world, { world: world ?? undefined, car: st.car, surface: st.surface, assist: st.assist });
@@ -98,13 +98,20 @@ export function makeStage({ bests = null }) {
   // A rebuild of the settings' track through the engine's loading state (lion-hawk [S-6], #21, #38): the stage step is
   // suspended (the car stays held), the build waits LOAD_HOLD of engine time and a presented frame, so the browser
   // paints its toast first, and the run or the title follows once the view has settled. s.loadThen: 'begin' | 'title'.
+  // A change that lands while a build is under way (quick presses on the title's shoulders or sliders, R14) doesn't
+  // start a second load: the one running finishes, sees the settings moved on, and loads again.
   function startLoad(e, s, then) {
-    s.loadThen = then;
+    if (s.loadThen) { if (then === 'begin') s.loadThen = then; return; } // a load is under way
+    s.loadThen = then; s.loadKey = trackKey(s.settings);
     s.sim.car.hold = true;
     setPhase(e, s, 'loading');
     e.emit('toast', { text: 'Building the track…', seconds: null }); // null: shown while loading
     ctxOf.get(s).load({ hold: LOAD_HOLD, settle: true, label: 'Building the track…', build: () => build(e, s),
-      then: () => { const t = s.loadThen; s.loadThen = null; if (t === 'begin') begin(e, s); else title(e, s); } });
+      then: () => {
+        const t = s.loadThen; s.loadThen = null;
+        if (!s.pad && trackKey(s.settings) !== s.loadKey && trackKey(s.settings) !== s.builtKey) return startLoad(e, s, t); // (a failed seed doesn't retry)
+        if (t === 'begin') begin(e, s); else title(e, s);
+      } });
   }
 
   // Run events from progress (moved from Game.handle).
@@ -181,7 +188,7 @@ export function makeStage({ bests = null }) {
         case 'assist': s.sim.setAssist(value); break;
         case 'gearbox': s.sim.car.autoShift = value === 'auto'; break;
         case 'units': break; // the view reads it
-        default: api.toTitle(e); // mode, world, style, theme, obstacles
+        default: api.toTitle(e); // mode, world, length, style, theme, obstacles
       }
     },
     setSeed(e, text) { const s = S(e); s.settings.seed = String(text).trim() || newSeed(e.rng('seeds')); s.settingsRev++; api.toTitle(e); },
@@ -273,7 +280,7 @@ export function makeStage({ bests = null }) {
     enter(e, ctx) {
       const a = ctx.args ?? {}, settings = normalizeSettings(a.settings);
       if (!settings.seed) settings.seed = newSeed(e.rng('seeds'));
-      const s = Object.assign(ctx.state, { settings, pad: !!a.pad, sim: null, world: null, mode: null, phase: null, pose: null, loadThen: null,
+      const s = Object.assign(ctx.state, { settings, pad: !!a.pad, sim: null, world: null, mode: null, phase: null, pose: null, loadThen: null, loadKey: null,
         builtKey: null, poseCache: null, worldRev: 0, carRev: 0, settingsRev: 0, cam: 0, wheels: false, holdT: 0, holdFired: false, titleBest: null });
       ctxOf.set(s, ctx);
       clear(s);

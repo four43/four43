@@ -225,8 +225,8 @@ the button.
 - The game opens on the **title** overlay (mode, track, car, Drive) and has `pause`, `results` and
   `settings` overlays and a timing HUD: see `tracks-spec.md` T-26. The cards are the page's own markup in
   `[data-lh-slot]` elements that the engine adopts as registry controls, so every control has a test id:
-  `stage.pause`; `title.mode.{freeDrive,stage,timeAttack}`, `title.world.{loop,stage}`, `title.seed` (field),
-  `title.dice`, `title.style.{twisty,flowing}`, `title.theme.{summer,winter}`, `title.density.{mild,wild}`,
+  `stage.pause`; `title.mode.{stage,timeAttack,freeDrive}`, `title.world.{loop,stage}`, `title.seed` (field),
+  `title.dice`, `title.length.{micro,short,medium,long}`, `title.style.{1..5}`, `title.theme.{summer,winter}`, `title.obstacles.{1..5}`,
   `title.car.{awd,rwd}`, `title.settings`, `title.drive`; `pause.{resume,restart,settings,quit}`;
   `results.{retry,newSeed,menu}`; `settings.surface.*`, `settings.assist.{true,false}`,
   `settings.units.{mph,kmh}`, `settings.gearbox.{auto,manual}`, `settings.close`.
@@ -810,3 +810,47 @@ noise was too simple. A simpler palette that sits with the models; Art of Rally 
   origin, so one tone per tuft; the flat-ground tones only, no earth/rock), times the blade's root-to-tip shade and a
   per-instance tint 0.8–1.15. Tufts in a dry patch are straw, in a dark field dark green; winter grass verges follow the
   snow palette.
+
+## Round 14: controller title, track length, style and obstacle levels (2026-10-26)
+
+Request: shoulder buttons for the mode with a pad (LB [Stage] [Time Attack] [Free Drive] RB, in that order) and no
+cursor up there; a shuffle icon for the random seed; no Go button (the seed commits on leaving the field or Enter);
+track style a 1–5 slider from Tight to Flowing; obstacles a 1–5 slider from Mild to Frequent, by frequency only (Wild's
+obstacles were too big for the car); settings always on the View button; the Start prompt on Drive, not A. Then: a
+Length choice (micro, short, medium, long) above Track style.
+
+- **R14-1 Title layout.** Mode row Stage, Time attack, Free drive. Seed field with a shuffle button (two crossing
+  arrows, `title.dice`); no Go: Enter submits the form (blurring the field) and leaving the field fires its change,
+  either of which commits the seed. Length (segments), Track style (slider), Theme, Obstacles (slider), Car.
+- **R14-2 Controller.** On lion-hawk 0.13.1 (`nav.shoulders`, `nav.buttons`, the `view` glyph): LB/RB step the mode
+  from anywhere on the title (no wrap) and the pad never focuses the mode row (keys and the mouse still can); their
+  glyphs flank the row while a pad is the input. Start on the title drives; Drive shows the Start (`menu`) glyph. View
+  opens settings from the title, pause and results menus and while driving (`settings.nav.open`), and closes it; the
+  Settings buttons show the View glyph. Settings now pauses (`pauses: true`) so a run stands still under it.
+  Sliders: five stops on a rail, filled to the chosen one; with a pad or the keys the choice follows focus along the
+  rail, and focus entering the rail from another row lands on the chosen stop without changing it.
+- **R14-3 Style levels** (`STYLES` in `gen/trackgen.js`): 1 tight … 5 flowing; 2 is the old twisty and 4 the old
+  flowing draw for draw (same seed strings, so their tracks and bests stay). 1: more hairpins and switchbacks, shorter
+  straights, tighter plain corners; 3: the program loop with few hairpins (1.5/km) and wider corners, stages drawing
+  half their corners tight; 5: rings of 7–11 points, stage corners 45–320 m with longer straights. Measured over 8
+  seeds, heading change per km (loop) 789, 723, 433, 239, 150°. Levels 1–3 place features as tight roads do; level 1
+  fits about 1.1 obstacles per km (short straights).
+- **R14-4 Obstacle levels** (`PACK` in `gen/features.js`, `BUMPS.count`): 1 … 5 scale how often features (×0.6, 1,
+  1.3, 1.6, 2) and road bumps (×0.6, 1, 1.25, 1.5, 1.8) come; heights stay at the old mild sizes at every level. 2 is
+  the old mild.
+- **R14-5 Length** (`LENGTH_SCALE` in `gen/levels.js`): micro ×0.3, short ×0.6, medium ×1 (the default, the tracks as
+  they were), long ×1.5 on the style's target lengths; the validity band's top grows as k^0.7 for the short sizes
+  (short roads overrun their target). A ring keeps its corners per km (points × k^0.8, at least 4); a short program
+  loop asks for fewer hairpins and a wider guide. A seed with no layout at its size (about 1 in 200 at micro or long)
+  takes one a step nearer medium. Measured mean lengths, style 2: loop 775 / 1248 / 1655 / 2424 m, stage 1208 / 2316
+  / 3729 / 5138 m. Non-medium sizes add `|<size>` to the seed string and the best key.
+- **R14-6 Settings v6:** `style` and `obstacles` are levels (twisty 2, flowing 4, mild 2, wild 4), `length` added
+  (medium). Best keys keep the old names for style 2/4 and obstacles 2, so those bests carry over; old wild bests (on
+  taller obstacles) do not.
+- **R14-7 Rebuilds coalesce.** A track option changed while a track is building no longer starts a second load (it
+  threw "already loading" on quick shoulder or slider presses): the running load finishes, sees the settings moved on,
+  and loads again; a seed that fails doesn't retry.
+- **Validation:** unit 108/108; gen-layout 1667/1667 (every level and size builds on the test seeds, the gradient
+  and size order hold); `e2e.browser.mjs` adds the R14 controller walk (shoulders, rail focus, View in and out of a
+  run, Start drives); render 4/4; mobile 797/797.
+

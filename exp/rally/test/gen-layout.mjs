@@ -1,6 +1,6 @@
 // Layout generator + locator (spec tracks T-2, T-7). Run: node test/gen-layout.mjs [filter]
 import { rng } from '../src/gen/rng.js';
-import { generateLayout, LENGTHS } from '../src/gen/trackgen.js';
+import { generateLayout, STYLES as LEVELS } from '../src/gen/trackgen.js';
 import { makeLocator } from '../src/gen/locate.js';
 import { placeFeatures } from '../src/gen/features.js';
 
@@ -65,7 +65,7 @@ function hairpins(L) {
 const turnPerKm = (L) => { let t = 0; for (let i = 0; i < L.n; i++) t += Math.abs(L.curvature[i]); return t * 180 / Math.PI / L.length * 1000; };
 
 const seeds = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-const STYLES = ['flowing', 'twisty'];
+const STYLES = [1, 2, 3, 4, 5]; // rally spec R14-3: 1 tight … 5 flowing; 2 is the old twisty, 4 the old flowing
 const stats = {};
 for (const style of STYLES) for (const kind of ['loop', 'stage']) {
   stats[`${style} ${kind}`] = [];
@@ -85,7 +85,7 @@ for (const style of STYLES) for (const kind of ['loop', 'stage']) {
       check('closed flag', L.closed === (kind === 'loop') ? 1 : 0, 1, 1);
       check('ds', L.ds, 1, 1);
       check('length = n·ds (stage: (n-1)·ds)', L.length - (L.closed ? L.n : L.n - 1) * L.ds, -1e-6, 1e-6);
-      check('length (m)', L.length, ...LENGTHS[style][kind]);
+      check('length (m)', L.length, ...LEVELS[style].lengths[kind]);
       let kmax = 0; for (let i = 0; i < L.n; i++) kmax = Math.max(kmax, Math.abs(L.curvature[i]));
       check('max |curvature| (1/m)', kmax, 0, 1 / 15);
       const b = L.bounds;
@@ -151,19 +151,33 @@ for (const style of STYLES) for (const kind of ['loop', 'stage']) {
   }
 }
 
-// Style: the default is twisty; a twisty layout differs from a flowing one from the same rng.
-test('style default and difference', () => {
-  const d = generateLayout(rng('a'), { kind: 'loop' }), f = generateLayout(rng('a'), { kind: 'loop', style: 'flowing' });
-  check('default style is twisty', d.style === 'twisty' ? 1 : 0, 1, 1);
-  check('twisty != flowing (same rng)', d.n !== f.n || d.x[100] !== f.x[100] ? 1 : 0, 1, 1);
-  let threw = 0; try { generateLayout(rng('a'), { style: 'wiggly' }); } catch { threw = 1; }
-  check('unknown style throws', threw, 1, 1);
+// Style: the default is 2 (the old twisty); the old names read as 2 and 4; 2 differs from 4 from the same rng.
+test('style default, names and difference', () => {
+  const d = generateLayout(rng('a'), { kind: 'loop' }), f = generateLayout(rng('a'), { kind: 'loop', style: 4 });
+  check('default style is 2', d.style === 2 ? 1 : 0, 1, 1);
+  const tw = generateLayout(rng('a'), { kind: 'loop', style: 'twisty' }), fl = generateLayout(rng('a'), { kind: 'loop', style: 'flowing' });
+  check("'twisty' is 2, 'flowing' is 4", tw.style === 2 && fl.style === 4 && tw.n === d.n && fl.n === f.n ? 1 : 0, 1, 1);
+  check('2 != 4 (same rng)', d.n !== f.n || d.x[100] !== f.x[100] ? 1 : 0, 1, 1);
+  for (const bad of ['wiggly', 0, 6]) { let threw = 0; try { generateLayout(rng('a'), { style: bad }); } catch { threw = 1; } check(`unknown style ${bad} throws`, threw, 1, 1); }
+});
+
+// R14-5: length scales the style's targets; medium is the default (the layouts as they were); every size builds.
+test('length: micro < short < medium < long, medium is the default', () => {
+  for (const kind of ['loop', 'stage']) for (const style of [1, 3, 5]) {
+    const mean = (length) => seeds.slice(0, 4).reduce((t, sd) => t + generateLayout(rng(sd), { kind, style, length }).length, 0) / 4;
+    const m = ['micro', 'short', 'medium', 'long'].map(mean);
+    for (let i = 1; i < m.length; i++) check(`${kind} style ${style}: size ${i} longer than ${i - 1} (${m[i - 1].toFixed(0)} → ${m[i].toFixed(0)} m)`, m[i] / m[i - 1], 1.1, Infinity);
+    const d = generateLayout(rng('a'), { kind, style }), md = generateLayout(rng('a'), { kind, style, length: 'medium' });
+    check(`${kind} style ${style}: medium = default`, d.n === md.n && d.x[50] === md.x[50] ? 1 : 0, 1, 1);
+  }
+  let threw = 0; try { generateLayout(rng('a'), { length: 'huge' }); } catch { threw = 1; }
+  check('unknown length throws', threw, 1, 1);
 });
 
 // Twistiness over the seeds: hairpins per km and total |heading change| per km, twisty vs flowing.
 const avg = (a, k) => a.reduce((t, s) => t + s[k], 0) / a.length;
 for (const kind of ['loop', 'stage']) {
-  const f = stats[`flowing ${kind}`], t = stats[`twisty ${kind}`];
+  const f = stats[`4 ${kind}`], t = stats[`2 ${kind}`];
   if (!f.length || !t.length) continue;
   test(`twistiness ${kind}`, () => {
     const fh = avg(f, 'hpKm'), th = avg(t, 'hpKm'), ft = avg(f, 'turnKm'), tt = avg(t, 'turnKm');
@@ -172,6 +186,13 @@ for (const kind of ['loop', 'stage']) {
     check('twisty hairpins/km (avg)', th, kind === 'loop' ? 3 : 1.5, Infinity);
     if (kind === 'loop') check('twisty hairpins/km (each seed)', Math.min(...t.map((s) => s.hpKm)), 2, Infinity);
     check('twisty / flowing |heading change| per km', tt / ft, 2, Infinity);
+  });
+  // R14-3: tight to flowing in order; each level turns less per km than the one before it
+  test(`style gradient ${kind}`, () => {
+    const turn = STYLES.map((st) => avg(stats[`${st} ${kind}`], 'turnKm')), hp = STYLES.map((st) => avg(stats[`${st} ${kind}`], 'hpKm'));
+    console.log(`  ${kind} by level: ${STYLES.map((st, i) => `${st}: ${hp[i].toFixed(2)} hp/km ${turn[i].toFixed(0)}°/km`).join(', ')}`);
+    for (let i = 1; i < STYLES.length; i++) check(`${kind} level ${STYLES[i]} turns less than ${STYLES[i - 1]}`, turn[i] / turn[i - 1], 0, 0.97);
+    check(`${kind} level 5 hairpins/km (avg)`, hp[4], 0, 0.2);
   });
 }
 
@@ -187,21 +208,20 @@ test('twisty obstacles', () => {
       for (const f of fs) {
         if (f.type === 'berm') continue;
         n++;
-        if (style !== 'twisty') continue;
+        if (style > 3) continue; // 1–3 place features as tight roads do
         for (let s = f.s0 - 40; s <= f.s1 + 30; s++) if (kAt(s) > 1 / 60 + 1e-6) { bad++; break; }
         if (f.type === 'kicker' || f.type === 'crest') for (let s = f.s0 - 40; s <= f.s1; s++) if (kAt(s) > 1 / 120 + 1e-6) { badLaunch++; break; }
       }
       km += L.length / 1000;
     }
     per[`${style} ${kind}`] = n / km;
-    if (style === 'twisty') {
-      check(`twisty ${kind}: obstacles with a curvy run-up/out (1/60 over [s0-40, s1+30])`, bad, 0, 0);
-      check(`twisty ${kind}: kickers/crests on a bend (1/120 over [s0-40, s1])`, badLaunch, 0, 0);
+    if (style <= 3) {
+      check(`style ${style} ${kind}: obstacles with a curvy run-up/out (1/60 over [s0-40, s1+30])`, bad, 0, 0);
+      check(`style ${style} ${kind}: kickers/crests on a bend (1/120 over [s0-40, s1])`, badLaunch, 0, 0);
     }
   }
   console.log('  obstacles/km (mild): ' + Object.entries(per).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', '));
-  check('twisty loop obstacles/km (mild)', per['twisty loop'], 2, Infinity);
-  check('twisty stage obstacles/km (mild)', per['twisty stage'], 2, Infinity);
+  for (const st of [1, 2, 3]) for (const kind of ['loop', 'stage']) check(`style ${st} ${kind} obstacles/km (level 2)`, per[`${st} ${kind}`], st === 1 ? 1 : 2, Infinity); // level 1's straights are short: fewer fit
 });
 
 for (const [k, a] of Object.entries(stats)) {

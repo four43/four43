@@ -3,8 +3,10 @@
 // shapes analytically so terrain, rendering and the autopilot all agree on them. Whoops are only a
 // stretch here: their ridges are 2D road bumps (gen/bumps.js, rally spec R11), not a profile.
 
+import { styleLevel, obstacleLevel } from './levels.js';
+
 const DEG = Math.PI / 180;
-// Mild ranges from the spec; `wild` scales heights by WILD_HEIGHT.
+// Ranges from the spec (the old 'mild'); the obstacles level only changes how often they come (rally spec R14-4).
 export const FEATURE_RANGES = {
   kicker: { height: [1, 1.5], lipS: [8, 10], landS: [20, 40], recS: [15, 25] },
   crest: { height: [2, 4], length: [30, 50] },
@@ -13,7 +15,8 @@ export const FEATURE_RANGES = {
   berm: { angle: [10 * DEG, 18 * DEG] },
 };
 const WEIGHTS = [['kicker', 3], ['whoops', 3], ['crest', 2], ['tabletop', 2]];
-const WILD_HEIGHT = 1.4, WILD_PACK = 1.6;
+// obstacles level 1 … 5: features per metre × PACK (2 = the old mild; heights never change: the old wild's ×1.4 tossed the car)
+export const PACK = { 1: 0.6, 2: 1, 3: 1.3, 4: 1.6, 5: 2 };
 const RUN_UP = 60, RUN_OUT = 40, MAX_K = 1 / 120; // straight-ish stretch around a feature
 // Twisty layouts rarely run 160 m at |κ| ≤ 1/120, so there the run-up is 40 m and the run-out
 // 30 m; whoops and tabletops (ridden slowly, no flight) may sit on mild bends (|κ| ≤ 1/60), and
@@ -54,11 +57,11 @@ function makeFeature(type, s0, r, hk) {
   }
 }
 
-// style: 'flowing' | 'twisty' (default: the layout's own style, else flowing).
-export function placeFeatures(layout, r, { obstacles = 'mild', style = layout.style } = {}) {
-  const { n, closed, length, curvature: K } = layout;
-  const tw = style === 'twisty', runUp = tw ? TWISTY.runUp : RUN_UP, runOut = tw ? TWISTY.runOut : RUN_OUT;
-  const wild = obstacles === 'wild', hk = wild ? WILD_HEIGHT : 1, pack = wild ? WILD_PACK : 1;
+// style: 1 … 5 (default: the layout's own); 1–3 place as tight roads do. obstacles: 1 … 5.
+export function placeFeatures(layout, r, { obstacles: ob = 2, style: sv = layout.style ?? 4 } = {}) {
+  const { n, closed, length, curvature: K } = layout, style = styleLevel(sv), obstacles = obstacleLevel(ob);
+  const tw = style <= 3, runUp = tw ? TWISTY.runUp : RUN_UP, runOut = tw ? TWISTY.runOut : RUN_OUT;
+  const hk = 1, pack = PACK[obstacles];
   const kAt = (s) => {
     let i = Math.round(s);
     if (closed) i = ((i % n) + n) % n; else if (i < 0 || i > n - 1) return Infinity;
@@ -67,7 +70,7 @@ export function placeFeatures(layout, r, { obstacles = 'mild', style = layout.st
   const clear = (a, b, kMax = MAX_K) => { for (let s = Math.floor(a); s <= Math.ceil(b); s++) if (kAt(s) > kMax + 1e-7) return false; return true; };
   const out = [];
   // Obstacles: walk the road; at each candidate start try a feature, else step 10 m on. After a
-  // placement the next candidate is a random 300–500 m (twisty 200–360 m; ÷1.6 wild) further on.
+  // placement the next candidate is a random 300–500 m (tight 120–250 m) ÷ PACK further on.
   const types = r.fork('types'), params = r.fork('params'), gaps = r.fork('gaps');
   const [g0, g1] = tw ? TWISTY.gap : [300, 500], gap = () => gaps.range(g0, g1) / pack;
   const sMax = length - (closed ? START_CLEAR : 0); // loops: keep the run-up to the line plain
