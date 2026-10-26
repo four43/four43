@@ -19,7 +19,7 @@
     "@gltf-transform/extensions": "^4.5.1",
     "esbuild": "^0.28.2",
     "pngjs": "^7.0.0",
-    "lion-hawk": "github:four43/lion-hawk-engine#v0.13.0",
+    "lion-hawk": "github:four43/lion-hawk-engine#v0.13.1",
     "three": "^0.186.0"
   },
   "type": "module",
