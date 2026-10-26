@@ -43,6 +43,13 @@ test('desktop: settings sheet, a title choice rebuilds the track, results card, 
     assert.equal(await game.page.locator('#unit').textContent(), 'km/h');
     await game.tap('settings.close');
     assert.equal(await game.page.locator('#sheet').isVisible(), false);
+    assert.equal(await game.page.locator('#scrim').isVisible(), false);
+    await game.tap('title.settings'); // the pop-over: a tap on the scrim outside the sheet closes it
+    assert.equal(await game.page.locator('#scrim').isVisible(), true);
+    assert.equal(await game.page.locator('#closeSheet .closeX').isVisible(), true, 'with the mouse, Close is the corner ×');
+    await game.page.mouse.click(5, 5);
+    assert.equal(await game.page.locator('#sheet').isVisible(), false, 'a scrim tap closes the sheet');
+    assert.deepEqual((await game.scene()).overlays, ['title']);
     await game.tap('title.theme.winter');
     await game.until(s => s.phase === 'title', { maxSteps: 120 });
     await game.page.waitForFunction(() => window.engine.settled());
@@ -142,6 +149,8 @@ test('desktop: a gamepad walks the title, opens and leaves settings, drives, pau
     await push({ left: true }); assert.equal(await focused(), 'title.settings');
     await push({ a: true }); assert.deepEqual((await game.scene()).overlays, ['title', 'settings']);
     assert.match(await focused(), /^settings\./, 'focus moves into the sheet');
+    assert.equal(await game.page.locator('#closeSheet .closeLbl').isVisible(), true, 'with a pad, Close is a (B) Back button');
+    assert.equal(await game.page.locator('#closeSheet .closeX').isVisible(), false, 'and not the corner ×');
     const picked = row => game.page.evaluate(r => document.querySelector(`[data-testid^="settings.${r}."][aria-pressed="true"]`)?.getAttribute('data-testid'), row);
     await game.page.evaluate(() => document.querySelector('[data-testid="settings.units.mph"]').focus()); // onto the Units row
     const before = await picked('units');

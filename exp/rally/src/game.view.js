@@ -128,9 +128,19 @@ function overlayHalves() {
     },
   };
 
+  // A tap on the scrim closes the sheet through its own Close button, so it goes through the engine like any tap.
+  const scrimTap = ev => ev.currentTarget.ownerDocument.getElementById('closeSheet')?.click();
   const settings = {
-    enter(engine, view) { view.doc.getElementById('sheet').hidden = false; },
-    exit(engine, view) { view.doc.getElementById('sheet').hidden = true; },
+    enter(engine, view) {
+      const doc = view.doc, scrim = doc.getElementById('scrim');
+      doc.getElementById('sheet').hidden = false;
+      scrim.hidden = false; scrim.addEventListener('click', scrimTap); // the same function: a second enter adds nothing
+    },
+    exit(engine, view) {
+      const doc = view.doc, scrim = doc.getElementById('scrim');
+      doc.getElementById('sheet').hidden = true;
+      scrim.hidden = true; scrim.removeEventListener('click', scrimTap);
+    },
   };
   return { title, pause, results, settings };
 }

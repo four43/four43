@@ -232,6 +232,9 @@ the button.
   `settings.units.{mph,kmh}`, `settings.gearbox.{auto,manual}`, `settings.close`.
 - The **settings sheet** (Settings in the title footer, or Settings in the pause menu): Surface
   (pad only), Driving (Assisted / Sim), Units (mph / km/h), Gearbox (Auto / Manual), control help.
+  It pops over in the centre of the screen on a scrim that dims and blurs everything under it (scene, title, pause or
+  results card); a tap on the scrim closes it through `settings.close`. `settings.close` is a × in the corner with the
+  mouse, touch or keys; with a pad it is a full-width (B) Back button in a footer under the scrolling options.
   Settings persist in `localStorage` (`rally-sim-settings`, `v` 4: adds `mode`; a saved
   `world: 'pad'` becomes a loop — the pad is reached with `?pad`).
 - In play, top left: **Pause** chip and the seed chip ("Loop · seed · 1.2 mi"). A toast shows

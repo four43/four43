@@ -115,9 +115,12 @@ html:not([data-lh-input="pad"]):not([data-lh-input="keys"]) .glyph { display: no
 body.manual .shiftBtns { display: flex; }
 .shiftBtns button { height: 56px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(237,230,214,.2); font-size: 24px; font-weight: 700; touch-action: none; }
 
-/* settings sheet */
-#sheet { position: fixed; top: calc(var(--sa-t) + 58px); left: calc(var(--sa-l) + 10px); width: min(360px, calc(100vw - 20px));
-  max-height: calc(100% - var(--sa-t) - var(--sa-b) - 70px); overflow: auto; touch-action: pan-y; background: var(--panel-solid); border-radius: 14px; padding: 14px 16px 16px; z-index: 30; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+/* settings sheet: a pop-over in the centre, the scrim dimming and blurring everything under it (tap it to close) */
+#scrim { position: fixed; inset: 0; z-index: 28; background: rgba(15, 22, 26, .45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#scrim[hidden], #sheet[hidden] { display: none; }
+.sheetBody { flex: 0 1 auto; min-height: 0; overflow: auto; touch-action: pan-y; overscroll-behavior: contain; padding: 14px 16px 16px; }
+#sheet { position: fixed; left: 50%; top: calc(50% + (var(--sa-t) - var(--sa-b)) / 2); transform: translate(-50%, -50%); box-sizing: border-box;
+  width: min(420px, calc(100vw - var(--sa-l) - var(--sa-r) - 24px)); max-height: calc(100% - var(--sa-t) - var(--sa-b) - 24px); display: flex; flex-direction: column; overflow: hidden; background: var(--panel-solid); border-radius: 14px; z-index: 30; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
 #sheet h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
 .seg { display: flex; background: rgba(237,230,214,.08); border-radius: 10px; padding: 3px; gap: 3px; }
 .seg button { flex: 1; border: 0; background: transparent; padding: 9px 4px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; color: var(--dim); }
@@ -148,7 +151,15 @@ html:not([data-lh-input="pad"]) .glyph.shoulder { display: none; }
 #seedChip { cursor: default; font-variant-numeric: tabular-nums; }
 #toast { position: fixed; left: 50%; top: calc(var(--sa-t) + 64px); transform: translateX(-50%); z-index: 40;
   background: var(--panel-solid); padding: 10px 18px; border-radius: 12px; font-size: 18px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
-#closeSheet { border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
+/* Close: a × in the corner for the mouse and touch; with a pad, a (B) Back button along the bottom, as consoles do */
+#closeSheet { position: absolute; top: 12px; right: 14px; border: 0; background: transparent; font-size: 26px; cursor: pointer; padding: 0 4px; line-height: 1; }
+#closeSheet .closeLbl, html:not([data-lh-input="pad"]) #closeSheet .glyph { display: none; }
+html[data-lh-input="pad"] .sheetFoot { flex: none; padding: 10px 16px 16px; border-top: 1px solid rgba(237,230,214,.12); }
+html[data-lh-input="pad"] #closeSheet { position: static; width: 100%; min-height: 48px; border-radius: 12px; border: 1px solid rgba(237,230,214,.2);
+  background: rgba(237,230,214,.08); font-size: 18px; font-weight: 600; }
+html[data-lh-input="pad"] #closeSheet .closeX { display: none; }
+html[data-lh-input="pad"] #closeSheet .closeLbl { display: inline; }
+html[data-lh-input="pad"] #closeSheet:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
 
 
 /* Screens (spec tracks T-26) from the engine's own state: the title overlay shows the menu over the live scene;
@@ -337,20 +348,24 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
 <div id="lights" hidden><i></i><i></i><i></i><b>GO</b></div>
 <div id="banner" hidden></div>
 
+<div id="scrim" hidden></div>
 <div id="sheet" hidden>
-  <h2>Settings <button id="closeSheet" data-lh-slot="settings.close" aria-label="Close">×</button></h2>
-  <h3 class="padOnly">Surface</h3>
-  <div class="seg padOnly"><button data-set="surface:tarmac" data-lh-slot="settings.surface.tarmac">Tarmac</button><button data-set="surface:hardpack" data-lh-slot="settings.surface.hardpack">Dirt</button><button data-set="surface:gravel" data-lh-slot="settings.surface.gravel">Gravel</button><button data-set="surface:snow" data-lh-slot="settings.surface.snow">Snow</button><button data-set="surface:ice" data-lh-slot="settings.surface.ice">Ice</button></div>
-  <h3>Driving</h3>
-  <div class="seg"><button data-set="assist:true" data-lh-slot="settings.assist.true">Assisted</button><button data-set="assist:false" data-lh-slot="settings.assist.false">Sim</button></div>
-  <h3>Units</h3>
-  <div class="seg"><button data-set="units:mph" data-lh-slot="settings.units.mph">mph</button><button data-set="units:kmh" data-lh-slot="settings.units.kmh">km/h</button></div>
-  <h3>Gearbox</h3>
-  <div class="seg"><button data-set="gearbox:auto" data-lh-slot="settings.gearbox.auto">Auto</button><button data-set="gearbox:manual" data-lh-slot="settings.gearbox.manual">Manual</button></div>
-  <h3>Rumble</h3>
-  <div class="seg"><button data-set="rumble:off" data-lh-slot="settings.rumble.off">Off</button><button data-set="rumble:light" data-lh-slot="settings.rumble.light">Light</button><button data-set="rumble:full" data-lh-slot="settings.rumble.full">Full</button></div>
-  <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to get back onto the road, Shift+R (or hold Reset) to restart, Esc or P to pause, C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift, Start to pause. In menus the arrow keys, D-pad or stick move, Enter or A selects, Esc or B goes back, and the bumpers change the highlighted option.</p>
-  <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st.</p>
+  <div class="sheetBody">
+    <h2>Settings</h2>
+    <h3 class="padOnly">Surface</h3>
+    <div class="seg padOnly"><button data-set="surface:tarmac" data-lh-slot="settings.surface.tarmac">Tarmac</button><button data-set="surface:hardpack" data-lh-slot="settings.surface.hardpack">Dirt</button><button data-set="surface:gravel" data-lh-slot="settings.surface.gravel">Gravel</button><button data-set="surface:snow" data-lh-slot="settings.surface.snow">Snow</button><button data-set="surface:ice" data-lh-slot="settings.surface.ice">Ice</button></div>
+    <h3>Driving</h3>
+    <div class="seg"><button data-set="assist:true" data-lh-slot="settings.assist.true">Assisted</button><button data-set="assist:false" data-lh-slot="settings.assist.false">Sim</button></div>
+    <h3>Units</h3>
+    <div class="seg"><button data-set="units:mph" data-lh-slot="settings.units.mph">mph</button><button data-set="units:kmh" data-lh-slot="settings.units.kmh">km/h</button></div>
+    <h3>Gearbox</h3>
+    <div class="seg"><button data-set="gearbox:auto" data-lh-slot="settings.gearbox.auto">Auto</button><button data-set="gearbox:manual" data-lh-slot="settings.gearbox.manual">Manual</button></div>
+    <h3>Rumble</h3>
+    <div class="seg"><button data-set="rumble:off" data-lh-slot="settings.rumble.off">Off</button><button data-set="rumble:light" data-lh-slot="settings.rumble.light">Light</button><button data-set="rumble:full" data-lh-slot="settings.rumble.full">Full</button></div>
+    <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to get back onto the road, Shift+R (or hold Reset) to restart, Esc or P to pause, C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift, Start to pause. In menus the arrow keys, D-pad or stick move, Enter or A selects, Esc or B goes back, and the bumpers change the highlighted option.</p>
+    <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st.</p>
+  </div>
+  <div class="sheetFoot"><button id="closeSheet" data-lh-slot="settings.close" aria-label="Close"><img class="glyph" data-lh-glyph="back" alt=""><span class="closeX" aria-hidden="true">×</span><span class="closeLbl">Back</span></button></div>
 </div>
 
 <div id="debug" hidden>
