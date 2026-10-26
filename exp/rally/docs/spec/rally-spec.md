@@ -811,7 +811,7 @@ noise was too simple. A simpler palette that sits with the models; Art of Rally 
   per-instance tint 0.8–1.15. Tufts in a dry patch are straw, in a dark field dark green; winter grass verges follow the
   snow palette.
 
-## Round 14: controller title, track length, style and obstacle levels (2026-10-26)
+## Round 14: controller title, track length, style and obstacle levels (0.10.0, lion-hawk 0.13.1, 2026-10-26)
 
 Request: shoulder buttons for the mode with a pad (LB [Stage] [Time Attack] [Free Drive] RB, in that order) and no
 cursor up there; a shuffle icon for the random seed; no Go button (the seed commits on leaving the field or Enter);
