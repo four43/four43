@@ -756,7 +756,7 @@ angle and width across the track; ridges are fine as long as they can be ridden.
   a 0.07 s hop, up.y ≥ 0.965. Track, wild, game, verge, markers suites pass; goldens re-blessed (the stage surface
   changed); `test/game.mjs` run 2 now idles 0.5 s after Go to differ from run 1 (a held car is at rest at Go).
 
-## Round 12: road width (2026-10-25)
+## Round 12: road width (0.8.1, 2026-10-25)
 
 Request (playtest): vary the width of the track; it was too much the same (3.5 m ± ~0.45 m everywhere). Then: as wide as
 20 m and as narrow as 1.5 car widths (~2.6 m; the car is ~1.75 m across).
