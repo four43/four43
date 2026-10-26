@@ -296,6 +296,26 @@ function groundPatch(sh, inject, { depth } = {}) {
   sh.fragmentShader = inject(sh.fragmentShader, 'color_fragment', FRAG_GROUND_COLOR);
 }
 
+// Verge tufts (R13-5): each takes the ground's painted colour at its root (flat over the tuft, so a whole tuft is one tone
+// of the field it stands in), times its vertex colour (dark root, light tip) and instance tint. Slope tones are left out
+// (tufts only grow on the flatter verge).
+const VERT_TUFT = `varying vec2 vRsRoot;`;
+const VERT_TUFT_MAIN = `#ifdef USE_INSTANCING
+vRsRoot = ( modelMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xz;
+#else
+vRsRoot = ( modelMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xz;
+#endif`;
+const FRAG_TUFT_COLOR = `diffuseColor.rgb *= rsGround( vRsRoot, 1.0 );`;
+function tuftPatch(sh, inject, { depth } = {}) {
+  if (depth) return;
+  Object.assign(sh.uniforms, U);
+  sh.vertexShader = inject(sh.vertexShader, 'common', VERT_TUFT);
+  sh.vertexShader = inject(sh.vertexShader, 'project_vertex', VERT_TUFT_MAIN);
+  sh.fragmentShader = inject(sh.fragmentShader, 'common', `varying vec2 vRsRoot;\n${FRAG_LIB}`);
+  sh.fragmentShader = inject(sh.fragmentShader, 'color_fragment', FRAG_TUFT_COLOR);
+}
+
 // The road material: the compiled base (vertex colours) extended by the road patch; the ground: the terrain's.
 export const roadMaterial = (mc, base) => mc.extend(base, 'rally-road-surface', roadPatch);
 export const groundMaterial = (mc, base) => mc.extend(base, 'rally-ground-surface', groundPatch);
+export const tuftMaterial = (mc, base) => mc.extend(base, 'rally-tuft-surface', tuftPatch);

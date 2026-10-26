@@ -10,7 +10,7 @@ import { noise2 } from '../gen/noise.js';
 import { roadSurfaceAt } from '../gen/surfaces.js';
 import { heightAt } from '../gen/terrain.js';
 import { rng } from '../gen/rng.js';
-import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, setSky, setGround } from './roadSurface.js';
+import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, tuftMaterial, setSky, setGround } from './roadSurface.js';
 import { VERGE } from '../gen/surfaces.js';
 import { EDGE, edgeAt } from '../gen/edges.js';
 import { Pebbles } from './pebbles.js';
@@ -34,7 +34,7 @@ const POST_H = 1.2, POST_W = 0.12, POST_D = 0.09; // matches TrackWorld's box co
 const lin = (hex) => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; }; // sRGB hex -> linear
 const PAL = {
   summer: {
-    a: lin('#445e2e'), b: lin('#66823e'),          // the tufts' greens, by large-scale noise (rally-grass's painted tones, R13)
+    a: lin('#445e2e'), b: lin('#66823e'),          // the terrain's vertex greens (the ground shader paints over them, R13)
     earth: lin('#6a5843'), rock: lin('#7a766d'),   // steep slopes
     shoulder: lin('#76694f'), slope: [0.95, 0.8],  // ny range over which slope colour takes over
   },
@@ -293,7 +293,7 @@ export class TrackView {
     for (const kind of Object.keys(geos)) {
       const cfg = COVER[kind], cap = Math.ceil(cfg.perCell * Math.PI * ((COVER.radius + COVER.cell) / COVER.cell) ** 2);
       // Tufts sway (height²) and shrink into the ground between COVER.fade radii: the compiler's WIND feature.
-      const m = this.mc.get('rally-grass', { instanced: true, vertexColors: true, wind: { fade: COVER.fade, amp: [0.12, 0.08] } });
+      const m = tuftMaterial(this.mc, this.mc.get('rally-grass', { instanced: true, vertexColors: true, wind: { fade: COVER.fade, amp: [0.12, 0.08] } }));
       const im = createInstances({ geometry: geos[kind], material: m, max: cap, colors: true, castShadow: false, receiveShadow: true }).mesh;
       this.root.add(im); // updateCover writes its matrix and colour arrays in place
       this.cover[kind] = im;
@@ -313,7 +313,7 @@ export class TrackView {
     e = { kind, cx, cz, data: null, n: 0 };
     this.coverCells.set(key, e);
     if (!cfg) return e;
-    const r = rng(`${seed}|cover|${cx}|${cz}`), out = new Float32Array(cfg.perCell * 9), P = PAL[this.theme], c = [0, 0, 0];
+    const r = rng(`${seed}|cover|${cx}|${cz}`), out = new Float32Array(cfg.perCell * 9);
     const dist = this.roadDist;
     let n = 0;
     for (let k = 0; k < cfg.perCell; k++) {
@@ -325,11 +325,9 @@ export class TrackView {
       let d = dist[gz * T.nx + gx] / 10;
       if (d < COVER.fullD + 1.5) { const at = locator.locate(x, z); d = Math.abs(at.d) - (edgeAt(this.track.edges, this.track.layout, at.s, at.d) - EDGE.half); }
       if (d < COVER.minD || keep > smooth(COVER.minD, COVER.fullD, d) * 0.98 + 0.02) continue;
-      const big = this.noise(x / 70, z / 70);
-      mix3(c, P.a, P.b, 0.5 + 0.6 * big);
-      const o = n * 9;
+      const o = n * 9; // colour: a tint only, the shader takes the ground's colour under the tuft (R13-5)
       out[o] = x; out[o + 1] = heightAt(T, x, z) - 0.03; out[o + 2] = z; out[o + 3] = yaw; out[o + 4] = w; out[o + 5] = h;
-      out[o + 6] = c[0] * tint; out[o + 7] = c[1] * tint; out[o + 8] = c[2] * tint;
+      out[o + 6] = out[o + 7] = out[o + 8] = tint;
       n++;
     }
     e.data = out; e.n = n;

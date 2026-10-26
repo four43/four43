@@ -803,6 +803,10 @@ noise was too simple. A simpler palette that sits with the models; Art of Rally 
   a damp halo, relief filled in; on tarmac water gathers towards the edges. Tarmac's tone bands at a quarter (`tone`),
   strokes nearly off.
 - **R13-3 Ground**: three tones in big soft-edged fields (~55 m), dry patches, small clumps (faded with distance), earth
-  then rock as the slope steepens; the terrain's vertex colours no longer colour it. The tufts' greens follow the palette.
+  then rock as the slope steepens; the terrain's vertex colours no longer colour it.
 - **Removed**: the photo textures (`pwa/road-*.jpg`, `pwa/ground-*.jpg`, 1.7 MB), their texture arrays and loader.
-
+- **R13-5 Tufts take the ground's colour** (request: grasses take the colour of the terrain they stand on): the verge
+  tufts' material (`tuftMaterial`, `mc.extend` on `rally-grass`) paints each tuft with `rsGround` at its root (the instance
+  origin, so one tone per tuft; the flat-ground tones only, no earth/rock), times the blade's root-to-tip shade and a
+  per-instance tint 0.8–1.15. Tufts in a dry patch are straw, in a dark field dark green; winter grass verges follow the
+  snow palette.
