@@ -778,7 +778,7 @@ Request (playtest): vary the width of the track; it was too much the same (3.5 m
   at the start gate, no step at a loop's seam; tarmac's local wander (against a ±12 m average) under half of loose.
   Generator, track (its verge probe now 1 m past the edge), wild, game, verge and markers suites pass; goldens re-blessed.
 
-## Round 13: painted surfaces (2026-10-25)
+## Round 13: painted surfaces (0.9.0, 2026-10-25)
 
 Request (playtest): the realistic photo textures (R10-7, R10-9) didn't fit the low-poly, vector look; the old flat
 noise was too simple. A simpler palette that sits with the models; Art of Rally (Funselector) is the reference.
