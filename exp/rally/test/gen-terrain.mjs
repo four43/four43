@@ -156,12 +156,15 @@ test('features: dimensions', () => {
   check(`features outside spec ranges (of ${n})`, bad, 0, 0);
   // the spec's T-4 ranges
   const S = FEATURE_RANGES;
-  check('kicker height 1-1.5, lip 8-10, landing 20-40', +(S.kicker.height[0] === 1 && S.kicker.height[1] === 1.5 && S.kicker.lipS[0] === 8 &&
-    S.kicker.lipS[1] === 10 && S.kicker.landS[0] === 20 && S.kicker.landS[1] === 40), 1, 1);
-  check('crest 2-4 m over 30-50 m', +(S.crest.height[0] === 2 && S.crest.height[1] === 4 && S.crest.length[0] === 30 && S.crest.length[1] === 50), 1, 1);
+  // R17: jumps shaped for ~70-100 km/h: gentle take-offs from a straight, landings downhill
+  const inside = (r, lo, hi) => r[0] >= lo && r[1] <= hi;
+  check('kicker take-off 5-8 deg, landing 8-12 deg, ends <= 0.4 m below the road', +(inside(S.kicker.takeoff, 5, 8) && inside(S.kicker.landing, 8, 12) &&
+    inside(S.kicker.depth, 0, 0.4)), 1, 1);
+  check('crest take-off 4-7 deg, landing 6-9 deg', +(inside(S.crest.takeoff, 4, 7) && inside(S.crest.landing, 6, 9)), 1, 1);
   check('whoops stretch 4-10 x 5-6 m (R11: the ridges are road bumps)', +(S.whoops.count[0] === 4 && S.whoops.count[1] === 10 &&
     S.whoops.pitch[0] === 5 && S.whoops.pitch[1] === 6 && !('height' in S.whoops)), 1, 1);
-  check('tabletop 1-1.5 m, top 10-20 m', +(S.tabletop.height[0] === 1 && S.tabletop.height[1] === 1.5 && S.tabletop.topS[0] === 10 && S.tabletop.topS[1] === 20), 1, 1);
+  check('tabletop take-off 6-8 deg, top 10-18 m, down 8-12 deg', +(inside(S.tabletop.takeoff, 6, 8) && inside(S.tabletop.topS, 10, 18) &&
+    inside(S.tabletop.landing, 8, 12)), 1, 1);
 });
 
 test('features: profile shapes', () => {
@@ -170,21 +173,42 @@ test('features: profile shapes', () => {
     for (let k = 0; k < 200; k++) { const f = feats(L, 'shape' + k, obstacles).find((q) => q.type === type); if (f) return f; }
     throw new Error('no ' + type);
   };
-  const kk = find('kicker'), lip = kk.s0 + kk.lipS;
-  check('kicker offset at s0', profileOffset([kk], kk.s0), -1e-6, 1e-6);
-  check('kicker offset at lip = height', profileOffset([kk], lip - 1e-6) / kk.height, 0.99, 1.0001);
-  check('kicker ramp steepest at the lip (slope)', (profileOffset([kk], lip - 0.01) - profileOffset([kk], lip - 1.01)), 1.6 * kk.height / kk.lipS, 3 * kk.height / kk.lipS);
-  check('kicker drops behind the lip (m within 3 m)', profileOffset([kk], lip) - profileOffset([kk], lip + 3), 0.9 * kk.height, 2 * kk.height);
-  let minOff = 0; for (let s = lip; s <= kk.s1; s += 0.25) minOff = Math.min(minOff, profileOffset([kk], s));
-  check('kicker landing goes down to -height', minOff / kk.height, -1.0001, -0.99);
-  let mono = 1; for (let s = lip + 3; s + 0.5 <= lip + kk.landS; s += 0.5) if (profileOffset([kk], s + 0.5) > profileOffset([kk], s) + 1e-9) mono = 0;
-  check('kicker landing is downhill all the way to lip + landS', mono, 1, 1);
-  check('kicker offset at s1', profileOffset([kk], kk.s1), -1e-6, 1e-6);
-  const cr = find('crest');
-  check('crest peak / height', profileOffset([cr], (cr.s0 + cr.s1) / 2) / cr.height, 0.999, 1.001);
+  // R17 launch shape, sampled every 5 cm: continuous height and slope, a straight take-off of >= 3 m up to the lip
+  // (f.lipS from s0), a gentle concave entry, a downhill landing, no deeper than the feature's depth.
+  const D = 0.05, at = (f, s) => profileOffset([f], s);
+  const shape = (f) => {
+    let maxStep = 0, maxKink = 0, up = 0, down = 0, low = 0, high = 0, entryK = 0, footK = 0;
+    for (let s = f.s0; s + 2 * D <= f.s1; s += D) {
+      const a = at(f, s), b = at(f, s + D), c = at(f, s + 2 * D), m0 = (b - a) / D, m1 = (c - b) / D;
+      maxStep = Math.max(maxStep, Math.abs(b - a)); maxKink = Math.max(maxKink, Math.abs(m1 - m0));
+      up = Math.max(up, m0); down = Math.min(down, m0); low = Math.min(low, a); high = Math.max(high, a);
+      if (s < f.s0 + f.lipS - 3 && m1 > m0) entryK = Math.max(entryK, (m1 - m0) / D);
+      if (s > f.s0 + f.lipS && m1 > m0 + 1e-12) footK = Math.max(footK, (m1 - m0) / D);
+    }
+    let straight = 0; const mLip = (at(f, f.s0 + f.lipS - D) - at(f, f.s0 + f.lipS - 2 * D)) / D;
+    for (let s = f.s0 + f.lipS - D; s > f.s0; s -= D) { if (Math.abs((at(f, s) - at(f, s - D)) / D - mLip) > 1e-6) break; straight += D; }
+    return { maxStep, maxKink, up: Math.atan(up) / DEG, down: Math.atan(-down) / DEG, low, high, entryR: entryK ? 1 / entryK : Infinity, footR: footK ? 1 / footK : Infinity, straight, lipDeg: Math.atan(mLip) / DEG };
+  };
+  for (const [type, maxUp, maxDown] of [['kicker', 8, 12], ['crest', 7, 9], ['tabletop', 8, 12]]) {
+    const f = find(type), g = shape(f), R = FEATURE_RANGES[type];
+    check(`${type} offset 0 at s0 and s1`, Math.abs(at(f, f.s0)) + Math.abs(at(f, f.s1)), 0, 1e-6);
+    check(`${type} height continuous (m per 5 cm)`, g.maxStep, 0, D * Math.tan(13 * DEG));
+    check(`${type} slope continuous (change per 5 cm)`, g.maxKink, 0, 0.02);
+    check(`${type} steepest climb (deg)`, g.up, 0, maxUp + 1e-6);
+    check(`${type} steepest descent (deg)`, g.down, 0, maxDown + 1e-6);
+    check(`${type} straight take-off before the lip (m)`, g.straight, 3 - 2 * D, 1e9);
+    check(`${type} lip angle = its take-off (deg)`, g.lipDeg - f.takeoff, -0.01, 0.01);
+    check(`${type} entry curve radius (m)`, g.entryR, R.entryR[0] - 1, 1e9);
+    check(`${type} tightest concave bend after the lip (m)`, g.footR, type === 'crest' ? 99 : 59, 1e9);
+    check(`${type} height = its peak (m)`, g.high - f.height, -1e-3, 1e-6);
+    check(`${type} reaches its depth, no deeper (m)`, g.low + f.depth, -1e-6, 1e-3);
+  }
   const tt = find('tabletop');
-  check('tabletop top flat', Math.abs(profileOffset([tt], tt.s0 + tt.upS + 1) - profileOffset([tt], tt.s0 + tt.upS + tt.topS - 1)), 0, 1e-6);
-  check('tabletop top / height', profileOffset([tt], tt.s0 + tt.upS + tt.topS / 2) / tt.height, 0.999, 1.001);
+  check('tabletop top flat', Math.abs(at(tt, tt.s0 + tt.lipS + 3) - at(tt, tt.s0 + tt.lipS + tt.topS - 3)), 0, 1e-6);
+  const kk = find('kicker'), cr = find('crest');
+  check('kicker height (m)', kk.height, 0.45, 1.3);
+  check('crest height (m)', cr.height, 0.6, 2.0);
+  check('tabletop height (m)', tt.height, 0.6, 1.35);
   const wh = find('whoops');
   let whMax = 0; for (let s = wh.s0; s <= wh.s1; s += 0.1) whMax = Math.max(whMax, Math.abs(profileOffset([wh], s)));
   check('whoops add no profile (R11: ridges are road bumps)', whMax, 0, 0);
@@ -386,10 +410,9 @@ test('terrain: obstacles in road[]', () => {
   {
     const fs = feats(L, seedK, 'mild'), t = generateTerrain(L, fs, rng(seedK).fork('terrain'), {});
     const lip = Math.round(kk.s0 + kk.lipS);
-    // road[lip] holds the lip (sampled just before the face), then the ground falls away
-    const rise = t.road[lip - 1] - t.road[Math.round(kk.s0)];
-    check('kicker rises to the lip in road[] (m)', rise, 0.5 * kk.height, 2 * kk.height + 1.5);
-    check('kicker drop behind the lip in road[] (m)', t.road[lip - 1] - t.road[lip + 3], 0.6 * kk.height, 3 * kk.height);
+    const rise = t.road[lip] - t.road[Math.round(kk.s0)];
+    check('kicker rises to the lip in road[] (m)', rise, 0.5 * kk.height, 1.5 * kk.height + 1.5);
+    check('kicker lands downhill in road[] (m over 10 m)', t.road[lip] - t.road[lip + 10], 0.5, 3);
   }
 });
 

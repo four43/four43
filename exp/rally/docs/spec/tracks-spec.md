@@ -191,7 +191,7 @@ World = {
   - Bank: up to 4° into corners from curvature, plus berm bank; + = left side up.
 - **T-4 Obstacles** (arcade fun, after Toyota/Sega-style off-road racers): placed on low-curvature
   stretches with a clear 60 m run-up and 40 m run-out, at most one per 300–500 m (`wild` packs
-  them ~1.6× tighter and ~1.4× taller).
+  them ~1.6× tighter; heights are the same at every obstacles level, rally spec R14-4).
   - *Flowing:* the whole stretch [s0 − 60, s1 + 40] at |κ| ≤ 1/120; one type drawn per spot,
     spots 10 m apart.
   - *Twisty* (few 160 m straights): 40 m run-up and 30 m run-out with the whole stretch at
@@ -199,15 +199,26 @@ World = {
     crests, which launch, also need |κ| ≤ 1/120 from the run-up to their end. At most one per
     120–250 m; up to 4 type draws per spot, spots 5 m apart. Mild over 8 seeds: twisty loops 2.3
     obstacles/km (mostly whoops and tabletops), stages 2.75 (flowing 2.2 / 2.1).
-  - *Kicker:* rises 1–1.5 m over 8–10 m with a sharp lip, then a long downhill landing 20–40 m on.
-  - *Crest:* a sharp hilltop (2–4 m over 30–50 m) that unloads or launches.
+  - *Jumps* (kicker, crest, tabletop; rally spec R17) share one launch shape built from constant-curvature arcs, so
+    height and slope are continuous: a concave entry of radius `entryR` up to the take-off angle, a straight of
+    `straight` m (≥ 3 m, longer than any wheelbase) to the lip, so both axles leave from one plane, a short round-over
+    at the lip (3 m radius; 8 m on crests), a downhill landing at the landing angle, and a concave foot of ≥ 60 m
+    (crest 100 m) back to level. A low jump eases its landing angle rather than tighten the foot. Concave bends are
+    sized for ~1 g of extra load at 90–100 km/h. Each feature stores its parameters plus `lipS` (lip, m from s0) and
+    `height` (the peak). Shaped for ~70–100 km/h.
+  - *Kicker* (rallycross-style built jump): take-off 5–7.5°, entry radius 65–85 m, straight 3–4 m, landing 8–12°
+    down to 0–0.4 m below the road, back up over 15–25 m. 0.45–1.3 m high.
+  - *Crest* (stage yump): take-off 4–7°, entry radius 110–150 m, straight 4–8 m, landing 6–9° down to 0.5–1.5 m
+    below the road, back up over 25–40 m. 0.6–2 m high.
   - *Whoops:* 4–8 rounded ridges, 0.25–0.45 m high (× 1.4 on wild), 6.5–8 m apart, clamped so
     the ridge between two wheels in adjacent troughs (2.4 m apart) stands ≤ 0.15 m — under the
     hull's ~0.2 m clearance (`WHOOPS_RIDGE_MAX`) — and to ≤ 0.5 m outright (`WHOOPS_MAX_H`) so the
     faces stay climbable by the front overhang (~13°). The first cut (0.4–0.7 m, 5–7 m) beached
     the car at low speed and flipped it above ~16 m/s; uncapped wild whoops (0.61 m) slewed it off
     the road. `test/wild.mjs`: the autopilot gets round 6 seeds' wild twisty loops and stages.
-  - *Tabletop:* up 1–1.5 m, flat top 10–20 m, down.
+  - *Tabletop:* take-off 6–8°, entry radius 65–85 m, straight 3–3.5 m, a 3 m round-over onto a flat top of
+    10–18 m, then a 3 m round-over into an 8–12° down ramp. 0.6–1.35 m high. A slow car lands on the top, a fast one
+    on the down ramp.
   - *Berm:* a hairpin (radius < 40 m) gets up to 18° of extra bank.
 - **T-5 Surfaces.** Sections of 200–700 m; each picks a road surface from the theme with a
   transition table (summer: gravel ↔ dirt ↔ tarmac; winter: snow ↔ packed ↔ ice, occasional

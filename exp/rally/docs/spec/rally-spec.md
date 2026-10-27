@@ -1001,3 +1001,39 @@ cars (R5 4WD, Classic RWD).
   walks the garage headless (steer edges, shift buttons, wrap, Back keeps the car, Drive); `e2e.browser.mjs` walks it
   in Chromium (a stored `awd`, D-pad, stick, LB wrap, right stick and mouse drag turn it, B and Done keep the car,
   saved, then drive).
+
+## Round 17: jump shapes (2026-10-26)
+
+The user found the kickers far too steep for real stage or rallycross jumps, and every car nose-dived over them. All
+jumps are now shaped for ~70–100 km/h (the user's pick: the roads are narrow and twisty).
+
+- **R17-1 Measured first** (`build/jumpprobe.mjs`: autopilot over the t1–t4 wild stages at 79–100 km/h). Kickers
+  rose 1–1.5 m on a u² ramp to an 11–21° lip with a 27–37° back face; crest tops were as tight as 11 m in radius,
+  tabletop edges rolled over. Cars left at −20 to −50°/s and landed up to 23° nose-down against the ground; a few
+  cartwheeled. With nothing acting on pitch in the air, a flight's pitch change is its take-off rate × airtime.
+- **R17-2 One launch shape** for kickers, crests and tabletops (tracks spec T-4): concave entry, a straight of ≥ 3 m
+  to the lip, a downhill landing, a ≥ 60 m concave foot. The first cut's 25–45 m entries bottomed the suspension at
+  ~85 km/h (≈ 1.8 g extra) and the hull struck the ramp; bends are now sized for ~1 g at 90–100 km/h, which pulled
+  the take-off angles down to 5–7.5° (kicker) and 6–8° (tabletop) from the planned 6–9° / 8–10°.
+- **R17-3 What is left.** A car still leaves a lip at ~−20 to −25°/s nose-down: once its front wheels are past the
+  lip the rear springs hold the tail up for wheelbase ÷ speed (~0.11 s at 80 km/h) while gravity drops the nose. It
+  falls with speed and no ramp shape cancels it (a concave lip makes it worse: the compressed rear kicks harder). So
+  kickers and crests land ~10° nose-down on average, tabletops ~5°. The next round (aero, and the wheels' spin
+  reacting on the body in the air, so braking drops the nose and throttle lifts it) is where the player gets to
+  correct it.
+
+  | (Impreza / Escort, flights ≥ 0.4 s) | before | after |
+  |---|---|---|
+  | fastest take-off rate | −43 / −52°/s | −27 / −24°/s |
+  | worst landing against the ground | −19 / −23° | −12 / −12° |
+  | kicker mean landing | – / −20° | −10 / −10° |
+  | crest mean landing | −16 / −8° | −10 / −11° |
+  | tabletop mean landing | −5 / −8° | −6 / −5° |
+  | longest flight | 3.6 / 4.8 s (crashes) | 1.0 / 1.0 s |
+
+- **Validation:** `test/gen-terrain.mjs` checks the ranges and each shape (continuous height and slope, climb and
+  descent limits, ≥ 3 m straight at the take-off angle, entry and foot radii, height = peak, depth reached).
+  `test/jumps.mjs` (in `npm test`, ~25 s) drives the Impreza and Escort over the t1–t4 wild stages: ≥ 10 flights
+  each, none over 1.5 s, take-off no faster than −30°/s, worst landing ≥ −16°, mean landing per type ≥ −12°. Against
+  the old shapes it fails 8 of 13. Goldens and the other suites unchanged.
+

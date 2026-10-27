@@ -6,8 +6,9 @@ import { pointAt } from '../world/trackWorld.js';
 
 const G = 9.81;
 // Speed caps (m/s) from OBSTACLE_LEAD m before an obstacle to its end, swept per feature on the
-// test seeds: kickers sometimes nose-dive into the landing from ~16, whoops launch and flip from
-// ~16 (and the tallest can't be crawled either: the hull grounds on the ridges).
+// test seeds: whoops launch and flip from ~16 (and the tallest can't be crawled either: the hull
+// grounds on the ridges). The jumps' caps date from the old steep kickers; the R17 shapes fly cleanly
+// at 79-100 km/h (test/jumps.mjs), but the autopilot's drives and goldens keep these.
 export const OBSTACLE_V = 16, OBSTACLE_LEAD = 15;
 export const V_MAX = 38;
 export const CAPS = { kicker: 12, whoops: 12, crest: 16, tabletop: 16 };
