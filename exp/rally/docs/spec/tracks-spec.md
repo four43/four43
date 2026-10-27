@@ -270,7 +270,9 @@ World = {
   shown on screen. Settings persist.
 - **T-11 Reset to road.** On a track, Reset puts the car on the road centre at the nearest point
   behind it, facing along the road, stopped, with props left as they are; a separate long-press /
-  `Shift+R` resets the whole track (props home, car at spawn).
+  `Shift+R` resets the whole track (props home, car at spawn). In a timed run with a checkpoint
+  missed, Reset instead puts the car 5 m before that checkpoint (progress moves with it, the clock
+  runs on), so driving on credits it.
 - **T-12 Validation.** `test/gen.mjs`: determinism, min radius, clearance, bounds, length bands,
   grade ≤ 12 % outside features, surface coverage of [0, length), obstacle run-up/out space,
   marker counts. `test/track.mjs`: an autopilot (pure pursuit on the centreline, speed from
@@ -365,7 +367,7 @@ state and the track; the only thing it does to the car is place it, hold it and 
   - *Pause menu* (Esc, P, gamepad Start, or the Pause chip): Resume, Restart, Settings, Quit to
     menu; Time attack adds the lap list. Restart is also Shift+R / hold Reset (a new countdown
     from the start or run-up, markers home). Reset (R / tap) stays "back onto the road", clock
-    running. Leaving the page (hidden) pauses a timed run.
+    running — or back to just before a missed checkpoint (T-11). Leaving the page (hidden) pauses a timed run.
   - *Game HUD:* timer (top centre, m:ss.cc), lap line under it ("Lap 3 · Last 1:02.31 · Best
     1:01.88"; before the flying start "Run-up: the clock starts at the line"; Stage: "Best …"),
     split pill ("Split 3/12 −0.42", green faster / red slower, 3 s), countdown lights (three

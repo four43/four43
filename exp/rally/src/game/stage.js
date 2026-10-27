@@ -17,6 +17,7 @@ const MS_MAX = 0xffffffff, ms = t => Math.max(0, Math.min(MS_MAX, Math.round(t *
 export const READY_T = 0.8, COUNT_T = 3, LOAD_HOLD = 0.05, RESULTS_AFTER = 1.5, RESET_HOLD = 0.6;
 export const DRIVING = new Set(['ready', 'countdown', 'running']);
 const START_Y = 0.6;          // CoM above the road when placed
+const MISSED_BACK = 5;        // m before a missed checkpoint that Reset puts the car
 const EPS = 1e-9;
 
 // Opens an overlay unless it is open or already requested in this step/transition (#36).
@@ -228,8 +229,10 @@ export function makeStage({ bests = null }) {
   };
 
   // Reset: R = back onto the road (the pad: the spawn), Shift+R = restart; the touch chip: tap = reset, held = restart.
-  const recover = s => {
-    const sim = s.sim;
+  // After a missed checkpoint, Reset goes back to just before it instead, so driving on credits it.
+  const recover = (e, s) => {
+    const sim = s.sim, P = s.progress;
+    if (P?.missed && !P.finished) { api.teleport(e, Math.max(0, P.cps[P.next] - MISSED_BACK)); return; }
     if (!sim.world.recover) { sim.resetCar(); return; }
     const p = sim.car.body.translation(), r = sim.world.recover(p.x, p.z); sim.car.reset(r, r.yaw);
   };
@@ -244,11 +247,11 @@ export function makeStage({ bests = null }) {
       s.holdT += dt;
       if (!s.holdFired && s.holdT >= RESET_HOLD - EPS) { s.holdFired = true; restartOrReset(e, s); return; }
     } else {
-      if (hold.released && !s.holdFired) recover(s);
+      if (hold.released && !s.holdFired) recover(e, s);
       s.holdT = 0; s.holdFired = false;
     }
     if (I.resetAll.pressed) { restartOrReset(e, s); return; }
-    if (I.reset.pressed) recover(s);
+    if (I.reset.pressed) recover(e, s);
     const dir = I.shiftUp.pressed ? 1 : I.shiftDown.pressed ? -1 : 0;
     if (dir) {
       if (s.settings.gearbox === 'auto') { s.settings.gearbox = 'manual'; s.sim.car.autoShift = false; s.settingsRev++; }

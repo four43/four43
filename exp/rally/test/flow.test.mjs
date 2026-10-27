@@ -116,6 +116,19 @@ test('Reset: a tap puts the car back on the road, a 0.6 s hold restarts; a shift
   assert.equal(h.engine.scene.state.settings.gearbox, 'manual'); assert.equal(h.engine.scene.state.sim.car.autoShift, false);
 });
 
+test('after a missed checkpoint, Reset goes back to just before it and driving on credits it', () => {
+  const h = headless(game(), { args: STAGE }), P = () => h.engine.scene.state.progress;
+  h.jump('stage', 'teleport', { p: -3 }, STAGE); // just behind the line (a stage has a run-up)
+  h.until(() => P().started, { maxSeconds: 4, input: { throttle: 1 }, message: 'started' });
+  const cp = P().cps[0];
+  h.debug.teleport(cp + 60); h.step(2); // past it without crossing: missed
+  assert.equal(h.state().missed, true); assert.equal(h.state().next, 0);
+  h.step(1, { reset: true }); h.step(1);
+  assert.ok(h.state().p < cp && h.state().p > cp - 10, `p ${h.state().p} just before checkpoint at ${cp}`);
+  h.until(x => x.state().next === 1, { maxSeconds: 6, input: { throttle: 1 }, message: 'checkpoint credited' });
+  assert.equal(h.state().missed, false);
+});
+
 test('presets put the stage in a known state without stepping (S-5)', () => {
   const args = { settings: { mode: 'stage', seed: 'p2' } }, h = headless(game(), { args });
   h.jump('stage', 'countdown', { n: 2 }, args);
