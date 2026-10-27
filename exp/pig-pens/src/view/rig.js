@@ -35,8 +35,8 @@ export function bindCamera(engine, canvas) {
 // Going inside (v3 §5.3): with a building in focus the camera eases to look down into it from the front, sized so the whole
 // building fits the screen, and stays clamped round it; leaving eases back to the pose the farm had. Reads the focus, never
 // writes it. followFocus(focus, dt) runs every drawn frame before rig.orbit.update.
-export const FOCUS = { pitch: 0.95, margin: 1.2, ease: 3.2, minK: 0.45, maxK: 1.6 };
-const focusRig = { id: null, saved: null, goal: null };
+export const FOCUS = { pitch: 0.95, margin: 1.2, ease: 3.2, minK: 0.45, maxK: 1.6, give: 4 }; // give: s before an ease that can't land lets go
+const focusRig = { id: null, saved: null, goal: null }; // saved: the farm's pose and limits, kept until the camera is back there
 export function focusFrame(id, camera) {
   const B = BUILDINGS[id], w = B.w ?? B.hx * 2, d = B.d ?? B.hz * 2, vf = camera.fov * Math.PI / 180;
   const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
@@ -47,21 +47,25 @@ export function followFocus(focus, dt) {
   const o = rig.orbit; if (!o) return;
   const id = focus ? focus.split('.')[0] : null, st = o.state, L = o.limits;
   if (id !== focusRig.id) {
-    if (id && !focusRig.id) focusRig.saved = { pose: { tx: st.tx, ty: st.ty, tz: st.tz, yaw: st.yaw, pitch: st.pitch, dist: st.dist }, limits: { ...L, bounds: L.bounds && { ...L.bounds } } };
+    // the farm's pose, saved on the way in, unless the camera is still on its way back to it (a roof tapped mid-way out)
+    if (id && !focusRig.id && !focusRig.saved) focusRig.saved = { pose: { tx: st.tx, ty: st.ty, tz: st.tz, yaw: st.yaw, pitch: st.pitch, dist: st.dist }, limits: { ...L, bounds: L.bounds && { ...L.bounds } } };
     focusRig.id = id;
     if (id) {
       const f = focusFrame(id, rig.camera);
-      focusRig.goal = f;
+      focusRig.goal = f; focusRig.t = 0;
       Object.assign(L, { min: f.dist * FOCUS.minK, max: f.dist * FOCUS.maxK, pitchMin: 0.55,
         bounds: { x: [f.B.x - f.w / 2, f.B.x + f.w / 2], z: [f.B.z - f.d / 2, f.B.z + f.d / 2 + 1.5] } });
     } else if (focusRig.saved) {
-      focusRig.goal = focusRig.saved.pose; Object.assign(L, focusRig.saved.limits); focusRig.saved = null;
+      focusRig.goal = focusRig.saved.pose; focusRig.t = 0; Object.assign(L, focusRig.saved.limits, { bounds: focusRig.saved.limits.bounds && { ...focusRig.saved.limits.bounds } });
     }
   }
   const g = focusRig.goal; if (!g) return;
-  const k = Math.min(1, dt * FOCUS.ease);
+  const k = Math.min(1, dt * FOCUS.ease); focusRig.t += dt;
   let dy = g.yaw - st.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
   st.tx += (g.tx - st.tx) * k; st.ty += (g.ty - st.ty) * k; st.tz += (g.tz - st.tz) * k;
   st.yaw += dy * k; st.pitch += (g.pitch - st.pitch) * k; st.dist += (g.dist - st.dist) * k;
-  if (Math.abs(dy) < 1e-3 && Math.abs(g.dist - st.dist) < 0.02 && Math.hypot(g.tx - st.tx, g.tz - st.tz) < 0.02) focusRig.goal = null; // arrived: the gestures own it again
+  const there = Math.abs(dy) < 1e-3 && Math.abs(g.dist - st.dist) < 0.02 && Math.hypot(g.tx - st.tx, g.tz - st.tz) < 0.02;
+  if (there || focusRig.t > FOCUS.give) { // arrived (or as near as the clamps allow): the gestures own it again
+    focusRig.goal = null; if (!focusRig.id) focusRig.saved = null;
+  }
 }

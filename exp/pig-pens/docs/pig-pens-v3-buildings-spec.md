@@ -23,6 +23,14 @@ Amended 26 October 2026 (Pig Pens 2.6.1):
 - A gate that crosses a lane or a pen east of the middle swings to the opposite side from its western twin (`g.swing`).
 - The fox comes from the woods, `CP.foxWoods` (14 m) beyond the boundary, and it goes back there. It runs round the buildings: it follows corners with no leg through a building, and it runs away to the nearest woods that it can reach in a straight line. The night gulp is at 24.5 s, and all the chickens are in bed at 10.5 s.
 
+Amended 27 October 2026 (R2 built, Pig Pens 2.7.0):
+- The herd is 22 pigs: 16 adults and 6 piglets. A seeded shuffle gives each adult its stall (`barn.js assignStalls`, its own random sequence). Each piglet sleeps beside its mother, between her and the stall mouth.
+- Pigs walk to bed in a state of their own (`ST.BED`): along the flow field to the doors, then on a fixed path (doors → each side's spot in the aisle → the stall's mouth → the stall). They sleep in `ST.REST` with `p.bed`. Piglets walk the same path to their mother's stall. If a pig is stuck on the path for 40 s, it is set down in its stall.
+- The `BED` table in `src/barn.js` holds the tuning values. The `?tune` page comes in R3, with `SICK`.
+- The adult birds roost on 12 perches on two rails, and the chicks sit beside their mother. The fox and the morning release still treat them as inside.
+- The plaques are cells of one canvas texture. A stall plaque has a face on each side of its header beam. The coop plaques are in two rows on the back wall, above the birds. They are cut with that wall.
+- Fix: if you leave one building and tap another before the camera is back, leaving the second building still returns to the farm view.
+
 ---
 
 ## 1. Introduction

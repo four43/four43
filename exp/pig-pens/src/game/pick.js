@@ -102,6 +102,13 @@ export function classify(sim, r, focus = null) {
   const gh = rayGate(sim.lay, r); if (gh) cands.push({ kind: 'gate', id: gh.gate.id, d: gh.t1 });
   const ch = focus === 'coop' ? rayBox(r, sim.lay.coop.popPick) : rayCoop(sim.lay, r); if (ch) cands.push({ kind: 'door', d: ch.t1 });
   const bh = rayBuilding(sim.lay, r, focus); if (bh) cands.push({ kind: 'building', id: bh.b.id, d: bh.d });
+  // inside, a name plaque is its owner (the pig in that stall, the bird on that perch)
+  const inside = focus && sim.lay.buildings.find(b => b.id === focus);
+  if (inside?.plaques) inside.plaques.forEach((box, k) => {
+    const hb = rayBox(r, box); if (!hb) return;
+    if (focus === 'barn') { const i = sim.stallOwner[k]; if (i >= 0) cands.push({ kind: 'pig', i, d: hb.t0 - 0.05 }); }
+    else { const b = sim.flock.birds.find(o => o.perch === k); if (b) cands.push({ kind: 'bird', i: b.i, d: hb.t0 - 0.05 }); }
+  });
   if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i !== undefined ? { kind: c.kind, i: c.i } : c.id !== undefined ? { kind: c.kind, id: c.id } : { kind: c.kind }; }
   if (h) {
     if (focus && outsideFocus(sim.lay, focus, h.x, h.z)) return { kind: 'outside' }; // inside, the grass round it goes out first

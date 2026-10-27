@@ -1,4 +1,5 @@
 // Chickens: a flock with a pecking order, grain, eggs, chicks, a coop bedtime and a fox at night.
+import { COOP } from './defs/buildings.js';
 import { hit } from './flow.js';
 
 export const CST = { PECK: 0, ROAM: 1, GRAIN: 2, NEST: 3, LAY: 4, BROOD: 5, DUST: 6, FLEE: 7, ROOST: 8, ENTER: 9, INSIDE: 10, EXIT: 11, CARRIED: 12, LOST: 13, GRAB: 14, AIR: 15, HOME: 16, DEFEND: 17 };
@@ -64,6 +65,15 @@ export function createFlock(ctx) {
   for (let k = 0; k < 10; k++) makeBird('hen', ...spot(0.17));
   // pecking order: rooster on top, hens shuffled below him
   { const hens = birds.filter(b => b.kind === 'hen').sort(() => rng() - 0.5); hens.forEach((h, k) => h.rank = k + 1); }
+  // perches on the roost bar (v3 §7.6): each grown bird its own, in hatch order; a chick sits by its mother's
+  birds.forEach((b, k) => { b.perch = k < COOP.perches ? k : -1; });
+  const perchOf = b => b.kind === 'chick' ? (birds[b.mom]?.perch ?? -1) : b.perch;
+  // a bird's place on the roost bar in world space (a chick tucked in beside its mother, on the low side)
+  function roostAt(b) {
+    const k = perchOf(b); if (k < 0) return [coop.x, COOP.floor + b.r, coop.z]; // more birds than perches: in the straw
+    const [lx, ly, lz] = COOP.perchAt(k), side = b.kind === 'chick' ? 0.11 * (1 + birds.filter(o => o.mom === b.mom && o.i < b.i).length % 2 * -2) : 0;
+    return [coop.x + lx + side, ly + b.r, coop.z + lz];
+  }
 
   function setEnabled(b, on) { if (b.enabled === on) return; b.enabled = on; b.body.setEnabled(on); }
   function place(b, x, y, z) { world.place(b, { at: [x, y, z] }); b.px = x; b.py = y; b.pz = z; } // E-8; velocities zeroed
@@ -324,7 +334,7 @@ export function createFlock(ctx) {
         const x = coop.doorX, z = coop.rampZ + (coop.doorZ - coop.rampZ) * up, y = b.r + 0.45 * up;
         place(b, x, y, z); b.yaw = b.state === CST.ENTER ? Math.PI : 0;
         if (u >= 1) {
-          if (b.state === CST.ENTER) { setState(b, CST.INSIDE); b.hidden = true; setEnabled(b, false); }
+          if (b.state === CST.ENTER) { setState(b, CST.INSIDE); b.hidden = true; setEnabled(b, false); place(b, ...roostAt(b)); b.yaw = 0; } // up on its perch, facing out
           else { place(b, x, b.r, coop.rampZ + 0.2); setState(b, CST.ROAM, 1.5); }
         }
         continue;

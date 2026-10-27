@@ -27,3 +27,17 @@ for (const [w, h] of [[1280, 720], [390, 844]]) {
 test('cameraMode: a Hand drag orbits, other tools leave the camera alone (2.1.0 bindGestures)', () => {
   assert.equal(cameraMode('hand'), 'orbit'); assert.equal(cameraMode('shoo'), 'none'); assert.equal(cameraMode('feed'), 'none');
 });
+
+test('going in and out (v3 §5.3): leaving one building and tapping another mid-way out still comes back to the farm view', async () => {
+  const { attach, followFocus, rig: R } = await import('../src/view/rig.js');
+  const cam = new THREE.PerspectiveCamera(48, 1280 / 720), o = attach(cam, canvas(1280, 720)), st = o.state;
+  const farm = { tx: st.tx, tz: st.tz, dist: st.dist, yaw: st.yaw };
+  const run = (focus, seconds) => { for (let i = 0; i < seconds * 60; i++) { followFocus(focus, 1 / 60); R.orbit.update(1 / 60); } };
+  run('barn', 2); assert.ok(st.dist < farm.dist * 0.6, 'framed on the barn');
+  run(null, 0.25);                       // on the way out…
+  run('clinic', 2); assert.ok(Math.abs(st.tx - 11.9) < 0.5, '…the clinic takes over');
+  run(null, 3);
+  assert.ok(Math.hypot(st.tx - farm.tx, st.tz - farm.tz) < 0.05 && Math.abs(st.dist - farm.dist) < 0.05, `back at the farm view (${st.tx.toFixed(2)}, ${st.tz.toFixed(2)}, ${st.dist.toFixed(1)})`);
+  assert.deepEqual(o.limits.bounds, { x: [-34, 34], z: [-30, 30] }, 'and the farm’s limits');
+  run('coop', 2); run(null, 3); assert.ok(Math.abs(st.dist - farm.dist) < 0.05, 'a plain visit still comes back');
+});

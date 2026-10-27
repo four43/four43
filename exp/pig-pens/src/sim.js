@@ -3,9 +3,10 @@ import { buildLayout, mulberry32, FENCE_H, REGION } from './layout.js';
 import { FlowGrid, hit } from './flow.js';
 import { createFlock } from './chickens.js';
 import { createVet } from './clinic.js';
+import { BED, assignStalls, doorOut, stallAt, stallFace, pathIn, pathOut } from './barn.js';
 
 export const DT = 1 / 60;
-export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10 };
+export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10, BED: 11 }; // BED: walking to or from its stall (barn.js)
 export const ST_NAME = Object.keys(ST);
 // Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64.
 export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox'];
@@ -53,6 +54,7 @@ export function createSim(world, opts = {}) {
   const cgrid = new FlowGrid(field, 0.4, lay.obstacles, 0.24); // chickens are small: narrower margins
   const fenceObs = lay.obstacles.filter(o => o.fence);
   const destFields = lay.destinations.map(d => grid.field(d.x, d.z, d.r));
+  let barnField = grid.field(doorOut[0], doorOut[1], 1.0); // to just outside the barn doors
   const troughs = lay.pens.map((p, i) => {
     const t = p.trough;
     const ex = t.x, ez = t.z + t.inward * 0.95;
@@ -98,8 +100,32 @@ export function createSim(world, opts = {}) {
       px: x, py: r, pz: z, vx: 0, vy: 0, vz: 0, speed: 0, dvx: 0, dvz: 0,
       region: lay.region(x, z), getUp: 0, tumbleQ: [0, 0, 0, 1], airT: 0, settleT: 0, rot: [0, 0, 0, 1],
       oink: 0, mud: rng() < 0.35 ? 0.45 + 0.55 * rng() : 0, seed: rng(), washed: 0, wet: 0,
+      // v3 R2: its home pen, its stall (set below), and bedtime: p.bed { phase: go | in | out | sleep | wait, path, k, nap, t }
+      home: piglet ? pigs[mom].home : (i % lay.pens.length), stall: -1, bed: null, wakeAt: 0, bedTry: 0,
     };
     pigs.push(animal(x, z, r, fields.mass, { member: ['pig'], filter: GROUPS }, 'pet', fields));
+  }
+
+  // ---- stalls (v3 §7.1): each adult its own, piglets in mum's; their own shuffle, so the farm's random sequence is not moved
+  const stallOwner = new Array(16).fill(-1);
+  const BARN_FACE_SIGN = id => (stallFace(id) === 0 ? 1 : -1); // toward the stall's mouth
+  // where a pig lies in its stall: an adult in the middle, its piglets beside it, toward the mouth
+  function spotOf(p) {
+    const [x, z] = stallAt(p.stall); if (!p.piglet) return [x, z];
+    const k = pigs.filter(o => o.mom === p.mom && o.i < p.i).length;
+    return [x + (k % 2 ? 0.38 : -0.38), z + 0.55 * BARN_FACE_SIGN(p.stall)];
+  }
+  const bedPath = (p, inside) => { const path = pathIn(p.stall, inside); path[path.length - 1] = spotOf(p); return path; };
+  { const ids = assignStalls(nAdults, opts.seed ?? 1); for (const p of pigs) { p.stall = p.piglet ? ids[p.mom] : ids[p.i]; if (!p.piglet && p.stall >= 0) stallOwner[p.stall] = p.i; } }
+  const bedRng = mulberry32(((opts.seed ?? 1) ^ 0xbed) >>> 0);
+  const barnGate = lay.gates.find(g => g.kind === 'barn');
+  const inBarn = p => lay.region(p.px, p.pz) === REGION.barn;
+  // a farm that starts at night starts with everyone tucked up in the barn
+  if (opts.night) for (const p of pigs) {
+    if (p.stall < 0) continue;
+    const [x, z] = spotOf(p);
+    world.place(p, { at: [x, p.r, z] }); p.px = x; p.pz = z; p.yaw = stallFace(p.stall);
+    p.bed = { phase: 'sleep', path: null, k: 0, nap: false, t: 0 }; p.state = ST.REST; p.timer = 1e9; p.region = lay.region(p.px, p.pz);
   }
 
   // ---- dog ------------------------------------------------------------------
@@ -122,6 +148,8 @@ export function createSim(world, opts = {}) {
   function setNight(n) {
     if (clock.night === n) return;
     clock.hour = n ? 22 : 11;
+    if (!n) for (const p of pigs) if (p.bed?.phase === 'sleep' && !p.bed.nap) p.wakeAt = t + bedRng() * BED.wakeStagger; // up in ones and twos
+    for (const p of pigs) p.bedTry = 0;
     if (n) flock.onNight(); else flock.newDay();
     emit('daynight', { night: n });
   }
@@ -158,6 +186,7 @@ export function createSim(world, opts = {}) {
   }
   function rebuildFields() {
     lay.destinations.forEach((d, k) => { destFields[k] = grid.field(d.x, d.z, d.r); });
+    barnField = grid.field(doorOut[0], doorOut[1], 1.0);
     for (const tr of troughs) tr.field = grid.field(tr.ex, tr.ez, 1.0);
     for (const f of foods) f.field = grid.field(f.x, f.z, 0.9);
     hose.fx = 1e9; hose.ft = 0;
@@ -194,12 +223,26 @@ export function createSim(world, opts = {}) {
     return best;
   }
   function setState(p, s, timer = 0) { p.state = s; p.timer = timer; }
+  // bedtime (barn.js): can it walk to the barn doors (or is it in the barn already)?
+  function canReachBarn(p) { return inBarn(p) || isFinite(grid.dist(barnField, p.px, p.pz)); }
+  function goBed(p, nap) {
+    dropClaims(p);
+    const inside = inBarn(p);
+    p.bed = { phase: inside ? 'in' : 'go', path: inside ? bedPath(p, true) : null, k: 0, nap, t: 0 };
+    setState(p, ST.BED, 120);
+  }
+  function leaveBed(p) { p.bed.phase = 'out'; p.bed.path = pathOut(p.stall); p.bed.k = 0; p.bed.t = 0; p.bed.nap = false; setState(p, ST.BED, 120); }
+  // who would not make it to the barn tonight (v3 §7.2.5): adults with a stall, not in the barn, with no way to its doors
+  function bedtime() {
+    const stuck = pigs.filter(p => !p.piglet && p.stall >= 0 && !inBarn(p) && !canReachBarn(p)).length;
+    return { stuck, doorShut: !barnGate.open, inBarn: pigs.filter(inBarn).length };
+  }
   function startTravel(p, dest) { p.target = dest; p.trough = -1; setState(p, ST.TRAVEL, 70); }
   function startTrough(p, id) { p.trough = id; p.target = null; troughs[id].claim++; setState(p, ST.TRAVEL, 60); }
   function dropClaims(p) {
     if (p.trough >= 0) { troughs[p.trough].claim = Math.max(0, troughs[p.trough].claim - 1); p.trough = -1; }
     if (p.snack >= 0) { const f = foods.find(f => f.id === p.snack); if (f) f.claims = Math.max(0, f.claims - 1); p.snack = -1; }
-    p.target = null;
+    p.target = null; p.bed = null; // anything else it does instead (a fright, a hand, the trough) ends its bedtime
   }
   function inEatStrip(p, tr) {
     const along = Math.abs(p.px - tr.x), out = (p.pz - tr.z) * tr.inward;
@@ -424,8 +467,16 @@ export function createSim(world, opts = {}) {
           if (bf && p.state !== ST.REST) { dropClaims(p); bf.claims++; p.snack = bf.id; setState(p, ST.SNACK, 25); emit('oink', { i: p.i, x: p.px, z: p.pz }); }
         }
       }
-      if (calm && (p.state === ST.ROAM || p.state === ST.GRAZE || (p.state === ST.REST && p.hunger > 0.85) || (p.state === ST.TRAVEL && p.target))) {
+      if (calm && (p.state === ST.ROAM || p.state === ST.GRAZE || (p.state === ST.REST && p.hunger > 0.85 && !p.bed) || (p.state === ST.TRAVEL && p.target))) {
         if (p.hunger > P.hungerSeek) { const id = chooseTrough(p); if (id >= 0) { dropClaims(p); startTrough(p, id); } }
+      }
+      // bedtime (v3 §7.2): an adult with a stall that can get there goes to bed; a pig set down in the barn by day naps
+      if (calm && p.stall >= 0 && !p.bed && t >= p.bedTry && (p.state === ST.ROAM || p.state === ST.GRAZE || p.state === ST.REST)) {
+        if (clock.night || (inBarn(p) && !p.piglet)) { if (canReachBarn(p)) goBed(p, !clock.night); else p.bedTry = t + BED.retry; }
+      }
+      if (calm && !clock.night && !p.bed && (p.state === ST.ROAM || p.state === ST.GRAZE) && p.curiosity <= 0 && p.stall >= 0 && !p.piglet
+          && barnGate.open && pigs.filter(o => o.bed?.nap).length < BED.napMax && bedRng() < BED.napChance && canReachBarn(p)) {
+        p.curiosity = 35 + bedRng() * 55; goBed(p, true); // a nap in its stall (v3 §7.4)
       }
       if (calm && !clock.night && (p.state === ST.ROAM || p.state === ST.GRAZE) && p.curiosity <= 0) {
         p.curiosity = 35 + rng() * 55;
@@ -526,8 +577,55 @@ export function createSim(world, opts = {}) {
           break;
         }
         case ST.REST: {
+          if (p.bed) { // in its stall, or curled up at the shut barn doors
+            const b = p.bed;
+            if (b.phase === 'wait') {
+              face = Math.PI; // nose to the doors
+              if (!clock.night) { p.bed = null; setState(p, ST.GRAZE, 1 + rng() * 2); }
+              else if (barnGate.open) { b.phase = 'in'; b.path = bedPath(p, false); b.k = 0; b.t = 0; setState(p, ST.BED, 120); }
+              break;
+            }
+            const [sx, sz] = spotOf(p), hx = sx - p.px, hz = sz - p.pz, hd = Math.hypot(hx, hz);
+            if (hd > 0.3) { dvx = hx / hd; dvz = hz / hd; speed = Math.min(0.5, hd); } // nudged: shuffle back
+            face = stallFace(p.stall); p.timer = 1e9;
+            const up = b.nap ? t >= b.until : !clock.night && t >= p.wakeAt;
+            if (up && barnGate.open) leaveBed(p); // shut in (a morning or a nap): stays put till the doors open (the hint says why)
+            break;
+          }
           if (p.timer <= 0) setState(p, ST.GRAZE, 1 + rng() * 2);
           speed = 0;
+          break;
+        }
+        case ST.BED: {
+          const b = p.bed; if (!b) { setState(p, ST.GRAZE, 1); break; }
+          if (b.phase === 'go') {
+            if (Math.hypot(p.px - doorOut[0], p.pz - doorOut[1]) < BED.door) {
+              if (barnGate.open) { b.phase = 'in'; b.path = bedPath(p, false); b.k = 0; b.t = 0; }
+              else { b.phase = 'wait'; setState(p, ST.REST, 1e9); break; }
+            } else {
+              if (p.timer <= 0 || !flowTo(barnField, 1.6)) { p.bed = null; p.bedTry = t + BED.retry; setState(p, ST.ROAM, 3); break; }
+              speed = P.travelSpeed; useFeelers = true;
+              break;
+            }
+          }
+          // along the path (in, or out); doors shut on the way out: back to the stall
+          if (b.phase === 'out' && !barnGate.open) { b.phase = 'in'; b.path = bedPath(p, true); b.k = 0; b.t = 0; }
+          b.t += DT;
+          const [wx, wz] = b.path[b.k], last = b.k === b.path.length - 1, dx = wx - p.px, dz = wz - p.pz, d = Math.hypot(dx, dz);
+          const reach = !last ? BED.arrive * 2 : b.phase === 'out' ? BED.door * 0.6 : BED.arrive / 2; // out of the doors: anywhere near will do
+          if (d < reach || (b.phase === 'in' && b.t > BED.stuck && last)) {
+            if (!last) { b.k++; break; }
+            if (b.phase === 'in') { // home: lie down (a nap is timed, a night lasts till morning)
+              if (d >= reach) { world.place(p, { at: [wx, p.r, wz] }); } // set down after a jam in the aisle
+              b.phase = 'sleep'; if (b.nap) b.until = t + BED.nap[0] + bedRng() * (BED.nap[1] - BED.nap[0]);
+              setState(p, ST.REST, 1e9); emit('oink', { i: p.i, x: p.px, z: p.pz, happy: 1 }); break;
+            }
+            p.bed = null; startTravel(p, p.home); break; // out of the doors: back to its own pen
+          }
+          if (b.phase === 'in' && b.t > BED.stuck) { b.k = b.path.length - 1; break; } // jammed: on to the stall
+          if (b.phase === 'out' && b.t > BED.stuck) { b.t = BED.stuck / 2; if (!last) { b.k++; break; } } // jammed: on to the next point
+          dvx = dx / d; dvz = dz / d; speed = Math.min(BED.walk, 0.3 + d);
+          if (last) face = b.phase === 'in' ? stallFace(p.stall) : null;
           break;
         }
         case ST.FLEE: {
@@ -540,12 +638,14 @@ export function createSim(world, opts = {}) {
         }
       }
       // piglets stay close to mum unless panicking or eating
-      if (mom && p.trough < 0 && p.state !== ST.SHOWER && p.state !== ST.ZOOM && p.state !== ST.FLEE && p.state !== ST.EAT && p.state !== ST.SNACK && mom.state !== ST.GRAB && mom.state !== ST.AIR) {
+      if (mom && !p.bed && p.trough < 0 && p.state !== ST.SHOWER && p.state !== ST.ZOOM && p.state !== ST.FLEE && p.state !== ST.EAT && p.state !== ST.SNACK && mom.state !== ST.GRAB && mom.state !== ST.AIR) {
         const dx = mom.px - p.px, dz = mom.pz - p.pz, d = Math.hypot(dx, dz);
         if (d > 1.6) {
           const w = Math.min(2.5, (d - 1.6) * 0.8);
           const df = destFieldFor(mom);
-          if (d < 4 || !df || !grid.dir(df, p.px, p.pz, tmp)) { dvx += dx / d * w; dvz += dz / d * w; }
+          // close by, straight to her; but a piglet outside while she is in the barn goes round by the doors first
+          const viaDoors = df === barnField && !inBarn(p) && Math.hypot(p.px - doorOut[0], p.pz - doorOut[1]) > 1.0;
+          if ((d < 4 && !viaDoors) || !df || !grid.dir(df, p.px, p.pz, tmp)) { dvx += dx / d * w; dvz += dz / d * w; }
           else { dvx += tmp[0] * w; dvz += tmp[1] * w; }
           speed = Math.max(speed, Math.min(2.6, 0.4 + d * 0.5)); if (p.state === ST.GRAZE || p.state === ST.REST) p.state = ST.ROAM, p.timer = 2;
         } else if (mom.state === ST.REST && p.state !== ST.REST && p.state !== ST.TRAVEL) setState(p, ST.REST, mom.timer + 1);
@@ -606,6 +706,7 @@ export function createSim(world, opts = {}) {
     }
   }
   function destFieldFor(mom) {
+    if (mom.bed && mom.bed.phase !== 'out') return barnField; // to the barn doors (inside, the piglet just follows her)
     if (mom.trough >= 0) return troughs[mom.trough].field;
     if (mom.target !== null && mom.target !== undefined) return destFields[mom.target];
     return null;
@@ -620,6 +721,7 @@ export function createSim(world, opts = {}) {
   return {
     world, lay, grid, pigs, dog, foods, troughs, events, counts,
     think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, flock, setGate, threats, vet,
+    stallOwner, bedtime, barnGate,
     get time() { return t; }, get foodCap() { return P.foodCap; }, get transitions() { return transitions; }, get grabbed() { return grabbed; },
   };
 }

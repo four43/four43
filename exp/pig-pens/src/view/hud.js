@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { ST } from '../sim.js';
 import { rig } from './rig.js';
 
-const PIG_DOING = s => ({ [ST.ROAM]: 'Wandering about', [ST.GRAZE]: 'Nibbling the grass', [ST.EAT]: 'Eating at the trough', [ST.FLEE]: 'Running away!', [ST.SNACK]: 'Chasing a snack', [ST.GRAB]: 'Squealing in your hand', [ST.AIR]: 'Flying!', [ST.SHOWER]: 'Waiting for a bath', [ST.ZOOM]: 'Squeaky clean and zooming' }[s]);
+const PIG_DOING = s => ({ [ST.BED]: 'Off to bed in the barn', [ST.ROAM]: 'Wandering about', [ST.GRAZE]: 'Nibbling the grass', [ST.EAT]: 'Eating at the trough', [ST.FLEE]: 'Running away!', [ST.SNACK]: 'Chasing a snack', [ST.GRAB]: 'Squealing in your hand', [ST.AIR]: 'Flying!', [ST.SHOWER]: 'Waiting for a bath', [ST.ZOOM]: 'Squeaky clean and zooming' }[s]);
 const BIRD_DOING = { 0: 'Pecking at the ground', 1: 'Strutting about', 2: 'Going for grain', 3: 'Off to a nest box', 4: 'Laying an egg', 5: 'Sitting on an egg', 6: 'Taking a dust bath', 7: 'Panicking!', 8: 'Heading to bed', 9: 'Climbing the ramp', 10: 'Asleep in the coop', 11: 'Coming out', 12: 'Inside the fox’s cheeks!', 13: 'Lost in the woods', 14: 'Flapping in your hand', 15: 'Flapping through the air', 16: 'Walking home', 17: 'Chasing the fox!' };
 const bar = (label, v, cls) => `<div class="bar ${cls}"><span>${label}</span><i><b style="width:${Math.round(Math.max(0, Math.min(1, v)) * 100)}%"></b></i></div>`;
 function cardInfo(sim, sel) {
@@ -13,15 +13,17 @@ function cardInfo(sim, sel) {
   if (sel.kind === 'pig') {
     const p = sim.pigs[sel.i], mum = p.mom >= 0 ? sim.pigs[p.mom].name : null;
     let doing = PIG_DOING(p.state);
-    if (p.state === ST.REST) doing = Math.hypot(p.px - lay.wallow.x, p.pz - lay.wallow.z) < 4 ? 'Rolling in the mud' : 'Fast asleep';
+    if (p.state === ST.REST) doing = p.bed?.phase === 'wait' ? 'Waiting at the barn doors' : p.bed?.nap ? 'Napping in the barn' : p.bed ? 'Fast asleep in the barn'
+      : Math.hypot(p.px - lay.wallow.x, p.pz - lay.wallow.z) < 4 ? 'Rolling in the mud' : 'Fast asleep';
+    if (p.state === ST.BED && p.bed?.phase === 'out') doing = 'Off out to the pen';
     if (p.state === ST.TRAVEL) doing = p.trough >= 0 ? 'Heading to the trough' : p.target === lay.destinations.length - 1 ? 'Off to the mud' : 'Exploring another pen';
-    return { name: p.name, sub: p.piglet ? `Piglet · mum is ${mum}` : 'Pig', doing, bars: bar('Hunger', p.hunger, 'hunger') + bar('Mud', p.mud, 'mud'), at: [p.px, p.pz] };
+    return { name: p.name, sub: p.piglet ? `Piglet · mum is ${mum}` : p.stall >= 0 ? `Pig · sleeps in stall ${p.stall + 1}` : 'Pig', doing, bars: bar('Hunger', p.hunger, 'hunger') + bar('Mud', p.mud, 'mud'), at: [p.px, p.pz] };
   }
   if (sel.kind === 'bird') {
     const b = flock.birds[sel.i], adults = flock.birds.filter(o => o.kind !== 'chick').length;
     const sub = b.kind === 'rooster' ? 'Rooster · top of the pecking order' : b.kind === 'chick' ? `Chick · mum is ${flock.birds[b.mom].name}` : `Hen · number ${b.rank + 1} of ${adults} in the pecking order`;
     const extra = b.kind === 'hen' ? `<div class="facts"><span>Eggs today <b>${b.eggsToday}</b></span><span>All time <b>${b.eggsTotal}</b></span></div>` : '';
-    return { name: b.name, sub, doing: BIRD_DOING[b.state], bars: extra + bar('Fright', b.panic, 'fright'), at: b.state === 12 ? [flock.fox.x, flock.fox.z] : b.hidden ? null : [b.px, b.pz] };
+    return { name: b.name, sub, doing: BIRD_DOING[b.state], bars: extra + bar('Fright', b.panic, 'fright'), at: b.state === 12 ? [flock.fox.x, flock.fox.z] : b.hidden && b.state !== 10 ? null : [b.px, b.pz] };
   }
   if (sel.kind === 'fox') { const f = flock.fox; return { name: 'The fox', sub: 'Fox · up to no good', doing: f.carrying ? `Cheeks full of ${f.carrying.name}! Tap to make it spit.` : ['Gone', 'Sniffing around', 'Chasing a chicken!', 'Very pleased with itself', 'Running away'][f.state], bars: bar('Nerve', 1 - Math.min(1, f.fear / 0.6), 'fright'), at: f.state ? [f.x, f.z] : null }; }
   if (sel.kind === 'vet') { const v = sim.vet; return { name: v.name, sub: 'Vet · looks after every animal on the farm', doing: v.doing, bars: '', at: [v.x, v.z] }; }

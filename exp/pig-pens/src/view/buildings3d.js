@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { BUILDINGS, COOP, BARN, CLINIC } from '../defs/buildings.js';
 import { geometryUnder } from './models.js';
+import { createPlaques } from './plaques.js';
 
 export const CUT = {
   ease: 4.5,          // 1/s: how fast the roof lifts and the walls drop (about half a second)
@@ -92,6 +93,10 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
   for (const [d, b] of [[doorL, B.barn], [doorR, B.barn], [pop, B.coop]]) d.children[0].material = frontOf(b).mat;
   let popAnim = lay.coop.open ? 1 : 0;
 
+  // ---- name plaques (v3 §7): the coop's hang on its back wall, so they are cut with it
+  const plaques = createPlaques({ root: group, sim, clipCoop: B.coop.walls.find(w => w.node.name === 'wall_back').plane });
+  let frame = 0;
+
   // ---- lamps: warm light inside each building at night (the coop's lights the ramp, as before)
   const lamp = (x, y, z, d, k) => { const l = new THREE.PointLight('#ffb347', 0, d, 1.6); l.position.set(x, y, z); group.add(l); return { l, k }; };
   const lamps = [
@@ -167,12 +172,12 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     popAnim += Math.sign((lay.coop.open ? 1 : 0) - popAnim) * Math.min(Math.abs((lay.coop.open ? 1 : 0) - popAnim), dt * 2.5);
     pop.position.y = popY + popAnim * COOP.popDoor.h;
     for (const { l, k } of lamps) l.intensity = night * k;
-    updateVet(dt);
+    updateVet(dt); plaques.update(frame++);
   }
   return {
     update,
     dispose() { // world.dispose frees the group with the farm root (the wall materials are ours: not shared)
-      vet.mixer.stopAllAction(); cat.mixer.stopAllAction();
+      vet.mixer.stopAllAction(); cat.mixer.stopAllAction(); plaques.dispose();
     },
   };
 }

@@ -10,7 +10,7 @@ test('snacks: ten quick tosses land five; none while five are out', () => {
   for (let k = 0; k < 10; k++) if (sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx + (k % 5) - 2, pen.cz)) ok++;
   assert.equal(ok, 5); assert.equal(sim.foods.length, 5); assert.equal(sim.tossFood(26, 4, 22, 27, 23), null);
 });
-test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 22–27 s (24.5 since 2.6.1: the fox runs in from the woods), a tap makes the fox spit, nobody is lost by morning', () => {
+test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 22–30 s (27.1 at 2.7.0: the fox runs in from the woods, past a herd going to bed), a tap makes the fox spit, nobody is lost by morning', () => {
   const sim = farmSim({ pigs: 30, seed: 9 }), F = sim.flock; steps(sim, 300); sim.setNight(true);
   let bed = -1, gulp = -1, spit = null;
   steps(sim, 60 * 40, s => {
@@ -18,7 +18,7 @@ test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 22–27
     if (bed < 0 && F.birds.every(b => b.state === 10)) bed = s / 60;
     if (gulp >= 0 && !spit && s / 60 > gulp + 2 && F.fox.carrying) F.tapFox();
   });
-  assert.ok(bed > 10 && bed < 13, `${bed}`); assert.ok(gulp > 22 && gulp < 27, `${gulp}`);
+  assert.ok(bed > 10 && bed < 13, `${bed}`); assert.ok(gulp > 22 && gulp < 30, `${gulp}`);
   assert.equal(spit?.reason, 'tap'); assert.ok(spit.t - gulp > 1.9 && spit.t - gulp < 2.4, `${spit.t - gulp}`);
   sim.setNight(false); steps(sim, 60 * 20);
   assert.equal(F.birds.length, 11); assert.equal(F.birds.filter(b => b.state === 12).length, 0); assert.equal(F.fox.carrying, null);

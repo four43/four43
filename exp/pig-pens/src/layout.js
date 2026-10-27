@@ -126,6 +126,10 @@ export function buildLayout() {
   addBuilding('coop', COOP, COOP); addBuilding('barn', BARN, BARN); addBuilding('clinic', CLINIC, CLINIC);
   const barn = buildings[1], clinic = buildings[2];
   barn.inner = { x0: BARN.x + BARN.inner.x0, x1: BARN.x + BARN.inner.x1, z0: BARN.z + BARN.inner.z0, z1: BARN.z + BARN.inner.z1 };
+  // the name plaques' tap volumes (v3 §5.5: a tap on one opens its owner's card), by stall and by perch
+  const plaqueBox = ([x, y, z], { w, h }, pad = 0.06) => ({ x0: x - w / 2 - pad, x1: x + w / 2 + pad, y0: y - h / 2 - pad, y1: y + h / 2 + pad, z0: z - 0.1, z1: z + 0.1 });
+  barn.plaques = BARN.stalls.map(s => plaqueBox([BARN.x + s.plaque[0], s.plaque[1], BARN.z + s.plaque[2]], BARN.plaque));
+  buildings[0].plaques = Array.from({ length: COOP.perches }, (_, k) => { const [x, y, z] = COOP.plaqueAt(k); return plaqueBox([COOP.x + x, y, COOP.z + z], COOP.plaque, 0.03); });
 
   // ---- static obstacles (physics + flow-field rasterisation) ---------------
   const obstacles = [];  // {type:'box', x,z,hx,hz,h,rot} | {type:'circle', x,z,r,h}

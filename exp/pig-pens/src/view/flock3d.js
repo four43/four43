@@ -63,11 +63,11 @@ export function createFlock3d({ root, assets, mc, sim, spawnFeathers }) {
         for (const m of other) m.setMatrixAt(b.i, ZERO);
         a.painted = true;
       }
-      if (b.hidden || b.state === CST.INSIDE || b.state === CST.LOST) { for (const m of set) m.setMatrixAt(b.i, ZERO); continue; }
+      if ((b.hidden && b.state !== CST.INSIDE) || b.state === CST.LOST) { for (const m of set) m.setMatrixAt(b.i, ZERO); continue; } // inside: on its perch
       const [name, rate] = birdClip(b) || (b.speed < 0.08 ? ['idle', 1] : b.speed < 1.0 ? ['walk', b.speed / (0.5 * b.scale / 0.3)] : ['run', b.speed / (1.6 * b.scale / 0.3)]);
       if (name !== a.name) { a.prev = a.name; a.pt = a.t; a.name = name; a.blend = 0; }
       a.t += dt * rate; a.pt += dt * rate; a.blend = Math.min(1, a.blend + dt * 8);
-      const sit = b.state === CST.LAY || b.state === CST.BROOD || (b.state === CST.DUST && b.dusting) ? 0.28 * b.scale : 0;
+      const sit = b.state === CST.LAY || b.state === CST.BROOD || b.state === CST.INSIDE || (b.state === CST.DUST && b.dusting) ? 0.28 * b.scale : 0;
       M.compose(v.set(b.px, b.py - b.r - sit, b.pz), q.setFromAxisAngle(UP, b.yaw), s.setScalar(b.scale));
       for (let k = 0; k < set.length; k++) {
         sampleAnimTable(table, a.name, a.t, k, PM); if (a.blend < 1) { sampleAnimTable(table, a.prev, a.pt, k, PB); lerpM(PB, PM, a.blend, PM); }

@@ -48,8 +48,14 @@ export function makeFarm() {
     setNight(e, n) {
       const s = S(e); n = !!n; if (s.sim.clock.night === n) return;
       s.sim.setNight(n);
-      if (n) api.hint(e, 'Night time. The chickens are off to bed. Shut the coop door once they’re in.', 4.5);
-      else api.hint(e, s.sim.lay.coop.open ? 'Good morning!' : 'Good morning! Open the coop door to let the chickens out.', 3.5);
+      const bed = s.sim.bedtime(); // v3 §7.2: who can't get to the barn, and the barn's doors
+      if (n) {
+        const stuck = bed.stuck ? ` ${bed.stuck === 1 ? '1 pig is' : `${bed.stuck} pigs are`} shut in their pens.` : '';
+        api.hint(e, `Night time. Everyone’s off to bed.${stuck}${bed.doorShut ? ' The barn doors are shut!' : ''} Shut the coop door once the chickens are in.`, 5);
+      } else {
+        const out = [!s.sim.lay.coop.open && 'the coop door', bed.doorShut && bed.inBarn && 'the barn doors'].filter(Boolean);
+        api.hint(e, out.length ? `Good morning! Open ${out.join(' and ')} to let everyone out.` : 'Good morning!', 3.5);
+      }
     },
     // What a Hand tap does with the target picked at pointer down (#55; main.js act).
     act(e, t) {
@@ -196,7 +202,7 @@ export function makeFarm() {
     enter(e, ctx) {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
-        sim: createSim(ctx.world, { pigs: a.pigs ?? 48, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
+        sim: createSim(ctx.world, { pigs: a.pigs ?? 22, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
         tool: 'hand', selected: null, focus: null, gesture: null, grab: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });

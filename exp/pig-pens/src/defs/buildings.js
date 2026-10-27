@@ -12,6 +12,14 @@ export const COOP = {
   perches: 12,                                 // roost bar slots (R2: one per adult bird)
 };
 
+// The roost bar (coop.model.mjs builds it): two round rails along x, low at the front, high at the back. Perch k sits on
+// rail k % 2, slot floor(k / 2) of 6, the high rail's slots half a slot over so every bird has its own x; its plaque hangs
+// on the back wall above, in the same column, the high rail's row above the low rail's.
+COOP.rails = [{ y: 0.68, z: -0.65 }, { y: 1.05, z: -0.92 }];
+COOP.perchAt = k => { const r = COOP.rails[k % 2], slot = Math.floor(k / 2); return [-1.05 + slot * 0.42 + (k % 2) * 0.21, r.y + 0.04, r.z]; };
+COOP.plaqueAt = k => { const [x] = COOP.perchAt(k); return [x, k % 2 ? 1.71 : 1.54, -1.04]; }; // above the roosting birds' heads
+COOP.plaque = { w: 0.2, h: 0.14 };
+
 export const BARN = {
   x: -0.4, z: -22.3,                // x −8.2 … 7.4, z −26.3 … −18.3: the middle of the north row, over the pens' middle
   w: 15.6, d: 8.0, wall: 0.2,
@@ -32,9 +40,14 @@ export const BARN = {
   for (let k = 0; k < 4; k++) stalls.push({ x0: hd + k * front, x1: hd + (k + 1) * front, z0: iz - B.stall.depth, z1: iz, row: 'front' });
   B.stalls = stalls.map((s, id) => {
     const cx = (s.x0 + s.x1) / 2, out = s.row === 'back' ? 1 : -1, mouth = s.row === 'back' ? s.z1 : s.z0;
-    return { id, ...s, at: [cx, 0, (s.z0 + s.z1) / 2], face: s.row === 'back' ? 0 : Math.PI, plaque: [cx, B.stall.headerY + 0.18, mouth + out * 0.06] };
+    return { id, ...s, at: [cx, 0, (s.z0 + s.z1) / 2], face: s.row === 'back' ? 0 : Math.PI, plaque: [cx, B.stall.headerY + 0.13, mouth + out * 0.09], out };
   });
   B.inner = { x0: -ix, x1: ix, z0: -iz, z1: iz };
+  // the way in, in model-local [x, z]: outside the doors, just inside them, the aisle's middle; then along the aisle to the
+  // stall, its mouth (just on the aisle side) and the stall itself
+  B.doorOut = [0, B.d / 2 + 1.0];
+  for (const st of B.stalls) { const back = st.row === 'back'; st.mouth = [st.at[0], back ? st.z1 + 0.35 : st.z0 - 0.35]; }
+  B.plaque = { w: 0.78, h: 0.26 };
   B.doorIn = [0, 0, iz - 0.6];        // just inside the doors
   B.lamps = [[-ix / 2, B.eave - 0.4, 0], [ix / 2, B.eave - 0.4, 0]];
 }
