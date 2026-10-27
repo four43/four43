@@ -39,7 +39,7 @@ test('rayBox: enters and leaves a box; a miss, a parallel ray outside it and a b
 });
 test('gates: a camera ray at the gateway, above the panels, just in front of it, or at a leaf lying open picks that gate', () => {
   const lay = buildLayout(), toward = (g, a, n, y) => g.dir === 'x' ? [g.x + a, y, g.z + n] : [g.x + n, y, g.z - a];
-  for (const g of lay.gates) {
+  for (const g of lay.gates.filter(g => g.kind !== 'barn')) { // the barn's doors: test/buildings.test.mjs
     for (const [a, n, y] of [[0, 0, 0.5], [0, 0, 1.1], [0, 0.35, 0], [g.width / 2 - 0.2, -0.3, 0.6]]) assert.equal(rayGate(lay, rayTo(toward(g, a, n, y)))?.gate, g, `gate ${g.id} at ${a}, ${n}, ${y}`);
     for (const l of g.leaves) assert.equal(rayGate(lay, rayTo(toward(g, l.hingeX + l.side * L / 2, -0.35, 0.5), 20, 0.01))?.gate, g, `gate ${g.id}: the open leaf`);
   }

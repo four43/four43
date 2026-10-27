@@ -21,7 +21,8 @@ function state(e) {
   const f = sim.flock;
   return {
     tool: s.tool, selected: s.selected ? { ...s.selected } : null,
-    night: sim.clock.night, door: sim.lay.coop.open, gates: sim.lay.gates.map(g => g.open),
+    night: sim.clock.night, door: sim.lay.coop.open, gates: sim.lay.gates.map(g => g.open), focus: s.focus,
+    vet: { x: sim.vet.x, z: sim.vet.z, state: sim.vet.state, node: sim.vet.node },
     basket: f.basket, eggs: f.eggs.length, foods: sim.foods.length, foodLeft: sim.foodCap - sim.foods.length,
     dog: { active: sim.dog.active, x: sim.dog.x, z: sim.dog.z }, hose: { active: sim.hose.active, x: sim.hose.x, z: sim.hose.z },
     ring: s.ring ? [s.ring[0], s.ring[1]] : null, grabbed: { pig: sim.grabbed, bird: f.grabbed },
@@ -42,8 +43,8 @@ export function pigPensGame() {
   });
   return defineGame({
     id: 'pig-pens', sim: { hz: 1 / DT, maxCatchUp: 4, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm',
-    // [T-25] state homes (lion-hawk §2.2): the basket is player 1's; day or night and the pigs in each of the 8 regions are the farm's
-    player: { eggs: F.uint(2) }, gameState: { night: F.bool(), pens: F.list(F.uint(1), 8, 8) },
+    // [T-25] state homes (lion-hawk §2.2): the basket is player 1's; day or night and the pigs in each of the 9 regions (8: the barn) are the farm's
+    player: { eggs: F.uint(2) }, gameState: { night: F.bool(), pens: F.list(F.uint(1), 9, 9) },
     defs: { materials: MATERIALS, models: PHYS },
     physics: { rapier: R, gravity: [0, -9.81, 0], groups: GROUPS }, // GROUPS' order is 2.1.0's collision bits (D9: the game passes Rapier)
     scenes: { farm }, state, debug,

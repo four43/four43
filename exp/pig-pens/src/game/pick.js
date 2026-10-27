@@ -42,6 +42,24 @@ export function rayGate(lay, r) {
 }
 // The ray through the coop's front (layout.js coop.pick): { t0, t1 } or null.
 export const rayCoop = (lay, r) => rayBox(r, lay.coop.pick);
+// The building the ray picks (layout.js buildings, v3 §5.1), skipping the one in focus: { b, d } at the nearer of where it
+// enters the roof (above everything inside, so a roof tap beats an animal under it) and where it leaves the whole building
+// (so an animal, a gate or the coop door in front of the walls wins), or null.
+export function rayBuilding(lay, r, focus = null) {
+  let best = null;
+  for (const b of lay.buildings) {
+    if (b.id === focus) continue;
+    const roof = rayBox(r, b.roof), body = rayBox(r, b.body);
+    const d = Math.min(roof ? roof.t0 : Infinity, body ? body.t1 : Infinity);
+    if (d < Infinity && (!best || d < best.d)) best = { b, d };
+  }
+  return best;
+}
+// Is the ground point outside the building in focus (with a little margin)?
+export function outsideFocus(lay, focus, x, z) {
+  const b = lay.buildings.find(o => o.id === focus); if (!b) return false;
+  return x < b.x0 - 0.6 || x > b.x1 + 0.6 || z < b.z0 - 0.6 || z > b.z1 + 0.6;
+}
 
 // The nearest gate within 1.5 m of a ground point (farm3d.js).
 export function pickGate(lay, x, z) {
@@ -63,11 +81,14 @@ export function pickEgg(flock, r) {
 }
 export const foxHit = (flock, r) => flock.fox.state !== FST.AWAY && rayDist(r, flock.fox.x, 0.4, flock.fox.z) < 0.9;
 export const dogHit = (dog, r) => rayDist(r, dog.x, 0.4, dog.z) < 0.8;
+// Dr. Emmy, only with the clinic in focus (her roof hides her otherwise)
+export const vetHit = (vet, r) => rayDist(r, vet.x, 0.7, vet.z) < 0.75;
 
-// What the Hand acts on (main.js classify): an egg first; then the nearest of the animals, the gates and the coop front
-// (stable sort: ties go to the earlier candidate). A gate or the coop counts at the far side of its tap volume, so an
-// animal inside it or in front of it wins; one behind it does not. Last, a gate or the coop door near the ground hit.
-export function classify(sim, r) {
+// What the Hand acts on (main.js classify): an egg first; then the nearest of the animals, the gates, the coop front and
+// the buildings (stable sort: ties go to the earlier candidate). A gate or the coop counts at the far side of its tap
+// volume, so an animal inside it or in front of it wins; one behind it does not. A building counts as rayBuilding says.
+// Last, a gate or the coop door near the ground hit; inside a building, a ground tap outside it goes back out.
+export function classify(sim, r, focus = null) {
   const flock = sim.flock, h = planeHit(r, 0), [ox, oy, oz, dx, dy, dz] = r;
   const egg = pickEgg(flock, r); if (egg) return { kind: 'egg', id: egg.id };
   const pi = sim.pick(ox, oy, oz, dx, dy, dz), bi = flock.pick(ox, oy, oz, dx, dy, dz);
@@ -77,10 +98,15 @@ export function classify(sim, r) {
   if (bi >= 0) { const b = flock.birds[bi]; cands.push({ kind: 'bird', i: bi, d: dist(b.px, b.py, b.pz) - 0.4 }); }
   const f = flock.fox; if (foxHit(flock, r)) cands.push({ kind: 'fox', d: dist(f.x, 0.35, f.z) - 0.6 });
   if (dogHit(sim.dog, r)) cands.push({ kind: 'dog', d: dist(sim.dog.x, 0.4, sim.dog.z) });
+  if (focus?.startsWith('clinic') && vetHit(sim.vet, r)) cands.push({ kind: 'vet', d: dist(sim.vet.x, 0.75, sim.vet.z) });
   const gh = rayGate(sim.lay, r); if (gh) cands.push({ kind: 'gate', id: gh.gate.id, d: gh.t1 });
-  const ch = rayCoop(sim.lay, r); if (ch) cands.push({ kind: 'door', d: ch.t1 });
+  const ch = focus === 'coop' ? rayBox(r, sim.lay.coop.popPick) : rayCoop(sim.lay, r); if (ch) cands.push({ kind: 'door', d: ch.t1 });
+  const bh = rayBuilding(sim.lay, r, focus); if (bh) cands.push({ kind: 'building', id: bh.b.id, d: bh.d });
   if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i !== undefined ? { kind: c.kind, i: c.i } : c.id !== undefined ? { kind: c.kind, id: c.id } : { kind: c.kind }; }
-  if (h) { const g = pickGate(sim.lay, h.x, h.z); if (g) return { kind: 'gate', id: g.id }; if (pickDoor(sim.lay, h.x, h.z)) return { kind: 'door' }; }
+  if (h) {
+    if (focus && outsideFocus(sim.lay, focus, h.x, h.z)) return { kind: 'outside' }; // inside, the grass round it goes out first
+    const g = pickGate(sim.lay, h.x, h.z); if (g) return { kind: 'gate', id: g.id }; if (!focus && pickDoor(sim.lay, h.x, h.z)) return { kind: 'door' };
+  }
   return null;
 }
 

@@ -8,7 +8,7 @@ import MANIFEST from '../baked/manifest.json' with { type: 'json' };
 import { buildWorld } from './view/world.js';
 import { createHud } from './view/hud.js';
 import { bindSnacks } from './view/snacks3d.js';
-import { rig, attach, bindCamera } from './view/rig.js';
+import { rig, attach, bindCamera, followFocus } from './view/rig.js';
 import { Sound } from './sound.js';
 
 export const MODEL_KEYS = Object.keys(MANIFEST.models);
@@ -76,7 +76,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
       if (!world) return; // still loading, or no WebGL
       const s = engine.scene.state, dt = view.dt;
       world.update(dt, s, frame, alpha); hud.update(engine, s, frame, dt);
-      rig.orbit.update(dt, view.rawDt);
+      followFocus(s.focus, dt); rig.orbit.update(dt, view.rawDt);
       const post = view.gfx.post; if (post?.params) post.params.focus = rig.orbit.state.dist;
       frame++;
     },

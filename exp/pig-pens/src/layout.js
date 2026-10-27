@@ -1,4 +1,5 @@
 // Farm layout on a 2.4 m fence-tile grid. Pure data: shared by physics, flow fields and rendering.
+import { COOP, BARN, CLINIC } from './defs/buildings.js';
 export const L = 2.4;               // one Kenney fence tile, scaled
 export const FENCE_H = 0.84;        // fence height after scaling
 export const TX = tx => (tx - 7.5) * L;
@@ -27,8 +28,9 @@ export function buildLayout() {
   vRun(15, 0, 5, 'fence'); vRun(15, 5, 7, 'fence', [5, 6]); vRun(15, 7, 12, 'fence', [9]);
   vRun(5, 0, 5, 'fence', [2]); vRun(10, 0, 5, 'fence', [2]);
   vRun(5, 7, 12, 'fence', [9]); vRun(10, 7, 12, 'fence', [9]);
-  // Chicken run against the north boundary, with one gate toward the pens
-  hRun(-2, 2, 9, 'fence', [6]); vRun(2, -5, -2, 'fence'); vRun(9, -5, -2, 'fence');
+  // Chicken run against the north boundary, with one gate toward the pens (2.6.0: five tiles west, so the barn east of it
+  // stands in the middle of the north row, v3 §3.1)
+  hRun(-2, -3, 4, 'fence', [1]); vRun(-3, -5, -2, 'fence'); vRun(4, -5, -2, 'fence');
   // Field boundary
   hRun(-5, -5, 20, 'planks'); hRun(17, -5, 20, 'planks');
   vRun(-5, -5, 17, 'planks'); vRun(20, -5, 17, 'planks');
@@ -49,12 +51,18 @@ export function buildLayout() {
   const field = rect(-5, -5, 20, 17);
   const complex = rect(0, 0, 15, 12);
   const wallow = { x: TX(-2.6), z: TZ(4.4), rx: 3.4, rz: 2.6 };
-  const run = rect(2, -5, 9, -2);
-  const coop = { x: -10.9, z: -25.05, hx: 1.5, hz: 1.15, h: 2.0, doorX: -10.5, doorZ: -23.9, rampZ: -22.95, open: true };
-  // the coop's tap volume: its whole front, from just inside the wall out over the ramp, up to the roof
-  coop.pick = { x0: coop.x - coop.hx - 0.15, x1: coop.x + coop.hx + 0.15, y0: 0, y1: 2.4, z0: coop.z + coop.hz - 0.3, z1: coop.rampZ + 0.25 };
-  const nests = [-0.6, 0.2, 1.0, 1.8].map((x, i) => ({ id: i, x, z: -25.95, ax: x, az: -25.2 }));
-  const dust = { x: -5.6, z: -22.5, r: 1.15 };
+  const run = rect(-3, -5, 4, -2);
+  // the coop stands at the run's east end (v3 §3.1; src/defs/buildings.js), the nest boxes where it stood
+  const coop = { x: COOP.x, z: COOP.z, hx: COOP.hx, hz: COOP.hz, h: COOP.eave, doorX: COOP.x + COOP.popDoor.x, doorZ: COOP.z + COOP.hz,
+    rampZ: COOP.z + COOP.rampZ, open: true };
+  // the coop door's tap volume: the whole front wall up to the eave, from just inside it out over the ramp (the roof above
+  // is the coop's building volume: a tap there goes in)
+  coop.pick = { x0: coop.x - coop.hx - 0.15, x1: coop.x + coop.hx + 0.15, y0: 0, y1: COOP.eave, z0: coop.z + coop.hz - 0.3, z1: coop.rampZ + 0.25 };
+  // inside the coop (v3 §5.5) only the pop door itself toggles it, so a tap on the grass round it still goes back out
+  { const d = COOP.popDoor, f = coop.z + coop.hz;
+    coop.popPick = { x0: coop.doorX - d.w / 2 - 0.15, x1: coop.doorX + d.w / 2 + 0.15, y0: COOP.floor - 0.1, y1: COOP.floor + d.h * 2 + 0.1, z0: f - 0.3, z1: f + 0.3 }; }
+  const nests = [-24.4, -23.6, -22.8, -22.0].map((x, i) => ({ id: i, x, z: -25.95, ax: x, az: -25.2 }));
+  const dust = { x: -17.6, z: -22.5, r: 1.15 };
 
   // ---- gates: merge neighbouring gate tiles into one gate (double gates at the lane ends)
   const gates = [];
@@ -82,6 +90,34 @@ export function buildLayout() {
     for (const l of g.leaves) { const a = l.hingeX, b = l.hingeX + l.side * L; g.pick.push(box(Math.min(a, b), Math.max(a, b), -0.9, 0.35)); }
   }
 
+  // ---- the barn's double door: a gate of its own (v3 §6), two leaves hinged at the opening's sides that swing out (+z);
+  // buildings3d draws it (farm3d skips kind 'barn'), the sim opens and shuts it like any gate
+  const barnFront = BARN.z + BARN.d / 2;
+  {
+    const hw = BARN.door.w / 2, x = BARN.x, z = barnFront, y1 = BARN.door.h;
+    gates.push({ id: gates.length, kind: 'barn', dir: 'x', tiles: [], x, z, x0: x - hw, x1: x + hw, z0: z, z1: z, width: BARN.door.w, run: false, open: true,
+      leaves: [{ side: -1, hingeX: -hw }, { side: 1, hingeX: hw }],
+      // the doorway where the leaves shut, and each open leaf standing out from its hinge
+      pick: [{ x0: x - hw - 0.1, x1: x + hw + 0.1, y0: 0, y1, z0: z - 0.45, z1: z + 0.45 },
+        ...[-1, 1].map(sd => ({ x0: x + sd * hw - 0.3, x1: x + sd * hw + 0.3, y0: 0, y1, z0: z, z1: z + hw + 0.2 }))] });
+  }
+
+  // ---- buildings (v3 §3, §5): world footprint, the walls' colliders, and two tap volumes: `roof` (everything above the
+  // eave) and `body` (the whole building; the coop's is its roof only, as its front wall is the pop door's)
+  const buildings = [];
+  const addBuilding = (id, B, { eave, ridge, overhang }) => {
+    const hx = (B.w ?? B.hx * 2) / 2, hz = (B.d ?? B.hz * 2) / 2, o = overhang + 0.1;
+    const box = { x0: B.x - hx, x1: B.x + hx, z0: B.z - hz, z1: B.z + hz };
+    // the coop's roof stops at its front wall and starts just above the eave: everything in front is the pop door's
+    const roof = id === 'coop' ? { x0: box.x0 - o, x1: box.x1 + o, y0: eave + 0.1, y1: ridge + 0.15, z0: box.z0 - o, z1: box.z1 }
+      : { x0: box.x0 - o, x1: box.x1 + o, y0: eave - 0.15, y1: ridge + 0.15, z0: box.z0 - o, z1: box.z1 + o };
+    const body = id === 'coop' ? roof : { ...box, y0: 0, y1: ridge + 0.15 };
+    buildings.push({ id, x: B.x, z: B.z, hx, hz, eave, ridge, ...box, roof, body });
+  };
+  addBuilding('coop', COOP, COOP); addBuilding('barn', BARN, BARN); addBuilding('clinic', CLINIC, CLINIC);
+  const barn = buildings[1], clinic = buildings[2];
+  barn.inner = { x0: BARN.x + BARN.inner.x0, x1: BARN.x + BARN.inner.x1, z0: BARN.z + BARN.inner.z0, z1: BARN.z + BARN.inner.z1 };
+
   // ---- static obstacles (physics + flow-field rasterisation) ---------------
   const obstacles = [];  // {type:'box', x,z,hx,hz,h,rot} | {type:'circle', x,z,r,h}
   const T = 0.09; // fence half-thickness
@@ -100,6 +136,24 @@ export function buildLayout() {
     obstacles.push(g.barrier);
   }
   obstacles.push({ type: 'box', x: coop.x, z: coop.z, hx: coop.hx, hz: coop.hz, h: coop.h, coop: true });
+  // the barn: four walls round the open doorway (the door is its gate's barrier), and the low stall dividers
+  {
+    const B = BARN, t = B.wall / 2, h = B.eave, hx = B.w / 2, hz = B.d / 2, hw = B.door.w / 2, x = B.x, z = B.z;
+    obstacles.push({ type: 'box', x, z: z - hz + t, hx, hz: t, h, building: 'barn' });
+    for (const sd of [-1, 1]) {
+      obstacles.push({ type: 'box', x: x + sd * (hx - t), z, hx: t, hz, h, building: 'barn' });
+      const w = (hx - hw) / 2; obstacles.push({ type: 'box', x: x + sd * (hw + w), z: z + hz - t, hx: w, hz: t, h, building: 'barn' });
+    }
+    // a divider on each stall's east side, unless the barn wall is there; the front rows' door-side stalls get one at the doorway
+    const dv = B.stall.divider / 2;
+    for (const st of B.stalls) for (const ex of [st.x0, st.x1]) {
+      if (Math.abs(Math.abs(ex) - B.inner.x1) < 0.01) continue;           // the side wall
+      if (ex === st.x0 && B.stalls.some(o => o !== st && o.row === st.row && Math.abs(o.x1 - ex) < 0.01)) continue; // its neighbour's
+      obstacles.push({ type: 'box', x: x + ex, z: z + (st.z0 + st.z1) / 2, hx: dv, hz: (st.z1 - st.z0) / 2, h: B.stall.dividerH, building: 'barn', divider: st.id });
+    }
+  }
+  // the clinic: one solid block (nothing walks in; patients are set down inside, v3 §9)
+  obstacles.push({ type: 'box', x: clinic.x, z: clinic.z, hx: clinic.hx, hz: clinic.hz, h: CLINIC.eave, building: 'clinic' });
   for (const p of pens) obstacles.push({ type: 'box', x: p.trough.x, z: p.trough.z, hx: p.trough.len / 2, hz: p.trough.w / 2, h: 0.42, trough: p.id });
 
   // ---- decor -------------------------------------------------------------
@@ -120,15 +174,15 @@ export function buildLayout() {
   // field: a few shade trees, a hay stack and Biscuit's dog house on the right, its door toward the farm
   const dogHouse = { x: TX(18.4), z: -10.5, s: 1.5, rot: -0.6 }; // the door faces (sin rot, cos rot); the front wall is 0.77 s out
   { const { x, z, s, rot } = dogHouse; decor.push({ m: 'dogHouse', x, z, rot, s }); obstacles.push({ type: 'box', x, z, hx: 0.66 * s, hz: 0.77 * s, h: 1.5 * s, rot }); }
-  addSolid('oak', TX(-3), TZ(-3), 0.4, 3.2, 0.45);
+  addSolid('oak', 26.5, -21, 0.4, 3.2, 0.45); // east of the clinic (the run took its corner, 2.6.0)
   addSolid('tree', TX(18), TZ(14.5), 1.2, 3.4, 0.4);
-  addSolid('treeFat', TX(17.5), TZ(-2.5), 2.0, 3.0, 0.45);
+  addSolid('treeFat', -26, 9, 2.0, 3.0, 0.45);   // moved off the clinic's corner (v3 §3.2)
   addSolid('oak', TX(4), TZ(15), 2.6, 3.0, 0.45);
-  decor.push({ m: 'hayB', x: TX(12), z: TZ(-3), rot: 0.3, s: 2.4 }); obstacles.push({ type: 'box', x: TX(12), z: TZ(-3), hx: 0.75, hz: 0.75, h: 1.2, rot: 0.3 });
+  { const x = -26.5, z = -16; decor.push({ m: 'hayB', x, z, rot: 0.3, s: 2.4 }); obstacles.push({ type: 'box', x, z, hx: 0.75, hz: 0.75, h: 1.2, rot: 0.3 }); } // off the barn's floor
   // chicken run props
-  decor.push({ m: 'sack', x: TX(6.5) + 2.0, z: run.z1 - 0.45, rot: 0.4, s: 1.3 });
-  decor.push({ m: 'sack', x: TX(6.5) + 2.5, z: run.z1 - 0.5, rot: -0.3, s: 1.2 });
-  for (let i = 0; i < 9; i++) decor.push({ m: 'wheat', x: TX(-1.2) - (i % 3) * 1.2, z: TZ(-4.3) + Math.floor(i / 3) * 1.1, rot: rng() * 6, s: 2.4 });
+  decor.push({ m: 'sack', x: TX(1.5) + 2.0, z: run.z1 - 0.45, rot: 0.4, s: 1.3 });
+  decor.push({ m: 'sack', x: TX(1.5) + 2.5, z: run.z1 - 0.5, rot: -0.3, s: 1.2 });
+  for (let i = 0; i < 9; i++) decor.push({ m: 'wheat', x: 22.4 - (i % 3) * 1.2, z: TZ(-4.3) + Math.floor(i / 3) * 1.1, rot: rng() * 6, s: 2.4 });
   // scenery beyond the boundary (no collision)
   for (let i = 0; i < 70; i++) {
     const a = rng() * Math.PI * 2, rr = 40 + rng() * 45;
@@ -141,7 +195,8 @@ export function buildLayout() {
   for (let i = 0; i < 9; i++) for (let j = 0; j < 4; j++) decor.push({ m: 'corn', x: -20 + i * 2.2 + (rng() - 0.5) * 0.3, z: -31 - j * 1.6, rot: rng() * 6, s: 2.6 });
   for (let i = 0; i < 10; i++) decor.push({ m: 'pumpkin', x: 6 + rng() * 14, z: -31 - rng() * 5, rot: rng() * 6, s: 2.5 });
   // grass tufts, flowers, rocks scattered in the field (walk-through)
-  const inPenOrLane = (x, z) => (x > complex.x0 - 0.3 && x < complex.x1 + 0.3 && z > complex.z0 - 0.3 && z < complex.z1 + 0.3) || (x > run.x0 - 0.3 && x < run.x1 + 0.3 && z > run.z0 && z < run.z1 + 0.3);
+  const inPenOrLane = (x, z) => (x > complex.x0 - 0.3 && x < complex.x1 + 0.3 && z > complex.z0 - 0.3 && z < complex.z1 + 0.3) || (x > run.x0 - 0.3 && x < run.x1 + 0.3 && z > run.z0 && z < run.z1 + 0.3)
+    || buildings.some(b => x > b.x0 - 0.8 && x < b.x1 + 0.8 && z > b.z0 - 0.3 && z < b.z1 + 1.2);
   for (let i = 0; i < 160; i++) {
     const x = (rng() - 0.5) * 120, z = (rng() - 0.5) * 110;
     if (inPenOrLane(x, z)) continue;
@@ -165,8 +220,9 @@ export function buildLayout() {
   function region(x, z) {
     for (const p of pens) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.id;
     if (x > lane.x0 && x < lane.x1 && z > lane.z0 && z < lane.z1) return 6;
+    const b = barn.inner; if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return 8;
     return 7;
   }
 
-  return { edges, gates, pens, lane, field, complex, wallow, run, coop, nests, dust, dogHouse, obstacles, decor, destinations, region };
+  return { edges, gates, pens, lane, field, complex, wallow, run, coop, nests, dust, dogHouse, buildings, barn, clinic, obstacles, decor, destinations, region };
 }

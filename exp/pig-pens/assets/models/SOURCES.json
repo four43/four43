@@ -35,6 +35,24 @@
     "cube-pets/animal-dog.glb": { "sha256": "c127d71ac8794f97", "from": "Cube Pets/Models/GLB format/animal-dog.glb" },
     "cube-pets/animal-chick.glb": { "sha256": "86dd5f030c934148", "from": "Cube Pets/Models/GLB format/animal-chick.glb" },
     "cube-pets/animal-fox.glb": { "sha256": "ac1ae804da301371", "from": "Cube Pets/Models/GLB format/animal-fox.glb" },
-    "cube-pets/Textures/colormap.png": { "sha256": "2f6d0032e51c2d49", "from": "Cube Pets/Models/GLB format/Textures/colormap.png" }
+    "cube-pets/Textures/colormap.png": { "sha256": "2f6d0032e51c2d49", "from": "Cube Pets/Models/GLB format/Textures/colormap.png" },
+    "furniture-kit/desk.glb": { "sha256": "0164fe828f028b32", "from": "Furniture Kit/Models/GLTF format/desk.glb" },
+    "furniture-kit/chairDesk.glb": { "sha256": "46406619186034cb", "from": "Furniture Kit/Models/GLTF format/chairDesk.glb" },
+    "furniture-kit/computerScreen.glb": { "sha256": "5942cbad29a2d2b9", "from": "Furniture Kit/Models/GLTF format/computerScreen.glb" },
+    "furniture-kit/bedSingle.glb": { "sha256": "ca00c63f9a12da31", "from": "Furniture Kit/Models/GLTF format/bedSingle.glb" },
+    "furniture-kit/pillow.glb": { "sha256": "6fae7c190d0b676e", "from": "Furniture Kit/Models/GLTF format/pillow.glb" },
+    "furniture-kit/kitchenCabinet.glb": { "sha256": "7238c57778935ae2", "from": "Furniture Kit/Models/GLTF format/kitchenCabinet.glb" },
+    "furniture-kit/kitchenSink.glb": { "sha256": "7b9610277d71f00d", "from": "Furniture Kit/Models/GLTF format/kitchenSink.glb" },
+    "furniture-kit/kitchenFridgeSmall.glb": { "sha256": "35dab7f63711623b", "from": "Furniture Kit/Models/GLTF format/kitchenFridgeSmall.glb" },
+    "furniture-kit/kitchenCoffeeMachine.glb": { "sha256": "063f582c6fa0f00a", "from": "Furniture Kit/Models/GLTF format/kitchenCoffeeMachine.glb" },
+    "furniture-kit/rugRounded.glb": { "sha256": "2ef5cc634bb1060a", "from": "Furniture Kit/Models/GLTF format/rugRounded.glb" },
+    "furniture-kit/pottedPlant.glb": { "sha256": "5b760eda2766f75f", "from": "Furniture Kit/Models/GLTF format/pottedPlant.glb" },
+    "furniture-kit/lampRoundFloor.glb": { "sha256": "50fe1b5b588edf15", "from": "Furniture Kit/Models/GLTF format/lampRoundFloor.glb" },
+    "furniture-kit/bookcaseOpenLow.glb": { "sha256": "6d4d625faf977a2d", "from": "Furniture Kit/Models/GLTF format/bookcaseOpenLow.glb" },
+    "furniture-kit/trashcan.glb": { "sha256": "e0ccc1fe50cbd053", "from": "Furniture Kit/Models/GLTF format/trashcan.glb" },
+    "furniture-kit/coatRackStanding.glb": { "sha256": "d8231c22dab63ceb", "from": "Furniture Kit/Models/GLTF format/coatRackStanding.glb" },
+    "mini-characters/character-female-f.glb": { "sha256": "2ff4311897bfaf99", "from": "Mini Characters/Models/GLB format/character-female-f.glb" },
+    "mini-characters/Textures/colormap.png": { "sha256": "0d4947d34ff32acf", "from": "Mini Characters/Models/GLB format/Textures/colormap.png" },
+    "cube-pets/animal-cat.glb": { "sha256": "1e73aaf7d497dd7d", "from": "Cube Pets/Models/GLB format/animal-cat.glb" }
   }
 }

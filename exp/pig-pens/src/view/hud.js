@@ -24,13 +24,14 @@ function cardInfo(sim, sel) {
     return { name: b.name, sub, doing: BIRD_DOING[b.state], bars: extra + bar('Fright', b.panic, 'fright'), at: b.state === 12 ? [flock.fox.x, flock.fox.z] : b.hidden ? null : [b.px, b.pz] };
   }
   if (sel.kind === 'fox') { const f = flock.fox; return { name: 'The fox', sub: 'Fox · up to no good', doing: f.carrying ? `Cheeks full of ${f.carrying.name}! Tap to make it spit.` : ['Gone', 'Sniffing around', 'Chasing a chicken!', 'Very pleased with itself', 'Running away'][f.state], bars: bar('Nerve', 1 - Math.min(1, f.fear / 0.6), 'fright'), at: f.state ? [f.x, f.z] : null }; }
+  if (sel.kind === 'vet') { const v = sim.vet; return { name: v.name, sub: 'Vet · looks after every animal on the farm', doing: v.doing, bars: '', at: [v.x, v.z] }; }
   return { name: 'Biscuit', sub: 'Sheepdog · good dog', doing: sim.dog.active ? 'Herding' : sim.dog.home === 3 ? 'Napping in his dog house' : sim.dog.home ? 'Trotting home' : 'Waiting for a job', bars: '', at: [sim.dog.x, sim.dog.z] };
 }
 
 export function createHud(doc, { world }) {
   const $ = id => doc.getElementById(id), win = doc.defaultView;
   const card = $('card'), hintEl = $('hint'), badge = $('snacks'), feedBtn = doc.querySelector('[data-tool="feed"]');
-  const dn = $('daynight'), eggTxt = $('eggCount'), eggBox = $('eggs');
+  const dn = $('daynight'), eggTxt = $('eggCount'), eggBox = $('eggs'), outside = $('outside');
   const stillMotion = win.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   let selKey = null, hintUntil = null, shownLeft = -1, lastEggs = -1, night = null;
   const eggPops = [], popV = new THREE.Vector3();
@@ -79,6 +80,7 @@ export function createHud(doc, { world }) {
       const f = sim.flock;
       if (f.basket !== lastEggs) { const bump = lastEggs >= 0; lastEggs = f.basket; eggTxt.textContent = lastEggs; if (bump) { eggBox.classList.remove('bump'); void eggBox.offsetWidth; eggBox.classList.add('bump'); } }
       if (sim.clock.night !== night) { night = sim.clock.night; dn.setAttribute('aria-label', night ? 'Night. Switch to day' : 'Day. Switch to night'); } // aria-pressed is the engine's (farm.night)
+      if (outside) outside.hidden = !s.focus;
       updateEggPops(dt);
     },
     dispose() {

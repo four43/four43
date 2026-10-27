@@ -1,0 +1,49 @@
+{
+  "title": "Vet clinic",
+  "description": "Kenney-style vet clinic, 9 x 8 m: cream walls with teal trim and big teal-framed windows, a low slate gable roof with a white paw-print sign over the front, a slate front door. Built-in interior for the cutaway: mint checker waiting room, pale exam room with exam table, sink and pegboard, wood-floored studio, two low animal benches in the waiting room. roof / walls (6 face groups, origins on the ground) / interior.",
+  "size": [
+    9.37,
+    4.32,
+    8.8
+  ],
+  "tolerance": [
+    0.04,
+    0.06,
+    0.04
+  ],
+  "grounded": true,
+  "nodes": [
+    "roof",
+    "bench_east",
+    "bench_partition",
+    "walls",
+    "wall_front",
+    "wall_back",
+    "wall_side_L",
+    "wall_side_R",
+    "wall_inner_across",
+    "wall_inner_down",
+    "door",
+    "interior",
+    "exam_table",
+    "sink",
+    "pegboard"
+  ],
+  "budget": {
+    "tris": 6000,
+    "materials": 7,
+    "kb": 300
+  },
+  "checks": [
+    "FRONT tile: cream front wall with a slate door (small window, handle) right of centre under a teal canopy, and big teal-framed windows on both sides of it",
+    "FRONT tile: a white sign board with a teal paw print (pad + 4 toes) and a teal cross stands on the front roof slope",
+    "3/4 tile: low two-sided slate gable roof with teal fascia and rake trim, overhanging the walls; cream gable end on the left (+X) side with a vent; the -X end is flush (no overhang) where it butts the barn",
+    "3/4 tile: teal corner boards at the corners, slate plinth band at the base; nothing floats",
+    "zoom walls: wall tops are clean and level at eave height with no roof pieces left on them",
+    "zoom interior TOP: three floors read clearly: mint/pale checker across the front half, pale exam room back-right on screen (model +X is screen-right in top view? judge by position: x<0), wood studio",
+    "zoom interior 3/4: exam table (grey with mint pad) and a sink unit against the back wall in the exam room; a tan pegboard with dark dots on the exam room's west wall",
+    "zoom interior: two low wooden slat benches with mint cushion strips: one along the east (+X) wall of the waiting room, one along the waiting-room face of the across partition, stopping before the studio doorway",
+    "zoom interior: the other Furniture Kit spots (desk, bed, kitchen, rug, plant, cat bed) are clear floor",
+    "zoom sink: rim, basin, splashback and tap read as separate clean pieces with no flicker/stripes"
+  ]
+}

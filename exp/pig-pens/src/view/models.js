@@ -48,6 +48,13 @@ export function partGeometry(assets, key, name) {
   if (!list.length) throw new Error(`pig-pens: model '${key}' has no part '${name}'`);
   return list.length === 1 ? list[0] : mergeGeometries(list, false);
 }
+// every mesh under `node` merged into one geometry in the node's own space (the buildings' animated groups: one draw each)
+export function geometryUnder(node) {
+  node.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(node.matrixWorld).invert(), m = new THREE.Matrix4(), list = [];
+  node.traverse(o => { if (o.isMesh) list.push(plain(o).applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld))); });
+  return !list.length ? null : list.length === 1 ? list[0] : mergeGeometries(list, false);
+}
 export const colorGeo = (g, hex) => { const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
 export function mergeGeos(list) {
   const parts = list.map(g => g.index ? g.toNonIndexed() : g);

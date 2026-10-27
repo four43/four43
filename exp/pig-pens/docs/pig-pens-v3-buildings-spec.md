@@ -5,6 +5,19 @@ Date: 26 October 2026
 Baseline: Pig Pens 2.5.1 (`pig-pens-v2-spec.md`, amended for 2.5.0)
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the new technical names (TN) and technical verbs (TV).
 
+Amended 26 October 2026 (R1 built, Pig Pens 2.6.0):
+- The sim reads building positions from `src/defs/buildings.js`. The model scripts import the same file, and `test/models.test.mjs` checks the node names. There is no baked sidecar and there are no socket empties (§3.5, §4.1).
+- The vet's name is Dr. Emmy. A Cube Pets cat sleeps on a cushion in her studio. She walks round the north end of the reception desk.
+- The coop's door volume is its front wall up to the eave. Its roof volume starts above the eave and stops at the front wall (§5.1).
+- A pinch-out does not leave a building (§5.4). Back, Escape and a ground tap outside do.
+- The view merges each moving part (roof, each wall face, each door) and the rest of each building into one mesh. The clinic furniture is one mesh.
+- The doors drop with the front wall when it is cut.
+- The barn is the centre of the north row (playtest 1). The chicken run moves 5 tiles (12 m) west, and the coop, the barn and the clinic move with it (§3.1).
+- A clipping plane cuts the walls that face the camera down to stubs. The walls are not scaled. A cut wall casts no shadow (§5.2).
+- Inside the coop, only the pop door itself toggles the door. A tap on the grass round it goes back out (§5.5).
+- The waiting room has two low animal benches in the clinic model. It has no Furniture Kit chairs.
+- Measured changes from the layout move: the chickens go to bed in 10.1 s (it was 11.7 s), the night fox gulps at 20.0 s (it was 22 s), and 45 pigs are penned at 120 s (it was 37). The goldens and the feel baseline are blessed again.
+
 ---
 
 ## 1. Introduction
@@ -73,10 +86,10 @@ The buildings stand in one row against the north boundary (z = −26.4). From we
 
 | Item | Position (x) | Size | Note |
 |---|---|---|---|
-| Chicken run | −13.2 … 3.6 | no change | |
-| Coop | east end of the run, against the run's east fence | 3.0 × 2.3 m (no change) | Moves from x = −10.9. The nest boxes, ramp and pop door move with it. |
-| Barn | 3.8 … 17.8 | 14 × 8 m, ridge approximately 6 m | Front (doors) faces south. |
-| Clinic | 17.8 … 27.0 | 9.2 × 8 m, one storey | Front door faces south. |
+| Chicken run | −25.2 … −8.4 | 5 tiles west of 2.5.1 | The nest boxes are at its west end. |
+| Coop | east end of the run, against the run's east fence (x −10.1) | 3.0 × 2.3 m (no change) | The ramp and pop door move with it. |
+| Barn | −8.2 … 7.4 | 15.6 × 8 m, ridge 6.2 m | Front (doors) faces south, over the middle of the pens. |
+| Clinic | 7.4 … 16.4 | 9 × 8 m, one storey | Front door faces south. |
 
 Values are approximate. The plan sets the final values. The plan must keep all three fronts reachable from the open field.
 
@@ -187,7 +200,7 @@ A wall is near when its outward normal points toward the camera. Calculate this 
 
 - The `back` action (button or Escape) goes up one level: `clinic.exam` → `clinic` → `null`.
 - A tap on the ground outside the focused building leaves it.
-- A pinch-out past the zoom limit leaves it.
+- A pinch-out past the zoom limit leaves it. (Not in 2.6.0.)
 - On leave, the roof comes back and the walls grow to full height.
 
 ### 5.5 Tools in focus

@@ -82,6 +82,11 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 .bar span{width:52px} .bar i{flex:1;height:9px;border-radius:5px;background:rgba(107,68,40,.18);overflow:hidden} .bar b{display:block;height:100%;border-radius:5px}
 .bar.hunger b{background:#f2a33a} .bar.mud b{background:#7a5434} .bar.fright b{background:#e8483f}
 .facts{display:flex;gap:14px;margin-top:6px;font-size:13px}
+#outside{all:unset;cursor:pointer;position:fixed;left:calc(var(--lh-sa-left,env(safe-area-inset-left,0px)) + 12px);top:calc(var(--lh-sa-top,env(safe-area-inset-top,0px)) + 12px);z-index:5;display:flex;align-items:center;gap:6px;height:46px;padding:0 16px 0 12px;font-weight:800;font-size:16px;color:var(--ink)}
+#outside[hidden]{display:none}
+#outside svg{width:24px;height:24px}
+#outside:active{transform:translateY(2px)}
+#outside:focus-visible{outline:3px solid #2f7de1;outline-offset:2px}
 #loading{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;font-weight:800;color:#5a3820;background:var(--sky);z-index:10}
 :is(#daynight,#bell).chunk{background:var(--panel);border:2.5px solid var(--mud);box-shadow:0 4px 0 var(--mud)}
 #bell.chunk{background:var(--hay)}
@@ -103,6 +108,8 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M12 5V3.5"/></svg>
   </button>
 </div>
+<button id="outside" data-lh-slot="farm.back" class="chunk" hidden aria-label="Go back outside">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Outside</button>
 <div id="hint" class="chunk" role="status" aria-live="polite"></div>
 <nav id="tools" class="chunk" aria-label="Tools">
   <button data-tool="hand" data-lh-slot="farm.tool.hand" aria-pressed="true">

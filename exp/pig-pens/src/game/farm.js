@@ -5,6 +5,7 @@
 // events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
 import { createSim } from '../sim.js';
 import { planeHit, classify, grabTarget } from './pick.js';
+import { BUILDINGS } from '../defs/buildings.js';
 
 export const TOOLS = ['hand', 'shoo', 'feed', 'hose', 'grab'];
 export const TOOL_LABEL = { hand: 'Hand', shoo: 'Shoo', feed: 'Feed', hose: 'Hose', grab: 'Grab' };
@@ -19,7 +20,14 @@ export const START_HINT = 'Tap an animal to meet it. Two fingers turn, pan and z
 export const TAP = { move: 12, seconds: 0.45 }, ORBIT_PX = 10, LIFT = { hose: 55, grab: 80 };
 export const GRAB_EASE = 0.18, GRAB_Y = 1.7, TOSS_GAP = 0.18;
 // The farm's own event types (never a createSim type), so the engine-path golden can filter them out (#57).
-export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter']);
+export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter', 'focus']);
+// Going inside (v3 §5): the building in focus, its hint, and the tools that stay outside
+export const FOCUS_HINT = {
+  coop: 'The coop. Tap Outside or the grass to go back out.',
+  barn: 'The barn. Tap the doors to open or shut them.',
+  clinic: 'The vet’s clinic. Dr. Emmy is in.',
+};
+export const OUTSIDE_TOOLS = new Set(['shoo', 'feed', 'hose']);
 
 export function makeFarm() {
   const S = e => { if (e.scene.name !== 'farm') throw new Error('pig-pens: the farm scene is not the main scene'); return e.scene.state; };
@@ -51,8 +59,19 @@ export function makeFarm() {
       if (t.kind === 'gate') { const g = sim.lay.gates[t.id]; sim.setGate(t.id, !g.open); api.hint(e, g.open ? 'Gate open.' : 'Gate shut.', 1.2); return; }
       if (t.kind === 'fox' && sim.flock.fox.carrying) { sim.flock.tapFox(); return; }
       if (t.kind === 'door') return api.toggleDoor(e);
+      if (t.kind === 'building') return api.enter(e, t.id);
+      if (t.kind === 'outside') return api.leave(e);
       api.select(e, t);
     },
+    // Into a building (a roof tap): the camera frames it and its roof lifts (the view); another building's roof switches.
+    enter(e, id) {
+      if (!BUILDINGS[id]) throw new Error(`pig-pens: no building '${id}'`);
+      const s = S(e); if (s.focus === id) return;
+      s.focus = id; e.emit('focus', { focus: id }); api.hint(e, FOCUS_HINT[id], 3);
+    },
+    leave(e) { const s = S(e); if (!s.focus) return; s.focus = null; e.emit('focus', { focus: null }); },
+    // Back (Escape, the Outside button): a selection closes first, then the building
+    back(e) { const s = S(e); if (s.selected) api.select(e, null); else api.leave(e); },
     toggleDoor(e) {
       const c = S(e).sim.lay.coop; c.open = !c.open; // #60: was flipped by the view
       e.emit('door', { open: c.open });
@@ -65,6 +84,7 @@ export function makeFarm() {
       if (ph === 'down') {
         if (s.gesture?.down) endGesture(e, s); // a stray down (bindPointer cancels first): never leave a grab or hose on
         const g = s.gesture = { tool: s.tool, pointer: d.pointer, down: true, target: null };
+        if (s.focus && OUTSIDE_TOOLS.has(g.tool)) { g.down = false; g.tool = 'none'; return api.hint(e, `Step outside to use the ${TOOL_LABEL[s.tool]}.`, 2); }
         return down(e, s, g, d);
       }
       const g = s.gesture; if (!g || g.pointer !== d.pointer) return;
@@ -79,7 +99,7 @@ export function makeFarm() {
 
   function down(e, s, g, d) {
     const sim = s.sim;
-    if (g.tool === 'hand') g.target = classify(sim, d.ray);
+    if (g.tool === 'hand') g.target = classify(sim, d.ray, s.focus);
     else if (g.tool === 'shoo') shoo(e, s, d.ray, true);
     else if (g.tool === 'hose') { if (aimHose(s, d)) e.emit('hose', { on: true }); }
     else if (g.tool === 'grab') {
@@ -163,20 +183,21 @@ export function makeFarm() {
     const I = e.input.snapshot;
     for (let k = 0; k < TOOLS.length; k++) if (I[TOOLS[k]].pressed) api.setTool(e, TOOLS[k]);
     if (I.bell.pressed) api.ringBell(e);
-    if (I.back.pressed) api.select(e, null);
+    if (I.back.pressed) api.back(e);
   }
 
   const scene = {
     // [S-5, #25] known states, never stepping; (engine, opts) as jump calls them
     presets: {
       night: e => api.setNight(e, true),
+      focus: (e, o) => api.enter(e, o.id),
       tool: (e, o) => api.setTool(e, o.name), selected: (e, o) => api.select(e, { kind: o.kind, i: o.i }),
     },
     enter(e, ctx) {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
         sim: createSim(ctx.world, { pigs: a.pigs ?? 48, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
-        tool: 'hand', selected: null, gesture: null, grab: null, ring: null, lastToss: -Infinity,
+        tool: 'hand', selected: null, focus: null, gesture: null, grab: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });
       // grab lift and hose nozzle easing, before the step's commands (#60)
@@ -191,7 +212,7 @@ export function makeFarm() {
         for (let i = 0; i < q.length; i++) e.emit(q[i].type, q[i]);
         q.length = 0;
         const me = e.players[0], g = e.gameState, c = s.sim.counts; // [T-25]: written each step, allocation-free
-        me.eggs = Math.min(0xffff, s.sim.flock.basket); g.night = s.sim.clock.night; for (let i = 0; i < 8; i++) g.pens[i] = c[i];
+        me.eggs = Math.min(0xffff, s.sim.flock.basket); g.night = s.sim.clock.night; for (let i = 0; i < 9; i++) g.pens[i] = c[i];
       }, { stage: 'post' });
       ctx.command('tool', (e, d) => api.pointer(e, d));
       api.hint(e, START_HINT, 5);
@@ -204,6 +225,7 @@ export function makeFarm() {
       u.toggle({ id: 'night', label: 'Night', get: () => s.sim.clock.night, set: (v, e) => api.setNight(e, v) });
       u.button({ id: 'bell', label: 'Ring the dinner bell', action: e => api.ringBell(e) });
       u.button({ id: 'close', label: 'Close', when: () => !!s.selected, action: e => api.select(e, null) });
+      u.button({ id: 'back', label: 'Outside', when: () => !!s.focus, action: e => api.leave(e) });
     },
   };
   return { scene, api };

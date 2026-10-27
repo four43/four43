@@ -8,6 +8,13 @@
       "sha256": "6ea48fa6a5638858fd0109677251444bd581bd8fc72e88f77b16c37c5c4a02dd",
       "options": "00ea732d4a8bd02c"
     },
+    "barn": {
+      "glb": "models/barn.glb",
+      "anim": null,
+      "bytes": 91236,
+      "sha256": "bc33ebb128d0f159189af2c2c5b0a5d36aab647d3978c038fb9fa47ca82a8490",
+      "options": "744513ec08eaa7a3"
+    },
     "barrel": {
       "glb": "models/barrel.glb",
       "anim": null,
@@ -43,6 +50,13 @@
       "sha256": "d77f75ab57980a808868cbcfff71e635df08a4193e792a3245c1f0594ae58ef4",
       "options": "00ea732d4a8bd02c"
     },
+    "cat": {
+      "glb": "models/cat.glb",
+      "anim": null,
+      "bytes": 60948,
+      "sha256": "aa2efa1cd20da4933770e31c64c60ce15086aa36f2de12cb387639b7812511b2",
+      "options": "d56a718f4bc8198d"
+    },
     "chick": {
       "glb": "models/chick.glb",
       "anim": "models/chick.anim.json",
@@ -50,12 +64,26 @@
       "sha256": "e4b9b015b77e6fba16ea36ad80db91d9a95c05556f649bfaab780ba73fc54a69",
       "options": "e8a16382c3955dd2"
     },
+    "clinic": {
+      "glb": "models/clinic.glb",
+      "anim": null,
+      "bytes": 111568,
+      "sha256": "58a9a37607708840fc40ba1ef2b2497934a17a46bea2113cbed84e242bc7e4d7",
+      "options": "0ac307800b139544"
+    },
     "cob": {
       "glb": "models/cob.glb",
       "anim": null,
       "bytes": 7280,
       "sha256": "a01253069eb59988a2483b5567619bb62822b40646fee7cc590d8df6fd741128",
       "options": "00ea732d4a8bd02c"
+    },
+    "coop": {
+      "glb": "models/coop.glb",
+      "anim": null,
+      "bytes": 43548,
+      "sha256": "ceb8f4a0eff1bbdd9e25f816b89af9339656773db4f4e2b59166050d96e58fe9",
+      "options": "a79abd6109bc8c11"
     },
     "corn": {
       "glb": "models/corn.glb",
@@ -112,6 +140,111 @@
       "bytes": 52544,
       "sha256": "b149dc080c51ec029758e84c39294d03e84f54b6ee44f211a73ac1d7f07cd0a4",
       "options": "d56a718f4bc8198d"
+    },
+    "furn_bedSingle": {
+      "glb": "models/furn_bedSingle.glb",
+      "anim": null,
+      "bytes": 13320,
+      "sha256": "c6eb2516d8409d5510d11fb8fbd22fd8b091de77c2261e008fa6ba8cb6ba17fc",
+      "options": "829cae375206be4a"
+    },
+    "furn_bookcaseOpenLow": {
+      "glb": "models/furn_bookcaseOpenLow.glb",
+      "anim": null,
+      "bytes": 4500,
+      "sha256": "5b2c1f4e2592ca6b40b7c5bc87c2212d89680f975bfe1a8b71cc9d5289d594e3",
+      "options": "829cae375206be4a"
+    },
+    "furn_chairDesk": {
+      "glb": "models/furn_chairDesk.glb",
+      "anim": null,
+      "bytes": 14792,
+      "sha256": "2bc78742e5ae1fc92c51f2dd3ed4ffe82f805629f2fb93273866d81554f85dba",
+      "options": "829cae375206be4a"
+    },
+    "furn_coatRackStanding": {
+      "glb": "models/furn_coatRackStanding.glb",
+      "anim": null,
+      "bytes": 4980,
+      "sha256": "2334b6dfe8a313960c49c03c4bd5176add7303614ca624d0f40b3ee4e07aeaea",
+      "options": "829cae375206be4a"
+    },
+    "furn_computerScreen": {
+      "glb": "models/furn_computerScreen.glb",
+      "anim": null,
+      "bytes": 4884,
+      "sha256": "6e1660106c40f1b599d9668123b2c5a20c330d1c005334f4f252baa6a0f76f85",
+      "options": "829cae375206be4a"
+    },
+    "furn_desk": {
+      "glb": "models/furn_desk.glb",
+      "anim": null,
+      "bytes": 8320,
+      "sha256": "22d695fc4de80de3d2d7c9e18e3e04b924a6521407cd7bc5f3c2387a9c4d265f",
+      "options": "829cae375206be4a"
+    },
+    "furn_kitchenCabinet": {
+      "glb": "models/furn_kitchenCabinet.glb",
+      "anim": null,
+      "bytes": 9680,
+      "sha256": "ba7a5c72bcc1905ff364a5f3bf70915b59ad474d6f7108d952978eb1c8802fc0",
+      "options": "829cae375206be4a"
+    },
+    "furn_kitchenCoffeeMachine": {
+      "glb": "models/furn_kitchenCoffeeMachine.glb",
+      "anim": null,
+      "bytes": 8136,
+      "sha256": "91bd618901d4462a80f0156f2d74f8048313267d328977a8bba7152b5d77fc21",
+      "options": "829cae375206be4a"
+    },
+    "furn_kitchenFridgeSmall": {
+      "glb": "models/furn_kitchenFridgeSmall.glb",
+      "anim": null,
+      "bytes": 10288,
+      "sha256": "dddd1fcd026241028cd26cecfc74f0e61c70a2113b12c10f4fa531866e87f507",
+      "options": "829cae375206be4a"
+    },
+    "furn_kitchenSink": {
+      "glb": "models/furn_kitchenSink.glb",
+      "anim": null,
+      "bytes": 16744,
+      "sha256": "2a8d2dc4baedec7c9ef5dfdbb5d6c6ea73ddeb4487403b428615bec3b3cff86b",
+      "options": "829cae375206be4a"
+    },
+    "furn_lampRoundFloor": {
+      "glb": "models/furn_lampRoundFloor.glb",
+      "anim": null,
+      "bytes": 4860,
+      "sha256": "08c040ae56be07413dfb8924289d2756205036e8a0bb841d08996a3ae80ae838",
+      "options": "829cae375206be4a"
+    },
+    "furn_pillow": {
+      "glb": "models/furn_pillow.glb",
+      "anim": null,
+      "bytes": 3296,
+      "sha256": "5c5ea5d21be6b4cf104507dac10c67950061d54358491d19b0e953f36aeeca48",
+      "options": "829cae375206be4a"
+    },
+    "furn_pottedPlant": {
+      "glb": "models/furn_pottedPlant.glb",
+      "anim": null,
+      "bytes": 6520,
+      "sha256": "ee12da71d66ce3f57e7504bce5a9a225618346fd19e8593449f5abaa342a5946",
+      "options": "829cae375206be4a"
+    },
+    "furn_rugRounded": {
+      "glb": "models/furn_rugRounded.glb",
+      "anim": null,
+      "bytes": 6092,
+      "sha256": "5dae8b9231ee246732bd57a1a86ab6ab7377b1c8e686d102bb108c78e209a9b9",
+      "options": "829cae375206be4a"
+    },
+    "furn_trashcan": {
+      "glb": "models/furn_trashcan.glb",
+      "anim": null,
+      "bytes": 5024,
+      "sha256": "b5636af4944e3df7cf63f77dab18ee1f384bd3d8f38572b11823018e95e4e4fc",
+      "options": "829cae375206be4a"
     },
     "gate": {
       "glb": "models/gate.glb",
@@ -224,6 +357,13 @@
       "bytes": 4780,
       "sha256": "55ec028019a5132d253516eae37aa09676340d642375cd2bc3e6b3df51220590",
       "options": "e97fc75ca206e284"
+    },
+    "vet": {
+      "glb": "models/vet.glb",
+      "anim": null,
+      "bytes": 77236,
+      "sha256": "e43ebbee97a75854e2b5aee550e271390f26aeed8c15ebf5732d701cc97b7c81",
+      "options": "d56a718f4bc8198d"
     },
     "wheat": {
       "glb": "models/wheat.glb",

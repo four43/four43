@@ -4,6 +4,7 @@
 // same canvas (devices.js), and the two agree on the Hand's orbit through rig.orbit.orbiting (#52). Nothing here calls the sim.
 import { createOrbitRig, makeProject } from 'lion-hawk/view';
 import { ORBIT_PX } from '../game/farm.js';
+import { BUILDINGS } from '../defs/buildings.js';
 
 // 2.1.0's rig.js values; min 2.5, max 80, pitch 0.28..1.48 and ground 0 are the rig's defaults
 export const ORBIT = {
@@ -29,4 +30,38 @@ export function attach(camera, canvas) {
 export function bindCamera(engine, canvas) {
   const dev = rig.orbit.bindGesture(engine, canvas, { mode: () => cameraMode(rig.downTool), tapMove: ORBIT_PX });
   return () => dev.dispose();
+}
+
+// Going inside (v3 §5.3): with a building in focus the camera eases to look down into it from the front, sized so the whole
+// building fits the screen, and stays clamped round it; leaving eases back to the pose the farm had. Reads the focus, never
+// writes it. followFocus(focus, dt) runs every drawn frame before rig.orbit.update.
+export const FOCUS = { pitch: 0.95, margin: 1.2, ease: 3.2, minK: 0.45, maxK: 1.6 };
+const focusRig = { id: null, saved: null, goal: null };
+export function focusFrame(id, camera) {
+  const B = BUILDINGS[id], w = B.w ?? B.hx * 2, d = B.d ?? B.hz * 2, vf = camera.fov * Math.PI / 180;
+  const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+  const dist = Math.max((w / 2 + FOCUS.margin) / Math.tan(hf / 2), (d / 2 + FOCUS.margin) * Math.sin(FOCUS.pitch) / Math.tan(vf / 2) + d / 2);
+  return { tx: B.x, ty: 0.5, tz: B.z + 0.4, yaw: 0, pitch: FOCUS.pitch, dist, B, w, d };
+}
+export function followFocus(focus, dt) {
+  const o = rig.orbit; if (!o) return;
+  const id = focus ? focus.split('.')[0] : null, st = o.state, L = o.limits;
+  if (id !== focusRig.id) {
+    if (id && !focusRig.id) focusRig.saved = { pose: { tx: st.tx, ty: st.ty, tz: st.tz, yaw: st.yaw, pitch: st.pitch, dist: st.dist }, limits: { ...L, bounds: L.bounds && { ...L.bounds } } };
+    focusRig.id = id;
+    if (id) {
+      const f = focusFrame(id, rig.camera);
+      focusRig.goal = f;
+      Object.assign(L, { min: f.dist * FOCUS.minK, max: f.dist * FOCUS.maxK, pitchMin: 0.55,
+        bounds: { x: [f.B.x - f.w / 2, f.B.x + f.w / 2], z: [f.B.z - f.d / 2, f.B.z + f.d / 2 + 1.5] } });
+    } else if (focusRig.saved) {
+      focusRig.goal = focusRig.saved.pose; Object.assign(L, focusRig.saved.limits); focusRig.saved = null;
+    }
+  }
+  const g = focusRig.goal; if (!g) return;
+  const k = Math.min(1, dt * FOCUS.ease);
+  let dy = g.yaw - st.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  st.tx += (g.tx - st.tx) * k; st.ty += (g.ty - st.ty) * k; st.tz += (g.tz - st.tz) * k;
+  st.yaw += dy * k; st.pitch += (g.pitch - st.pitch) * k; st.dist += (g.dist - st.dist) * k;
+  if (Math.abs(dy) < 1e-3 && Math.abs(g.dist - st.dist) < 0.02 && Math.hypot(g.tx - st.tx, g.tz - st.tz) < 0.02) focusRig.goal = null; // arrived: the gestures own it again
 }

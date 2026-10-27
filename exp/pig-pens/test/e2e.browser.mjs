@@ -3,6 +3,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, openGame, expectScene, expectState, expectTappable, expectFitsSafeArea } from 'lion-hawk/playwright';
 import { servePigPens } from './serve.mjs';
+import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
 
 const ENTRY = process.env.PIGPENS_ENTRY ?? 'src/main.js';
 const ARGS = { pigs: 24 };
@@ -118,5 +119,23 @@ test('iPhone: the toolbar and top bar are tappable and inside the safe area (#63
     await expectTappable(game, 'farm.bell'); await expectTappable(game, 'farm.night');
     await expectFitsSafeArea(game, '#tools'); await expectFitsSafeArea(game, '#top');
     assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop (v3): a click on a roof goes into that building; the Outside button and Escape come back out', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 3, args: ARGS });
+  try {
+    await expectScene(game, 'farm');
+    for (const [id, roof] of [['barn', [BARN.x + 3, 6.0, BARN.z]], ['clinic', [CLINIC.x, 4.2, CLINIC.z - 0.7]], ['coop', [COOP.x - 0.6, 2.4, COOP.z]]]) {
+      const at = await game.point({ world: roof });
+      await game.page.mouse.click(at.x, at.y); await game.step(2);
+      await expectState(game, 'focus', id);
+      await frames(game); await expectTappable(game, 'farm.back');
+      if (id === 'clinic') { await game.page.keyboard.press('Escape'); await frames(game); await game.step(2); }
+      else { await game.tap('farm.back'); await game.step(2); }
+      await expectState(game, 'focus', null);
+      for (let k = 0; k < 40; k++) await frames(game); // the camera eases back before the next roof is aimed at
+    }
   } finally { await game.close(); }
 });

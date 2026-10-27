@@ -2,6 +2,7 @@
 import { buildLayout, mulberry32, FENCE_H } from './layout.js';
 import { FlowGrid, hit } from './flow.js';
 import { createFlock } from './chickens.js';
+import { createVet } from './clinic.js';
 
 export const DT = 1 / 60;
 export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10 };
@@ -125,6 +126,7 @@ export function createSim(world, opts = {}) {
     emit('daynight', { night: n });
   }
   const tmp = [0, 0];
+  const vet = createVet({ clock, seed: opts.seed ?? 1 }); // the clinic's vet (v3 §9.2): her own rng, after the herd's
 
   function readState() {
     for (const p of pigs) {
@@ -281,9 +283,10 @@ export function createSim(world, opts = {}) {
   }
 
   // ---- main step -----------------------------------------------------------------
-  const counts = new Array(8).fill(0);
+  const counts = new Array(9).fill(0); // by lay.region: pens 0–5, lane 6, field 7, barn 8
   function think() {
     t += DT; clock.t = t;
+    vet.step(DT);
     updateThreats();
     // farmer tops up one trough at a time, which keeps the herd moving between pens
     refillT -= DT;
@@ -616,7 +619,7 @@ export function createSim(world, opts = {}) {
 
   return {
     world, lay, grid, pigs, dog, foods, troughs, events, counts,
-    think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, flock, setGate, threats,
+    think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, flock, setGate, threats, vet,
     get time() { return t; }, get foodCap() { return P.foodCap; }, get transitions() { return transitions; }, get grabbed() { return grabbed; },
   };
 }

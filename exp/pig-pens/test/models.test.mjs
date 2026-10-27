@@ -52,3 +52,17 @@ test('the pig skin is the compiler\'s instanced coverage material with the eyeli
 test('the dog and the fox carry their clips for AnimationMixer', () => {
   for (const k of ['dog', 'fox']) assert.deepEqual(['idle', 'walk', 'run'].filter(c => !assets.get(k).clips.some(x => x.name === c)), [], k);
 });
+test('v3 buildings carry the nodes the cutaway drives (defs/buildings.js); the vet keeps her clips', () => {
+  const faces = ['wall_front', 'wall_back', 'wall_side_L', 'wall_side_R'];
+  const need = { coop: ['pop_door'], barn: ['door_L', 'door_R'], clinic: ['door', 'pegboard', 'exam_table', 'sink'] };
+  for (const id of ['coop', 'barn', 'clinic']) {
+    const scene = assets.get(id).scene, has = n => !!scene.getObjectByName(n);
+    for (const n of ['roof', 'walls', 'interior', ...need[id]]) assert.ok(has(n), `${id}: ${n}`);
+    const walls = scene.getObjectByName('walls').children.map(c => c.name).sort();
+    assert.deepEqual(walls, [...faces, ...(id === 'clinic' ? ['wall_inner_across', 'wall_inner_down'] : [])].sort(), id);
+    for (const w of scene.getObjectByName('walls').children) assert.ok(Math.abs(w.position.y) < 1e-6, `${id}/${w.name} stands on the ground`);
+  }
+  for (const [n, x] of [['door_L', 1], ['door_R', -1]]) { const d = assets.get('barn').scene.getObjectByName(n); assert.ok(Math.abs(d.position.x - x * 1.6) < 1e-3, `${n} hinges at the opening's side`); }
+  assert.deepEqual(['idle', 'walk', 'sit'].filter(c => !assets.get('vet').clips.some(x => x.name === c)), [], 'vet clips');
+  assert.ok(assets.get('cat').clips.some(x => x.name === 'idle'), 'the cat idles');
+});

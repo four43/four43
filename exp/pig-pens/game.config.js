@@ -3,6 +3,13 @@
 const nature = f => ({ file: `nature-kit/${f}.glb` });
 const kit = (k, f, material) => ({ file: `${k}/${f}.glb`, rename: { materials: { colormap: material } } });
 const PET_CLIPS = ['idle', 'walk', 'run', 'eat', 'dance', 'gesture-negative'];
+// our own buildings (tools/models/*.model.mjs, glb-author): plain colour factors baked to COLOR_0, every material drawn as wood
+const custom = (f, mats) => ({ file: `custom/${f}.glb`, rename: { materials: Object.fromEntries(mats.map(m => [m, 'wood'])) } });
+// the clinic's furniture (Kenney Furniture Kit: factor colours, no texture); all of it draws as wood (no metal: no env map)
+const FURNITURE = ['desk', 'chairDesk', 'computerScreen', 'bedSingle', 'pillow', 'kitchenCabinet', 'kitchenSink', 'kitchenFridgeSmall',
+  'kitchenCoffeeMachine', 'rugRounded', 'pottedPlant', 'lampRoundFloor', 'bookcaseOpenLow', 'trashcan', 'coatRackStanding'];
+const FURN_MATS = ['wood', 'woodDark', 'metal', 'metalLight', 'metalMedium', 'metalDark', 'glass', 'plant', 'carpet', 'carpetWhite', 'carpetDarker', 'lamp', '_defaultMat'];
+export const furnId = f => `furn_${f}`;
 
 export default {
   id: 'pig-pens', outEnv: 'PIGPENS_OUT',
@@ -28,6 +35,13 @@ export default {
       dog: kit('cube-pets', 'animal-dog', 'pet'), fox: kit('cube-pets', 'animal-fox', 'pet'),
       // our own (tools/models/dog-house.model.mjs, glb-author): plain colour factors, baked to COLOR_0 like the Nature Kit
       dogHouse: { file: 'custom/dog-house.glb', rename: { materials: { houseRed: 'wood', roofDark: 'wood', trim: 'wood', doorDark: 'wood' } } },
+      // v3 buildings (src/defs/buildings.js), their furniture, the vet and her cat
+      coop: custom('coop', ['wood', 'wall', 'trim', 'roof', 'plank', 'straw']),
+      barn: custom('barn', ['barnRed', 'trim', 'roofGrey', 'straw', 'wood', 'lampGlow']),
+      clinic: custom('clinic', ['wall', 'trim', 'slate', 'mint', 'pale', 'wood', 'dark']),
+      ...Object.fromEntries(FURNITURE.map(f => [furnId(f), { file: `furniture-kit/${f}.glb`, rename: { materials: Object.fromEntries(FURN_MATS.map(m => [m, 'wood'])) } }])),
+      vet: kit('mini-characters', 'character-female-f', 'pet'),
+      cat: kit('cube-pets', 'animal-cat', 'pet'),
     },
     optimise: { meshopt: true, quantize: false, weld: false, prune: true, dedupe: true },
   },

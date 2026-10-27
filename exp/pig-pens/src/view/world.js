@@ -10,6 +10,7 @@ import { modelGeometry, mergeGeos, boxGeo, sceneryMaterials } from './models.js'
 import { createPigs } from './pigs3d.js';
 import { createFootprints } from './footprints.js';
 import { buildFarmExtras } from '../farm3d.js';
+import { createBuildings } from './buildings3d.js';
 import { ST } from '../sim.js';
 import { L } from '../layout.js';
 
@@ -144,6 +145,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
   const selRing = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.8, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.95, depthWrite: false }));
   selRing.position.y = 0.045; selRing.visible = false; scene.add(selRing);
   const extras = buildFarmExtras({ scene, sim, assets, mc, MAT, lights: { sun: gfx.lights.sun, hemi: gfx.lights.hemi, background: gfx.scene.background, fog: gfx.scene.fog } });
+  const buildings = createBuildings({ root: scene, assets, sim, camera: gfx.camera, renderer: gfx.renderer });
 
 
   // ---------- hose: nozzle, hose pipe and water particles ---------------------------
@@ -216,7 +218,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
     // One drawn frame (main.js's frame minus the sim, input and HUD). dt is the frame time, 0 for hook renders (#19):
     // nothing here divides by it. `frame` counts drawn frames (trough food every 8th, as before).
     update(dt, s, frame, alpha = 1) {
-      pigs.update(dt, alpha); prints.update(dt); updateZs(dt); updateHose(dt, s.hose); extras.update(dt);
+      pigs.update(dt, alpha); prints.update(dt); updateZs(dt); updateHose(dt, s.hose); extras.update(dt); buildings.update(dt, s.focus, extras.night);
       if ((frame & 7) === 0) updateTroughFood();
       ring.visible = !!s.ring;
       if (s.ring) { ring.position.x = s.ring[0]; ring.position.z = s.ring[1]; ring.rotation.y += dt; ring.scale.setScalar(1 + 0.08 * Math.sin(performance.now() * 0.01)); }
@@ -227,7 +229,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
     },
     feathers(ev) { extras.spawnFeathers(ev.x, ev.y, ev.z, ev.n, ev.tint); },
     dispose() {
-      pigs.dispose(); prints.dispose(); extras.dispose(); if (pipe) pipe.geometry.dispose();
+      pigs.dispose(); prints.dispose(); extras.dispose(); buildings.dispose(); if (pipe) pipe.geometry.dispose();
       gfx.scene.remove(scene); disposeTree(scene, { keepShared: true }); // the compiler's materials and the assets' geometry stay
     },
   };

@@ -1,0 +1,20 @@
+{
+  "title": "Chicken coop",
+  "description": "Chunky Kenney-style hen house on short dark stilts: orange-red walls with cream corner boards and trim, dark red-brown stepped-shingle gable roof (ridge along X), a sliding pop door and small window on the front (+Z), a slatted cream ramp down to the ground. Hollow: straw floor and a two-rail ladder roost along the back wall. Nodes roof, walls/wall_*, interior, pop_door drive the game's cutaway and door.",
+  "size": [3.56, 2.45, 3.5],
+  "tolerance": 0.04,
+  "grounded": true,
+  "nodes": ["roof", "walls", "wall_front", "wall_back", "wall_side_L", "wall_side_R", "interior", "pop_door", "roost", "perch_high", "perch_low", "straw", "ramp"],
+  "contacts": ["stilt_0F", "stilt_2B", "ramp"],
+  "budget": { "tris": 2500, "materials": 6, "kb": 150 },
+  "checks": [
+    "FRONT tile: a tan pop door panel with dark battens sits right of centre (model's left, +X) at floor height between cream guide runners, and a small cream-framed window with a cross sits left of centre",
+    "FRONT tile: cream corner boards run up both front corners and a cream eave board runs along the wall top",
+    "3/4 tile: the coop stands on short dark stilts under a dark-brown floor slab, the walls clearly orange-red",
+    "3/4 tile: the roof is a two-sided gable with its ridge running left-right, darker than the walls, overhanging all round, with stepped shingle rows",
+    "LEFT tile: the ramp's top meets the pop door sill and its low end touches the grid line; stilts touch the grid line",
+    "LEFT tile: the gable end is a closed triangle under the roof with cream rake trim on the roof edge",
+    "interior zoom (top, roof hidden): a straw-yellow floor fills the inside and two parallel round perch rails span most of the width along the back wall on small A-frame legs",
+    "far view: reads as an orange coop with a dark roof and a cream ramp, not a blob"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Barn",
+  "description": "Kenney-style red gambrel barn (BARN in src/defs/buildings.js): white trim, dark stepped-shingle roof, front cross-gable with hay-loft door and hay-hood beam, double swing doors hinged at the jambs, 16 straw stalls with dividers and header beams, two lanterns and hay bales inside. Cutaway nodes: roof, walls/wall_*, door_L/door_R.",
+  "size": [16.38, 6.2, 9.0],
+  "tolerance": [0.03, 0.03, 0.04],
+  "grounded": true,
+  "nodes": ["roof", "walls", "wall_front", "wall_back", "wall_side_L", "wall_side_R", "interior", "door_L", "door_R", "floor", "ridge_cap", "crossgable_face", "loft_door", "hayhood_beam", "lamp_0_glass", "lamp_1_glass"],
+  "contacts": ["front_L", "front_R", "back_wall", "side_L_wall", "side_R_wall"],
+  "budget": { "tris": 7000, "materials": 6, "kb": 350 },
+  "checks": [
+    "FRONT tile: a red barn with a double door centred in the long front wall, white frame round the doors and white X bracing on both leaves",
+    "FRONT tile: a small cross-gable sits above the doors with a white-framed hay-loft door and a beam sticking out at its peak",
+    "LEFT tile: the side wall's gable end shows the gambrel profile (steep lower slope, shallow upper slope) with white rake trim and a small window",
+    "3/4 tile: the dark grey roof shows stepped shingle rows and overhangs the walls; white corner boards and eave band are visible",
+    "3/4 tile: side walls have small square white-framed windows",
+    "LEFT tile: walls touch the grid line; nothing floats",
+    "no-roof TOP view: 8 straw stalls along the back wall and 4+4 along the front either side of the door, with wood dividers and cream header beams, the aisle between them clear in the middle",
+    "no-roof TOP view: two lanterns hang over the aisle at about x = +-3.8, hay bales stand at both aisle ends",
+    "far view: reads as a classic red barn with a dark roof, not a blob"
+  ]
+}
