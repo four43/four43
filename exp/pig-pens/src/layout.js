@@ -51,6 +51,8 @@ export function buildLayout() {
   const wallow = { x: TX(-2.6), z: TZ(4.4), rx: 3.4, rz: 2.6 };
   const run = rect(2, -5, 9, -2);
   const coop = { x: -10.9, z: -25.05, hx: 1.5, hz: 1.15, h: 2.0, doorX: -10.5, doorZ: -23.9, rampZ: -22.95, open: true };
+  // the coop's tap volume: its whole front, from just inside the wall out over the ramp, up to the roof
+  coop.pick = { x0: coop.x - coop.hx - 0.15, x1: coop.x + coop.hx + 0.15, y0: 0, y1: 2.4, z0: coop.z + coop.hz - 0.3, z1: coop.rampZ + 0.25 };
   const nests = [-0.6, 0.2, 1.0, 1.8].map((x, i) => ({ id: i, x, z: -25.95, ax: x, az: -25.2 }));
   const dust = { x: -5.6, z: -22.5, r: 1.15 };
 
@@ -65,6 +67,19 @@ export function buildLayout() {
     if (g.dir === 'x') { g.x = (g.x0 + g.x1) / 2; g.z0 = g.z1 = g.z; } else { g.z = (g.z0 + g.z1) / 2; g.x0 = g.x1 = g.x; }
     g.width = g.tiles.length * L;
     g.run = g.z < run.z1 + 0.1 && g.x > run.x0 && g.x < run.x1;
+    // the leaves (one per tile): a double gate hinges at both ends, a single one at a side picked from its position
+    const hw = g.width / 2;
+    g.leaves = g.tiles.map((tile, k) => {
+      const side = g.tiles.length > 1 ? (k === 0 ? -1 : 1) : (((Math.round(g.x * 7 + g.z * 3) % 2) + 2) % 2 ? 1 : -1);
+      return { side, hingeX: g.tiles.length > 1 ? side * hw : side * (hw - 0.04) };
+    });
+    // tap volumes (world boxes { x0, x1, y0, y1, z0, z1 }), generous so a gate is easy to hit: the gateway where the
+    // leaves shut, and where each leaf lies open (folded back beside the fence, on the gate's -z side as farm3d swings it)
+    const box = (a0, a1, n0, n1) => g.dir === 'x' // gate frame (along a, across n) → world; dir z is the frame turned +90°
+      ? { x0: g.x + a0, x1: g.x + a1, y0: 0, y1: 1.3, z0: g.z + n0, z1: g.z + n1 }
+      : { x0: g.x + n0, x1: g.x + n1, y0: 0, y1: 1.3, z0: g.z - a1, z1: g.z - a0 };
+    g.pick = [box(-hw - 0.1, hw + 0.1, -0.45, 0.45)];
+    for (const l of g.leaves) { const a = l.hingeX, b = l.hingeX + l.side * L; g.pick.push(box(Math.min(a, b), Math.max(a, b), -0.9, 0.35)); }
   }
 
   // ---- static obstacles (physics + flow-field rasterisation) ---------------

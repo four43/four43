@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { farmSim } from './farmSim.mjs';
-import { planeHit, rayDist, classify, grabTarget, pickGate, pickDoor } from '../src/game/pick.js';
+import { planeHit, rayDist, classify, grabTarget, pickGate, pickDoor, rayBox, rayGate, rayCoop } from '../src/game/pick.js';
+import { buildLayout, L } from '../src/layout.js';
 import { rayTo } from './rays.mjs';
 
 test('rayDist matches three.js Ray.distanceToPoint, behind-the-origin included', () => {
@@ -28,4 +29,31 @@ test('classify: an egg wins over everything; a pig is a pig; empty ground is nul
   assert.equal(pickGate(sim.lay, sim.lay.gates[1].x, sim.lay.gates[1].z), sim.lay.gates[1]);
   const c = sim.lay.coop; assert.equal(pickDoor(sim.lay, c.doorX, c.z + c.hz + 0.5), true);
   assert.equal(classify(sim, rayTo([sim.lay.field.x0 - 30, 0, sim.lay.field.z0 - 30])), null);
+});
+
+test('rayBox: enters and leaves a box; a miss, a parallel ray outside it and a box behind the eye are null', () => {
+  const b = { x0: -1, x1: 1, y0: 0, y1: 1, z0: -1, z1: 1 }, h = rayBox([0, 0.5, 5, 0, 0, -1], b);
+  assert.ok(Math.abs(h.t0 - 4) < 1e-12 && Math.abs(h.t1 - 6) < 1e-12);
+  assert.equal(rayBox([3, 0.5, 5, 0, 0, -1], b), null); assert.equal(rayBox([0, 2, 5, 0, 0, -1], b), null);
+  assert.equal(rayBox([0, 0.5, 5, 0, 0, 1], b), null);
+});
+test('gates: a camera ray at the gateway, above the panels, just in front of it, or at a leaf lying open picks that gate', () => {
+  const lay = buildLayout(), toward = (g, a, n, y) => g.dir === 'x' ? [g.x + a, y, g.z + n] : [g.x + n, y, g.z - a];
+  for (const g of lay.gates) {
+    for (const [a, n, y] of [[0, 0, 0.5], [0, 0, 1.1], [0, 0.35, 0], [g.width / 2 - 0.2, -0.3, 0.6]]) assert.equal(rayGate(lay, rayTo(toward(g, a, n, y)))?.gate, g, `gate ${g.id} at ${a}, ${n}, ${y}`);
+    for (const l of g.leaves) assert.equal(rayGate(lay, rayTo(toward(g, l.hingeX + l.side * L / 2, -0.35, 0.5), 20, 0.01))?.gate, g, `gate ${g.id}: the open leaf`);
+  }
+  assert.equal(rayGate(lay, rayTo([lay.gates[0].x + 6, 0, lay.gates[0].z + 6], 20, 0.01)), null, 'open ground far from a gate');
+});
+test('coop: the front wall, the door, the roof edge above it and the ramp all pick the coop front', () => {
+  const lay = buildLayout(), c = lay.coop, front = c.z + c.hz;
+  for (const p of [[c.doorX, 0.66, front], [c.x - c.hx + 0.2, 1.5, front], [c.x + c.hx - 0.1, 2.1, front + 0.1], [c.doorX, 0.05, c.rampZ]]) assert.ok(rayCoop(lay, rayTo(p)), `${p}`);
+  assert.equal(rayCoop(lay, rayTo([c.x + c.hx + 3, 0, front + 2])), null, 'beside the coop');
+});
+test('classify: a gate or the coop front counts at its far side, so an animal standing in it wins; the coop front toggles the door', () => {
+  const sim = farmSim({ pigs: 24, seed: 3 }); sim.step(30);
+  const g = sim.lay.gates[1], p = sim.pigs[0];
+  p.body.setTranslation({ x: g.x, y: p.r, z: g.z }, true); p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); sim.step(1);
+  assert.deepEqual(classify(sim, rayTo([p.px, p.py, p.pz])), { kind: 'pig', i: p.i }, 'the pig in the gateway');
+  const c = sim.lay.coop; assert.deepEqual(classify(sim, rayTo([c.x - c.hx + 0.3, 1.6, c.z + c.hz])), { kind: 'door' });
 });

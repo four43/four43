@@ -22,6 +22,27 @@ export function rayDist(r, x, y, z) {
 // three's Vector3.distanceTo (main.js's grab pick used it, the Hand's classify Math.hypot).
 const dist3 = (r, x, y, z) => { const ax = r[0] - x, ay = r[1] - y, az = r[2] - z; return Math.sqrt(ax * ax + ay * ay + az * az); };
 
+// Where a ray enters and leaves a world box { x0, x1, y0, y1, z0, z1 } (slab method): { t0, t1 }, or null on a miss or
+// when the box is behind the origin.
+export function rayBox(r, b) {
+  let t0 = 0, t1 = Infinity;
+  for (let k = 0; k < 3; k++) {
+    const o = r[k], d = r[k + 3], lo = k === 0 ? b.x0 : k === 1 ? b.y0 : b.z0, hi = k === 0 ? b.x1 : k === 1 ? b.y1 : b.z1;
+    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return null; continue; }
+    let a = (lo - o) / d, c = (hi - o) / d; if (a > c) [a, c] = [c, a];
+    if (a > t0) t0 = a; if (c < t1) t1 = c; if (t0 > t1) return null;
+  }
+  return { t0, t1 };
+}
+// The gate whose tap volumes (layout.js g.pick: the shut gateway and the open leaves) the ray meets first: { gate, t0, t1 }.
+export function rayGate(lay, r) {
+  let best = null;
+  for (const g of lay.gates) for (const b of g.pick) { const h = rayBox(r, b); if (h && (!best || h.t0 < best.t0)) best = { gate: g, ...h }; }
+  return best;
+}
+// The ray through the coop's front (layout.js coop.pick): { t0, t1 } or null.
+export const rayCoop = (lay, r) => rayBox(r, lay.coop.pick);
+
 // The nearest gate within 1.5 m of a ground point (farm3d.js).
 export function pickGate(lay, x, z) {
   let best = null, bd = 1.5;
@@ -43,8 +64,9 @@ export function pickEgg(flock, r) {
 export const foxHit = (flock, r) => flock.fox.state !== FST.AWAY && rayDist(r, flock.fox.x, 0.4, flock.fox.z) < 0.9;
 export const dogHit = (dog, r) => rayDist(r, dog.x, 0.4, dog.z) < 0.8;
 
-// What the Hand acts on (main.js classify): an egg first; then the nearest animal (stable sort: ties go to the earlier
-// candidate); then a gate or the coop door under the ground hit.
+// What the Hand acts on (main.js classify): an egg first; then the nearest of the animals, the gates and the coop front
+// (stable sort: ties go to the earlier candidate). A gate or the coop counts at the far side of its tap volume, so an
+// animal inside it or in front of it wins; one behind it does not. Last, a gate or the coop door near the ground hit.
 export function classify(sim, r) {
   const flock = sim.flock, h = planeHit(r, 0), [ox, oy, oz, dx, dy, dz] = r;
   const egg = pickEgg(flock, r); if (egg) return { kind: 'egg', id: egg.id };
@@ -55,7 +77,9 @@ export function classify(sim, r) {
   if (bi >= 0) { const b = flock.birds[bi]; cands.push({ kind: 'bird', i: bi, d: dist(b.px, b.py, b.pz) - 0.4 }); }
   const f = flock.fox; if (foxHit(flock, r)) cands.push({ kind: 'fox', d: dist(f.x, 0.35, f.z) - 0.6 });
   if (dogHit(sim.dog, r)) cands.push({ kind: 'dog', d: dist(sim.dog.x, 0.4, sim.dog.z) });
-  if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i === undefined ? { kind: c.kind } : { kind: c.kind, i: c.i }; }
+  const gh = rayGate(sim.lay, r); if (gh) cands.push({ kind: 'gate', id: gh.gate.id, d: gh.t1 });
+  const ch = rayCoop(sim.lay, r); if (ch) cands.push({ kind: 'door', d: ch.t1 });
+  if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i !== undefined ? { kind: c.kind, i: c.i } : c.id !== undefined ? { kind: c.kind, id: c.id } : { kind: c.kind }; }
   if (h) { const g = pickGate(sim.lay, h.x, h.z); if (g) return { kind: 'gate', id: g.id }; if (pickDoor(sim.lay, h.x, h.z)) return { kind: 'door' }; }
   return null;
 }

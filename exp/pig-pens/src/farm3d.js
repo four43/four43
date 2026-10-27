@@ -25,11 +25,7 @@ export function buildFarmExtras({ scene, sim, assets, mc, MAT, lights }) {
     const hw = g.width / 2, rot = g.dir === 'x' ? 0 : Math.PI / 2;
     g.frame = new THREE.Matrix4().compose(new THREE.Vector3(g.x, 0, g.z), new THREE.Quaternion().setFromAxisAngle(UP, rot), new THREE.Vector3(1, 1, 1));
     for (const sd of [-1, 1]) posts.push(new THREE.Matrix4().copy(g.frame).multiply(new THREE.Matrix4().makeTranslation(sd * (hw - 0.03), 0, 0)).multiply(new THREE.Matrix4().makeScale(L, L, L)));
-    g.tiles.forEach((tile, k) => {
-      const side = g.tiles.length > 1 ? (k === 0 ? -1 : 1) : (((Math.round(g.x * 7 + g.z * 3) % 2) + 2) % 2 ? 1 : -1);
-      const hingeX = g.tiles.length > 1 ? side * hw : side * (hw - 0.04);
-      leaves.push({ g, side, hingeX });
-    });
+    for (const { side, hingeX } of g.leaves) leaves.push({ g, side, hingeX }); // layout.js: the same leaves its tap volumes use
   }
   const postMesh = new THREE.InstancedMesh(postGeo, MAT.instanced, posts.length); posts.forEach((m, i) => postMesh.setMatrixAt(i, m)); postMesh.castShadow = true; scene.add(postMesh);
   const leafMesh = new THREE.InstancedMesh(leafGeo, MAT.instanced, leaves.length); leafMesh.castShadow = true; leafMesh.frustumCulled = false; leafMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(leafMesh);
