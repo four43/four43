@@ -42,10 +42,13 @@ test('partGeometry: pet parts are node-local, as 2.1.0 drew them (the anim table
   for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - 0.64) < 0.02 && pos.getY(i) > 0.6 && pos.getY(i) < 0.93) face++;
   assert.ok(face > 0, 'the face plane at z 0.64 the eyelid mask reads');
 });
-test('the pig skin is the compiler\'s instanced coverage material with the eyelid patch', () => {
+test('the pig skin is the compiler\'s instanced coverage material with the eyelid patch; the coat adds fur shells', () => {
   const m = pigSkin(mc), key = m.customProgramCacheKey();
   assert.match(key, /COVERAGE/); assert.match(key, /x:eyelids/); assert.ok('COVERAGE_INSTANCED' in m.defines);
   assert.ok(pigSkin(mc) === m, 'cached: one material for every pig part');
+  const coat = pigSkin(mc, { fur: true });
+  assert.ok('FUR' in coat.defines && !('FUR' in m.defines), 'the coat is the shells; the skin under them is not');
+  for (const x of [m, coat]) assert.ok('COVERAGE_WET' in x.defines, 'mud and wet: the hide takes both');
 });
 test('the dog and the fox carry their clips for AnimationMixer', () => {
   for (const k of ['dog', 'fox']) assert.deepEqual(['idle', 'walk', 'run'].filter(c => !assets.get(k).clips.some(x => x.name === c)), [], k);

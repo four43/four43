@@ -26,7 +26,7 @@ export const P = {
   hungerSeek: 0.68, eatRate: 0.2, troughCap: 10, refillEvery: 14,
   smell: 16, smellHungry: 26,
   mudWallowRest: 0.16, mudWallowWalk: 0.07, mudDry: 0.0015, muddy: 0.3,
-  hoseR: 1.4, hoseLure: 11, washRate: 0.45, zoomSpeed: 3.7,
+  hoseR: 1.4, hoseLure: 11, washRate: 0.45, soakRate: 1.5, dryTime: 45, zoomSpeed: 3.7,
   foodCap: 5, foodEatTime: 2.5, foodPursuers: 3, foodLife: 20, foodFade: 1.5,
 };
 
@@ -96,7 +96,7 @@ export function createSim(world, opts = {}) {
       curiosity: 15 + rng() * 50, target: null, trough: -1, snack: -1, eatT: 0,
       px: x, py: r, pz: z, vx: 0, vy: 0, vz: 0, speed: 0, dvx: 0, dvz: 0,
       region: lay.region(x, z), getUp: 0, tumbleQ: [0, 0, 0, 1], airT: 0, settleT: 0, rot: [0, 0, 0, 1],
-      oink: 0, mud: rng() < 0.35 ? 0.45 + 0.55 * rng() : 0, seed: rng(), washed: 0,
+      oink: 0, mud: rng() < 0.35 ? 0.45 + 0.55 * rng() : 0, seed: rng(), washed: 0, wet: 0,
     };
     pigs.push(animal(x, z, r, fields.mass, { member: ['pig'], filter: GROUPS }, 'pet', fields));
   }
@@ -398,6 +398,7 @@ export function createSim(world, opts = {}) {
       { const w = lay.wallow, ex = (p.px - w.x) / w.rx, ez = (p.pz - w.z) / w.rz;
         if (ex * ex + ez * ez < 1) p.mud = Math.min(1, p.mud + (p.state === ST.REST ? P.mudWallowRest : P.mudWallowWalk) * DT);
         else p.mud = Math.max(0, p.mud - P.mudDry * DT); }
+      p.wet = Math.max(0, p.wet - DT / P.dryTime); // a hosed pig stays wet (sleek and shiny) for a while, then fluffs up again
       p.curiosity -= DT; p.oink -= DT; p.timer -= DT;
 
       // ---- decisions -------------------------------------------------------------
@@ -577,8 +578,9 @@ export function createSim(world, opts = {}) {
     // hose: rinse every pig in the spray; once clean, off they go
     hose.idle = hose.active ? 0 : hose.idle + DT;
     if (hose.active) for (const p of pigs) {
-      if (p.state === ST.ZOOM || p.state === ST.FLEE) continue;
       if (Math.hypot(p.px - hose.x, p.pz - hose.z) > P.hoseR + p.r) continue;
+      p.wet = Math.min(1, p.wet + P.soakRate * DT); // every pig in the spray gets soaked, bathing or not
+      if (p.state === ST.ZOOM || p.state === ST.FLEE) continue;
       const was = p.mud; p.mud = Math.max(0, p.mud - P.washRate * DT); p.washed += DT;
       if (p.mud < 0.03 && p.state !== ST.GRAB && p.state !== ST.AIR) {
         // radiate away from the middle of the spray (back through the queue of bathers would be slow)

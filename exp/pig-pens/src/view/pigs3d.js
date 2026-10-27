@@ -1,9 +1,11 @@
 // The pig crowd (phase 3k, A-11): one InstancedMesh per pig part, posed from the baked anim table with a blend on clip
-// changes, interpolated between steps from the World's transform pool (E-11), on the compiler's pig skin (pigSkin.js). The
-// crowd owns instanceCoverage (lane w = the herd sim's mud) and aSleep (the eyelids). pickAnim and the tumble and rest
-// poses are 2.1.0's.
+// changes, interpolated between steps from the World's transform pool (E-11), on the compiler's pig skin (pigSkin.js): the
+// skin, then a coat of fur shells on the pink (eyes and hooves bare, a shorter fuzz on the snout). The crowd owns
+// instanceCoverage (lane w = the herd sim's mud), instanceWet (the herd sim's wet) and aSleep (the eyelids); mud and wet mat
+// the coat and make it shine. pickAnim and the tumble and rest poses are 2.1.0's.
 import * as THREE from 'three';
 import { sampleAnimTable } from 'lion-hawk/view';
+import MATERIALS from '../defs/materials.js';
 import { partGeometry, lerpM } from './models.js';
 import { pigSkin } from './pigSkin.js';
 import { ST } from '../sim.js';
@@ -20,10 +22,21 @@ export function createPigs({ root, assets, mc, sim, world }) {
     }
     g.setAttribute('aEye', new THREE.BufferAttribute(eye, 3)); }
   for (const g of geos) if (!g.attributes.aEye) g.setAttribute('aEye', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3), 3));
+  // the coat: full on the pink skin (r high, b above g), none on the eyes (white and grey) or the hooves (b below g); the snout
+  // part ('Group') is short fuzz. The face (the head's and snout's forward faces) is bare: it is one quad with the eyes a
+  // centimetre in front of it, so its shells would grow over them. Shells before the instance attributes, which furGeometry
+  // must not repeat.
+  const SHELLS = MATERIALS.get('pigHide').look.fur.shells;
+  for (let k = 0; k < geos.length; k++) {
+    const g = geos[k], col = g.attributes.color, nrm = g.attributes.normal, snout = names[k] === 'Group' ? 0.4 : 1;
+    const head = names[k] === 'body' || names[k] === 'Group', face = i => head && nrm.getZ(i) > 0.9;
+    geos[k] = mc.furGeometry(g, i => (col.getX(i) > 0.6 && col.getZ(i) > col.getY(i) && !face(i) ? snout : 0), { shells: SHELLS });
+  }
   const mud = new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4); mud.setUsage(THREE.DynamicDrawUsage);
+  const wet = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); wet.setUsage(THREE.DynamicDrawUsage);
   const sleep = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); sleep.setUsage(THREE.DynamicDrawUsage);
-  for (const g of geos) { g.setAttribute('instanceCoverage', mud); g.setAttribute('aSleep', sleep); }
-  const mat = pigSkin(mc);
+  for (const g of geos) { g.setAttribute('instanceCoverage', mud); g.setAttribute('instanceWet', wet); g.setAttribute('aSleep', sleep); }
+  const mat = [pigSkin(mc), pigSkin(mc, { fur: true })]; // furGeometry's groups: the skin, then the shells
   const meshes = geos.map((g, k) => { const m = new THREE.InstancedMesh(g, mat, N); m.name = `pig-${names[k]}`; m.castShadow = m.receiveShadow = true; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); root.add(m); return m; });
   const anim = sim.pigs.map(() => ({ name: 'idle', t: Math.random(), prev: 'idle', prevT: 0, blend: 1, rest: 0, phase: Math.random() * 10 }));
   function pickAnim(p, s) {
@@ -66,9 +79,9 @@ export function createPigs({ root, assets, mc, sim, world }) {
         if (s.blend < 1) { sampleAnimTable(table, s.prev, s.prevT, k, PB); lerpM(PB, PM, s.blend, PM); }
         meshes[k].setMatrixAt(p.i, TMP.multiplyMatrices(W, PM));
       }
-      mud.setXYZW(p.i, 0, 0, 0, p.mud); sleep.setX(p.i, s.rest > 0.6 ? 1 : 0);
+      mud.setXYZW(p.i, 0, 0, 0, p.mud); wet.setX(p.i, p.wet); sleep.setX(p.i, s.rest > 0.6 ? 1 : 0);
     }
-    mud.needsUpdate = true; sleep.needsUpdate = true; for (const m of meshes) m.instanceMatrix.needsUpdate = true;
+    mud.needsUpdate = true; wet.needsUpdate = true; sleep.needsUpdate = true; for (const m of meshes) m.instanceMatrix.needsUpdate = true;
   }
   return { update, meshes, anim, dispose() { for (const g of geos) g.dispose(); } }; // the material is the compiler's (shared, cached)
 }

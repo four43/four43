@@ -17,7 +17,9 @@ export default defineMaterials({
   paintwork: { extends: 'steel', phys: { friction: 0.4, restitution: 0 } },          // the tractor (mass from massProps, D3)
   // look-only model materials
   plumage:   { extends: 'fur', look: { fur: { length: 0.07, shells: 10, density: 34 } } }, // chicken shells (fur.js's len/density)
-  pigHide:   { extends: 'pet', coverage: { mud: 1 } },                              // the pig crowd's skin: mud through COVERAGE_INSTANCED (Task 15)
+  // the pig crowd's skin: a short peach fuzz (shells) that mud and wet mat flat and shine (COVERAGE_INSTANCED, lion-hawk 0.15
+  // COVERAGE_WET); it fluffs up again as the pig dries
+  pigHide:   { extends: 'pet', look: { fur: { length: 0.05, shells: 8, density: 42, tint: '#fff2f4' } }, coverage: { mud: 1, wet: 1 } },
   // the baked models' own material ids (game.config.js renames Kenney's); their colours are baked into COLOR_0
   leaf:      { extends: 'grass' },
   petal:     { extends: 'grass' },
@@ -26,4 +28,5 @@ export default defineMaterials({
   hay:       { extends: 'grass' },
   produce:   { extends: 'flesh' },
   scenery:   { extends: 'grass', look: { roughness: 0.95, metalness: 0 } },          // one material for all instanced decor (draw-call parity)
+  mudPrint:  { extends: 'mud', look: { transparent: true, roughness: 0.6 } },         // muddy hoof prints (view/footprints.js): shape and fade are a patch
 });

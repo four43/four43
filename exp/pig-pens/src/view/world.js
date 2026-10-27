@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { disposeTree } from 'lion-hawk/view';
 import { modelGeometry, mergeGeos, boxGeo, sceneryMaterials } from './models.js';
 import { createPigs } from './pigs3d.js';
+import { createFootprints } from './footprints.js';
 import { buildFarmExtras } from '../farm3d.js';
 import { ST } from '../sim.js';
 import { L } from '../layout.js';
@@ -115,6 +116,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
   }
 
   const pigs = createPigs({ root: scene, assets, mc, sim, world });
+  const prints = createFootprints({ root: scene, mc, sim }); // muddy pigs leave hoof prints that fade
   // little Zzz's drifting up from pigs asleep at night
   const N = sim.pigs.length, zTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.font = '900 52px "Sniglet", "Arial Rounded MT Bold", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 8; g.strokeStyle = '#4a3a6a'; g.strokeText('z', 32, 34); g.fillStyle = '#ffffff'; g.fillText('z', 32, 34); return new THREE.CanvasTexture(c); })();
   const zs = Array.from({ length: 36 }, () => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: zTex, transparent: true, depthWrite: false })); sp.visible = false; scene.add(sp); return { sp, age: 0, life: 0, x: 0, y: 0, z: 0, ph: 0 }; });
@@ -214,7 +216,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
     // One drawn frame (main.js's frame minus the sim, input and HUD). dt is the frame time, 0 for hook renders (#19):
     // nothing here divides by it. `frame` counts drawn frames (trough food every 8th, as before).
     update(dt, s, frame, alpha = 1) {
-      pigs.update(dt, alpha); updateZs(dt); updateHose(dt, s.hose); extras.update(dt);
+      pigs.update(dt, alpha); prints.update(dt); updateZs(dt); updateHose(dt, s.hose); extras.update(dt);
       if ((frame & 7) === 0) updateTroughFood();
       ring.visible = !!s.ring;
       if (s.ring) { ring.position.x = s.ring[0]; ring.position.z = s.ring[1]; ring.rotation.y += dt; ring.scale.setScalar(1 + 0.08 * Math.sin(performance.now() * 0.01)); }
@@ -225,7 +227,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
     },
     feathers(ev) { extras.spawnFeathers(ev.x, ev.y, ev.z, ev.n, ev.tint); },
     dispose() {
-      pigs.dispose(); extras.dispose(); if (pipe) pipe.geometry.dispose();
+      pigs.dispose(); prints.dispose(); extras.dispose(); if (pipe) pipe.geometry.dispose();
       gfx.scene.remove(scene); disposeTree(scene, { keepShared: true }); // the compiler's materials and the assets' geometry stay
     },
   };

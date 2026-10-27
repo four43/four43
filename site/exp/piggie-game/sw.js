@@ -1,6 +1,6 @@
 // Offline support. The page, the baked models, the icons and the Google Font are
 // cached, so the farm plays with no connection.
-const CACHE = 'pig-pens-2.3.1+lh0.13.1-d14d0afddd34';
+const CACHE = 'pig-pens-2.4.0+lh0.15.0-25b92a07a139';
 const PRECACHE = ["./","assets/models/apple.glb","assets/models/barrel.glb","assets/models/bush.glb","assets/models/bushS.glb","assets/models/cabbage.glb","assets/models/carrot.glb","assets/models/chick.glb","assets/models/chick.anim.json","assets/models/cob.glb","assets/models/corn.glb","assets/models/dog.glb","assets/models/egg.glb","assets/models/fence.glb","assets/models/flowerR.glb","assets/models/flowerY.glb","assets/models/fox.glb","assets/models/gate.glb","assets/models/grass.glb","assets/models/grassS.glb","assets/models/hay.glb","assets/models/hayB.glb","assets/models/oak.glb","assets/models/pig.glb","assets/models/pig.anim.json","assets/models/planks.glb","assets/models/post.glb","assets/models/pumpkin.glb","assets/models/rock.glb","assets/models/sack.glb","assets/models/sign.glb","assets/models/tractor.glb","assets/models/tree.glb","assets/models/treeFall.glb","assets/models/treeFat.glb","assets/models/wheat.glb","apple-touch-icon.png","icon-192.png","icon-512.png","icon.svg","manifest.webmanifest","og-image.jpg"]; // the build's list: the page, assets/models/*, the manifest and icons
 
 self.addEventListener('install', e => {
@@ -28,7 +28,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 2.3.1+lh0.13.1-d14d0afddd34), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 2.4.0+lh0.15.0-25b92a07a139), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;

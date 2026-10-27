@@ -38,3 +38,13 @@ test('gates: with every gate shut for 120 s no pig changes area', () => {
   const start = sim.pigs.map(p => p.region); steps(sim, 60 * 120);
   assert.equal(sim.pigs.filter((p, i) => p.region !== start[i]).length, 0);
 });
+test('hose: a pig in the spray soaks to wet 1 within a second; out of it, it dries over dryTime (45 s), then its coat fluffs up', () => {
+  const sim = farmSim({ pigs: 24, seed: 4 }); steps(sim, 60);
+  const p = sim.pigs[0], far = sim.pigs.filter(q => Math.hypot(q.px - p.px, q.pz - p.pz) > 6);
+  assert.ok(sim.pigs.every(q => q.wet === 0), 'everyone starts dry');
+  steps(sim, 60, () => sim.setHose(p.px, p.pz, true, p.px, p.pz + 5));
+  assert.equal(p.wet, 1); assert.ok(far.every(q => q.wet === 0), 'only pigs in the spray get wet');
+  sim.setHose(null, null, false); steps(sim, 60 * 20);
+  assert.ok(p.wet > 0.5 && p.wet < 0.6, `still wet after 20 s: ${p.wet}`);
+  steps(sim, 60 * 26); assert.equal(p.wet, 0);
+});
