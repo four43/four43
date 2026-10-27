@@ -1,0 +1,23 @@
+{
+  "title": "Vet's tools",
+  "description": "Ten chunky kid-friendly vet tools for the exam-room pegboard, each its own group whose origin is its peg point (top-centre); each hangs down (-Y), lies flat in XY with its back at z=0 and front +Z, and has a Socket_<tool>_tip at its business end. Laid out along X at 0.45 m spacing. Static, no clips.",
+  "size": [4.35, 0.39, 0.08],
+  "tolerance": [0.05, 0.1, 0.15],
+  "grounded": false,
+  "nodes": ["tool_stethoscope", "tool_otoscope", "tool_thermometer", "tool_magnifier", "tool_shot", "tool_drops", "tool_spoon", "tool_tweezers", "tool_bandage", "tool_lollipop"],
+  "sockets": ["Socket_tool_stethoscope_tip", "Socket_tool_otoscope_tip", "Socket_tool_thermometer_tip", "Socket_tool_magnifier_tip", "Socket_tool_shot_tip", "Socket_tool_drops_tip", "Socket_tool_spoon_tip", "Socket_tool_tweezers_tip", "Socket_tool_bandage_tip", "Socket_tool_lollipop_tip"],
+  "budget": { "tris": 3000, "materials": 8, "kb": 200 },
+  "checks": [
+    "FRONT tile: ten separate tools in a row, none overlapping, all hanging down from the same top line",
+    "FRONT tile: the stethoscope reads as two ear tips on a teal Y of tubing with a loop and a round silver chest piece at the bottom",
+    "FRONT tile: the otoscope has a handle and a head with a cone pointing sideways and a pale blue lens",
+    "FRONT tile: the thermometer is a fat white stick with a red bulb at the bottom and visible scale marks",
+    "FRONT tile: the magnifier is a ring with a pale blue lens on a handle",
+    "FRONT tile: the syringe has a plunger pad, finger flange, barrel with measure lines, and a short blunt needle - friendly, not sharp",
+    "FRONT tile: the drops bottle has a rubber teat on top and a white label band",
+    "FRONT tile: the spoon has a pink blob in its bowl; the tweezers are two arms joined at the top with slightly open tips",
+    "FRONT tile: the bandage is a white roll with a hanging tail strip with a red cross; the lollipop is a swirl disc on a stick",
+    "LEFT tile: every tool is shallow (<= 8 cm) and nothing sits behind the board line z=0",
+    "diag sheet: every Socket_*_tip marker sits at its tool's business end"
+  ]
+}

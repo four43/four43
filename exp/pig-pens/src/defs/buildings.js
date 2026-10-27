@@ -81,8 +81,12 @@ export const CLINIC = {
     rug:        { at: [2.6, 0, -1.7], yaw: 0 },
     catBed:     { at: [3.6, 0, -0.7], yaw: 0 },
     plant:      { at: [-3.9, 0, 3.5], yaw: 0 },
-    // 6 waiting places for patients (R3): benches along the east wall and the partition
-    benches: [[3.6, 0, 0.9], [3.6, 0, 2.1], [3.6, 0, 3.3], [-0.6, 0, 0.6], [0.6, 0, 0.6], [1.8, 0, 0.6]],
+    // 6 waiting places for patients (R3) on the two animal benches (clinic.model.mjs bench_east, bench_partition: seat top
+    // 0.33): [x, seat y, z, yaw]; the east bench's sitters face the room (−x), the partition bench's face the front (+z)
+    benches: [[3.95, 0.33, 0.95, -Math.PI / 2], [3.95, 0.33, 2.05, -Math.PI / 2], [3.95, 0.33, 3.15, -Math.PI / 2],
+      [-0.5, 0.33, 0.42, 0], [0.5, 0.33, 0.42, 0], [1.5, 0.33, 0.42, 0]],
+    tableTop: 0.87,                                              // the exam table's pad (clinic.model.mjs)
+    frontDoor: [1.6, 0, 4.9],                                    // just outside the front door: where patients come out
   },
   // the vet's walk graph: named points (local x, z) and the links she may walk straight along
   walk: {
@@ -94,6 +98,15 @@ export const CLINIC = {
       ['waiting', 'studioDoor'], ['studioDoor', 'kitchenVet'], ['studioDoor', 'bedSide'], ['kitchenVet', 'bedSide']],
   },
 };
+// The pegboard's tools (R3, vet-tools.model.mjs): where each hangs (its peg, model-local [x, y, z]; the board faces +x on
+// the exam room's west wall): the check-ups along the top, the treatments below. A tool hangs down from its peg, ~0.4 m.
+CLINIC.pegs = [
+  ...['stethoscope', 'otoscope', 'thermometer', 'magnifier'].map((tool, k) => ({ tool, at: [-4.22, 1.95, -2.2 - 0.57 + k * 0.38] })),
+  ...['shot', 'drops', 'spoon', 'tweezers', 'bandage'].map((tool, k) => ({ tool, at: [-4.22, 1.47, -2.2 - 0.64 + k * 0.32] })),
+];
+// the exam room (local x0..x1, z0..z1) and the exam close-up's framing (the camera east of the table, looking west at it and the board)
+CLINIC.examRoom = { x0: -4.3, x1: -0.06, z0: -3.8, z1: -0.06 };
+CLINIC.examView = { target: [-3.0, 1.0, -2.2], dist: 5.4, pitch: 0.5, yaw: Math.PI / 2 };
 CLINIC.inner = { x0: -CLINIC.w / 2 + CLINIC.wall, x1: CLINIC.w / 2 - CLINIC.wall, z0: -CLINIC.d / 2 + CLINIC.wall, z1: CLINIC.d / 2 - CLINIC.wall };
 
 export const BUILDINGS = { coop: COOP, barn: BARN, clinic: CLINIC };

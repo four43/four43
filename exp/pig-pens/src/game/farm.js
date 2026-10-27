@@ -4,8 +4,8 @@
 // Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.physics.step → read →
 // events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
 import { createSim } from '../sim.js';
-import { planeHit, classify, grabTarget } from './pick.js';
-import { BUILDINGS } from '../defs/buildings.js';
+import { planeHit, classify, grabTarget, rayBox } from './pick.js';
+import { BUILDINGS, CLINIC } from '../defs/buildings.js';
 
 export const TOOLS = ['hand', 'shoo', 'feed', 'hose', 'grab'];
 export const TOOL_LABEL = { hand: 'Hand', shoo: 'Shoo', feed: 'Feed', hose: 'Hose', grab: 'Grab' };
@@ -21,11 +21,19 @@ export const TAP = { move: 12, seconds: 0.45 }, ORBIT_PX = 10, LIFT = { hose: 55
 export const GRAB_EASE = 0.18, GRAB_Y = 1.7, TOSS_GAP = 0.18;
 // The farm's own event types (never a createSim type), so the engine-path golden can filter them out (#57).
 export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter', 'focus']);
+// The exam room (v3 §9.4): the tools' tap volumes on the pegboard (world boxes), the height a dragged tool is held at,
+// and how near the patient a tool has to be let go to be used on it
+const PEG_BOX = CLINIC.pegs.map(({ tool, at: [x, y, z] }) => ({ tool,
+  box: { x0: CLINIC.x + x - 0.08, x1: CLINIC.x + x + 0.22, y0: y - 0.44, y1: y + 0.04, z0: CLINIC.z + z - 0.16, z1: CLINIC.z + z + 0.16 } }));
+// A tool is carried on an upright plane just east of the exam table (between the close-up's camera and the patient, so
+// it stays in front of the patient under the finger); used when let go within `reach` of the patient's middle.
+export const EXAM_DRAG = { y: 1.15, front: 0.6, reach: 0.9, lift: 0.25 };
 // Going inside (v3 §5): the building in focus, its hint, and the tools that stay outside
 export const FOCUS_HINT = {
   coop: 'The coop. Tap Outside or the grass to go back out.',
   barn: 'The barn. Tap the doors to open or shut them.',
-  clinic: 'The vet’s clinic. Dr. Emmy is in.',
+  clinic: 'The vet’s clinic. Tap the exam room to see a patient.',
+  'clinic.exam': 'Drag a tool from the pegboard onto the patient.',
 };
 export const OUTSIDE_TOOLS = new Set(['shoo', 'feed', 'hose']);
 
@@ -66,18 +74,27 @@ export function makeFarm() {
       if (t.kind === 'fox' && sim.flock.fox.carrying) { sim.flock.tapFox(); return; }
       if (t.kind === 'door') return api.toggleDoor(e);
       if (t.kind === 'building') return api.enter(e, t.id);
+      if (t.kind === 'exam') return api.enter(e, 'clinic.exam');
       if (t.kind === 'outside') return api.leave(e);
       api.select(e, t);
     },
     // Into a building (a roof tap): the camera frames it and its roof lifts (the view); another building's roof switches.
     enter(e, id) {
-      if (!BUILDINGS[id]) throw new Error(`pig-pens: no building '${id}'`);
+      if (!FOCUS_HINT[id]) throw new Error(`pig-pens: no building '${id}'`);
       const s = S(e); if (s.focus === id) return;
-      s.focus = id; e.emit('focus', { focus: id }); api.hint(e, FOCUS_HINT[id], 3);
+      if (id === 'clinic.exam' && (s.sim.clock.night || s.sim.vet.state === 'sleep')) return api.hint(e, 'The vet’s asleep. Come back in the morning!', 2.5);
+      setFocus(e, s, id); api.hint(e, FOCUS_HINT[id], 3);
+      if (id === 'clinic.exam' && !s.sim.clinic.queue.length) api.hint(e, 'Nobody’s waiting. Bring a poorly animal to the clinic with Grab.', 3.5);
     },
-    leave(e) { const s = S(e); if (!s.focus) return; s.focus = null; e.emit('focus', { focus: null }); },
-    // Back (Escape, the Outside button): a selection closes first, then the building
-    back(e) { const s = S(e); if (s.selected) api.select(e, null); else api.leave(e); },
+    leave(e) { const s = S(e); if (s.focus) setFocus(e, s, null); },
+    // Back (Escape, the Outside button): a selection closes first, then the exam room, then the building
+    back(e) { const s = S(e); if (s.selected) api.select(e, null); else if (s.focus === 'clinic.exam') setFocus(e, s, 'clinic'); else api.leave(e); },
+    // A grabbed animal let go over the clinic is checked in (v3 §9.1)
+    admit(e, kind, i) {
+      const s = S(e), r = s.sim.clinic.admit(kind, i);
+      if (r === 'full') api.hint(e, 'The waiting room’s full.', 2.5);
+      return r;
+    },
     toggleDoor(e) {
       const c = S(e).sim.lay.coop; c.open = !c.open; // #60: was flipped by the view
       e.emit('door', { open: c.open });
@@ -90,7 +107,7 @@ export function makeFarm() {
       if (ph === 'down') {
         if (s.gesture?.down) endGesture(e, s); // a stray down (bindPointer cancels first): never leave a grab or hose on
         const g = s.gesture = { tool: s.tool, pointer: d.pointer, down: true, target: null };
-        if (s.focus && OUTSIDE_TOOLS.has(g.tool)) { g.down = false; g.tool = 'none'; return api.hint(e, `Step outside to use the ${TOOL_LABEL[s.tool]}.`, 2); }
+        if (s.focus && s.focus !== 'clinic.exam' && OUTSIDE_TOOLS.has(g.tool)) { g.down = false; g.tool = 'none'; return api.hint(e, `Step outside to use the ${TOOL_LABEL[s.tool]}.`, 2); }
         return down(e, s, g, d);
       }
       const g = s.gesture; if (!g || g.pointer !== d.pointer) return;
@@ -103,8 +120,27 @@ export function makeFarm() {
     },
   };
 
+  function setFocus(e, s, id) { s.focus = id; s.exam.drag = null; s.sim.clinic.open = id === 'clinic.exam'; e.emit('focus', { focus: id }); }
+  // the exam room's gestures: press a tool on the pegboard, carry it (held at EXAM_DRAG.y), let it go on the patient
+  function examDown(s, d) {
+    let best = null; for (const p of PEG_BOX) { const h = rayBox(d.ray, p.box); if (h && (!best || h.t0 < best.t0)) best = { tool: p.tool, t0: h.t0 }; }
+    if (best) { s.exam.drag = { tool: best.tool, at: null }; examMove(s, d); }
+  }
+  function examMove(s, d) {
+    const D = s.exam.drag; if (!D) return;
+    const X = CLINIC.x + CLINIC.spots.examTable.at[0] + EXAM_DRAG.front, r = d.ray; if (Math.abs(r[3]) < 1e-4) return;
+    const t = (X - r[0]) / r[3]; if (t < 0) return;
+    const R = CLINIC.examRoom, y = r[1] + r[4] * t, z = r[2] + r[5] * t;
+    D.at = [X, Math.max(0.4, Math.min(2.4, y)), Math.max(CLINIC.z + R.z0 + 0.2, Math.min(CLINIC.z + R.z1, z))];
+  }
+  function examUp(e, s) {
+    const D = s.exam.drag; s.exam.drag = null; if (!D?.at) return;
+    const p = s.sim.clinic.patient();
+    if (p && s.sim.clinic.exam.state === 'patient' && Math.hypot(D.at[1] - p.py - EXAM_DRAG.lift, D.at[2] - p.pz) < EXAM_DRAG.reach) s.sim.clinic.applyTool(D.tool);
+  }
   function down(e, s, g, d) {
     const sim = s.sim;
+    if (s.focus === 'clinic.exam') { g.tool = 'exam'; return examDown(s, d); }
     if (g.tool === 'hand') g.target = classify(sim, d.ray, s.focus);
     else if (g.tool === 'shoo') shoo(e, s, d.ray, true);
     else if (g.tool === 'hose') { if (aimHose(s, d)) e.emit('hose', { on: true }); }
@@ -118,6 +154,7 @@ export function makeFarm() {
     }
   }
   function move(e, s, g, d) {
+    if (g.tool === 'exam') return examMove(s, d);
     if (g.tool === 'shoo') shoo(e, s, d.ray, false);
     else if (g.tool === 'hose') aimHose(s, d);
     else if (g.tool === 'grab' && s.grab) { s.grab.ray = [...d.ray]; s.grab.aim = d.aim ? [...d.aim] : null; moveGrab(s); }
@@ -125,9 +162,15 @@ export function makeFarm() {
   // up or cancel (the gesture stays for its tap)
   function lift(e, s, g) {
     const sim = s.sim;
+    if (g.tool === 'exam') return examUp(e, s);
     if (g.tool === 'shoo') { sim.setDog(null, null, false); s.ring = null; }
     else if (g.tool === 'hose') { sim.setHose(null, null, false); e.emit('hose', { on: false }); }
-    else if (g.tool === 'grab' && s.grab) { (s.grab.kind === 'pig' ? sim : sim.flock).release(); s.grab = null; }
+    else if (g.tool === 'grab' && s.grab) {
+      // let go over the clinic: checked in (it sits down in the waiting room); anywhere else: dropped (or thrown)
+      const kind = s.grab.kind, i = kind === 'pig' ? sim.grabbed : sim.flock.grabbed, h = planeHit(s.grab.ray, GRAB_Y), c = sim.lay.clinic;
+      (kind === 'pig' ? sim : sim.flock).release(); s.grab = null;
+      if (h && i >= 0 && h.x > c.x0 - 0.3 && h.x < c.x1 + 0.3 && h.z > c.z0 - 0.3 && h.z < c.z1 + 0.6) api.admit(e, kind, i);
+    }
   }
   // Ends the gesture in progress (a stray down): its lift, then no tap.
   function endGesture(e, s) {
@@ -203,7 +246,7 @@ export function makeFarm() {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
         sim: createSim(ctx.world, { pigs: a.pigs ?? 22, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
-        tool: 'hand', selected: null, focus: null, gesture: null, grab: null, ring: null, lastToss: -Infinity,
+        tool: 'hand', selected: null, focus: null, exam: { drag: null }, gesture: null, grab: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });
       // grab lift and hose nozzle easing, before the step's commands (#60)
@@ -221,6 +264,7 @@ export function makeFarm() {
         me.eggs = Math.min(0xffff, s.sim.flock.basket); g.night = s.sim.clock.night; for (let i = 0; i < c.length; i++) g.pens[i] = c[i];
       }, { stage: 'post' });
       ctx.command('tool', (e, d) => api.pointer(e, d));
+      ctx.command('tune', (e, d) => s.sim.sickness.tune(d.key, d.value)); // ?tune=key=value,… (main.js): SICK values (sickness.js)
       api.hint(e, START_HINT, 5);
     },
     // #69: the controls close over this scene's ctx.state, not e.scene.state (the main scene's)
@@ -231,7 +275,7 @@ export function makeFarm() {
       u.toggle({ id: 'night', label: 'Night', get: () => s.sim.clock.night, set: (v, e) => api.setNight(e, v) });
       u.button({ id: 'bell', label: 'Ring the dinner bell', action: e => api.ringBell(e) });
       u.button({ id: 'close', label: 'Close', when: () => !!s.selected, action: e => api.select(e, null) });
-      u.button({ id: 'back', label: 'Outside', when: () => !!s.focus, action: e => api.leave(e) });
+      u.button({ id: 'back', label: 'Outside', when: () => !!s.focus, action: e => api.back(e) });
     },
   };
   return { scene, api };

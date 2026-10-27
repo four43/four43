@@ -39,6 +39,7 @@ export default {
       coop: custom('coop', ['wood', 'wall', 'trim', 'roof', 'plank', 'straw']),
       barn: custom('barn', ['barnRed', 'trim', 'roofGrey', 'straw', 'wood', 'lampGlow']),
       clinic: custom('clinic', ['wall', 'trim', 'slate', 'mint', 'pale', 'wood', 'dark']),
+      vetTools: custom('vet-tools', ['white', 'metal', 'teal', 'red', 'pink', 'yellow', 'glass', 'dark']),
       ...Object.fromEntries(FURNITURE.map(f => [furnId(f), { file: `furniture-kit/${f}.glb`, rename: { materials: Object.fromEntries(FURN_MATS.map(m => [m, 'wood'])) } }])),
       vet: kit('mini-characters', 'character-female-f', 'pet'),
       cat: kit('cube-pets', 'animal-cat', 'pet'),

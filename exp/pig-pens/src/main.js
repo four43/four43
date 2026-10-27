@@ -17,6 +17,8 @@ async function start() {
     timer: q.has('fps') ? () => performance.now() : undefined,
   });
   useSeats(view, document); // lion-hawk C-5, C-10: keys through the 'farm' context
+  // ?tune=coldChance=1,earInterval=30: the sickness values (sickness.js SICK), through the sim's `tune` command
+  for (const kv of (q.get('tune') ?? '').split(',').filter(Boolean)) { const [key, value] = kv.split('='); window.engine?.command('tune', { key, value }); }
   const failed = window.engine?.errors?.[0]; if (failed) throw new Error(failed.message); // the view could not start (WebGL)
 }
 start().catch(err => { const l = $('loading'); if (l) l.textContent = 'Could not start: ' + err.message; console.error(err); });

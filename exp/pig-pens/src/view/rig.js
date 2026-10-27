@@ -4,17 +4,17 @@
 // same canvas (devices.js), and the two agree on the Hand's orbit through rig.orbit.orbiting (#52). Nothing here calls the sim.
 import { createOrbitRig, makeProject } from 'lion-hawk/view';
 import { ORBIT_PX } from '../game/farm.js';
-import { BUILDINGS } from '../defs/buildings.js';
+import { BUILDINGS, CLINIC } from '../defs/buildings.js';
 
 // 2.1.0's rig.js values; min 2.5, max 80, pitch 0.28..1.48 and ground 0 are the rig's defaults
 export const ORBIT = {
   target: { x: 0, y: 0.5, z: 1 }, distance: 46, pitch: 0.92, bounds: { x: [-34, 34], z: [-30, 30] },
   fit: { portrait: { yaw: Math.PI / 2, dist: 60, tx: -3, tz: -9 }, landscape: { yaw: 0, dist: 46, tx: -1, tz: -4 } },
 };
-export const rig = { orbit: null, project: null, camera: null, canvas: null, downTool: 'hand' };
+export const rig = { orbit: null, project: null, camera: null, canvas: null, downTool: 'hand', locked: false }; // locked: the exam room's fixed close-up
 
 // the one-finger drag: a Hand drag orbits past ORBIT_PX, other tools leave the camera alone
-export const cameraMode = downTool => downTool === 'hand' ? 'orbit' : 'none';
+export const cameraMode = downTool => downTool === 'hand' && !rig.locked ? 'orbit' : 'none';
 
 // framed by the canvas aspect, as 2.1.0's fitCam (on phones the long axis of the pens runs up the screen)
 export function createRig(camera, canvas) {
@@ -38,6 +38,11 @@ export function bindCamera(engine, canvas) {
 export const FOCUS = { pitch: 0.95, margin: 1.2, ease: 3.2, minK: 0.45, maxK: 1.6, give: 4 }; // give: s before an ease that can't land lets go
 const focusRig = { id: null, saved: null, goal: null }; // saved: the farm's pose and limits, kept until the camera is back there
 export function focusFrame(id, camera) {
+  if (id === 'clinic.exam') { // the exam close-up (v3 §5.3): east of the table, looking west at it and the pegboard
+    const V = CLINIC.examView, B = CLINIC, R = CLINIC.examRoom;
+    return { tx: B.x + V.target[0], ty: V.target[1], tz: B.z + V.target[2], yaw: V.yaw, pitch: V.pitch, dist: V.dist * Math.max(1, 1.3 / camera.aspect),
+      B: { x: B.x + (R.x0 + R.x1) / 2, z: B.z + (R.z0 + R.z1) / 2 }, w: R.x1 - R.x0, d: R.z1 - R.z0 };
+  }
   const B = BUILDINGS[id], w = B.w ?? B.hx * 2, d = B.d ?? B.hz * 2, vf = camera.fov * Math.PI / 180;
   const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
   const dist = Math.max((w / 2 + FOCUS.margin) / Math.tan(hf / 2), (d / 2 + FOCUS.margin) * Math.sin(FOCUS.pitch) / Math.tan(vf / 2) + d / 2);
@@ -45,7 +50,7 @@ export function focusFrame(id, camera) {
 }
 export function followFocus(focus, dt) {
   const o = rig.orbit; if (!o) return;
-  const id = focus ? focus.split('.')[0] : null, st = o.state, L = o.limits;
+  const id = focus ?? null, st = o.state, L = o.limits;
   if (id !== focusRig.id) {
     // the farm's pose, saved on the way in, unless the camera is still on its way back to it (a roof tapped mid-way out)
     if (id && !focusRig.id && !focusRig.saved) focusRig.saved = { pose: { tx: st.tx, ty: st.ty, tz: st.tz, yaw: st.yaw, pitch: st.pitch, dist: st.dist }, limits: { ...L, bounds: L.bounds && { ...L.bounds } } };

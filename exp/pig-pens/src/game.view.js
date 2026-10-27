@@ -60,6 +60,11 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
           case 'gulp': hint(`Gulp! The fox has ${ev.name} in its cheeks. Tap the fox!`, 4.5); break;
           case 'spit': hint(ev.reason === 'hiccup' ? `Hic! The fox couldn’t keep ${ev.name} down.` : ev.reason === 'morning' ? `Ptooey! The fox spat out ${ev.name} and slunk off home.` : `Ptooey! Out pops ${ev.name}, a bit ruffled.`, 3.5); break;
           case 'hatch': hint(`An egg hatched! ${flock.birds[ev.mom].name} has a new chick.`, 4); break;
+          // v3 R3: sickness and the clinic
+          case 'sick': hint(`${ev.name} isn’t feeling well. Grab ${ev.name} and drop them on the vet’s clinic!`, 5); break;
+          case 'clinic': hint({ in: `${ev.name} is in the waiting room. Tap the clinic, then the exam room.`, healthy: `${ev.name}’s fit as a fiddle!`, full: 'The waiting room’s full.', out: `${ev.name} is all better!` }[ev.what], 3.5); break;
+          case 'exam': hud?.say(ev.text, ev.what === 'cured' ? 3 : 2.4, engine.time.sim); break;
+          case 'cured': world?.cured(ev.kind, ev.i); break;
         }
       });
       offs.push(bindCamera(engine, canvas), off);
@@ -76,7 +81,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
       if (!world) return; // still loading, or no WebGL
       const s = engine.scene.state, dt = view.dt;
       world.update(dt, s, frame, alpha); hud.update(engine, s, frame, dt);
-      followFocus(s.focus, dt); rig.orbit.update(dt, view.rawDt);
+      rig.locked = s.focus === 'clinic.exam'; followFocus(s.focus, dt); rig.orbit.update(dt, view.rawDt);
       const post = view.gfx.post; if (post?.params) post.params.focus = rig.orbit.state.dist;
       frame++;
     },

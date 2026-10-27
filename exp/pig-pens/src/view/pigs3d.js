@@ -22,6 +22,10 @@ export function createPigs({ root, assets, mc, sim, world }) {
     }
     g.setAttribute('aEye', new THREE.BufferAttribute(eye, 3)); }
   for (const g of geos) if (!g.attributes.aEye) g.setAttribute('aEye', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3), 3));
+  // the head (v3 §8.2: it goes green when poorly): the front of the body block and the snout
+  names.forEach((n, k) => { const pos = geos[k].attributes.position, h = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) h[i] = n === 'Group' || (n === 'body' && pos.getZ(i) > 0.12) ? 1 : 0;
+    geos[k].setAttribute('aHead', new THREE.BufferAttribute(h, 1)); });
   // the coat: full on the pink skin (r high, b above g), none on the eyes (white and grey) or the hooves (b below g); the snout
   // part ('Group') is short fuzz. The face (the head's and snout's forward faces) is bare: it is one quad with the eyes a
   // centimetre in front of it, so its shells would grow over them. Shells before the instance attributes, which furGeometry
@@ -35,7 +39,8 @@ export function createPigs({ root, assets, mc, sim, world }) {
   const mud = new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4); mud.setUsage(THREE.DynamicDrawUsage);
   const wet = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); wet.setUsage(THREE.DynamicDrawUsage);
   const sleep = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); sleep.setUsage(THREE.DynamicDrawUsage);
-  for (const g of geos) { g.setAttribute('instanceCoverage', mud); g.setAttribute('instanceWet', wet); g.setAttribute('aSleep', sleep); }
+  const sick = new THREE.InstancedBufferAttribute(new Float32Array(N), 1); sick.setUsage(THREE.DynamicDrawUsage);
+  for (const g of geos) { g.setAttribute('instanceCoverage', mud); g.setAttribute('instanceWet', wet); g.setAttribute('aSleep', sleep); g.setAttribute('aSick', sick); }
   const mat = [pigSkin(mc), pigSkin(mc, { fur: true })]; // furGeometry's groups: the skin, then the shells
   const meshes = geos.map((g, k) => { const m = new THREE.InstancedMesh(g, mat, N); m.name = `pig-${names[k]}`; m.castShadow = m.receiveShadow = true; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); root.add(m); return m; });
   const anim = sim.pigs.map(() => ({ name: 'idle', t: Math.random(), prev: 'idle', prevT: 0, blend: 1, rest: 0, phase: Math.random() * 10 }));
@@ -79,9 +84,9 @@ export function createPigs({ root, assets, mc, sim, world }) {
         if (s.blend < 1) { sampleAnimTable(table, s.prev, s.prevT, k, PB); lerpM(PB, PM, s.blend, PM); }
         meshes[k].setMatrixAt(p.i, TMP.multiplyMatrices(W, PM));
       }
-      mud.setXYZW(p.i, 0, 0, 0, p.mud); wet.setX(p.i, p.wet); sleep.setX(p.i, s.rest > 0.6 ? 1 : 0);
+      mud.setXYZW(p.i, 0, 0, 0, p.mud); wet.setX(p.i, p.wet); sleep.setX(p.i, s.rest > 0.6 ? 1 : 0); sick.setX(p.i, p.green ?? 0);
     }
-    mud.needsUpdate = true; wet.needsUpdate = true; sleep.needsUpdate = true; for (const m of meshes) m.instanceMatrix.needsUpdate = true;
+    mud.needsUpdate = true; wet.needsUpdate = true; sleep.needsUpdate = true; sick.needsUpdate = true; for (const m of meshes) m.instanceMatrix.needsUpdate = true;
   }
   return { update, meshes, anim, dispose() { for (const g of geos) g.dispose(); } }; // the material is the compiler's (shared, cached)
 }

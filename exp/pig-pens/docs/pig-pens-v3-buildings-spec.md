@@ -34,6 +34,16 @@ Amended 27 October 2026 (R2 built, Pig Pens 2.7.0):
 - A bird that comes in through the pop door walks across the straw to the point in front of its perch. Then it hops up in an arc that goes over the rail (`CP.roostWalk`, `roostHop`, `roostHopH`).
 - A chick sleeps in the straw in front of the roost bar, below its mother's perch. On the rail, the hens hid the chicks from the camera.
 
+Amended 27 October 2026 (R3 built, Pig Pens 2.8.0):
+- Sickness is in `src/sickness.js`. It has its own random sequence. Each farm keeps its own copy of the `SICK` values. You change them with the `tune` sim command: `?tune=coldChance=1,earInterval=30` in the URL, or `engine.command('tune', { key, value })`. A wrong key or value is an error. `debug.sicken(kind, i, ailment)` and `debug.cure(kind, i)` go through the sim.
+- The cold check happens once each night, `coldCheck` seconds after nightfall. A pig gets the check if it is wet or muddy and is not in bed in the barn. A bird gets it if it is not in the coop.
+- A pig's head is the front of its body block and its snout. A per-pig `aSick` value turns it green in the pig skin shader. A chicken's feathers go green through its instance colour.
+- The emotes are speech bubbles drawn on canvases in the Emote Pack style, so the build needs no PNG files. Each ailment has its own icon. A heart shows for 3 s after a cure. The emote is hidden while the patient is on the exam table.
+- The waiting places are on the two animal benches in the clinic model. Patients are kinematic while they are in the clinic: the body is off, and the pig state is `ST.CLINIC` or the bird state is `CST.CLINIC`. A patient walks from its bench through the exam room's doorway, round to the side of the table, and hops up.
+- A patient is called only while the player is in the exam room (`clinic.open`) and the vet is awake. The vet then waits by the table until the patient leaves.
+- The exam close-up looks west from the east side of the table, and the camera is locked. A tool is pressed on its peg, carried on an upright plane in front of the patient, and used if you let it go near the patient (`EXAM_DRAG.reach`). The vet's tools (`vet-tools.glb`, 10 tools) hang on 9 pegs. The lollipop is the treat after a cure.
+- Not in 2.8.0: sounds for the symptoms (a sneeze, a groan).
+
 ---
 
 ## 1. Introduction

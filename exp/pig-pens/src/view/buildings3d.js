@@ -2,11 +2,13 @@
 // every number), the cutaway when one is in focus (the roof floats up and away, the walls that face the camera are cut
 // down to stubs by a clipping plane that sinks to the stub height, the way The Sims cuts walls), the barn's doors and the coop's pop door, a lamp inside each at night, the
 // clinic's Kenney furniture, and Dr. Emmy and her cat. View only: reads the sim and the farm's focus, never writes them.
-// createBuildings({ root, assets, sim, camera, renderer }) → { update(dt, focus, night), dispose() }
+// createBuildings({ root, assets, sim, camera, renderer }) → { update(dt, s, night), cured(kind, i), dispose() } (s: the farm's state)
 import * as THREE from 'three';
 import { BUILDINGS, COOP, BARN, CLINIC } from '../defs/buildings.js';
 import { geometryUnder } from './models.js';
 import { createPlaques } from './plaques.js';
+import { createExamRoom } from './clinic3d.js';
+import { createEmotes } from './emotes.js';
 
 export const CUT = {
   ease: 4.5,          // 1/s: how fast the roof lifts and the walls drop (about half a second)
@@ -95,6 +97,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
 
   // ---- name plaques (v3 §7): the coop's hang on its back wall, so they are cut with it
   const plaques = createPlaques({ root: group, sim, clipCoop: B.coop.walls.find(w => w.node.name === 'wall_back').plane });
+  const exam = createExamRoom({ root: group, assets, sim }), emotes = createEmotes({ root: group, sim }); // v3 R3
   let frame = 0;
 
   // ---- lamps: warm light inside each building at night (the coop's lights the ramp, as before)
@@ -151,7 +154,8 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
 
   const ease = (cur, tgt, dt) => cur + (tgt - cur) * Math.min(1, dt * CUT.ease);
   const smooth = u => u * u * (3 - 2 * u);
-  function update(dt, focus, night) {
+  function update(dt, s, night) {
+    const focus = s.focus;
     for (const b of Object.values(B)) {
       const on = focus === b.id || (focus?.startsWith?.(b.id + '.') ?? false);
       b.cut = ease(b.cut, on ? 1 : 0, dt); if (Math.abs(b.cut - (on ? 1 : 0)) < 1e-3) b.cut = on ? 1 : 0;
@@ -172,11 +176,11 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     popAnim += Math.sign((lay.coop.open ? 1 : 0) - popAnim) * Math.min(Math.abs((lay.coop.open ? 1 : 0) - popAnim), dt * 2.5);
     pop.position.y = popY + popAnim * COOP.popDoor.h;
     for (const { l, k } of lamps) l.intensity = night * k;
-    updateVet(dt); plaques.update(frame++);
+    updateVet(dt); plaques.update(frame++); exam.update(dt, s); emotes.update(dt);
   }
   return {
-    update,
-    dispose() { // world.dispose frees the group with the farm root (the wall materials are ours: not shared)
+    update, cured: (kind, i) => emotes.cured(kind, i),
+    dispose() { exam.dispose(); emotes.dispose(); // world.dispose frees the group with the farm root (the wall materials are ours: not shared)
       vet.mixer.stopAllAction(); cat.mixer.stopAllAction(); plaques.dispose();
     },
   };

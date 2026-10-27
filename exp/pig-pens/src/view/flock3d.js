@@ -2,6 +2,7 @@
 // anim table; body and wings carry shell fur from the material compiler (look.fur on `plumage`), the face kept bare by the
 // 0..1 mask (3f C10). The fox and the dog: cloned models on AnimationMixer (A-11), as single animals need no table.
 import * as THREE from 'three';
+const SICK_GREEN = new THREE.Color(0.5, 0.85, 0.35);
 import { sampleAnimTable } from 'lion-hawk/view';
 import { partGeometry, lerpM } from './models.js';
 import { CST, FST } from '../chickens.js';
@@ -57,11 +58,13 @@ export function createFlock3d({ root, assets, mc, sim, spawnFeathers }) {
     for (const b of flock.birds) {
       let a = birdAnim[b.i]; if (!a) a = birdAnim[b.i] = { name: 'idle', t: Math.random(), prev: 'idle', pt: 0, blend: 1, painted: false };
       const set = b.kind === 'chick' ? babyMeshes : adultMeshes, other = b.kind === 'chick' ? adultMeshes : babyMeshes;
-      if (!a.painted) {
+      const green = Math.round((b.green ?? 0) * 20) / 20; // poorly (v3 §8.2): the feathers go a queasy green, repainted in 5% steps
+      if (!a.painted || a.green !== green) {
         if (b.kind === 'chick') tint.setRGB(1, 1, 1); else tint.setRGB(b.tint[0], b.tint[1], b.tint[2]);
+        tint.lerp(SICK_GREEN, green * 0.7);
         for (const m of set) { m.setColorAt(b.i, tint); m.instanceColor.needsUpdate = true; }
-        for (const m of other) m.setMatrixAt(b.i, ZERO);
-        a.painted = true;
+        if (!a.painted) for (const m of other) m.setMatrixAt(b.i, ZERO);
+        a.painted = true; a.green = green;
       }
       if ((b.hidden && b.state !== CST.INSIDE) || b.state === CST.LOST) { for (const m of set) m.setMatrixAt(b.i, ZERO); continue; } // inside: on its perch
       const [name, rate] = birdClip(b) || (b.speed < 0.08 ? ['idle', 1] : b.speed < 1.0 ? ['walk', b.speed / (0.5 * b.scale / 0.3)] : ['run', b.speed / (1.6 * b.scale / 0.3)]);

@@ -2,6 +2,7 @@
 // main.js so the sim can pick from the rays a `tool` command carries. Pure: no three.js. A ray `r` is
 // [ox, oy, oz, dx, dy, dz] with a unit direction. Same tolerances and priorities as the old view code.
 import { FST } from '../chickens.js';
+import { CLINIC } from '../defs/buildings.js';
 
 // Where the ray crosses the plane at height y; null when (nearly) parallel or behind the origin.
 export function planeHit(r, y) {
@@ -112,6 +113,8 @@ export function classify(sim, r, focus = null) {
   if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i !== undefined ? { kind: c.kind, i: c.i } : c.id !== undefined ? { kind: c.kind, id: c.id } : { kind: c.kind }; }
   if (h) {
     if (focus && outsideFocus(sim.lay, focus, h.x, h.z)) return { kind: 'outside' }; // inside, the grass round it goes out first
+    const R = CLINIC.examRoom, lx = h.x - CLINIC.x, lz = h.z - CLINIC.z; // in the clinic, the exam room's floor goes in there
+    if (focus === 'clinic' && lx > R.x0 && lx < R.x1 && lz > R.z0 && lz < R.z1) return { kind: 'exam' };
     const g = pickGate(sim.lay, h.x, h.z); if (g) return { kind: 'gate', id: g.id }; if (!focus && pickDoor(sim.lay, h.x, h.z)) return { kind: 'door' };
   }
   return null;

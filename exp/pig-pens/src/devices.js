@@ -17,7 +17,7 @@ export function toolAt(engine) {
       tool = engine.scene.state.tool; touch = ev?.pointerType !== 'mouse';
       rig.downTool = tool; orbitSent = false; // the rig resets orbiting on its capturing pointerdown
     }
-    if (tool === 'hand') {
+    if (tool === 'hand' && !rig.locked) { // in the exam room the Hand carries tools: every move goes to the sim
       const orbiting = rig.orbit.orbiting;
       if (phase === 'move') { if (orbiting && !orbitSent) { orbitSent = true; return { ray: ray(cx, cy), orbit: true }; } return null; } // once: the sim drops the press target
       if (orbiting && phase === 'tap') return { ray: ray(cx, cy), orbit: true };

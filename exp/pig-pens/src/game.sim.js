@@ -28,6 +28,8 @@ function state(e) {
     dog: { active: sim.dog.active, x: sim.dog.x, z: sim.dog.z }, hose: { active: sim.hose.active, x: sim.hose.x, z: sim.hose.z },
     ring: s.ring ? [s.ring[0], s.ring[1]] : null, grabbed: { pig: sim.grabbed, bird: f.grabbed },
     counts: [...sim.counts], time: sim.time,
+    sick: [...sim.pigs.filter(p => p.sick).map(p => ({ kind: 'pig', i: p.i, ailment: p.sick.ailment })), ...f.birds.filter(b => b.sick).map(b => ({ kind: 'bird', i: b.i, ailment: b.sick.ailment }))],
+    clinic: { queue: sim.clinic.queue.map(q => ({ ...q })), exam: sim.clinic.exam.state, drag: s.exam?.drag?.tool ?? null },
   };
 }
 
@@ -41,6 +43,9 @@ export function pigPensGame() {
     get sim() { return e.scene.state.sim; }, get farm() { return e.scene.state; },
     tool: name => api.setTool(e, name), select: sel => api.select(e, sel ?? null),
     night: (on = true) => api.setNight(e, on),
+    // v3 §8.5: make an animal poorly / better through the sim (kind 'pig' | 'bird')
+    sicken: (kind, i, ailment) => { const sim = e.scene.state.sim; return sim.sickness.sicken(kind, kind === 'pig' ? sim.pigs[i] : sim.flock.birds[i], ailment, 'debug'); },
+    cure: (kind, i) => { const sim = e.scene.state.sim; return sim.sickness.cure(kind, kind === 'pig' ? sim.pigs[i] : sim.flock.birds[i]); },
   });
   return defineGame({
     id: 'pig-pens', sim: { hz: 1 / DT, maxCatchUp: 4, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm',

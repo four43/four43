@@ -1,12 +1,13 @@
 // Pig herd simulation. No rendering dependencies so it runs headless in Node.
 import { buildLayout, mulberry32, FENCE_H, REGION } from './layout.js';
 import { FlowGrid, hit } from './flow.js';
-import { createFlock } from './chickens.js';
-import { createVet } from './clinic.js';
+import { createFlock, CST } from './chickens.js';
+import { createVet, createClinic } from './clinic.js';
+import { createSickness } from './sickness.js';
 import { BED, assignStalls, doorOut, stallAt, stallFace, pathIn, pathOut } from './barn.js';
 
 export const DT = 1 / 60;
-export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10, BED: 11 }; // BED: walking to or from its stall (barn.js)
+export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10, BED: 11, CLINIC: 12 }; // BED: walking to or from its stall (barn.js); CLINIC: at the vet's (clinic.js)
 export const ST_NAME = Object.keys(ST);
 // Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64.
 export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox'];
@@ -150,7 +151,7 @@ export function createSim(world, opts = {}) {
     clock.hour = n ? 22 : 11;
     if (!n) for (const p of pigs) if (p.bed?.phase === 'sleep' && !p.bed.nap) p.wakeAt = t + bedRng() * BED.wakeStagger; // up in ones and twos
     for (const p of pigs) p.bedTry = 0;
-    if (n) flock.onNight(); else flock.newDay();
+    if (n) { flock.onNight(); sickness.onNight(); } else flock.newDay();
     emit('daynight', { night: n });
   }
   const tmp = [0, 0];
@@ -249,7 +250,28 @@ export function createSim(world, opts = {}) {
     return along < tr.len / 2 + 0.25 && out > 0.2 && out < 1.25 + p.r;
   }
 
-  const flock = createFlock({ world, lay, rng, grid: cgrid, emit, DT, feelers, turnToward });
+  const flockCtx = { world, lay, rng, grid: cgrid, emit, DT, feelers, turnToward };
+  const flock = createFlock(flockCtx);
+  // sickness (v3 §8): its own rng; a cold comes to whoever sleeps out in the open, wet
+  const sickness = flockCtx.sickness = createSickness({ pigs, birds: () => flock.birds, clock, seed: opts.seed ?? 1, emit, now: () => t,
+    outsideAtNight: (kind, a) => kind === 'pig' ? a.bed?.phase !== 'sleep' && !inBarn(a) && !a.clinic
+      : a.state !== CST.INSIDE && a.state !== CST.CARRIED && !a.clinic });
+  // the clinic (v3 §9): pigs sit kinematic on the benches and the table (body off), and come out of the front door
+  const clinic = createClinic({ vet, clock, emit, now: () => t, animal: (kind, i) => (kind === 'pig' ? pigs[i] : flock.birds[i]),
+    cure: (kind, a) => sickness.cure(kind, a),
+    hold(kind, a, x, y, z, yaw) {
+      if (kind === 'bird') return flock.toClinic(a, x, y, z, yaw);
+      if (grabbed === a.i) grabbed = -1;
+      if (a.state !== ST.CLINIC) { dropClaims(a); a.body.lockRotations(true, true); world.setMaterial(a, '*', 'pet'); a.body.setEnabled(false); setState(a, ST.CLINIC); }
+      world.place(a, { at: [x, y, z] }, { q: [0, 0, 0, 1] }); a.px = x; a.py = y; a.pz = z; a.yaw = yaw; a.getUp = 0;
+    },
+    letGo(kind, a, x, z) { // out of the door with a happy hop, then off where it belongs
+      if (kind === 'bird') return flock.fromClinic(a, x, z);
+      if (grabbed === a.i) grabbed = -1;
+      a.body.setEnabled(true); a.body.lockRotations(true, true); world.setMaterial(a, '*', 'pet');
+      world.place(a, { at: [x, a.r + 0.05, z] }, { q: [0, 0, 0, 1] }); a.px = x; a.pz = z; a.panic = 0; a.getUp = 0;
+      a.threatX = x; a.threatZ = z - 2; setState(a, ST.ZOOM, 1.6); emit('oink', { i: a.i, x, z, happy: 1 });
+    } });
 
   // things that frighten animals this step
   const threats = [];
@@ -329,7 +351,7 @@ export function createSim(world, opts = {}) {
   const counts = new Array(REGION.count).fill(0); // by lay.region: pens 0–4, then REGION's aisle, field and barn
   function think() {
     t += DT; clock.t = t;
-    vet.step(DT);
+    vet.step(DT); sickness.step(DT); clinic.step(DT);
     updateThreats();
     // farmer tops up one trough at a time, which keeps the herd moving between pens
     refillT -= DT;
@@ -378,6 +400,7 @@ export function createSim(world, opts = {}) {
     const sep = [0, 0], fl = [0, 0];
     for (const p of pigs) {
       // ---- grabbed: spring at the scruff ---------------------------------------
+      if (p.state === ST.CLINIC) continue; // the clinic moves it
       if (p.state === ST.GRAB) {
         const q = p.body.rotation();
         const ax = 2 * (q.x * q.y - q.w * q.z) * 0.3, ay = (1 - 2 * (q.x * q.x + q.z * q.z)) * 0.3, az = 2 * (q.y * q.z + q.w * q.x) * 0.3;
@@ -394,6 +417,8 @@ export function createSim(world, opts = {}) {
       // ---- thrown / tumbling ---------------------------------------------------
       if (p.state === ST.AIR) {
         p.airT += DT;
+        { const dv = (p.lastSp ?? 0) - p.speed; if (dv > 0 && fenceObs.some(o => hit(o, p.px, p.pz, p.r + 0.35))) sickness.onImpact('pig', p, dv); } // into a fence
+        p.lastSp = p.speed;
         const low = p.py < p.r + 0.12 && Math.abs(p.vy) < 0.6;
         const slow = p.speed < 0.5 && (() => { const w = p.body.angvel(); return Math.hypot(w.x, w.y, w.z); })() < 1.5;
         p.settleT = low && slow ? p.settleT + DT : 0;
@@ -454,8 +479,8 @@ export function createSim(world, opts = {}) {
       if (p.panic > 0.3 && p.state !== ST.FLEE) { dropClaims(p); setState(p, ST.FLEE); }
       const calm = p.state !== ST.FLEE;
       const mom = p.mom >= 0 ? pigs[p.mom] : null;
-      if (calm && (p.state === ST.ROAM || p.state === ST.GRAZE || p.state === ST.REST || (p.state === ST.TRAVEL && p.target))) {
-        // snacks on the ground beat everything
+      if (calm && !p.sick && (p.state === ST.ROAM || p.state === ST.GRAZE || p.state === ST.REST || (p.state === ST.TRAVEL && p.target))) {
+        // snacks on the ground beat everything (a poorly pig is off its food, v3 §8.2)
         if (((p.i + Math.floor(t * 4)) & 3) === 0) {
           let bf = null, bd = p.hunger > 0.5 ? P.smellHungry : P.smell;
           for (const f of foods) {
@@ -467,7 +492,7 @@ export function createSim(world, opts = {}) {
           if (bf && p.state !== ST.REST) { dropClaims(p); bf.claims++; p.snack = bf.id; setState(p, ST.SNACK, 25); emit('oink', { i: p.i, x: p.px, z: p.pz }); }
         }
       }
-      if (calm && (p.state === ST.ROAM || p.state === ST.GRAZE || (p.state === ST.REST && p.hunger > 0.85 && !p.bed) || (p.state === ST.TRAVEL && p.target))) {
+      if (calm && !p.sick && (p.state === ST.ROAM || p.state === ST.GRAZE || (p.state === ST.REST && p.hunger > 0.85 && !p.bed) || (p.state === ST.TRAVEL && p.target))) {
         if (p.hunger > P.hungerSeek) { const id = chooseTrough(p); if (id >= 0) { dropClaims(p); startTrough(p, id); } }
       }
       // bedtime (v3 §7.2): an adult with a stall that can get there goes to bed; a pig set down in the barn by day naps
@@ -478,7 +503,7 @@ export function createSim(world, opts = {}) {
           && barnGate.open && pigs.filter(o => o.bed?.nap).length < BED.napMax && bedRng() < BED.napChance && canReachBarn(p)) {
         p.curiosity = 35 + bedRng() * 55; goBed(p, true); // a nap in its stall (v3 §7.4)
       }
-      if (calm && !clock.night && (p.state === ST.ROAM || p.state === ST.GRAZE) && p.curiosity <= 0) {
+      if (calm && !clock.night && !p.sick && (p.state === ST.ROAM || p.state === ST.GRAZE) && p.curiosity <= 0) {
         p.curiosity = 35 + rng() * 55;
         if (!p.piglet && p.hunger < 0.5) {
           const here = p.region; let dest;
@@ -556,7 +581,7 @@ export function createSim(world, opts = {}) {
           const dx = f.x - p.px, dz = f.z - p.pz, d = Math.hypot(dx, dz);
           if (d < p.r + f.r + 0.35 && f.y < 0.7) {
             f.bites += DT; face = Math.atan2(dx, dz); speed = 0; p.hunger = Math.max(0, p.hunger - 0.12 * DT);
-            if (f.bites >= P.foodEatTime) { emit('munch', { i: p.i, x: f.x, z: f.z }); dropClaims(p); removeFood(f); setState(p, ST.GRAZE, 1.5 + rng()); }
+            if (f.bites >= P.foodEatTime) { emit('munch', { i: p.i, x: f.x, z: f.z }); sickness.onEat('pig', p); dropClaims(p); removeFood(f); setState(p, ST.GRAZE, 1.5 + rng()); }
           } else if (d < 2.2) { dvx = dx / d; dvz = dz / d; speed = Math.min(P.snackSpeed, 0.5 + d); }
           else { flowTo(f.field, 1.0); speed = P.snackSpeed * (p.piglet ? 1.1 : 1); }
           break;
@@ -650,6 +675,7 @@ export function createSim(world, opts = {}) {
           speed = Math.max(speed, Math.min(2.6, 0.4 + d * 0.5)); if (p.state === ST.GRAZE || p.state === ST.REST) p.state = ST.ROAM, p.timer = 2;
         } else if (mom.state === ST.REST && p.state !== ST.REST && p.state !== ST.TRAVEL) setState(p, ST.REST, mom.timer + 1);
       }
+      if (p.sick) speed *= sickness.T.sickSpeed; // poorly: slow
       // normalise desire, then add separation and wall avoidance
       let dl = Math.hypot(dvx, dvz);
       if (dl > 1e-3) { dvx /= dl; dvz /= dl; }
@@ -721,7 +747,7 @@ export function createSim(world, opts = {}) {
   return {
     world, lay, grid, pigs, dog, foods, troughs, events, counts,
     think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, flock, setGate, threats, vet,
-    stallOwner, bedtime, barnGate,
+    stallOwner, bedtime, barnGate, sickness, clinic,
     get time() { return t; }, get foodCap() { return P.foodCap; }, get transitions() { return transitions; }, get grabbed() { return grabbed; },
   };
 }

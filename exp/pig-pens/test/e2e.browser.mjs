@@ -139,3 +139,31 @@ test('desktop (v3): a click on a roof goes into that building; the Outside butto
     }
   } finally { await game.close(); }
 });
+
+test('desktop (v3 R3): a whole vet visit with the mouse: check in, the exam room, a tool dragged off the pegboard, cured and out', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 3, args: ARGS });
+  try {
+    await expectScene(game, 'farm');
+    await world(game, () => { const d = window.engine.debug; d.sicken('pig', 2, 'cold'); d.sim.clinic.admit('pig', 2); });
+    const click = async w => { const at = await game.point({ world: w }); await game.page.mouse.click(at.x, at.y); await game.step(2); for (let k = 0; k < 40; k++) await frames(game); };
+    await click([CLINIC.x, 4.2, CLINIC.z - 0.7]); await expectState(game, 'focus', 'clinic');
+    await click([CLINIC.x - 3.5, 0, CLINIC.z - 3.2]); await expectState(game, 'focus', 'clinic.exam');
+    for (let i = 0; i < 40 && (await game.state()).clinic.exam !== 'patient'; i++) await game.step(30);
+    assert.equal((await game.state()).clinic.exam, 'patient', 'on the table');
+    for (let k = 0; k < 30; k++) await frames(game); // the close-up settles
+    const drag = async tool => {
+      const peg = CLINIC.pegs.find(p => p.tool === tool);
+      const pat = await world(game, () => { const p = window.engine.debug.sim.clinic.patient(); return [p.px + 0.6, p.py + 0.25, p.pz]; });
+      const a = await game.point({ world: [CLINIC.x + peg.at[0] + 0.05, peg.at[1] - 0.2, CLINIC.z + peg.at[2]] }), b = await game.point({ world: pat });
+      await game.page.mouse.move(a.x, a.y); await game.page.mouse.down(); await frames(game); await game.step(1);
+      assert.equal((await game.state()).clinic.drag, tool, `holding the ${tool}`);
+      await game.page.mouse.move(b.x, b.y, { steps: 6 }); await frames(game); await game.step(1);
+      await game.page.mouse.up(); await game.step(2);
+    };
+    await drag('shot');
+    assert.equal((await game.state()).clinic.exam, 'cured');
+    await game.step(60 * 4);
+    const s = await game.state(); assert.deepEqual(s.clinic.queue, []); assert.deepEqual(s.sick, []);
+  } finally { await game.close(); }
+});

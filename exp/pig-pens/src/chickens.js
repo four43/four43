@@ -2,7 +2,7 @@
 import { COOP } from './defs/buildings.js';
 import { hit } from './flow.js';
 
-export const CST = { PECK: 0, ROAM: 1, GRAIN: 2, NEST: 3, LAY: 4, BROOD: 5, DUST: 6, FLEE: 7, ROOST: 8, ENTER: 9, INSIDE: 10, EXIT: 11, CARRIED: 12, LOST: 13, GRAB: 14, AIR: 15, HOME: 16, DEFEND: 17 };
+export const CST = { PECK: 0, ROAM: 1, GRAIN: 2, NEST: 3, LAY: 4, BROOD: 5, DUST: 6, FLEE: 7, ROOST: 8, ENTER: 9, INSIDE: 10, EXIT: 11, CARRIED: 12, LOST: 13, GRAB: 14, AIR: 15, HOME: 16, DEFEND: 17, CLINIC: 18 }; // CLINIC: at the vet's (clinic.js)
 export const CST_NAME = Object.keys(CST);
 export const FST = { AWAY: 0, PROWL: 1, CHASE: 2, CARRY: 3, FLEE: 4 };
 
@@ -24,6 +24,7 @@ const CHICK_NAMES = ['Peep', 'Fluff', 'Bean', 'Dot', 'Puff', 'Sunny', 'Tiny', 'C
 
 export function createFlock(ctx) {
   const { world, lay, rng, grid, emit, DT, feelers, turnToward } = ctx;
+  const sick = () => ctx.sickness; // the farm's sickness (sim.js sets it after the flock): grain and knocks feed it
   const { coop, nests, dust, run, field } = lay;
   const birds = [], eggs = [], handfuls = [];
   let eggSeq = 0, grainSeq = 0, basket = 0;
@@ -334,6 +335,7 @@ export function createFlock(ctx) {
     for (const b of birds) {
       if (!b.enabled && b.state !== CST.INSIDE && b.state !== CST.CARRIED && b.state !== CST.LOST) continue;
       if (b.state === CST.INSIDE) { if (b.roost) stepRoost(b); continue; }
+      if (b.state === CST.CLINIC) continue; // the clinic moves it
       if (b.state === CST.CARRIED || b.state === CST.LOST) continue;
       const tr = b.body.translation(), lv = b.body.linvel();
       b.px = tr.x; b.py = tr.y; b.pz = tr.z; b.vx = lv.x; b.vy = lv.y; b.vz = lv.z; b.speed = Math.hypot(lv.x, lv.z);
@@ -347,6 +349,8 @@ export function createFlock(ctx) {
       }
       if (b.state === CST.AIR) { // flapping: wings slow the fall
         b.airT += DT;
+        { const dv = (b.lastSp ?? 0) - b.speed; if (dv > 0 && lay.obstacles.some(o => o.fence && hit(o, b.px, b.pz, b.r + 0.3))) sick()?.onImpact('bird', b, dv); } // into a fence
+        b.lastSp = b.speed;
         if (b.vy < 0) b.body.applyImpulse({ x: 0, y: b.mass * 9.81 * CP.glide * DT, z: 0 }, true);
         if (b.airT > 0.2 && b.py < b.r + 0.05 && Math.abs(b.vy) < 0.5) { setState(b, b.panic > 0.3 ? CST.FLEE : CST.PECK, 1); }
         if (b.speed > 0.3) b.yaw = turnToward(b.yaw, Math.atan2(b.vx, b.vz), 6 * DT);
@@ -411,7 +415,7 @@ export function createFlock(ctx) {
           if (e && (e.layer === b.i || rng() < DT * 0.05)) { e.brooder = b.i; b.egg = e.id; b.nest = e.nest; setState(b, CST.NEST, 60); }
         }
         // grain on the ground
-        if (b.state !== CST.NEST && ((b.i + (t * 4 | 0)) & 3) === 0 && b.kind !== 'chick' || (b.kind === 'chick' && b.state !== CST.NEST && ((b.i + (t * 4 | 0)) & 3) === 0)) {
+        if (!b.sick && (b.state !== CST.NEST && ((b.i + (t * 4 | 0)) & 3) === 0 && b.kind !== 'chick' || (b.kind === 'chick' && b.state !== CST.NEST && ((b.i + (t * 4 | 0)) & 3) === 0))) { // poorly: off its food
           let best = null, bd = b.kind === 'chick' ? 2.5 : 18;
           for (const h of handfuls) {
             const dd = Math.hypot(h.x - b.px, h.z - b.pz) < 3 ? Math.hypot(h.x - b.px, h.z - b.pz) : grid.dist(h.field, b.px, b.pz);
@@ -453,7 +457,7 @@ export function createFlock(ctx) {
           if (!g || g.eaten || g.claim !== b.i || b.timer <= 0) { if (g && g.claim === b.i) g.claim = -1; b.grain = null; setState(b, CST.PECK, 0.3 + rng() * 0.6); break; }
           if (b.displaced > 0.6) { g.claim = -1; b.grain = null; b.displaced = 0; setState(b, CST.ROAM, 0.6); b.wa = Math.atan2(b.px - g.x, b.pz - g.z); break; } // pushed off by a bigger hen
           const d = seek(g.x, g.z, 1.4, g.h.field, 3);
-          if (d < b.r + 0.12) { speed = 0; face = Math.atan2(g.x - b.px, g.z - b.pz); b.pecking = (b.pecking || 0) + DT; if (b.pecking > CP.peck) { g.eaten = true; b.ate = (b.ate || 0) + 1; b.pecking = 0; b.grain = null; setState(b, CST.PECK, 0.05); } }
+          if (d < b.r + 0.12) { speed = 0; face = Math.atan2(g.x - b.px, g.z - b.pz); b.pecking = (b.pecking || 0) + DT; if (b.pecking > CP.peck) { g.eaten = true; b.ate = (b.ate || 0) + 1; sick()?.onEat('bird', b); b.pecking = 0; b.grain = null; setState(b, CST.PECK, 0.05); } }
           break;
         }
         case CST.NEST: {
@@ -543,6 +547,9 @@ export function createFlock(ctx) {
 
   return {
     birds, eggs, handfuls, fox, F, buildFields, step, newDay, onNight, roostAt,
+    // the clinic (clinic.js): sat down kinematic where it says, and back out on its feet to walk home to the run
+    toClinic(b, x, y, z, yaw) { if (grabbed === b.i) grabbed = -1; releaseClaims(b); setEnabled(b, false); b.hidden = false; b.roost = null; place(b, x, y, z); b.yaw = yaw; b.speed = 0; setState(b, CST.CLINIC); },
+    fromClinic(b, x, z) { setEnabled(b, true); place(b, x, b.r, z); b.panic = 0; setState(b, CST.HOME, 30); },
     tapFox() { if (fox.state === FST.AWAY) return false; if (fox.carrying) { foxSpit('tap'); [fox.ex, fox.ez] = edgePoint(fox.x, fox.z); fox.state = FST.FLEE; fox.timer = 12; } else foxLeave(true); emit('yip', { x: fox.x, z: fox.z }); return true; }, scatterGrain, collectEgg, grainLeft, pick, grab, moveGrab, release,
     get basket() { return basket; }, get grabbed() { return grabbed; },
   };

@@ -365,6 +365,13 @@
       "sha256": "e43ebbee97a75854e2b5aee550e271390f26aeed8c15ebf5732d701cc97b7c81",
       "options": "d56a718f4bc8198d"
     },
+    "vetTools": {
+      "glb": "models/vetTools.glb",
+      "anim": null,
+      "bytes": 101856,
+      "sha256": "c87a1954e62438efb4319bf5fda1eaca731d072b11bd67e54e1c9e37dd784ec8",
+      "options": "7173b14f5a5a6ffc"
+    },
     "wheat": {
       "glb": "models/wheat.glb",
       "anim": null,
