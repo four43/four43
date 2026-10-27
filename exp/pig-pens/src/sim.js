@@ -1,5 +1,5 @@
 // Pig herd simulation. No rendering dependencies so it runs headless in Node.
-import { buildLayout, mulberry32, FENCE_H } from './layout.js';
+import { buildLayout, mulberry32, FENCE_H, REGION } from './layout.js';
 import { FlowGrid, hit } from './flow.js';
 import { createFlock } from './chickens.js';
 import { createVet } from './clinic.js';
@@ -80,7 +80,7 @@ export function createSim(world, opts = {}) {
     const r = piglet ? P.pigletR : P.adultR;
     let x, z, mom = -1;
     if (!piglet) {
-      const pen = lay.pens[i % 6];
+      const pen = lay.pens[i % lay.pens.length];
       [x, z] = freeSpot(pen.x0 + 1, pen.z0 + 1, pen.x1 - 1, pen.z1 - 1, r);
     } else {
       mom = Math.floor(rng() * nAdults);
@@ -283,7 +283,7 @@ export function createSim(world, opts = {}) {
   }
 
   // ---- main step -----------------------------------------------------------------
-  const counts = new Array(9).fill(0); // by lay.region: pens 0–5, lane 6, field 7, barn 8
+  const counts = new Array(REGION.count).fill(0); // by lay.region: pens 0–4, then REGION's aisle, field and barn
   function think() {
     t += DT; clock.t = t;
     vet.step(DT);
@@ -432,7 +432,7 @@ export function createSim(world, opts = {}) {
         if (!p.piglet && p.hunger < 0.5) {
           const here = p.region; let dest;
           if (rng() < (p.mud < P.muddy ? 0.5 : 0.12)) dest = lay.destinations.length - 1;
-          else { do dest = Math.floor(rng() * 6); while (dest === here); }
+          else { do dest = Math.floor(rng() * lay.pens.length); while (dest === here); }
           startTravel(p, dest);
           // nearby calm pigs tag along
           for (const o of pigs) {

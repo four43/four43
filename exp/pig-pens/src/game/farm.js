@@ -212,7 +212,7 @@ export function makeFarm() {
         for (let i = 0; i < q.length; i++) e.emit(q[i].type, q[i]);
         q.length = 0;
         const me = e.players[0], g = e.gameState, c = s.sim.counts; // [T-25]: written each step, allocation-free
-        me.eggs = Math.min(0xffff, s.sim.flock.basket); g.night = s.sim.clock.night; for (let i = 0; i < 9; i++) g.pens[i] = c[i];
+        me.eggs = Math.min(0xffff, s.sim.flock.basket); g.night = s.sim.clock.night; for (let i = 0; i < c.length; i++) g.pens[i] = c[i];
       }, { stage: 'post' });
       ctx.command('tool', (e, d) => api.pointer(e, d));
       api.hint(e, START_HINT, 5);

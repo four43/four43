@@ -18,6 +18,11 @@ Amended 26 October 2026 (R1 built, Pig Pens 2.6.0):
 - The waiting room has two low animal benches in the clinic model. It has no Furniture Kit chairs.
 - Measured changes from the layout move: the chickens go to bed in 10.1 s (it was 11.7 s), the night fox gulps at 20.0 s (it was 22 s), and 45 pigs are penned at 120 s (it was 37). The goldens and the feel baseline are blessed again.
 
+Amended 26 October 2026 (Pig Pens 2.6.1):
+- The aisles are an upside-down T. A stem 3 tiles wide runs from the barn doors down to the lane. The lane runs across to the mud. The two north pens are 6 tiles wide, one on each side of the stem. The north-centre pen is removed, so there are 5 pens. `lay.region` gives 0–4 for the pens, then `REGION.aisle`, `REGION.field` and `REGION.barn`.
+- A gate that crosses a lane or a pen east of the middle swings to the opposite side from its western twin (`g.swing`).
+- The fox comes from the woods, `CP.foxWoods` (14 m) beyond the boundary, and it goes back there. It runs round the buildings: it follows corners with no leg through a building, and it runs away to the nearest woods that it can reach in a straight line. The night gulp is at 24.5 s, and all the chickens are in bed at 10.5 s.
+
 ---
 
 ## 1. Introduction

@@ -28,7 +28,7 @@ test('a shut gate is one gate entity; opening it despawns it; no pig crosses a s
 });
 test('a snack is an entity until eaten; then no pig holds its id', () => {
   const sim = farmSim({ pigs: 48, seed: 6 }), h = sim.h; sim.step(300);
-  const pen = sim.lay.pens[5], f = sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx, pen.cz);
+  const pen = sim.lay.pens[4], f = sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx, pen.cz);
   assert.equal(h.find('food').length, 1); assert.ok(h.get(f.id) === f, "get returns the food entity");
   h.until(() => !h.get(f.id), { maxSteps: 60 * 60, message: 'the snack is eaten or trampled' });
   assert.equal(sim.pigs.filter(p => p.snack === f.id).length, 0); assert.equal(h.find('food').length, 0);

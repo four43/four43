@@ -2,7 +2,7 @@ import { farmSim } from './farmSim.mjs';
 import { ST } from '../src/sim.js';
 const sim = farmSim({ pigs: 48, seed: 6 });
 for (let s = 0; s < 300; s++) sim.step();
-const pen = sim.lay.pens[5];
+const pen = sim.lay.pens[4];
 // spam 10 taps: only 5 should land
 let accepted = 0;
 for (let k = 0; k < 10; k++) if (sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx + (k % 5) - 2, pen.cz)) accepted++;

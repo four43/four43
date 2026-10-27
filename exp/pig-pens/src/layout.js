@@ -15,18 +15,23 @@ export function mulberry32(seed) {
   };
 }
 
+// lay.region's answers past the pens' ids (0–4): the T-shaped aisle, the open field, inside the barn
+export const REGION = { aisle: 5, field: 6, barn: 7, count: 8 };
+
 export function buildLayout() {
   // ---- fence edges ------------------------------------------------------
   const edges = [];  // {x, z, dir:'x'|'z', kind:'fence'|'gate'|'planks', len}
   const hRun = (tz, tx0, tx1, kind, gates = []) => { for (let tx = tx0; tx < tx1; tx++) edges.push({ x: TX(tx + 0.5), z: TZ(tz), dir: 'x', kind: gates.includes(tx) ? 'gate' : kind }); };
   const vRun = (tx, tz0, tz1, kind, gates = []) => { for (let tz = tz0; tz < tz1; tz++) edges.push({ x: TX(tx), z: TZ(tz + 0.5), dir: 'z', kind: gates.includes(tz) ? 'gate' : kind }); };
 
-  // Pen complex: two rows of three pens with a lane between them.
-  hRun(0, 0, 15, 'fence'); hRun(12, 0, 15, 'fence');
-  hRun(5, 0, 15, 'fence', [2, 7, 12]); hRun(7, 0, 15, 'fence', [2, 7, 12]);
+  // Pen complex (2.6.1): the aisles are an upside-down T. The lane runs across between the rows (out to the mud on the
+  // west); its stem runs up the middle of the north row, open to the barn's doors. Two wide pens either side of the stem,
+  // three below the lane.
+  hRun(0, 0, 6, 'fence'); hRun(0, 9, 15, 'fence'); hRun(12, 0, 15, 'fence');
+  hRun(5, 0, 6, 'fence', [2]); hRun(5, 9, 15, 'fence', [12]); hRun(7, 0, 15, 'fence', [2, 7, 12]);
   vRun(0, 0, 5, 'fence', [2]); vRun(0, 5, 7, 'fence', [5, 6]); vRun(0, 7, 12, 'fence');
   vRun(15, 0, 5, 'fence'); vRun(15, 5, 7, 'fence', [5, 6]); vRun(15, 7, 12, 'fence', [9]);
-  vRun(5, 0, 5, 'fence', [2]); vRun(10, 0, 5, 'fence', [2]);
+  vRun(6, 0, 5, 'fence', [2]); vRun(9, 0, 5, 'fence', [2]);
   vRun(5, 7, 12, 'fence', [9]); vRun(10, 7, 12, 'fence', [9]);
   // Chicken run against the north boundary, with one gate toward the pens (2.6.0: five tiles west, so the barn east of it
   // stands in the middle of the north row, v3 §3.1)
@@ -37,17 +42,17 @@ export function buildLayout() {
 
   // ---- regions -----------------------------------------------------------
   const rect = (tx0, tz0, tx1, tz1) => ({ x0: TX(tx0), z0: TZ(tz0), x1: TX(tx1), z1: TZ(tz1) });
-  const pens = [];
-  for (let row = 0; row < 2; row++) for (let col = 0; col < 3; col++) {
-    const tz0 = row === 0 ? 0 : 7, tx0 = col * 5;
-    const r = rect(tx0, tz0, tx0 + 5, tz0 + 5);
+  const pens = []; // 0, 1: the north row's two (either side of the stem); 2, 3, 4: the south row
+  for (const [row, col, tx0, tx1] of [[0, 0, 0, 6], [0, 2, 9, 15], [1, 0, 0, 5], [1, 1, 5, 10], [1, 2, 10, 15]]) {
+    const tz0 = row === 0 ? 0 : 7;
+    const r = rect(tx0, tz0, tx1, tz0 + 5);
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
     // Trough sits against the outer (back) wall of each pen.
     const back = row === 0 ? r.z0 : r.z1, inward = row === 0 ? 1 : -1;
     pens.push({ id: pens.length, row, col, ...r, cx, cz,
       trough: { x: cx + (col - 1) * 1.6, z: back + inward * 0.62, inward, len: 2.3, w: 0.62 } });
   }
-  const lane = rect(0, 5, 15, 7);
+  const lane = rect(0, 5, 15, 7), stem = rect(6, 0, 9, 5); // the T's bar and its stem: one aisle region
   const field = rect(-5, -5, 20, 17);
   const complex = rect(0, 0, 15, 12);
   const wallow = { x: TX(-2.6), z: TZ(4.4), rx: 3.4, rz: 2.6 };
@@ -75,6 +80,9 @@ export function buildLayout() {
     if (g.dir === 'x') { g.x = (g.x0 + g.x1) / 2; g.z0 = g.z1 = g.z; } else { g.z = (g.z0 + g.z1) / 2; g.x0 = g.x1 = g.x; }
     g.width = g.tiles.length * L;
     g.run = g.z < run.z1 + 0.1 && g.x > run.x0 && g.x < run.x1;
+    // which side of its line the leaves swing to (the gate frame's n axis): −n, except gates across a lane or pen east of
+    // the middle, which mirror their western twins (2.6.1: the lane's east gate swung in over the lane's fences)
+    g.swing = g.dir === 'z' && g.x > 0.01 ? 1 : -1;
     // the leaves (one per tile): a double gate hinges at both ends, a single one at a side picked from its position
     const hw = g.width / 2;
     g.leaves = g.tiles.map((tile, k) => {
@@ -87,7 +95,8 @@ export function buildLayout() {
       ? { x0: g.x + a0, x1: g.x + a1, y0: 0, y1: 1.3, z0: g.z + n0, z1: g.z + n1 }
       : { x0: g.x + n0, x1: g.x + n1, y0: 0, y1: 1.3, z0: g.z - a1, z1: g.z - a0 };
     g.pick = [box(-hw - 0.1, hw + 0.1, -0.45, 0.45)];
-    for (const l of g.leaves) { const a = l.hingeX, b = l.hingeX + l.side * L; g.pick.push(box(Math.min(a, b), Math.max(a, b), -0.9, 0.35)); }
+    const [n0, n1] = g.swing < 0 ? [-0.9, 0.35] : [-0.35, 0.9];
+    for (const l of g.leaves) { const a = l.hingeX, b = l.hingeX + l.side * L; g.pick.push(box(Math.min(a, b), Math.max(a, b), n0, n1)); }
   }
 
   // ---- the barn's double door: a gate of its own (v3 §6), two leaves hinged at the opening's sides that swing out (+z);
@@ -95,7 +104,7 @@ export function buildLayout() {
   const barnFront = BARN.z + BARN.d / 2;
   {
     const hw = BARN.door.w / 2, x = BARN.x, z = barnFront, y1 = BARN.door.h;
-    gates.push({ id: gates.length, kind: 'barn', dir: 'x', tiles: [], x, z, x0: x - hw, x1: x + hw, z0: z, z1: z, width: BARN.door.w, run: false, open: true,
+    gates.push({ id: gates.length, kind: 'barn', dir: 'x', tiles: [], x, z, x0: x - hw, x1: x + hw, z0: z, z1: z, width: BARN.door.w, run: false, open: true, swing: 1,
       leaves: [{ side: -1, hingeX: -hw }, { side: 1, hingeX: hw }],
       // the doorway where the leaves shut, and each open leaf standing out from its hinge
       pick: [{ x0: x - hw - 0.1, x1: x + hw + 0.1, y0: 0, y1, z0: z - 0.45, z1: z + 0.45 },
@@ -161,7 +170,7 @@ export function buildLayout() {
   const decor = []; // {m, x, z, rot, s, solid?:radius}
   const addSolid = (m, x, z, rot, s, r) => { decor.push({ m, x, z, rot, s }); obstacles.push({ type: 'circle', x, z, r, h: 2 }); };
   // hay bales in pen corners (away from gates)
-  const hayCorners = [[0, 1], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
+  const hayCorners = [[0, 1], [1, 1], [0, 0], [1, 1], [0, 1]];
   for (const p of pens) {
     const [hx, hz] = hayCorners[p.id];
     const x = hx ? p.x1 - 1.2 : p.x0 + 1.2, z = (p.row === 0 ? (hz ? p.z1 - 1.6 : p.z0 + 2.2) : (hz ? p.z1 - 2.2 : p.z0 + 1.6));
@@ -219,10 +228,10 @@ export function buildLayout() {
 
   function region(x, z) {
     for (const p of pens) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.id;
-    if (x > lane.x0 && x < lane.x1 && z > lane.z0 && z < lane.z1) return 6;
-    const b = barn.inner; if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return 8;
-    return 7;
+    if ((x > lane.x0 && x < lane.x1 && z > lane.z0 && z < lane.z1) || (x > stem.x0 && x < stem.x1 && z > stem.z0 && z < stem.z1)) return REGION.aisle;
+    const b = barn.inner; if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return REGION.barn;
+    return REGION.field;
   }
 
-  return { edges, gates, pens, lane, field, complex, wallow, run, coop, nests, dust, dogHouse, buildings, barn, clinic, obstacles, decor, destinations, region };
+  return { edges, gates, pens, lane, stem, field, complex, wallow, run, coop, nests, dust, dogHouse, buildings, barn, clinic, obstacles, decor, destinations, region };
 }

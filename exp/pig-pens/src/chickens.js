@@ -15,6 +15,7 @@ export const CP = {
   fearDog: 5, fearFox: 6, panicGain: 6, panicDecay: 0.35,
   roostHour: 18.5, wakeHour: 6.5,
   foxFrom: 20, foxTo: 4.5, foxProwl: 1.7, foxChase: 4.7, foxCarry: 4.0, foxFlee: 6.2,
+  foxWoods: 14, foxBuildingMargin: 0.8, // m beyond the boundary the fox comes from and goes back to; how wide it keeps of a building
 };
 const HEN_NAMES = ['Clementine', 'Marigold', 'Pecky', 'Dolly', 'Butterscotch', 'Henrietta', 'Nugget', 'Pip', 'Mabel', 'Ginger', 'Saffron', 'Biscuit', 'Hazel', 'Poppy', 'Custard', 'Waffles'];
 const CHICK_NAMES = ['Peep', 'Fluff', 'Bean', 'Dot', 'Puff', 'Sunny', 'Tiny', 'Crumb', 'Pea', 'Button', 'Sprout', 'Twig', 'Wisp', 'Fuzz'];
@@ -78,16 +79,22 @@ export function createFlock(ctx) {
   });
   fox.yaw = 0; // a game field (`yaw` in a desc is the spawn pose)
   fox.body.setEnabled(false); // away until night (2.1.0 created it disabled)
-  // escape points around the inside of the boundary, away from the coop
-  const exits = [];
-  for (let x = field.x0 + 1; x < field.x1; x += 6) { exits.push([x, field.z0 + 0.8]); exits.push([x, field.z1 - 0.8]); }
-  for (let z = field.z0 + 1; z < field.z1; z += 6) { exits.push([field.x0 + 0.8, z]); exits.push([field.x1 - 0.8, z]); }
+  // escape points out in the woods, FOX_WOODS m beyond the boundary all round (2.6.1: it used to vanish at the fence)
+  const exits = [], W = CP.foxWoods;
+  for (let x = field.x0 + 1; x < field.x1; x += 6) { exits.push([x, field.z0 - W]); exits.push([x, field.z1 + W]); }
+  for (let z = field.z0 + 1; z < field.z1; z += 6) { exits.push([field.x0 - W, z]); exits.push([field.x1 + W, z]); }
   const safeExits = exits.filter(([x, z]) => Math.abs(x - coop.x) > coop.hx + 2.5 || Math.abs(z - coop.z) > coop.hz + 2.5);
-  function edgePoint(x, z) { let best = safeExits[0], bd = Infinity; for (const e of safeExits) { const d = Math.hypot(e[0] - x, e[1] - z); if (d < bd) { bd = d; best = e; } } return best; }
+  // the nearest way out it can run to straight, past no building (the north row is one long wall); else just the nearest
+  function edgePoint(x, z) {
+    const m = CP.foxBuildingMargin, clear = e => !lay.buildings.some(b => segBox(x, z, e[0], e[1], b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m) !== null);
+    let best = null, bd = Infinity, any = safeExits[0], ad = Infinity;
+    for (const e of safeExits) { const d = Math.hypot(e[0] - x, e[1] - z); if (d < ad) { ad = d; any = e; } if (d < bd && clear(e)) { bd = d; best = e; } }
+    return best ?? any;
+  }
   function foxSpawn() {
-    // comes in from the north-west woods, somewhere along that corner of the boundary
-    const along = rng();
-    const [x, z] = along < 0.5 ? [field.x0 + 0.8, field.z0 + 2 + along * 2 * 16] : [field.x0 + 2 + (along - 0.5) * 2 * 26, field.z0 + 0.8];
+    // comes out of the north-west woods, well beyond that corner of the boundary, and runs in
+    const along = rng(), W = CP.foxWoods;
+    const [x, z] = along < 0.5 ? [field.x0 - W, field.z0 + 2 + along * 2 * 16] : [field.x0 + 2 + (along - 0.5) * 2 * 26, field.z0 - W];
     fox.body.setEnabled(true); world.place(fox, { at: [x, 0.26, z] });
     fox.x = x; fox.z = z; fox.state = FST.PROWL; fox.fear = 0; fox.timer = 45; fox.raids++; emit('fox', { x, z });
   }
@@ -169,16 +176,46 @@ export function createFlock(ctx) {
       }
     }
     if (fox.state === FST.AWAY) return;
-    // steer, keeping out of the coop footprint
+    // steer round the buildings (the fox runs through fences, not walls): past the corner of one in the way, and out of
+    // any footprint it has strayed into
+    [tx, tz] = aroundBuildings(fox.x, fox.z, tx, tz);
     let dx = tx - fox.x, dz = tz - fox.z; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
-    const cx = fox.x - coop.x, cz = fox.z - coop.z; const qx = Math.max(Math.abs(cx) - coop.hx - 0.4, 0), qz = Math.max(Math.abs(cz) - coop.hz - 0.4, 0);
-    if (qx === 0 && qz === 0) { const l = Math.hypot(cx, cz) || 1; dx += cx / l * 2; dz += cz / l * 2; }
+    for (const b of lay.buildings) { // inside the margin: straight out through the nearest wall, harder the deeper it is
+      const m = CP.foxBuildingMargin, cx = fox.x - b.x, cz = fox.z - b.z, ox = b.hx + m - Math.abs(cx), oz = b.hz + m - Math.abs(cz);
+      if (ox > 0 && oz > 0) { const k = 2 + 6 * Math.min(1, Math.min(ox, oz) / m); if (ox < oz) dx += Math.sign(cx) * k; else dz += Math.sign(cz) * k; }
+    }
     const vdx = dx * Math.min(sp, d * 2.5), vdz = dz * Math.min(sp, d * 2.5);
     let ax = (vdx - fox.vx) / 0.2, az = (vdz - fox.vz) / 0.2; const al = Math.hypot(ax, az); if (al > 14) { ax *= 14 / al; az *= 14 / al; }
     fox.body.applyImpulse({ x: ax * 7 * DT, y: 0, z: az * 7 * DT }, true);
     if (fox.speed > 0.3) fox.yaw = turnToward(fox.yaw, Math.atan2(fox.vx, fox.vz), 8 * DT);
     let near = false; for (const o of lay.obstacles) if (o.fence && hit(o, fox.x, fox.z, 0.4)) { near = true; break; }
     fox.hop += ((near ? 1 : 0) - fox.hop) * Math.min(1, DT * 14);
+  }
+
+  // The fox's way past the buildings: when the straight line to (tx, tz) crosses a building (with a margin), it walks
+  // round that building's corners, clockwise or anticlockwise, whichever is the shorter way to where it can see (tx, tz),
+  // with no leg through any building (a neighbour's corner or wall ends that way); it returns the next corner, else (tx, tz).
+  function aroundBuildings(x, z, tx, tz) {
+    const m = CP.foxBuildingMargin, c = m + 0.3, B = lay.buildings;
+    const blocked = (ax, az, bx, bz) => B.some(b => segBox(ax, az, bx, bz, b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m) !== null); // by any building
+    let hit = null, ht = Infinity;
+    for (const b of B) { const t = segBox(x, z, tx, tz, b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m); if (t !== null && t < ht) { ht = t; hit = b; } }
+    if (!hit) return [tx, tz];
+    const cs = [[hit.x0 - c, hit.z0 - c], [hit.x1 + c, hit.z0 - c], [hit.x1 + c, hit.z1 + c], [hit.x0 - c, hit.z1 + c]];
+    const ok = cs.map(([cx, cz]) => !B.some(b => b !== hit && cx > b.x0 - m && cx < b.x1 + m && cz > b.z0 - m && cz < b.z1 + m));
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]), me = [x, z], to = [tx, tz];
+    let best = null, bd = Infinity;
+    for (let i = 0; i < 4; i++) {
+      if (!ok[i] || blocked(x, z, cs[i][0], cs[i][1])) continue;
+      for (const dir of [1, -1]) {
+        let j = i, len = dist(me, cs[i]), k = 0, fine = true;
+        while (blocked(cs[j][0], cs[j][1], tx, tz) && k++ < 4) { const n = (j + dir + 4) % 4; if (!ok[n] || blocked(cs[j][0], cs[j][1], cs[n][0], cs[n][1])) { fine = false; break; } len += dist(cs[j], cs[n]); j = n; }
+        if (!fine) continue;
+        len += dist(cs[j], to);
+        if (len < bd) { bd = len; best = dist(me, cs[i]) < 0.6 && j !== i ? cs[(i + dir + 4) % 4] : cs[i]; } // at a corner: the next one
+      }
+    }
+    return best ?? [tx, tz];
   }
 
   // ---- grain ------------------------------------------------------------------------
@@ -475,4 +512,16 @@ export function createFlock(ctx) {
     tapFox() { if (fox.state === FST.AWAY) return false; if (fox.carrying) { foxSpit('tap'); [fox.ex, fox.ez] = edgePoint(fox.x, fox.z); fox.state = FST.FLEE; fox.timer = 12; } else foxLeave(true); emit('yip', { x: fox.x, z: fox.z }); return true; }, scatterGrain, collectEgg, grainLeft, pick, grab, moveGrab, release,
     get basket() { return basket; }, get grabbed() { return grabbed; },
   };
+}
+
+// Where the segment (x0, z0) → (x1, z1) first enters the box [bx0, bx1] × [bz0, bz1], as a fraction 0..1 of the way
+// (0 when it starts inside), or null when it misses (slab method, in the ground plane).
+export function segBox(x0, z0, x1, z1, bx0, bz0, bx1, bz1) {
+  let t0 = 0, t1 = 1;
+  for (const [o, d, lo, hi] of [[x0, x1 - x0, bx0, bx1], [z0, z1 - z0, bz0, bz1]]) {
+    if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return null; continue; }
+    let a = (lo - o) / d, b = (hi - o) / d; if (a > b) [a, b] = [b, a];
+    if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) return null;
+  }
+  return t0;
 }

@@ -20,7 +20,7 @@ const run = (sim, sec, f) => { for (let s = 0; s < sec * 60; s++) { f && f(s / 6
 {
   const sim = farmSim({ pigs: 48, seed: 6 });
   run(sim, 5);
-  const pen = sim.lay.pens[5];
+  const pen = sim.lay.pens[4];
   const foods = [];
   for (let k = 0; k < 4; k++) foods.push(sim.tossFood(pen.cx, 6, pen.cz + 14, pen.cx + (k - 1.5), pen.cz));
   const ids = foods.map(f => f.id); let eatenAt = -1, peak = 0;

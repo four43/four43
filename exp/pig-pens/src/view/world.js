@@ -41,7 +41,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); const m = new THREE.Mesh(g, matV); m.receiveShadow = true; scene.add(m);
   };
   for (const p of lay.pens) patch(p.x0, p.z0, p.x1, p.z1, '#c9a173', '#b38b5f', 0.012, p.id * 1.7);
-  patch(lay.lane.x0, lay.lane.z0, lay.lane.x1, lay.lane.z1, '#dcc196', '#cfb085', 0.012, 9);
+  for (const [a, k] of [[lay.lane, 9], [lay.stem, 11]]) patch(a.x0, a.z0, a.x1, a.z1, '#dcc196', '#cfb085', 0.012 + k * 1e-4, k); // the T's bar and stem
   {
     const w = lay.wallow, g = new THREE.CircleGeometry(1, 40); g.rotateX(-Math.PI / 2); g.scale(w.rx, 1, w.rz); g.translate(w.x, 0.02, w.z);
     const m = new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color: '#8a5f3b', shininess: 70, specular: '#4a3622' })); m.receiveShadow = true; scene.add(m);

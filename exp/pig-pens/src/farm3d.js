@@ -35,8 +35,9 @@ export function buildFarmExtras({ scene, sim, assets, mc, MAT, lights }) {
     for (const g of lay.gates) { const tgt = g.open ? 1 : 0; if (g.anim !== tgt) { g.anim += Math.sign(tgt - g.anim) * Math.min(Math.abs(tgt - g.anim), dt * 1.8); dirty = true; } }
     if (!dirty && updateGates.done) return; updateGates.done = true;
     leaves.forEach((l, i) => {
-      const closedRot = l.side > 0 ? Math.PI : 0, openRot = l.side > 0 ? 0.2 : Math.PI - 0.2, u = smooth(0, 1, l.g.anim); // swing through -z only
-      M.copy(l.g.frame).multiply(T.makeTranslation(l.hingeX, 0, -0.07 * l.g.anim)).multiply(T.makeRotationY(closedRot + (openRot - closedRot) * u)).multiply(T.makeScale(L, L, L));
+      const closedRot = l.side > 0 ? Math.PI : 0, openRot = l.side > 0 ? 0.2 : Math.PI - 0.2, u = smooth(0, 1, l.g.anim); // swing through the frame's -z (+z when mirrored)
+      const sw = -l.g.swing; // −1 mirrors the swing across the gate's line (layout.js g.swing)
+      M.copy(l.g.frame).multiply(T.makeTranslation(l.hingeX, 0, -0.07 * l.g.anim * sw)).multiply(T.makeRotationY(sw * (closedRot + (openRot - closedRot) * u))).multiply(T.makeScale(L, L, L));
       leafMesh.setMatrixAt(i, M);
     });
     leafMesh.instanceMatrix.needsUpdate = true;

@@ -5,7 +5,7 @@ import R from '@dimforge/rapier3d-compat';
 import { headless } from 'lion-hawk/test';
 import { pigPensGame } from '../src/game.sim.js';
 import { FOCUS_HINT } from '../src/game/farm.js';
-import { buildLayout } from '../src/layout.js';
+import { buildLayout, REGION } from '../src/layout.js';
 import { classify, rayBuilding } from '../src/game/pick.js';
 import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
 import { VET_STOPS } from '../src/clinic.js';
@@ -35,7 +35,7 @@ test('layout: the coop at the run’s east end, the barn and the clinic beside i
     for (const b of lay.buildings) assert.ok(!(d.x > b.x0 - 1 && d.x < b.x1 + 1 && d.z > b.z0 - 1 && d.z < b.z1 + 1), `${d.m} at ${d.x},${d.z} clear of the ${b.id}`);
 });
 
-test('the barn: 16 stalls inside its walls, none overlapping, the doors a gate of their own, region 8', () => {
+test('the barn: 16 stalls inside its walls, none overlapping, the doors a gate of their own, its own region', () => {
   assert.equal(BARN.stalls.length, 16);
   const S = BARN.stalls.map(s => ({ x0: s.x0 + 1e-6, x1: s.x1 - 1e-6, z0: s.z0, z1: s.z1 }));
   for (let i = 0; i < 16; i++) for (let j = i + 1; j < 16; j++) assert.ok(!overlap(S[i], S[j]), `stalls ${i} and ${j}`);
@@ -43,7 +43,7 @@ test('the barn: 16 stalls inside its walls, none overlapping, the doors a gate o
   const door = lay.gates.find(g => g.kind === 'barn');
   assert.ok(door && door.open && Math.abs(door.width - BARN.door.w) < 1e-9 && door.leaves.length === 2);
   assert.equal(lay.obstacles.filter(o => o.divider !== undefined).length, 15, 'a divider between every pair of neighbours and at each side of the doorway');
-  assert.equal(lay.region(BARN.x, BARN.z), 8); assert.equal(lay.region(BARN.x, BARN.z + BARN.d / 2 + 1), 7);
+  assert.equal(lay.region(BARN.x, BARN.z), REGION.barn); assert.equal(lay.region(BARN.x + 6, BARN.z + BARN.d / 2 + 1), REGION.field);
 });
 
 test('picks: a roof from above goes in, an animal or the coop door in front wins, the focused building is not a target', () => {
@@ -116,7 +116,7 @@ test('a farm that starts at night has the vet asleep in bed', () => {
   const sim = farmSim({ pigs: 4, seed: 3, night: true }); assert.equal(sim.vet.state, 'sleep');
 });
 
-test('in the clinic, a tap on Dr. Maple opens her card; outside it, her roof hides her', () => {
+test('in the clinic, a tap on Dr. Emmy opens her card; outside it, her roof hides her', () => {
   const { h, s, sim } = farm(), v = sim.vet;
   h.until(() => v.state === 'idle', { maxSteps: 60 * 30 });
   const at = [v.x, 0.9, v.z];
@@ -147,4 +147,37 @@ test('Dr. Emmy walks round the reception desk, never through it', () => {
     return visits > 0 && v.state === 'walk' && v.node !== 'deskVet';
   }, { maxSteps: 60 * 600, message: 'to the desk and away again' });
   assert.equal(v.name, 'Dr. Emmy');
+});
+
+test('the fox comes out of the woods well beyond the boundary, and runs round the buildings, never through them', () => {
+  for (const seed of [9, 4, 11]) {
+    const sim = farmSim({ pigs: 12, seed }), f = sim.flock.fox, fl = sim.lay.field; sim.step(120); sim.setNight(true);
+    let spawned = false;
+    for (let s = 0; s < 60 * 90; s++) {
+      sim.step();
+      for (const e of sim.log.splice(0)) if (e.type === 'fox') { spawned = true; assert.ok(e.x < fl.x0 - 10 || e.z < fl.z0 - 10, `seed ${seed}: spawned out in the woods (${e.x}, ${e.z})`); }
+      if (f.state === 0) continue;
+      // through a wall = its middle more than its own radius (0.3 m) inside; catching a hen against a wall may touch it
+      const r = 0.3;
+      for (const b of sim.lay.buildings) assert.ok(!(f.x > b.x0 + r && f.x < b.x1 - r && f.z > b.z0 + r && f.z < b.z1 - r), `seed ${seed}: the fox in the ${b.id} at ${f.x.toFixed(2)}, ${f.z.toFixed(2)}`);
+    }
+    assert.ok(spawned, `seed ${seed}: a fox came`);
+  }
+});
+
+test('the aisles are an upside-down T: the stem runs from the barn doors down to the lane, two wide pens either side of it', () => {
+  assert.equal(lay.pens.length, 5);
+  const [a, b] = lay.pens; assert.ok(a.x1 <= lay.stem.x0 + 1e-9 && b.x0 >= lay.stem.x1 - 1e-9 && a.x1 - a.x0 > 14, 'the north pens flank the stem, wider than before');
+  assert.ok(Math.abs(lay.stem.z1 - lay.lane.z0) < 1e-9, 'the stem meets the lane');
+  const door = lay.gates.find(g => g.kind === 'barn');
+  assert.ok(door.x0 >= lay.stem.x0 && door.x1 <= lay.stem.x1, 'the barn doors open over the stem');
+  assert.equal(lay.region((lay.stem.x0 + lay.stem.x1) / 2, (lay.stem.z0 + lay.stem.z1) / 2), REGION.aisle);
+  assert.equal(lay.region((lay.lane.x0 + lay.lane.x1) / 2, (lay.lane.z0 + lay.lane.z1) / 2), REGION.aisle);
+  // nothing fences the stem off from the barn or the lane
+  for (const e of lay.edges) if (e.dir === 'x' && e.x > lay.stem.x0 && e.x < lay.stem.x1) assert.ok(!(Math.abs(e.z - lay.stem.z0) < 1e-9 || Math.abs(e.z - lay.stem.z1) < 1e-9), `a fence across the stem at z ${e.z}`);
+  // east-side gates mirror their western twins
+  for (const g of lay.gates.filter(g => g.dir === 'z' && g.kind !== 'barn')) {
+    const twin = lay.gates.find(o => o.dir === 'z' && Math.abs(o.x + g.x) < 1e-9 && Math.abs(o.z - g.z) < 1e-9);
+    if (twin && twin !== g) assert.equal(g.swing, -twin.swing, `gate ${g.id} swings opposite its twin ${twin.id}`);
+  }
 });

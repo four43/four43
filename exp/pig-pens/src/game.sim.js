@@ -6,6 +6,7 @@ import { defineGame, actions, button, F } from 'lion-hawk/sim';
 import MATERIALS from './defs/materials.js';
 import PHYS from '../baked/phys.json' with { type: 'json' };
 import { DT, GROUPS } from './sim.js';
+import { REGION } from './layout.js';
 import { makeFarm } from './game/farm.js';
 
 // hand…grab are keys 1–5, bell B, back Escape.
@@ -43,8 +44,8 @@ export function pigPensGame() {
   });
   return defineGame({
     id: 'pig-pens', sim: { hz: 1 / DT, maxCatchUp: 4, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm',
-    // [T-25] state homes (lion-hawk §2.2): the basket is player 1's; day or night and the pigs in each of the 9 regions (8: the barn) are the farm's
-    player: { eggs: F.uint(2) }, gameState: { night: F.bool(), pens: F.list(F.uint(1), 9, 9) },
+    // [T-25] state homes (lion-hawk §2.2): the basket is player 1's; day or night and the pigs in each region (lay.region: the pens, the aisle, the field, the barn) are the farm's
+    player: { eggs: F.uint(2) }, gameState: { night: F.bool(), pens: F.list(F.uint(1), REGION.count, REGION.count) },
     defs: { materials: MATERIALS, models: PHYS },
     physics: { rapier: R, gravity: [0, -9.81, 0], groups: GROUPS }, // GROUPS' order is 2.1.0's collision bits (D9: the game passes Rapier)
     scenes: { farm }, state, debug,
