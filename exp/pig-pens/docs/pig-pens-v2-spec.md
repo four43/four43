@@ -6,6 +6,8 @@ Published page: https://claude.ai/artifact/LJhHWc3FBwULhavmjkyG75
 Baseline: Pig Pens v1 (`pig-pens-spec.md`, version 1.3, the mud and hose release)
 Language standard: ASD-STE100 Simplified Technical English (STE). Section 2 gives the new technical names (TN) and technical verbs (TV).
 
+Amended 26 October 2026 (Pig Pens 2.5.0): the game has no tractor. The tractor, drive mode, the drive pad, the horn, the Get out button, the press ring and the `tractor` collision group are removed. The tractor is its own game now (Tractor Pickup). The tractor statements in this specification are history only.
+
 ---
 
 ## 1. Introduction

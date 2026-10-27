@@ -7,7 +7,7 @@ import { defineView, createTiltShift } from 'lion-hawk/view';
 import MANIFEST from '../baked/manifest.json' with { type: 'json' };
 import { buildWorld } from './view/world.js';
 import { createHud } from './view/hud.js';
-import { bindTractorAndSnacks } from './view/tractor3d.js';
+import { bindSnacks } from './view/snacks3d.js';
 import { rig, attach, bindCamera } from './view/rig.js';
 import { Sound } from './sound.js';
 
@@ -31,7 +31,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
       view.orbit = attach(gfx.camera, canvas); view.project = rig.project;
       // R1 measurement: draw calls and programs of the last drawn frame (read with ?tilt=0: one render per frame)
       view.perf = () => { const i = gfx.info(); return { calls: i.calls, triangles: i.triangles, programs: i.programs }; };
-      offs.push(bindTractorAndSnacks(view.sync, { sim: s.sim, night: () => world?.night ?? 0 })); // before the tractor's first draw
+      offs.push(bindSnacks(view.sync)); // before the first snack is drawn
       let pending = null; // a hint that came before the models (the start hint): shown once the HUD exists
       const build = () => {
         if (engine.scene.state !== s) return; // left the farm while loading
@@ -50,13 +50,11 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
           case 'hose': sound.hose(ev.on); break;
           case 'toss': sound.whoosh(); break;
           case 'scatter': sound.scatter(); break;
-          case 'horn': sound.horn(); break;
           case 'bell': sound.bell(); break;
           case 'door': sound.gate(); break;
           case 'feathers': world?.feathers(ev); break;
           case 'hint': hint(ev.text, ev.seconds); break;
           case 'egg': hud?.event(ev, flock.basket); break;
-          case 'drive': sound.engine(ev.on); if (!ev.on) rig.orbit.release(); break;
           // the flock's stories as hints
           case 'fox': hint('A fox is sniffing around the farm. Is the coop door shut?', 4.5); break;
           case 'gulp': hint(`Gulp! The fox has ${ev.name} in its cheeks. Tap the fox!`, 4.5); break;
@@ -69,7 +67,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
     exit(engine, view) {
       for (const f of offs) f(); offs = [];
       hud?.dispose(); hud = null; world?.dispose(); world = null;
-      sound?.hose(false); sound?.engine(false);
+      sound?.hose(false);
       if (view.project === rig.project) view.project = undefined;
       view.orbit = undefined; view.perf = undefined;
     },
@@ -77,7 +75,6 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
     frame(engine, alpha, view) {
       if (!world) return; // still loading, or no WebGL
       const s = engine.scene.state, dt = view.dt;
-      if (s.driving) { const t = s.sim.tractor; rig.orbit.chase(t, dt); sound.engineLevel(t.engine, t.speed); }
       world.update(dt, s, frame, alpha); hud.update(engine, s, frame, dt);
       rig.orbit.update(dt, view.rawDt);
       const post = view.gfx.post; if (post?.params) post.params.focus = rig.orbit.state.dist;

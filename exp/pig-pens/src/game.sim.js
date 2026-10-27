@@ -2,31 +2,29 @@
 // extras. Never touches three.js or the DOM. The caller initialises Rapier (`await R.init()`) before createEngine/boot (#6);
 // the engine creates the World per scene (S-3) on Pig Pens' materials, baked sidecars and collision groups.
 import R from '@dimforge/rapier3d-compat';
-import { defineGame, actions, axis, button, F } from 'lion-hawk/sim';
+import { defineGame, actions, button, F } from 'lion-hawk/sim';
 import MATERIALS from './defs/materials.js';
 import PHYS from '../baked/phys.json' with { type: 'json' };
 import { DT, GROUPS } from './sim.js';
-import { makeFarm, pressing } from './game/farm.js';
+import { makeFarm } from './game/farm.js';
 
-// throttle +1 = forward, steer +1 = left; hand…grab are keys 1–5, bell B, back Escape, getOut E (driving), horn H.
+// hand…grab are keys 1–5, bell B, back Escape.
 export const ACTIONS = actions({
-  throttle: axis(), steer: axis(),
   hand: button(), shoo: button(), feed: button(), hose: button(), grab: button(),
-  bell: button(), back: button(), getOut: button(), horn: button(),
+  bell: button(), back: button(),
 });
 
 // JSON-safe summary for tests and the hook (#28: the createSim object stays in ctx.state, never here).
 function state(e) {
   const s = e.scene.state, sim = s.sim;
   if (!sim) return {};
-  const f = sim.flock, t = sim.tractor;
+  const f = sim.flock;
   return {
-    tool: s.tool, driving: s.driving, selected: s.selected ? { ...s.selected } : null,
+    tool: s.tool, selected: s.selected ? { ...s.selected } : null,
     night: sim.clock.night, door: sim.lay.coop.open, gates: sim.lay.gates.map(g => g.open),
     basket: f.basket, eggs: f.eggs.length, foods: sim.foods.length, foodLeft: sim.foodCap - sim.foods.length,
     dog: { active: sim.dog.active, x: sim.dog.x, z: sim.dog.z }, hose: { active: sim.hose.active, x: sim.hose.x, z: sim.hose.z },
-    ring: s.ring ? [s.ring[0], s.ring[1]] : null, grabbed: { pig: sim.grabbed, bird: f.grabbed }, pressing: pressing(s),
-    tractor: { x: t.x, z: t.z, speed: t.speed, driven: t.driven, thr: t.inThr, steer: t.inSteer },
+    ring: s.ring ? [s.ring[0], s.ring[1]] : null, grabbed: { pig: sim.grabbed, bird: f.grabbed },
     counts: [...sim.counts], time: sim.time,
   };
 }
@@ -40,7 +38,7 @@ export function pigPensGame() {
   const debug = e => ({
     get sim() { return e.scene.state.sim; }, get farm() { return e.scene.state; },
     tool: name => api.setTool(e, name), select: sel => api.select(e, sel ?? null),
-    drive: () => api.enterDrive(e), night: (on = true) => api.setNight(e, on),
+    night: (on = true) => api.setNight(e, on),
   });
   return defineGame({
     id: 'pig-pens', sim: { hz: 1 / DT, maxCatchUp: 4, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm',

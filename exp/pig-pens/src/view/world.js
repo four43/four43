@@ -1,7 +1,7 @@
 // The 3D farm (lion-hawk 2e P6; on the phase 3 engine since 3k): ground, patches, fences, troughs and their food, decor,
 // the pig crowd (pigs3d.js), Zzz, the two rings, buildFarmExtras and the hose, all under one root group in the engine's
 // scene. Geometry is the baked models' (models.js) on the compiler's materials; lights, fog, sky, renderer and post are the
-// engine's (view.gfx). The tractor and snacks are view sync's (tractor3d.js). View only: three.js, Math.random and the DOM
+// engine's (view.gfx). Snacks are view sync's (snacks3d.js). View only: three.js, Math.random and the DOM
 // are fine here. buildWorld({ gfx, assets, mc, sim, world }) → { root, update(dt, s, frame, alpha), select(at, kind),
 // feathers(ev), night, dispose() }
 import * as THREE from 'three';
@@ -223,7 +223,7 @@ export function buildWorld({ gfx, assets, mc, sim, world }) {
     },
     // the yellow selection ring (main.js renderCard): at [x, z] or null, scaled by kind
     select(at, kind) {
-      if (at) { selRing.visible = true; selRing.position.x = at[0]; selRing.position.z = at[1]; selRing.scale.setScalar(kind === 'tractor' ? 3.2 : kind === 'bird' ? 0.5 : 1); } else selRing.visible = false;
+      if (at) { selRing.visible = true; selRing.position.x = at[0]; selRing.position.z = at[1]; selRing.scale.setScalar(kind === 'bird' ? 0.5 : 1); } else selRing.visible = false;
     },
     feathers(ev) { extras.spawnFeathers(ev.x, ev.y, ev.z, ev.n, ev.tint); },
     dispose() {

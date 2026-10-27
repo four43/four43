@@ -13,7 +13,7 @@ test('checks.determinism: two 600-step farms agree at every checksum', () => {
   const r = checks.determinism(pigPensGame(), { seed: 3, steps: 600, args: { pigs: 24 } }); assert.ok(r.ok, `first difference at step ${r.step}`);
 });
 test('checks.simPurity over the sim roots', () => {
-  const r = checks.simPurity(pigPensGame(), { roots: ['game.sim.js', 'game', 'defs', 'sim.js', 'chickens.js', 'flow.js', 'layout.js', 'tractor.js'].map(src) });
+  const r = checks.simPurity(pigPensGame(), { roots: ['game.sim.js', 'game', 'defs', 'sim.js', 'chickens.js', 'flow.js', 'layout.js'].map(src) });
   assert.notEqual(r?.ok, false, JSON.stringify(r));
 });
 test('checks.materials: every collider material exists and phys.json matches the registry', () => {

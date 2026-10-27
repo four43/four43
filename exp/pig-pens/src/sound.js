@@ -70,7 +70,6 @@ export class Sound {
   pop() { if (this.ok) this.tone('sine', 520, 880, 0.09, 0.2); }
   gate() { if (!this.ok) return; this.noise(0.12, 0.35, 380, 0, 1.5); this.tone('triangle', 180, 120, 0.12, 0.25, 0.02); }
   scatter() { if (!this.ok) return; for (let i = 0; i < 8; i++) this.noise(0.03, 0.18, 3500 + Math.random() * 2000, 0.25 + i * 0.03 + Math.random() * 0.04, 3); }
-  horn() { if (!this.ok) return; this.tone('square', 392, 380, 0.45, 0.12); this.tone('square', 466, 455, 0.45, 0.1); }
   cluck(vol = 0.3, worried = false) { if (!this.ok) return; const p = worried ? 1.25 : 1; this.voice(520 * p, 380 * p, 0.07, vol, [900, 2100]); this.voice(560 * p, 400 * p, 0.06, vol * 0.8, [900, 2100], 0.12); }
   peep(vol = 0.25) { if (!this.ok) return; this.tone('sine', 2600, 3400, 0.08, vol); this.tone('sine', 2700, 3500, 0.07, vol * 0.8, 0.12); }
   crow(short = false) { if (!this.ok) return; const d = short ? 0.5 : 1.3; this.voice(520, 760, 0.18, 0.45, [900, 2000]); this.voice(760, 820, d * 0.5, 0.5, [1000, 2300], 0.2); this.voice(820, 430, d * 0.4, 0.45, [900, 2000], 0.2 + d * 0.5); }
@@ -78,18 +77,6 @@ export class Sound {
   flap() { if (!this.ok) return; for (let i = 0; i < 5; i++) this.noise(0.05, 0.25, 700, i * 0.07, 0.8); }
   yip() { if (!this.ok) return; this.voice(900, 1300, 0.08, 0.4, [1200, 2400]); this.voice(950, 1400, 0.08, 0.35, [1200, 2400], 0.14); }
   egg() { if (!this.ok) return; this.tone('sine', 660, 990, 0.08, 0.25); this.tone('sine', 990, 1320, 0.1, 0.22, 0.09); }
-  engine(on) {
-    if (!this.ctx) return; const c = this.ctx;
-    if (!this.eng) {
-      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 38;
-      const o2 = c.createOscillator(); o2.type = 'square'; o2.frequency.value = 19;
-      const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420; f.Q.value = 2;
-      const g = c.createGain(); g.gain.value = 0; o.connect(f); o2.connect(f); f.connect(g); g.connect(this.master); o.start(); o2.start();
-      this.eng = { o, o2, f, g };
-    }
-    this.eng.g.gain.setTargetAtTime(on && !this.muted ? 0.13 : 0, c.currentTime, 0.2);
-  }
-  engineLevel(load, speed) { if (!this.eng || !this.ctx) return; const t = this.ctx.currentTime, f = 34 + speed * 7 + load * 14; this.eng.o.frequency.setTargetAtTime(f, t, 0.1); this.eng.o2.frequency.setTargetAtTime(f / 2, t, 0.1); this.eng.f.frequency.setTargetAtTime(300 + load * 500, t, 0.1); if (this.muted) this.eng.g.gain.setTargetAtTime(0, t, 0.05); }
   // events placed in the world are quieter far from the camera (audio.listen(camera): 18 / (d + 10), 0.05..0.6)
   event(ev) {
     if (!this.ok) return;

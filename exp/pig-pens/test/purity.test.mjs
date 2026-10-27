@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { scanPurity, stripComments } from 'lion-hawk/test';
 
 const src = fileURLToPath(new URL('../src/', import.meta.url));
-const SIM = ['game.sim.js', 'game', 'defs', 'sim.js', 'chickens.js', 'flow.js', 'layout.js', 'tractor.js'].map(p => join(src, p));
+const SIM = ['game.sim.js', 'game', 'defs', 'sim.js', 'chickens.js', 'flow.js', 'layout.js'].map(p => join(src, p));
 const files = p => !existsSync(p) ? [] : statSync(p).isDirectory() ? readdirSync(p).flatMap(n => files(join(p, n))) : p.endsWith('.js') ? [p] : [];
 const RULES = [/\blocalStorage\b/, /\bset(Timeout|Interval)\s*\(/, /\brequestAnimationFrame\b/,
   /from\s*['"][^'"]*\/(main|entry|game\.view|devices|farm3d|gfx|fur|tiltshift|sound|view\/[^'"]*)(\.js)?['"]/];

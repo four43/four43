@@ -1,6 +1,6 @@
 // Rendering for the newer farm pieces: animated gates, coop, nest boxes, eggs, grain, feathers (the engine's particle
 // pool) and the day/night lighting on the engine's light rig. Geometry comes from the baked models;
-// the chickens, the fox and the dog are view/flock3d.js; the tractor and snacks are drawn by view sync (view/tractor3d.js).
+// the chickens, the fox and the dog are view/flock3d.js; snacks are drawn by view sync (view/snacks3d.js).
 import * as THREE from 'three';
 import { createParticles } from 'lion-hawk/kits/fx/view';
 import { modelGeometry, mergeGeos, boxGeo, colorGeo } from './view/models.js';

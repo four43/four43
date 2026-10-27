@@ -24,8 +24,6 @@ for (const [w, h] of [[1280, 720], [390, 844]]) {
     const r1 = rig.ray(200, 300), r0 = OLD.ray(200, 300); r1.forEach((v, k) => assert.ok(Math.abs(v - r0[k]) < 1e-9, `ray[${k}]`));
   });
 }
-test('cameraMode: driving chases, a Hand drag orbits, other tools leave the camera alone (2.1.0 bindGestures)', () => {
-  assert.equal(cameraMode({ driving: true }, 'hand'), 'chase'); assert.equal(cameraMode({ driving: true }, 'feed'), 'chase');
-  assert.equal(cameraMode({ driving: false }, 'hand'), 'orbit'); assert.equal(cameraMode({ driving: false }, 'shoo'), 'none');
-  assert.equal(cameraMode({ driving: true }, 'hand', false), 'none', 'the Hand press that became the drive does not turn the camera');
+test('cameraMode: a Hand drag orbits, other tools leave the camera alone (2.1.0 bindGestures)', () => {
+  assert.equal(cameraMode('hand'), 'orbit'); assert.equal(cameraMode('shoo'), 'none'); assert.equal(cameraMode('feed'), 'none');
 });

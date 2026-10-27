@@ -49,7 +49,12 @@ const oldParts = id => PETS.has(id) ? OLD[id].parts : Object.entries(OLD[id]).ma
 const palette = cols => { const s = new Map(); for (const c of cols) s.set(c.join(), c); return [...s.values()]; };
 const covers = (a, b) => a.every(c => b.some(d => Math.abs(c[0] - d[0]) <= 2 && Math.abs(c[1] - d[1]) <= 2 && Math.abs(c[2] - d[2]) <= 2));
 
-for (const id of Object.keys(MAN.models)) {
+// models drawn since 2.1.0 have no old bake to match: only the dog house (2.5.0, tools/models/dog-house.model.mjs)
+const NEW = ['dogHouse'];
+test('every baked model is in the 2.1.0 bake, except the ones added since', () => {
+  assert.deepEqual(Object.keys(MAN.models).filter(id => !OLD[id]), NEW);
+});
+for (const id of Object.keys(MAN.models).filter(id => OLD[id])) {
   test(`${id}: triangles, vertices, bounds and palette match the 2.1.0 bake`, async () => {
     const now = await baked(id), was = oldParts(id);
     const tNow = now.reduce((s, p) => s + p.tris, 0), tWas = was.reduce((s, p) => s + p.idx.length / 3, 0);

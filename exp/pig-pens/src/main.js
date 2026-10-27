@@ -16,7 +16,7 @@ async function start() {
     canvas, args: { pigs: +q.get('pigs') || 48 }, seed: 1, devices: devices(document),
     timer: q.has('fps') ? () => performance.now() : undefined,
   });
-  useSeats(view, document); // lion-hawk C-5, C-10: keys, drive pad and horn through the 'farm' context
+  useSeats(view, document); // lion-hawk C-5, C-10: keys through the 'farm' context
   const failed = window.engine?.errors?.[0]; if (failed) throw new Error(failed.message); // the view could not start (WebGL)
 }
 start().catch(err => { const l = $('loading'); if (l) l.textContent = 'Could not start: ' + err.message; console.error(err); });

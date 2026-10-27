@@ -1,14 +1,13 @@
 // Pig herd simulation. No rendering dependencies so it runs headless in Node.
 import { buildLayout, mulberry32, FENCE_H } from './layout.js';
 import { FlowGrid, hit } from './flow.js';
-import { createTractor } from './tractor.js';
 import { createFlock } from './chickens.js';
 
 export const DT = 1 / 60;
 export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10 };
 export const ST_NAME = Object.keys(ST);
-// Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64, tractor 128.
-export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox', 'tractor'];
+// Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64.
+export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox'];
 const not = (...xs) => GROUPS.filter(g => !xs.includes(g));
 const G_STATIC = { member: ['static'], filter: not('dog', 'fox') }; // the dog and the fox hop fences
 const PET_BODY = { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, angularDamping: 1.2, ccd: true, canSleep: false };
@@ -26,6 +25,7 @@ export const P = {
   hungerSeek: 0.68, eatRate: 0.2, troughCap: 10, refillEvery: 14,
   smell: 16, smellHungry: 26,
   mudWallowRest: 0.16, mudWallowWalk: 0.07, mudDry: 0.0015, muddy: 0.3,
+  dogBored: 25, dogPorch: 2.6, dogBed: 0.96, // seconds idle before Biscuit trots home; porch and bed, metres out from the house centre
   hoseR: 1.4, hoseLure: 11, washRate: 0.45, soakRate: 1.5, dryTime: 45, zoomSpeed: 3.7,
   foodCap: 5, foodEatTime: 2.5, foodPursuers: 3, foodLife: 20, foodFade: 1.5,
 };
@@ -102,8 +102,9 @@ export function createSim(world, opts = {}) {
   }
 
   // ---- dog ------------------------------------------------------------------
-  const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'pig', 'food', 'chick', 'tractor', 'fox'] }, 'pet',
-    { tags: ['dog'], model: 'dog', draw: false, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0 });
+  const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'pig', 'food', 'chick', 'fox'] }, 'pet',
+    { tags: ['dog'], model: 'dog', draw: false, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0,
+      home: 0, bored: 0, lie: 0 }); // home: 0 out, 1 to the porch, 2 in through the door, 3 lying with his head out
 
   // ---- food -------------------------------------------------------------------
   const foods = []; let foodSeq = 0;
@@ -123,9 +124,6 @@ export function createSim(world, opts = {}) {
     if (n) flock.onNight(); else flock.newDay();
     emit('daynight', { night: n });
   }
-  // ---- tractor ----
-  const tractor = createTractor(world, lay.tractorSpawn, GROUPS);
-  function horn() { tractor.horn = 1.6; emit('horn', { x: tractor.x, z: tractor.z }); }
   const tmp = [0, 0];
 
   function readState() {
@@ -213,8 +211,6 @@ export function createSim(world, opts = {}) {
   function updateThreats() {
     threats.length = 0;
     threats.push({ kind: 'dog', x: dog.x, z: dog.z, R: dog.active || dog.speed > 1.5 ? P.dogRadiusActive : P.dogRadiusIdle });
-    if (tractor.speed > 0.8) threats.push({ kind: 'tractor', x: tractor.x, z: tractor.z, R: 3.5 + tractor.speed * 0.6 });
-    if (tractor.horn > 0) threats.push({ kind: 'horn', x: tractor.x, z: tractor.z, R: 14 });
     const f = flock.fox; if (f.state !== 0) threats.push({ kind: 'fox', x: f.x, z: f.z, R: 6 });
   }
 
@@ -253,6 +249,7 @@ export function createSim(world, opts = {}) {
   }
   function setDog(x, z, active) {
     dog.active = active;
+    if (active) { dog.home = 0; dog.bored = 0; } // a job: up and out
     if (x !== null) { dog.tx = Math.max(field.x0 + 1, Math.min(field.x1 - 1, x)); dog.tz = Math.max(field.z0 + 1, Math.min(field.z1 - 1, z)); }
   }
   function tossFood(fx, fy, fz, tx, tz, kind) {
@@ -300,15 +297,21 @@ export function createSim(world, opts = {}) {
     // route-finding field toward the spray, refreshed at most twice a second as it moves
     hose.ft -= DT;
     if (hose.active && hose.ft <= 0 && Math.hypot(hose.x - hose.fx, hose.z - hose.fz) > 0.8) { hose.field = grid.field(hose.x, hose.z, 1.2); hose.fx = hose.x; hose.fz = hose.z; hose.ft = 0.5; }
-    // dog
+    // dog: with no job for a while he trots home, in through the door, and lies down with his head out
     {
+      const H = lay.dogHouse, fx = Math.sin(H.rot), fz = Math.cos(H.rot);
+      if (!dog.active && dog.home === 0 && (dog.bored += DT) > P.dogBored && dog.speed < 0.3) dog.home = 1;
+      if (dog.home === 1) { dog.tx = H.x + fx * P.dogPorch; dog.tz = H.z + fz * P.dogPorch; if (Math.hypot(dog.tx - dog.x, dog.tz - dog.z) < 0.35) dog.home = 2; }
+      if (dog.home === 2) { dog.tx = H.x + fx * P.dogBed; dog.tz = H.z + fz * P.dogBed; if (Math.hypot(dog.tx - dog.x, dog.tz - dog.z) < 0.15) dog.home = 3; }
+      dog.lie += ((dog.home === 3 ? 1 : 0) - dog.lie) * Math.min(1, DT * 2);
       const dx = dog.tx - dog.x, dz = dog.tz - dog.z, d = Math.hypot(dx, dz);
       const sp = dog.active ? Math.min(8, d * 3) : Math.min(3, d * 2);
       const vdx = d > 0.05 ? dx / d * sp : 0, vdz = d > 0.05 ? dz / d * sp : 0;
       let ax = (vdx - dog.vx) / 0.15, az = (vdz - dog.vz) / 0.15; const al = Math.hypot(ax, az);
       if (al > 16) { ax *= 16 / al; az *= 16 / al; }
       dog.body.applyImpulse({ x: ax * 25 * DT, y: 0, z: az * 25 * DT }, true);
-      if (dog.speed > 0.4) dog.yaw = turnToward(dog.yaw, Math.atan2(dog.vx, dog.vz), 9 * DT);
+      if (dog.home === 3) dog.yaw = turnToward(dog.yaw, H.rot, 4 * DT); // turns round to look out of the door
+      else if (dog.speed > 0.4) dog.yaw = turnToward(dog.yaw, Math.atan2(dog.vx, dog.vz), 9 * DT);
       // visual hop over fences (the dog does not collide with fences)
       let near = false; for (const o of fenceObs) if (hit(o, dog.x, dog.z, 0.45)) { near = true; break; }
       dog.hop += ((near ? 1 : 0) - dog.hop) * Math.min(1, DT * 14);
@@ -568,7 +571,6 @@ export function createSim(world, opts = {}) {
       else if (p.speed > 0.25) p.yaw = turnToward(p.yaw, Math.atan2(p.vx, p.vz), turn * Math.min(1, p.speed));
     }
 
-    tractor.step(DT);
     flock.step(clock, threats, pigs, hose, dog, t);
   }
   // after the engine's Rapier step (lh.physics.step → read → events): read back, rinse, count
@@ -614,7 +616,7 @@ export function createSim(world, opts = {}) {
 
   return {
     world, lay, grid, pigs, dog, foods, troughs, events, counts,
-    think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, tractor, horn, flock, setGate, threats,
+    think, settle, pick, grab, moveGrab, release, setDog, setHose, tossFood, bell, hose, clock, setNight, flock, setGate, threats,
     get time() { return t; }, get foodCap() { return P.foodCap; }, get transitions() { return transitions; }, get grabbed() { return grabbed; },
   };
 }

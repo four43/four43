@@ -41,11 +41,10 @@ export function pickEgg(flock, r) {
   return best;
 }
 export const foxHit = (flock, r) => flock.fox.state !== FST.AWAY && rayDist(r, flock.fox.x, 0.4, flock.fox.z) < 0.9;
-export const tractorHit = (tractor, r) => rayDist(r, tractor.x, 1.2, tractor.z) < 2.1;
 export const dogHit = (dog, r) => rayDist(r, dog.x, 0.4, dog.z) < 0.8;
 
 // What the Hand acts on (main.js classify): an egg first; then the nearest animal (stable sort: ties go to the earlier
-// candidate); then a gate or the coop door under the ground hit; then the tractor.
+// candidate); then a gate or the coop door under the ground hit.
 export function classify(sim, r) {
   const flock = sim.flock, h = planeHit(r, 0), [ox, oy, oz, dx, dy, dz] = r;
   const egg = pickEgg(flock, r); if (egg) return { kind: 'egg', id: egg.id };
@@ -58,7 +57,6 @@ export function classify(sim, r) {
   if (dogHit(sim.dog, r)) cands.push({ kind: 'dog', d: dist(sim.dog.x, 0.4, sim.dog.z) });
   if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i === undefined ? { kind: c.kind } : { kind: c.kind, i: c.i }; }
   if (h) { const g = pickGate(sim.lay, h.x, h.z); if (g) return { kind: 'gate', id: g.id }; if (pickDoor(sim.lay, h.x, h.z)) return { kind: 'door' }; }
-  if (tractorHit(sim.tractor, r)) return { kind: 'tractor' };
   return null;
 }
 

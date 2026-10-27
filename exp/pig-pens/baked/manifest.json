@@ -71,6 +71,13 @@
       "sha256": "54852ca78843691510d4cc136f9622c672f2a861aa6602f65e019d8d4df1246d",
       "options": "d56a718f4bc8198d"
     },
+    "dogHouse": {
+      "glb": "models/dogHouse.glb",
+      "anim": null,
+      "bytes": 23232,
+      "sha256": "15e3d5b5cc964785b35b3cf23cbe3e39011cd521b61045b0620a8cc7d80ffde3",
+      "options": "d9bf669bebbe870d"
+    },
     "egg": {
       "glb": "models/egg.glb",
       "anim": null,
@@ -196,13 +203,6 @@
       "bytes": 5536,
       "sha256": "c709ab51f07ab75b18ee03b241d6c874485ce153bd0e9874e5d71ea54172f6ad",
       "options": "e97fc75ca206e284"
-    },
-    "tractor": {
-      "glb": "models/tractor.glb",
-      "anim": null,
-      "bytes": 69504,
-      "sha256": "e60ddee1d5581716ed47fa02a2f27dacac91b04983fa53e0d23a403d1da14abf",
-      "options": "2a3d035aa2cce86c"
     },
     "tree": {
       "glb": "models/tree.glb",

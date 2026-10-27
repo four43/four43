@@ -31,8 +31,6 @@
     "food-kit/egg.glb": { "sha256": "32e20b7ed798e42e", "from": "Food Kit/Models/GLB format/egg.glb" },
     "food-kit/bag.glb": { "sha256": "17803bb1e467d5cf", "from": "Food Kit/Models/GLB format/bag.glb" },
     "food-kit/Textures/colormap.png": { "sha256": "75baf74d9483a0fc", "from": "Food Kit/Models/GLB format/Textures/colormap.png" },
-    "car-kit/tractor.glb": { "sha256": "48b30b3e4bb0adb4", "from": "Car Kit/Models/GLB format/tractor.glb" },
-    "car-kit/Textures/colormap.png": { "sha256": "f3622a03a20c6696", "from": "Car Kit/Models/GLB format/Textures/colormap.png" },
     "cube-pets/animal-pig.glb": { "sha256": "0e09d3c745a7daa1", "from": "Cube Pets/Models/GLB format/animal-pig.glb" },
     "cube-pets/animal-dog.glb": { "sha256": "c127d71ac8794f97", "from": "Cube Pets/Models/GLB format/animal-dog.glb" },
     "cube-pets/animal-chick.glb": { "sha256": "86dd5f030c934148", "from": "Cube Pets/Models/GLB format/animal-chick.glb" },

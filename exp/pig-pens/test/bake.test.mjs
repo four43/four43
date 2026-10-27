@@ -1,5 +1,5 @@
 // Phase 3k T3 (A-1..A-6, D2): the committed bake matches the sources, the registry and the engine (bake --check), and
-// carries what the game needs: 33 models, anim tables for the two crowds only.
+// carries what the game needs: 33 models (32 Kenney, our dog house), anim tables for the two crowds only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -10,7 +10,7 @@ import CONFIG from '../game.config.js';
 const root = new URL('../', import.meta.url);
 const json = p => JSON.parse(readFileSync(new URL(p, root), 'utf8'));
 const IDS = ['fence', 'gate', 'planks', 'post', 'oak', 'tree', 'treeFat', 'treeFall', 'bush', 'bushS', 'flowerY', 'flowerR', 'rock', 'pumpkin', 'corn', 'grass', 'grassS',
-  'hay', 'hayB', 'apple', 'carrot', 'cabbage', 'cob', 'barrel', 'tractor', 'egg', 'sack', 'wheat', 'sign', 'pig', 'dog', 'chick', 'fox'];
+  'hay', 'hayB', 'apple', 'carrot', 'cabbage', 'cob', 'barrel', 'egg', 'sack', 'wheat', 'sign', 'pig', 'dog', 'chick', 'fox', 'dogHouse'];
 
 test('lion-hawk bake --check: sources, registry hash and engine version agree with baked/', () => {
   const r = spawnSync('npx', ['lion-hawk', 'bake', '--game', '.', '--check'], { cwd: new URL('.', root), encoding: 'utf8' });

@@ -14,7 +14,6 @@ export default defineMaterials({
   bird:      { extends: 'flesh', phys: { friction: 0, restitution: 0.05 } },
   foxPelt:   { extends: 'flesh', phys: { friction: 0, restitution: 0 } },
   snack:     { extends: 'flesh', phys: { sg: 0.5, friction: 0.9, restitution: 0.175 } }, // 500 kg/m³, as 2.1.0's setDensity(500)
-  paintwork: { extends: 'steel', phys: { friction: 0.4, restitution: 0 } },          // the tractor (mass from massProps, D3)
   // look-only model materials
   plumage:   { extends: 'fur', look: { fur: { length: 0.07, shells: 10, density: 34 } } }, // chicken shells (fur.js's len/density)
   // the pig crowd's skin: a short peach fuzz (shells) that mud and wet mat flat and shine (COVERAGE_INSTANCED, lion-hawk 0.15

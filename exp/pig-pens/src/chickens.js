@@ -51,7 +51,7 @@ export function createFlock(ctx) {
     };
     const b = world.spawn({
       body: { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, ccd: true, canSleep: false, mass },
-      colliders: [{ shape: 'sphere', r, material: 'bird' }], groups: { member: ['chick'], filter: ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'tractor'] },
+      colliders: [{ shape: 'sphere', r, material: 'bird' }], groups: { member: ['chick'], filter: ['ground', 'static', 'pig', 'food', 'dog', 'chick'] },
       at: [x, r, z], tags: ['bird'], model: 'chick', draw: false, ...fields, // drawn by the flock crowds (view/flock3d.js)
     });
     b.yaw = yaw;
@@ -73,7 +73,7 @@ export function createFlock(ctx) {
   // ---- fox ------------------------------------------------------------------------
   const fox = world.spawn({
     body: { type: 'dynamic', lock: { rot: true }, canSleep: false, mass: 7 }, colliders: [{ shape: 'sphere', r: 0.26, material: 'foxPelt' }],
-    groups: { member: ['fox'], filter: ['ground', 'pig', 'dog', 'tractor'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox', draw: false,
+    groups: { member: ['fox'], filter: ['ground', 'pig', 'dog'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox', draw: false,
     state: FST.AWAY, wa: 0, x: 0, z: -50, vx: 0, vz: 0, speed: 0, target: null, carrying: null, fear: 0, cooldown: 30, timer: 0, hop: 0, raids: 0, steals: 0, ex: 0, ez: 0,
   });
   fox.yaw = 0; // a game field (`yaw` in a desc is the spawn pose)
@@ -123,7 +123,7 @@ export function createFlock(ctx) {
     }
     const tr = fox.body.translation(), lv = fox.body.linvel();
     fox.x = tr.x; fox.z = tr.z; fox.vx = lv.x; fox.vz = lv.z; fox.speed = Math.hypot(lv.x, lv.z);
-    // fear: the dog, the rooster, a moving tractor, the horn, and a soaking from the hose
+    // fear: the dog, the rooster and a soaking from the hose
     for (const t of threats) { if (t.kind === 'fox') continue; const d = Math.hypot(fox.x - t.x, fox.z - t.z); if (d < t.R) fox.fear += (1 - d / t.R) * 2.5 * DT; }
     const roo = birds.find(b => b.kind === 'rooster' && outside(b));
     if (roo && Math.hypot(roo.px - fox.x, roo.pz - fox.z) < 1.1) { fox.fear += 1.6 * DT; if (rng() < DT * 3) emit('squawk', { x: fox.x, z: fox.z }); }

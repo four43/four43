@@ -1,29 +1,25 @@
 // The farm scene (lion-hawk 2e, [S-1]…[S-5], field notes #4, #28, #57, #58): one main scene owns the createSim world
-// (pigs, dog, chickens, fox, tractor, gates, coop, day/night) for the life of the page. The flow state main.js kept
-// in its closure lives in ctx.state ([S-4], #4): the tool, the selection, drive mode and the per-gesture state.
-// Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.kit.vehicle → lh.physics.step → read →
+// (pigs, dog, chickens, fox, gates, coop, day/night) for the life of the page. The flow state main.js kept
+// in its closure lives in ctx.state ([S-4], #4): the tool, the selection and the per-gesture state.
+// Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.physics.step → read →
 // events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
-import { VEHICLE_SYSTEM } from 'lion-hawk/kits/vehicle';
 import { createSim } from '../sim.js';
 import { planeHit, classify, grabTarget } from './pick.js';
 
 export const TOOLS = ['hand', 'shoo', 'feed', 'hose', 'grab'];
 export const TOOL_LABEL = { hand: 'Hand', shoo: 'Shoo', feed: 'Feed', hose: 'Hose', grab: 'Grab' };
 export const TOOL_HINT = {
-  hand: 'Tap an animal to meet it. Tap a gate or the coop door to open or shut it. Hold the tractor to drive.',
+  hand: 'Tap an animal to meet it. Tap a gate or the coop door to open or shut it.',
   shoo: 'Drag to send the dog. Pigs and chickens scatter from it.',
   feed: 'Tap to toss a snack. Tap in the chicken run to scatter grain.',
   hose: 'Drag to spray. Muddy pigs come for a bath.',
   grab: 'Drag a pig or a chicken to lift it. Flick to throw.',
 };
-export const START_HINT = 'Tap an animal to meet it. Hold the tractor to drive. Two fingers turn, pan and zoom.';
-export const PRESS = 0.75, TAP = { move: 12, seconds: 0.45 }, ORBIT_PX = 10, LIFT = { hose: 55, grab: 80 };
-export const GRAB_EASE = 0.18, GRAB_Y = 1.7, TOSS_GAP = 0.18, STEER_POW = 1.4;
+export const START_HINT = 'Tap an animal to meet it. Two fingers turn, pan and zoom.';
+export const TAP = { move: 12, seconds: 0.45 }, ORBIT_PX = 10, LIFT = { hose: 55, grab: 80 };
+export const GRAB_EASE = 0.18, GRAB_Y = 1.7, TOSS_GAP = 0.18;
 // The farm's own event types (never a createSim type), so the engine-path golden can filter them out (#57).
-export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter', 'drive']);
-
-// The Hand is held down on the tractor (the view shows the filling ring).
-export const pressing = s => s.gesture?.tool === 'hand' && s.gesture.down && s.gesture.target?.kind === 'tractor' && !s.driving;
+export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter']);
 
 export function makeFarm() {
   const S = e => { if (e.scene.name !== 'farm') throw new Error('pig-pens: the farm scene is not the main scene'); return e.scene.state; };
@@ -47,19 +43,6 @@ export function makeFarm() {
       if (n) api.hint(e, 'Night time. The chickens are off to bed. Shut the coop door once they’re in.', 4.5);
       else api.hint(e, s.sim.lay.coop.open ? 'Good morning!' : 'Good morning! Open the coop door to let the chickens out.', 3.5);
     },
-    // Drive mode is farm sub-state, not a scene: the world and the camera survive it. P4 adds the keys and presets.
-    enterDrive(e) {
-      const s = S(e); if (s.driving) return;
-      s.driving = true; s.sim.tractor.driven = true; api.select(e, null);
-      if (s.sim.dog.active) s.sim.setDog(null, null, false);
-      endGesture(e, s); // the old enterDrive hid the press ring and the tool gesture ended with it
-      e.emit('drive', { on: true }); api.hint(e, 'Push the stick to drive. Honk to clear the way.', 4);
-    },
-    exitDrive(e) {
-      const s = S(e); if (!s.driving) return;
-      s.driving = false; s.sim.tractor.driven = false; s.sim.tractor.setInput(0, 0);
-      e.emit('drive', { on: false }); // the view lifts the camera
-    },
     // What a Hand tap does with the target picked at pointer down (#55; main.js act).
     act(e, t) {
       const s = S(e), sim = s.sim;
@@ -80,7 +63,6 @@ export function makeFarm() {
     pointer(e, d) {
       const s = S(e), ph = d.phase;
       if (ph === 'down') {
-        if (s.driving) return;
         if (s.gesture?.down) endGesture(e, s); // a stray down (bindPointer cancels first): never leave a grab or hose on
         const g = s.gesture = { tool: s.tool, pointer: d.pointer, down: true, target: null };
         return down(e, s, g, d);
@@ -88,7 +70,6 @@ export function makeFarm() {
       const g = s.gesture; if (!g || g.pointer !== d.pointer) return;
       if (ph === 'move') { if (g.tool === 'hand' && d.orbit) g.target = null; else if (g.down) move(e, s, g, d); } // the view turned the Hand into an orbit: nothing to press
       else if (ph === 'up' || ph === 'cancel') { if (g.down) { g.down = false; lift(e, s, g); } }
-      else if (ph === 'press') { if (g.tool === 'hand' && g.down && g.target?.kind === 'tractor' && !s.driving) { g.target = null; api.enterDrive(e); } }
       else if (ph === 'tap') {
         if (g.tool === 'hand' && !d.orbit) api.act(e, g.target);
         else if (g.tool === 'feed') toss(e, s, d.ray);
@@ -122,7 +103,7 @@ export function makeFarm() {
     else if (g.tool === 'hose') { sim.setHose(null, null, false); e.emit('hose', { on: false }); }
     else if (g.tool === 'grab' && s.grab) { (s.grab.kind === 'pig' ? sim : sim.flock).release(); s.grab = null; }
   }
-  // Ends the gesture in progress (drive mode, a stray down): its lift, then no tap or press.
+  // Ends the gesture in progress (a stray down): its lift, then no tap.
   function endGesture(e, s) {
     const g = s.gesture; if (!g) return;
     if (g.down) { g.down = false; lift(e, s, g); }
@@ -177,18 +158,9 @@ export function makeFarm() {
     if (s.sim.hose.active) { const H = s.hose, k = Math.min(1, dt * 6); H.nx += (H.gx - H.nx) * k; H.nz += (H.gz - H.nz) * k; }
   }
 
-  // Keys (input.apply, after the commands, as the old frame ran the pointer before the keys). Not driving: 1–5, B, Escape.
+  // Keys (input.apply, after the commands, as the old frame ran the pointer before the keys): 1–5, B, Escape.
   function keys(e, s) {
     const I = e.input.snapshot;
-    if (s.driving) { // horn, Get out (Escape, E, the button's own path), else the stick/keys with the old 1.4 curve, then auto-right
-      const T = s.sim.tractor;
-      if (I.horn.pressed) s.sim.horn();
-      if (I.back.pressed || I.getOut.pressed) return api.exitDrive(e);
-      const st = I.steer;
-      T.setInput(I.throttle, Math.sign(st) * Math.abs(st) ** STEER_POW);
-      if (T.speed < 0.3 && T.rightIfTipped()) api.hint(e, 'Back on four wheels.', 1.5);
-      return;
-    }
     for (let k = 0; k < TOOLS.length; k++) if (I[TOOLS[k]].pressed) api.setTool(e, TOOLS[k]);
     if (I.bell.pressed) api.ringBell(e);
     if (I.back.pressed) api.select(e, null);
@@ -197,21 +169,21 @@ export function makeFarm() {
   const scene = {
     // [S-5, #25] known states, never stepping; (engine, opts) as jump calls them
     presets: {
-      driving: e => api.enterDrive(e), night: e => api.setNight(e, true),
+      night: e => api.setNight(e, true),
       tool: (e, o) => api.setTool(e, o.name), selected: (e, o) => api.select(e, { kind: o.kind, i: o.i }),
     },
     enter(e, ctx) {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
         sim: createSim(ctx.world, { pigs: a.pigs ?? 48, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
-        tool: 'hand', selected: null, driving: false, gesture: null, grab: null, ring: null, lastToss: -Infinity,
+        tool: 'hand', selected: null, gesture: null, grab: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });
       // grab lift and hose nozzle easing, before the step's commands (#60)
       ctx.system('farm.ease', (e, dt) => ease(s, dt), { stage: 'input.apply', after: ['lh.input'], before: ['lh.commands'] });
       ctx.system('farm.keys', () => keys(e, s), { stage: 'input.apply', after: ['lh.commands'] });
       // the farm step around the engine's Rapier step (overview §4.4): think before lh.physics.step, settle after the events
-      ctx.system('farm.think', () => s.sim.think(), { stage: 'physics.world', before: [VEHICLE_SYSTEM, 'lh.physics.step'] }); // the tractor's controls first
+      ctx.system('farm.think', () => s.sim.think(), { stage: 'physics.world', before: ['lh.physics.step'] });
       ctx.system('farm.settle', () => s.sim.settle(), { stage: 'physics.world', after: ['lh.physics.events'] });
       // #57: the sim's own queue, bridged in order, unfiltered, once per step
       ctx.system('farm.events', () => {
@@ -228,11 +200,10 @@ export function makeFarm() {
     ui(u, e, ctx) {
       const s = ctx.state;
       u.choice({ id: 'tool', options: TOOLS.map(t => ({ value: t, label: TOOL_LABEL[t] })), get: () => s.tool,
-        set: (v, e) => api.setTool(e, v), when: () => !s.driving });
+        set: (v, e) => api.setTool(e, v) });
       u.toggle({ id: 'night', label: 'Night', get: () => s.sim.clock.night, set: (v, e) => api.setNight(e, v) });
       u.button({ id: 'bell', label: 'Ring the dinner bell', action: e => api.ringBell(e) });
       u.button({ id: 'close', label: 'Close', when: () => !!s.selected, action: e => api.select(e, null) });
-      u.button({ id: 'exit', label: 'Get out', when: () => s.driving, action: e => api.exitDrive(e) });
     },
   };
   return { scene, api };

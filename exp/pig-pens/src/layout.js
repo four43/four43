@@ -53,7 +53,6 @@ export function buildLayout() {
   const coop = { x: -10.9, z: -25.05, hx: 1.5, hz: 1.15, h: 2.0, doorX: -10.5, doorZ: -23.9, rampZ: -22.95, open: true };
   const nests = [-0.6, 0.2, 1.0, 1.8].map((x, i) => ({ id: i, x, z: -25.95, ax: x, az: -25.2 }));
   const dust = { x: -5.6, z: -22.5, r: 1.15 };
-  const tractorSpawn = { x: TX(18.2), z: TZ(7.5), yaw: -0.5 };
 
   // ---- gates: merge neighbouring gate tiles into one gate (double gates at the lane ends)
   const gates = [];
@@ -103,7 +102,9 @@ export function buildLayout() {
   }
   // water barrels next to troughs
   for (const p of pens) { const t = p.trough; const bx = t.x + (t.len / 2 + 0.75) * (p.col === 2 ? -1 : 1); decor.push({ m: 'barrel', x: bx, z: t.z, rot: rng() * 6, s: 1.45, upright: true }); obstacles.push({ type: 'circle', x: bx, z: t.z, r: 0.52, h: 1.1 }); }
-  // field: a few shade trees, hay stack and the tractor
+  // field: a few shade trees, a hay stack and Biscuit's dog house on the right, its door toward the farm
+  const dogHouse = { x: TX(18.4), z: -10.5, s: 1.5, rot: -0.6 }; // the door faces (sin rot, cos rot); the front wall is 0.77 s out
+  { const { x, z, s, rot } = dogHouse; decor.push({ m: 'dogHouse', x, z, rot, s }); obstacles.push({ type: 'box', x, z, hx: 0.66 * s, hz: 0.77 * s, h: 1.5 * s, rot }); }
   addSolid('oak', TX(-3), TZ(-3), 0.4, 3.2, 0.45);
   addSolid('tree', TX(18), TZ(14.5), 1.2, 3.4, 0.4);
   addSolid('treeFat', TX(17.5), TZ(-2.5), 2.0, 3.0, 0.45);
@@ -152,5 +153,5 @@ export function buildLayout() {
     return 7;
   }
 
-  return { edges, gates, pens, lane, field, complex, wallow, run, coop, nests, dust, tractorSpawn, obstacles, decor, destinations, region };
+  return { edges, gates, pens, lane, field, complex, wallow, run, coop, nests, dust, dogHouse, obstacles, decor, destinations, region };
 }

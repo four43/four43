@@ -1,0 +1,18 @@
+{
+  "title": "Dog house",
+  "description": "Snoopy-style red wooden dog house: steep dark shingled gable roof, cream trim on the rakes and corners, arched dark doorway facing +Z, a name plate above the door. Static prop, no clips.",
+  "size": [1.3, 1.5, 1.5],
+  "tolerance": 0.06,
+  "grounded": true,
+  "nodes": ["walls", "roof_L", "roof_R", "door_hole", "name_plate"],
+  "budget": { "tris": 800, "materials": 5, "kb": 120 },
+  "checks": [
+    "FRONT tile: an arched (round-topped) dark doorway is centred in the red front wall, with a cream frame",
+    "FRONT tile: a small cream name plate sits between the door top and the roof peak",
+    "FRONT tile: cream trim boards run along both roof edges and down both front corners",
+    "3/4 tile: the roof is a steep two-sided gable, clearly darker than the red walls, and overhangs the walls on the sides and front",
+    "3/4 tile: the roof shows horizontal shingle rows (stepped lines)",
+    "LEFT tile: every wall touches the grid line, nothing floats",
+    "far view (downscaled 3/4): reads as a red house with dark roof and a dark door, not a blob"
+  ]
+}

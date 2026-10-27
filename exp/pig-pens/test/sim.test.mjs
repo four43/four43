@@ -10,15 +10,6 @@ test('snacks: ten quick tosses land five; none while five are out', () => {
   for (let k = 0; k < 10; k++) if (sim.tossFood(pen.cx, 4, pen.cz + 6, pen.cx + (k % 5) - 2, pen.cz)) ok++;
   assert.equal(ok, 5); assert.equal(sim.foods.length, 5); assert.equal(sim.tossFood(26, 4, 22, 27, 23), null);
 });
-test('tractor: 0 to 5.2–5.6 m/s in 4 s; full steer turns 1.8–2.0 rad in 2 s; stops in 1.2–1.4 s', () => {
-  const sim = farmSim({ pigs: 48, seed: 2 }), T = sim.tractor; steps(sim, 120);
-  T.driven = true; T.setInput(1, 0); steps(sim, 240);
-  assert.ok(T.speed > 5.2 && T.speed < 5.6, `${T.speed}`);
-  T.setInput(1, 1); const y0 = T.yaw; steps(sim, 120);
-  let dy = T.yaw - y0; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); assert.ok(dy > 1.8 && dy < 2.0, `${dy}`);
-  T.setInput(-1, 0); let stop = 0; steps(sim, 240, s => { if (!stop && T.fwd < 0.1) stop = s / 60; });
-  assert.ok(stop > 1.2 && stop < 1.4, `${stop}`);
-});
 test('night (seed 9): all in bed at 10–13 s (measured 11.7), a gulp at 20–24 s, a tap makes the fox spit, nobody is lost by morning', () => {
   const sim = farmSim({ pigs: 30, seed: 9 }), F = sim.flock; steps(sim, 300); sim.setNight(true);
   let bed = -1, gulp = -1, spit = null;
@@ -47,4 +38,15 @@ test('hose: a pig in the spray soaks to wet 1 within a second; out of it, it dri
   sim.setHose(null, null, false); steps(sim, 60 * 20);
   assert.ok(p.wet > 0.5 && p.wet < 0.6, `still wet after 20 s: ${p.wet}`);
   steps(sim, 60 * 26); assert.equal(p.wet, 0);
+});
+test('Biscuit: after dogBored seconds with no job he trots home, in through the door, and lies facing out; a job gets him up', () => {
+  const sim = farmSim({ pigs: 24, seed: 4 }), d = sim.dog, H = sim.lay.dogHouse, fx = Math.sin(H.rot), fz = Math.cos(H.rot);
+  steps(sim, 60 * 20); assert.equal(d.home, 0, 'still waiting for a job at 20 s');
+  let porch = false; steps(sim, 60 * 30, () => { if (d.home === 2) porch = true; });
+  assert.equal(d.home, 3); assert.ok(porch, 'he came in by the porch');
+  const along = (d.x - H.x) * fx + (d.z - H.z) * fz, across = (d.x - H.x) * fz - (d.z - H.z) * fx;
+  assert.ok(Math.abs(along - 0.96) < 0.2 && Math.abs(across) < 0.2, `lying in the doorway: ${along}, ${across}`);
+  assert.ok(d.lie > 0.95, `down on his belly: ${d.lie}`);
+  const turn = Math.atan2(Math.sin(d.yaw - H.rot), Math.cos(d.yaw - H.rot)); assert.ok(Math.abs(turn) < 0.1, `looking out of the door: ${turn}`);
+  sim.setDog(0, 0, true); steps(sim, 90); assert.equal(d.home, 0); assert.ok(d.lie < 0.1 && Math.hypot(d.x - H.x, d.z - H.z) > 3, 'up and off to work');
 });

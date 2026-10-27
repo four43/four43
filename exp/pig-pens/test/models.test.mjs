@@ -24,7 +24,6 @@ test('modelGeometry: model space, the 2.1.0 triangle count, position + normal + 
     assert.equal(tris(g), old, k); assert.deepEqual(Object.keys(g.attributes).sort(), ['color', 'normal', 'position'], k);
   }
   assert.equal(tris(modelGeometry(assets, 'fence', null, { parts: ['fence_simple'] })), OLD.fence.fence_simple.idx.length / 3);
-  assert.equal(tris(modelGeometry(assets, 'tractor', null, { parts: ['body'] })), OLD.tractor.body.idx.length / 3);
 });
 test('factor-only Nature Kit materials draw in their 2.1.0 colours (baked COLOR_0)', () => {
   const g = modelGeometry(assets, 'fence'), c = g.attributes.color, want = new Set(), got = new Set();

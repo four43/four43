@@ -9,7 +9,7 @@ const pairR = (a, b) => Math.max(MATERIALS.collider(a).restitution, MATERIALS.co
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: ${a} vs ${b}`);
 
 test('the game ids are registered after the base library', () => {
-  for (const id of ['pasture', 'fencing', 'pet', 'petGrip', 'bird', 'foxPelt', 'snack', 'paintwork', 'plumage', 'pigHide', 'leaf', 'petal', 'crop', 'hay', 'produce', 'stone', 'scenery'])
+  for (const id of ['pasture', 'fencing', 'pet', 'petGrip', 'bird', 'foxPelt', 'snack', 'plumage', 'pigHide', 'leaf', 'petal', 'crop', 'hay', 'produce', 'stone', 'scenery'])
     assert.ok(MATERIALS.has(id), id);
   assert.equal(MATERIALS.ids.indexOf('steel'), 0); // base library first (§4.2)
   assert.match(MATERIALS.hash, /^[0-9a-f]{8}$/);
@@ -20,7 +20,6 @@ test('animal-on-grass contacts equal 2.1.0 (friction Min 0, restitution Average 
   assert.equal(pairR('foxPelt', 'pasture'), 0);
   near(pairF('petGrip', 'pasture'), 0.75, 0.003, 'a held pig drags on the grass (was Average 0.75)');
   near(pairF('snack', 'pasture'), 0.85, 0.002, 'snack friction (was Average 0.85)'); near(pairR('snack', 'pasture'), 0.175, 1e-12, 'snack bounce');
-  near(pairF('paintwork', 'pasture'), Math.sqrt(0.4 * 0.8), 1e-12, 'tractor body on grass');
   assert.equal(pairF('pet', 'fencing'), 0); // pigs slide along fences, as with Min
 });
 test('densities: snacks 500 kg/m³; the grip swap keeps a pig\'s density so world.setMaterial never re-masses it', () => {

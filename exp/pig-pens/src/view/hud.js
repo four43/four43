@@ -1,10 +1,8 @@
-// The HUD (lion-hawk 2e P7, [U-5]): main.js's info card, hint, snack badge, egg counter and pops, day/night label,
-// drive class and press ring, moved out of its closure and driven from the farm state (`selected`, `driving`,
-// `pressing`) and engine events instead of the old handlers. View only: it reads the sim, never writes it.
+// The HUD (lion-hawk 2e P7, [U-5]): main.js's info card, hint, snack badge, egg counter and pops and day/night label,
+// moved out of its closure and driven from the farm state (`selected`) and engine events instead of the old handlers. View only: it reads the sim, never writes it.
 // createHud(doc, { world }) → { hint(text, seconds, now), event(ev, basket), update(engine, s, frame, dt), dispose() }
 import * as THREE from 'three';
 import { ST } from '../sim.js';
-import { pressing } from '../game/farm.js';
 import { rig } from './rig.js';
 
 const PIG_DOING = s => ({ [ST.ROAM]: 'Wandering about', [ST.GRAZE]: 'Nibbling the grass', [ST.EAT]: 'Eating at the trough', [ST.FLEE]: 'Running away!', [ST.SNACK]: 'Chasing a snack', [ST.GRAB]: 'Squealing in your hand', [ST.AIR]: 'Flying!', [ST.SHOWER]: 'Waiting for a bath', [ST.ZOOM]: 'Squeaky clean and zooming' }[s]);
@@ -26,16 +24,15 @@ function cardInfo(sim, sel) {
     return { name: b.name, sub, doing: BIRD_DOING[b.state], bars: extra + bar('Fright', b.panic, 'fright'), at: b.state === 12 ? [flock.fox.x, flock.fox.z] : b.hidden ? null : [b.px, b.pz] };
   }
   if (sel.kind === 'fox') { const f = flock.fox; return { name: 'The fox', sub: 'Fox · up to no good', doing: f.carrying ? `Cheeks full of ${f.carrying.name}! Tap to make it spit.` : ['Gone', 'Sniffing around', 'Chasing a chicken!', 'Very pleased with itself', 'Running away'][f.state], bars: bar('Nerve', 1 - Math.min(1, f.fear / 0.6), 'fright'), at: f.state ? [f.x, f.z] : null }; }
-  if (sel.kind === 'dog') return { name: 'Biscuit', sub: 'Sheepdog · good dog', doing: sim.dog.active ? 'Herding' : 'Waiting for a job', bars: '', at: [sim.dog.x, sim.dog.z] };
-  const t = sim.tractor; return { name: 'Tractor', sub: 'Press and hold it to drive', doing: t.driven ? `Driving at ${(Math.abs(t.fwd) * 3.6).toFixed(0)} km/h` : 'Parked', bars: '', at: [t.x, t.z] };
+  return { name: 'Biscuit', sub: 'Sheepdog · good dog', doing: sim.dog.active ? 'Herding' : sim.dog.home === 3 ? 'Napping in his dog house' : sim.dog.home ? 'Trotting home' : 'Waiting for a job', bars: '', at: [sim.dog.x, sim.dog.z] };
 }
 
 export function createHud(doc, { world }) {
   const $ = id => doc.getElementById(id), win = doc.defaultView;
   const card = $('card'), hintEl = $('hint'), badge = $('snacks'), feedBtn = doc.querySelector('[data-tool="feed"]');
-  const dn = $('daynight'), eggTxt = $('eggCount'), eggBox = $('eggs'), press = $('press');
+  const dn = $('daynight'), eggTxt = $('eggCount'), eggBox = $('eggs');
   const stillMotion = win.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  let selKey = null, hintUntil = null, shownLeft = -1, lastEggs = -1, night = null, driving = null, pressOn = false;
+  let selKey = null, hintUntil = null, shownLeft = -1, lastEggs = -1, night = null;
   const eggPops = [], popV = new THREE.Vector3();
 
   function renderCard(sim, sel) {
@@ -82,20 +79,11 @@ export function createHud(doc, { world }) {
       const f = sim.flock;
       if (f.basket !== lastEggs) { const bump = lastEggs >= 0; lastEggs = f.basket; eggTxt.textContent = lastEggs; if (bump) { eggBox.classList.remove('bump'); void eggBox.offsetWidth; eggBox.classList.add('bump'); } }
       if (sim.clock.night !== night) { night = sim.clock.night; dn.setAttribute('aria-label', night ? 'Night. Switch to day' : 'Day. Switch to night'); } // aria-pressed is the engine's (farm.night)
-      if (s.driving !== driving) { driving = s.driving; doc.body.classList.toggle('driving', driving); }
-      // the hold ring on the tractor, where the finger went down, until it drives, lifts or turns into an orbit
-      const on = pressing(s) && !rig.orbit?.orbiting && !!rig.pressAt;
-      if (on !== pressOn) {
-        pressOn = on;
-        if (on) { press.style.left = rig.pressAt.x + 'px'; press.style.top = rig.pressAt.y + 'px'; press.classList.remove('go'); void press.offsetWidth; press.classList.add('go'); press.hidden = false; }
-        else { press.hidden = true; press.classList.remove('go'); }
-      }
       updateEggPops(dt);
     },
     dispose() {
       for (const p of eggPops) p.el.remove(); eggPops.length = 0;
-      press.hidden = true; press.classList.remove('go'); card.hidden = true; hintEl.classList.remove('on');
-      doc.body.classList.remove('driving');
+      card.hidden = true; hintEl.classList.remove('on');
     },
   };
 }
