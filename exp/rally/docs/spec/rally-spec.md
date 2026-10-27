@@ -928,6 +928,8 @@ cars (R5 4WD, Classic RWD).
   model's measured bounds (a lamp pod or wing can stand past the spec sheet's length) and `bodyZ` their centre ahead of
   the wheelbase midpoint, where the hull and cabin colliders centre. Brake torque scales with mass from the R5's 6000
   N m; the handbrake is 1500 N m on every car.
+  The engine sound's afterfire pops (`cfg.sound.pops`) are on only for the anti-lag turbo cars of the 1990s on (Impreza,
+  Evo, the WRC cars); the 70s atmospheric cars and the Group B turbos lift quietly.
 
   | id | Car | Layout | Mass | Front | Peak torque | Power |
   |---|---|---|---|---|---|---|
