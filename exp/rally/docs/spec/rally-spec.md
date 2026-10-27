@@ -892,3 +892,64 @@ whose state the sound plays.
   (was 0.80: the smoother torque delivery lets the test driver hold a faster drift; bands widened). Goldens
   re-blessed (the 20 s autopilot drive ends ~10 m shorter). `e2e.browser.mjs` adds the sound walk (worklet, Quiet
   level, bumper mic, hushed under pause).
+
+## Round 16: real rally cars and the garage (0.12.0, 2026-10-26)
+
+Request: bring the user's low-poly models of real rally cars (authored outside the repo in `~/Documents/cars`) into the
+game, each driving like its real counterpart, picked in a garage that shows the live car. They replace the two Kenney
+cars (R5 4WD, Classic RWD).
+
+- **R16-1 Models.** The ten GLBs are copied to `assets/models/cars/<id>.glb` and baked like the other models. Their
+  generators (`*.model.mjs`, `lib/car.mjs`) stay in `~/Documents/cars`; re-export there, copy here, re-bake. The models
+  are life-size and follow Rally's conventions: +Y up, front +Z, +X the car's left, origin on the ground centred on the
+  wheelbase midpoint; wheel nodes are `WHEEL_PARTS` with their origin on the hub; sockets `sock-exhaust`,
+  `sock-cam-bonnet`, `sock-cam-bumper`, `sock-light-left|right`. Material names are lion-hawk ids: Rally's registry
+  gains `paint-body`, `paint-livery` (car paint, like `car-body`) and `aluminium`, the ids it lacked. Authored colours
+  become vertex colours at bake. The Kenney `hatchback-sports` and `sedan-sports` leave the bake; `wheel-racing` and
+  `cone` stay.
+- **R16-2 Cars.** `CARS` holds ten entries in era order. Each takes its geometry from its model (a test holds the
+  config to the GLB within 5 mm): `wheelbase`, `track` (mean of front and rear; the Stratos, Escort and Quattro differ
+  by 2–4 cm), `radius` (the hub height) and `size` (the spec's overall width × height × length, which sizes the hull
+  and cabin colliders). Mass, weight split, layout and engine are published figures, rounded; the tyres and surfaces
+  are Rally's for every car, so cars differ in power, weight, layout and size, not grip. Base torque for a turbo car is
+  the peak over (1 + maxBoost). Every car uses the `i4` sound preset except the Impreza (`flat4`, the unequal-header
+  boxer). Gearing and diffs follow the era: 70s cars RWD with a rear LSD; Group B AWD with a viscous centre; Group A
+  and WRC AWD with active-style front/rear LSDs (Rally's existing diff model, R5 values as the base).
+
+  | id | Car | Layout | Mass | Front | Peak torque | Power |
+  |---|---|---|---|---|---|---|
+  | stratos-hf | Lancia Stratos HF (1974-78) | mid RWD | 980 kg | 0.42 | 230 Nm @ 6500 (NA) | 240 hp |
+  | escort-rs1800 | Ford Escort RS1800 Mk2 (1975-81) | front RWD | 980 kg | 0.53 | 215 Nm @ 6500 (NA) | 245 hp |
+  | sport-quattro-s1 | Audi Sport Quattro S1 E2 (1985-86) | front AWD | 1090 kg | 0.60 | 490 Nm @ 5500, 1.4 bar | 470 hp |
+  | peugeot-205-t16 | Peugeot 205 T16 Evo 2 (1985-86) | mid AWD | 910 kg | 0.42 | 490 Nm @ 5500, 1.4 bar | 450 hp |
+  | impreza-555 | Subaru Impreza 555 (1993-96) | front AWD | 1230 kg | 0.58 | 470 Nm @ 4000, 1.0 bar | 300 hp |
+  | lancer-evo6 | Mitsubishi Lancer Evolution VI (1999) | front AWD | 1230 kg | 0.58 | 500 Nm @ 3500, 1.0 bar | 300 hp |
+  | peugeot-206-wrc | Peugeot 206 WRC (1999-2003) | front AWD | 1230 kg | 0.57 | 535 Nm @ 3500, 1.0 bar | 300 hp |
+  | xsara-wrc | Citroen Xsara WRC (2001-06) | front AWD | 1230 kg | 0.57 | 570 Nm @ 3000, 1.0 bar | 315 hp |
+  | polo-r-wrc | Volkswagen Polo R WRC (2013-16) | front AWD | 1200 kg | 0.56 | 425 Nm @ 5000, 1.0 bar | 315 hp |
+  | yaris-wrc | Toyota Yaris WRC (2017) | front AWD | 1190 kg | 0.56 | 425 Nm @ 4500, 1.0 bar | 380 hp |
+
+  Each entry carries a card: `name`, `years`, `era` (1970s, 1980s, 1990s, 2000s, 2010s), `layout` text, `power` (hp),
+  `mass`. The default car is `impreza-555`; a stored `car` that is not a `CARS` id (`awd`, `rwd`) loads as the default.
+  Bests stay keyed by car id, so old ones match no car.
+- **R16-3 Real-scale view.** `carView` draws a model with `cfg.body.real` at scale 1: the body group sits with its
+  ground origin at `-comHeight` below the sim body's origin, shifted by `zMid`; its own wheel nodes (tyre, rim, hub,
+  spokes, with their materials) are kept and posed from the part poses as now. The bumper and bonnet cameras use the
+  model's `sock-cam-bumper` / `sock-cam-bonnet` positions (body frame), replacing the fixed `BUMPER`/`BONNET` offsets.
+- **R16-4 Loading.** The page preloads the cone, the wheel and the current car only. Another car's GLB loads the first
+  time it is chosen (garage or `setCar`); the garage shows a small spinner over the stage until it is in. View sync
+  draws the car when its model is ready, as it does today.
+- **R16-5 Garage.** A `garage` overlay, opened from a title row that shows the current car's name (`title.car`,
+  "Car: Subaru Impreza 555 ›"); the `car` choice row leaves the title. The title's camera orbit frames the car.
+  - Left / right (d-pad, left stick, arrow keys, LB/RB, and on-screen ‹ › buttons for touch and mouse) steps to the
+    previous / next car, wrapping. Each step swaps the car at once (`setCar`), like the settings choices; there is no
+    undo: leaving the garage by any route keeps the car on show.
+  - The camera circles the car slowly (one turn in ~20 s). The right stick (x) or a drag on the stage turns it
+    directly; the slow turn resumes 2 s after the last input.
+  - A card shows era, name, years, layout, power and weight.
+  - A / Enter ("Done", `garage.done`) and B / Esc close it back to the title. Test ids: `garage.prev`, `garage.next`,
+    `garage.done`.
+- **Validation:** config-vs-GLB geometry for every car; a driving smoke per car (pulls away, turns, brakes, no NaN,
+  top speed plausible for its power); the existing physics targets move to two reference cars (Impreza for the old
+  AWD targets, Escort for the old RWD ones) with bands re-measured; goldens re-blessed; e2e: open the garage, step
+  both ways (car id and card change, the model loads), drag-rotate, close with B keeps the new car, drive.
