@@ -30,6 +30,9 @@ Amended 27 October 2026 (R2 built, Pig Pens 2.7.0):
 - The adult birds roost on 12 perches on two rails, and the chicks sit beside their mother. The fox and the morning release still treat them as inside.
 - The plaques are cells of one canvas texture. A stall plaque has a face on each side of its header beam. The coop plaques are in two rows on the back wall, above the birds. They are cut with that wall.
 - Fix: if you leave one building and tap another before the camera is back, leaving the second building still returns to the farm view.
+- The coop is 5 m wide (it was 3 m). It grows west into the run. The perch spacing and the plaque width come from the coop width.
+- A bird that comes in through the pop door walks across the straw to the point in front of its perch. Then it hops up in an arc that goes over the rail (`CP.roostWalk`, `roostHop`, `roostHopH`).
+- A chick sleeps in the straw in front of the roost bar, below its mother's perch. On the rail, the hens hid the chicks from the camera.
 
 ---
 

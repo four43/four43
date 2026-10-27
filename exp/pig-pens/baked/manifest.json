@@ -81,8 +81,8 @@
     "coop": {
       "glb": "models/coop.glb",
       "anim": null,
-      "bytes": 43548,
-      "sha256": "ceb8f4a0eff1bbdd9e25f816b89af9339656773db4f4e2b59166050d96e58fe9",
+      "bytes": 43976,
+      "sha256": "1fb6d30d0687e6930ed99ba58daabadab040e46f9d0d424315f3643a551ddf0d",
       "options": "a79abd6109bc8c11"
     },
     "corn": {

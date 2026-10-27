@@ -104,6 +104,15 @@ test('the coop: every grown bird roosts on its own perch at night, chicks beside
   assert.ok(grown.every(b => b.state === CST.INSIDE), 'all in');
   assert.equal(new Set(grown.map(b => b.perch)).size, grown.length, 'a perch each');
   for (const b of grown) { const [x, y, z] = COOP.perchAt(b.perch); assert.ok(Math.hypot(b.px - (COOP.x + x), b.pz - (COOP.z + z)) < 1e-6 && Math.abs(b.py - y - b.r) < 1e-6, `${b.name} on perch ${b.perch}`); }
+  // chicks: in the straw in front of the roost bar (up on it the hens would hide them), under their mother's perch
+  const mum = grown.find(b => b.kind === 'hen'), [mx] = COOP.perchAt(mum.perch);
+  const chicks = [0, 1].map(k => ({ kind: 'chick', mom: mum.i, i: 1000 + k, r: 0.09 }));
+  F.birds.push(...chicks); const at = chicks.map(c => F.roostAt(c)); F.birds.length -= chicks.length; // brothers and sisters count by place in the flock
+  for (const [x, y, z] of at) {
+    assert.ok(z > COOP.z + COOP.rails[0].z + 0.3, 'in front of the low rail'); assert.ok(Math.abs(y - COOP.floor - 0.09) < 1e-9, 'in the straw');
+    assert.ok(Math.abs(x - (COOP.x + mx)) < 0.2, 'under mum');
+  }
+  assert.ok(Math.abs(at[0][0] - at[1][0]) > 0.1, 'side by side, not on top of each other');
   sim.setNight(false); for (let s = 0; s < 60 * 30; s++) sim.step();
   assert.ok(F.birds.filter(b => b.state === CST.INSIDE).length < grown.length / 2, 'out for the day');
 });
@@ -118,4 +127,18 @@ test('inside the barn a tap on a plaque opens that stall’s pig; in the coop, t
   const [x, y, z] = COOP.plaqueAt(3), cat = [COOP.x + x, y, COOP.z + z];
   const bird = sim.flock.birds.find(b => b.perch === 3);
   assert.deepEqual(classify(sim, rayTo(cat, 1.5, 4), 'coop'), { kind: 'bird', i: bird.i });
+});
+
+test('a hen through the pop door walks across the straw to under her perch, then hops up onto it', () => {
+  const sim = farmSim({ pigs: 4, seed: 9 }), F = sim.flock; sim.step(120); sim.setNight(true);
+  const hen = F.birds.find(b => b.kind === 'hen');
+  sim.h.until(() => hen.state === CST.INSIDE, { maxSteps: 60 * 20, message: 'in' });
+  const [px, py, pz] = COOP.perchAt(hen.perch), track = [];
+  while (hen.roost) { sim.step(); track.push([hen.px, hen.py, hen.pz, hen.speed]); }
+  assert.ok(track.length > 60, `a walk, not a jump (${track.length} steps)`);
+  const under = track.findIndex(([x, y, z]) => Math.abs(x - (COOP.x + px)) < 0.05 && z > COOP.z + pz + 0.2 && Math.abs(y - COOP.floor - hen.r) < 0.01);
+  assert.ok(under > 0, 'it gets to the straw just in front of its perch');
+  assert.ok(track.slice(0, under).some(s => s[3] > 0.3), 'walking (the view plays the walk)');
+  assert.ok(track.slice(under).some(([, y]) => y > py + hen.r + 0.1), 'and hops up, over the perch');
+  assert.ok(Math.abs(hen.px - (COOP.x + px)) < 1e-6 && Math.abs(hen.py - py - hen.r) < 1e-6, 'onto it');
 });

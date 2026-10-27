@@ -4,8 +4,8 @@
 // stands at world (x, 0, z) unturned, so world = (x + lx, ly, z + lz). Every `at` below is model-local [lx, ly, lz].
 
 export const COOP = {
-  x: -10.1, z: -25.05,              // east end of the chicken run, against its fence (x −8.4)
-  hx: 1.5, hz: 1.15,                // footprint half sizes (as 2.5.1)
+  x: -11.1, z: -25.05,              // east end of the chicken run, against its fence (x −8.4); 2.7.0: 5 m wide (was 3)
+  hx: 2.5, hz: 1.15,                // footprint half sizes
   floor: 0.35, eave: 1.8, ridge: 2.45, overhang: 0.25,
   popDoor: { x: 0.4, w: 0.62, h: 0.62 },      // pop door: local x of its centre, size; it slides up 0.62 to open
   rampZ: 2.1,                                  // local z where the ramp meets the ground (world rampZ = z + rampZ)
@@ -16,9 +16,11 @@ export const COOP = {
 // rail k % 2, slot floor(k / 2) of 6, the high rail's slots half a slot over so every bird has its own x; its plaque hangs
 // on the back wall above, in the same column, the high rail's row above the low rail's.
 COOP.rails = [{ y: 0.68, z: -0.65 }, { y: 1.05, z: -0.92 }];
-COOP.perchAt = k => { const r = COOP.rails[k % 2], slot = Math.floor(k / 2); return [-1.05 + slot * 0.42 + (k % 2) * 0.21, r.y + 0.04, r.z]; };
+COOP.slot = (2 * COOP.hx - 0.9) / 6; // a perch's share of a rail
+COOP.perchAt = k => { const r = COOP.rails[k % 2], slot = Math.floor(k / 2), s = COOP.slot; return [-2.75 * s + slot * s + (k % 2) * s / 2, r.y + 0.04, r.z]; };
 COOP.plaqueAt = k => { const [x] = COOP.perchAt(k); return [x, k % 2 ? 1.71 : 1.54, -1.04]; }; // above the roosting birds' heads
-COOP.plaque = { w: 0.2, h: 0.14 };
+COOP.plaque = { w: COOP.slot / 2 - 0.04, h: 0.15 };
+COOP.chickZ = -0.2; // where chicks sleep: in the straw in front of the low rail (local z)
 
 export const BARN = {
   x: -0.4, z: -22.3,                // x −8.2 … 7.4, z −26.3 … −18.3: the middle of the north row, over the pens' middle

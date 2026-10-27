@@ -1,12 +1,38 @@
 {
   "title": "Chicken coop",
   "description": "Chunky Kenney-style hen house on short dark stilts: orange-red walls with cream corner boards and trim, dark red-brown stepped-shingle gable roof (ridge along X), a sliding pop door and small window on the front (+Z), a slatted cream ramp down to the ground. Hollow: straw floor and a two-rail ladder roost along the back wall. Nodes roof, walls/wall_*, interior, pop_door drive the game's cutaway and door.",
-  "size": [3.56, 2.45, 3.5],
+  "size": [
+    5.56,
+    2.45,
+    3.5
+  ],
   "tolerance": 0.04,
   "grounded": true,
-  "nodes": ["roof", "walls", "wall_front", "wall_back", "wall_side_L", "wall_side_R", "interior", "pop_door", "roost", "perch_high", "perch_low", "straw", "ramp"],
-  "contacts": ["stilt_0F", "stilt_2B", "ramp"],
-  "budget": { "tris": 2500, "materials": 6, "kb": 150 },
+  "nodes": [
+    "roof",
+    "walls",
+    "wall_front",
+    "wall_back",
+    "wall_side_L",
+    "wall_side_R",
+    "interior",
+    "pop_door",
+    "roost",
+    "perch_high",
+    "perch_low",
+    "straw",
+    "ramp"
+  ],
+  "contacts": [
+    "stilt_0F",
+    "stilt_2B",
+    "ramp"
+  ],
+  "budget": {
+    "tris": 2500,
+    "materials": 6,
+    "kb": 150
+  },
   "checks": [
     "FRONT tile: a tan pop door panel with dark battens sits right of centre (model's left, +X) at floor height between cream guide runners, and a small cream-framed window with a cross sits left of centre",
     "FRONT tile: cream corner boards run up both front corners and a cream eave board runs along the wall top",

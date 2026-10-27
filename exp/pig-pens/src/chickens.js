@@ -16,6 +16,7 @@ export const CP = {
   fearDog: 5, fearFox: 6, panicGain: 6, panicDecay: 0.35,
   roostHour: 18.5, wakeHour: 6.5,
   foxFrom: 20, foxTo: 4.5, foxProwl: 1.7, foxChase: 4.7, foxCarry: 4.0, foxFlee: 6.2,
+  roostWalk: 0.7, roostHop: 0.45, roostHopH: 0.28, // in the coop: m/s across the straw, s and m of the hop up to the perch
   foxWoods: 14, foxBuildingMargin: 0.8, // m beyond the boundary the fox comes from and goes back to; how wide it keeps of a building
 };
 const HEN_NAMES = ['Clementine', 'Marigold', 'Pecky', 'Dolly', 'Butterscotch', 'Henrietta', 'Nugget', 'Pip', 'Mabel', 'Ginger', 'Saffron', 'Biscuit', 'Hazel', 'Poppy', 'Custard', 'Waffles'];
@@ -68,11 +69,33 @@ export function createFlock(ctx) {
   // perches on the roost bar (v3 §7.6): each grown bird its own, in hatch order; a chick sits by its mother's
   birds.forEach((b, k) => { b.perch = k < COOP.perches ? k : -1; });
   const perchOf = b => b.kind === 'chick' ? (birds[b.mom]?.perch ?? -1) : b.perch;
-  // a bird's place on the roost bar in world space (a chick tucked in beside its mother, on the low side)
+  // a bird's place for the night in world space: a grown bird on its perch; a chick nestled in the straw in front of the
+  // roost bar, under its mother's perch (up on the rail the hens hid it from the camera, which looks in from the front)
+  // Through the pop door to its place for the night (v3 §7.6, 2.7.0 playtest): a walk across the straw to just in front of
+  // its perch, then a hop up onto it; a chick just walks to its spot. Kinematic (the body is off inside, as before).
+  function startRoost(b) {
+    const s = [coop.doorX, COOP.floor + b.r, coop.doorZ - 0.25], to = roostAt(b), chick = b.kind === 'chick';
+    const under = chick ? to : [to[0], COOP.floor + b.r, Math.max(to[2] + 0.32, coop.z + COOP.chickZ - 0.1)];
+    const leg = (from, end, hop) => ({ from, to: end, hop, dur: hop ? CP.roostHop : Math.max(0.2, Math.hypot(end[0] - from[0], end[2] - from[2]) / CP.roostWalk) });
+    b.roost = { k: 0, t: 0, legs: chick ? [leg(s, to, false)] : [leg(s, under, false), leg(under, to, true)] };
+    place(b, ...s);
+  }
+  function stepRoost(b) {
+    const R = b.roost, L = R.legs[R.k]; R.t += DT;
+    const u = Math.min(1, R.t / L.dur), x = L.from[0] + (L.to[0] - L.from[0]) * u, z = L.from[2] + (L.to[2] - L.from[2]) * u;
+    const up = L.to[1] - L.from[1], y = L.from[1] + up * u + (L.hop ? Math.sin(Math.PI * u) * (CP.roostHopH + Math.max(0, up) / 2) : 0); // clears the rail, drops onto it
+    place(b, x, y, z);
+    const dx = L.to[0] - L.from[0], dz = L.to[2] - L.from[2];
+    if (Math.hypot(dx, dz) > 0.02) b.yaw = turnToward(b.yaw, Math.atan2(dx, dz), 10 * DT);
+    b.speed = L.hop ? 0 : CP.roostWalk; // the view walks it
+    if (u >= 1) { R.k++; R.t = 0; if (R.k >= R.legs.length) { b.roost = null; b.speed = 0; b.yaw = 0; } } // settled, facing out
+  }
   function roostAt(b) {
     const k = perchOf(b); if (k < 0) return [coop.x, COOP.floor + b.r, coop.z]; // more birds than perches: in the straw
-    const [lx, ly, lz] = COOP.perchAt(k), side = b.kind === 'chick' ? 0.11 * (1 + birds.filter(o => o.mom === b.mom && o.i < b.i).length % 2 * -2) : 0;
-    return [coop.x + lx + side, ly + b.r, coop.z + lz];
+    const [lx, ly, lz] = COOP.perchAt(k);
+    if (b.kind !== 'chick') return [coop.x + lx, ly + b.r, coop.z + lz];
+    const n = birds.filter(o => o.mom === b.mom && o.i < b.i).length, side = (n % 2 ? -1 : 1) * (0.06 + 0.1 * Math.floor(n / 2));
+    return [coop.x + lx + side, COOP.floor + b.r, coop.z + COOP.chickZ];
   }
 
   function setEnabled(b, on) { if (b.enabled === on) return; b.enabled = on; b.body.setEnabled(on); }
@@ -305,12 +328,13 @@ export function createFlock(ctx) {
     // coop: release birds in the morning, one at a time
     if (!night && coop.open) {
       const b = birds.filter(b => b.state === CST.INSIDE).sort((a, c) => a.rank - c.rank)[0];
-      if (b && (t * 10 | 0) % 6 === 0 && !birds.some(o => o.state === CST.EXIT)) { b.hidden = false; setEnabled(b, true); place(b, coop.doorX, 0.6, coop.doorZ - 0.1); setState(b, CST.EXIT, 0.7); b.tween = 0; }
+      if (b && (t * 10 | 0) % 6 === 0 && !birds.some(o => o.state === CST.EXIT)) { b.roost = null; b.hidden = false; setEnabled(b, true); place(b, coop.doorX, 0.6, coop.doorZ - 0.1); setState(b, CST.EXIT, 0.7); b.tween = 0; }
     }
 
     for (const b of birds) {
       if (!b.enabled && b.state !== CST.INSIDE && b.state !== CST.CARRIED && b.state !== CST.LOST) continue;
-      if (b.state === CST.INSIDE || b.state === CST.CARRIED || b.state === CST.LOST) continue;
+      if (b.state === CST.INSIDE) { if (b.roost) stepRoost(b); continue; }
+      if (b.state === CST.CARRIED || b.state === CST.LOST) continue;
       const tr = b.body.translation(), lv = b.body.linvel();
       b.px = tr.x; b.py = tr.y; b.pz = tr.z; b.vx = lv.x; b.vy = lv.y; b.vz = lv.z; b.speed = Math.hypot(lv.x, lv.z);
       b.timer -= DT; b.flapCd -= DT; b.cluck -= DT; b.dustT -= DT; b.crowCd = (b.crowCd || 0) - DT;
@@ -334,7 +358,7 @@ export function createFlock(ctx) {
         const x = coop.doorX, z = coop.rampZ + (coop.doorZ - coop.rampZ) * up, y = b.r + 0.45 * up;
         place(b, x, y, z); b.yaw = b.state === CST.ENTER ? Math.PI : 0;
         if (u >= 1) {
-          if (b.state === CST.ENTER) { setState(b, CST.INSIDE); b.hidden = true; setEnabled(b, false); place(b, ...roostAt(b)); b.yaw = 0; } // up on its perch, facing out
+          if (b.state === CST.ENTER) { setState(b, CST.INSIDE); b.hidden = true; setEnabled(b, false); startRoost(b); } // in: across the straw and up to its perch
           else { place(b, x, b.r, coop.rampZ + 0.2); setState(b, CST.ROAM, 1.5); }
         }
         continue;
@@ -518,7 +542,7 @@ export function createFlock(ctx) {
   }
 
   return {
-    birds, eggs, handfuls, fox, F, buildFields, step, newDay, onNight,
+    birds, eggs, handfuls, fox, F, buildFields, step, newDay, onNight, roostAt,
     tapFox() { if (fox.state === FST.AWAY) return false; if (fox.carrying) { foxSpit('tap'); [fox.ex, fox.ez] = edgePoint(fox.x, fox.z); fox.state = FST.FLEE; fox.timer = 12; } else foxLeave(true); emit('yip', { x: fox.x, z: fox.z }); return true; }, scatterGrain, collectEgg, grainLeft, pick, grab, moveGrab, release,
     get basket() { return basket; }, get grabbed() { return grabbed; },
   };
