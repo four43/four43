@@ -8,7 +8,7 @@ import { PARAMS } from '../src/defs/rumble.js';
 
 const jolt = sim => Math.max(...sim.car.wheels.map(w => w.jolt));
 function drop(y, steps = 480) {
-  const sim = benchSim({ car: 'awd', surface: 'tarmac', pos: { x: 0, y, z: 0 } }), trace = [];
+  const sim = benchSim({ car: 'impreza-555', surface: 'tarmac', pos: { x: 0, y, z: 0 } }), trace = [];
   for (let i = 0; i < steps; i++) { sim.step(); trace.push(jolt(sim)); }
   sim.dispose();
   return trace;
@@ -27,7 +27,7 @@ test('a drop lands as a jolt that grows with the height and outlives a rendered 
 
 test('driving on the flat pad: no impact-sized jolt', async () => {
   await R.init();
-  const sim = benchSim({ car: 'awd', surface: 'tarmac' });
+  const sim = benchSim({ car: 'impreza-555', surface: 'tarmac' });
   for (let i = 0; i < 240; i++) sim.step(); // settle
   sim.car.input.throttle = 0.6;
   let peak = 0;

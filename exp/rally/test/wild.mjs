@@ -11,7 +11,7 @@ await R.init();
 let fails = 0;
 for (const seed of ['t1', 't2', 't3', 't4', 't5', 't6']) for (const kind of ['loop', 'stage']) {
   const track = generateTrack(seed, { kind, obstacles: 'wild' });
-  const sim = benchSim({ world: new TrackWorld(track), car: 'awd', assist: true });
+  const sim = benchSim({ world: new TrackWorld(track), car: 'impreza-555', assist: true });
   const L = track.layout; let sMax = 0, prevS = 0, lapped = false, fail = '';
   runUntil(sim, track, { maxTime: L.length / 6, onStep: (s) => {
     const p = s.car.body.translation(), loc = track.locator.locate(p.x, p.z), up = qrot(s.car.body.rotation(), { x: 0, y: 1, z: 0 });

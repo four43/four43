@@ -187,6 +187,31 @@ html[data-lh-overlays~="title"] #title { display: flex; }
 #titleBest b { color: var(--bone); font-weight: 700; }
 button.go { background: var(--amber); color: var(--panel-solid); border: 0; border-radius: 12px; padding: 10px 30px; font-size: 22px; font-weight: 700; min-height: 52px; cursor: pointer; }
 button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
+/* title: the car row opens the garage */
+.carBtn { width: 100%; display: flex; justify-content: space-between; align-items: center; min-height: 46px; text-align: left; }
+/* garage (R16-5): the title steps aside; a card along the bottom with the car's name between big step buttons */
+html[data-lh-overlays~="garage"] #title { display: none; }
+#garage { position: fixed; z-index: 16; left: 50%; transform: translateX(-50%); bottom: calc(var(--sa-b) + 14px);
+  width: min(560px, calc(100vw - var(--sa-l) - var(--sa-r) - 20px)); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#garage[hidden] { display: none; }
+.garageRow { display: flex; align-items: center; gap: 10px; width: 100%; }
+.garageCard { position: relative; flex: 1; min-width: 0; text-align: center; padding: 10px 12px 12px; background: var(--panel); backdrop-filter: blur(8px);
+  border-radius: 16px; border: 1px solid rgba(237,230,214,.18); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+#garageEra { font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+#garageName { margin: 2px 0 4px; font-size: 26px; font-weight: 700; line-height: 1.1; }
+#garageSpec { font-size: 16px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.garageStep { flex: none; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; grid-auto-flow: column; gap: 2px;
+  background: var(--panel); border: 1px solid rgba(237,230,214,.2); backdrop-filter: blur(8px); font-size: 40px; font-weight: 600; line-height: 1; cursor: pointer; padding: 0 0 4px; }
+.garageStep .glyph { width: 1.6rem; height: 1.6rem; margin: 0; }
+html[data-lh-input="pad"] .garageStep span, html:not([data-lh-input="pad"]) .garageStep .glyph { display: none; }
+.garageStep:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.garageHint { margin: 0; font-size: 15px; color: var(--bone); text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+html[data-lh-input="pad"] .garageHint .noPad, html:not([data-lh-input="pad"]) .garageHint .padOnlyHint { display: none; }
+.garageSpin { display: none; position: absolute; top: 10px; right: 12px; width: 18px; height: 18px; border-radius: 50%;
+  border: 3px solid rgba(237,230,214,.25); border-top-color: var(--bone); animation: spin .8s linear infinite; }
+body.carLoading .garageSpin { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-height: 520px) { #garageName { font-size: 22px; } .garageStep { width: 54px; height: 54px; } }
 /* Short, wide screens (phones in landscape): a wider panel with the options in two columns. */
 @media (max-height: 520px) and (min-width: 540px) {
   #title { width: min(720px, calc(100vw - var(--sa-l) - var(--sa-r) - 20px)); }
@@ -317,10 +342,21 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
       <div class="opt"><h3>Track style</h3><div class="slider" data-slider="style"><span>Tight</span><div class="stops"><button data-title="style:1" data-lh-slot="title.style.1" aria-label="Track style 1 of 5"><i></i></button><button data-title="style:2" data-lh-slot="title.style.2" aria-label="Track style 2 of 5"><i></i></button><button data-title="style:3" data-lh-slot="title.style.3" aria-label="Track style 3 of 5"><i></i></button><button data-title="style:4" data-lh-slot="title.style.4" aria-label="Track style 4 of 5"><i></i></button><button data-title="style:5" data-lh-slot="title.style.5" aria-label="Track style 5 of 5"><i></i></button></div><span>Flowing</span></div></div>
       <div class="opt"><h3>Theme</h3><div class="seg"><button data-title="theme:summer" data-lh-slot="title.theme.summer">Summer</button><button data-title="theme:winter" data-lh-slot="title.theme.winter">Winter</button></div></div>
       <div class="opt"><h3>Obstacles</h3><div class="slider" data-slider="obstacles"><span>Mild</span><div class="stops"><button data-title="obstacles:1" data-lh-slot="title.obstacles.1" aria-label="Obstacles 1 of 5"><i></i></button><button data-title="obstacles:2" data-lh-slot="title.obstacles.2" aria-label="Obstacles 2 of 5"><i></i></button><button data-title="obstacles:3" data-lh-slot="title.obstacles.3" aria-label="Obstacles 3 of 5"><i></i></button><button data-title="obstacles:4" data-lh-slot="title.obstacles.4" aria-label="Obstacles 4 of 5"><i></i></button><button data-title="obstacles:5" data-lh-slot="title.obstacles.5" aria-label="Obstacles 5 of 5"><i></i></button></div><span>Frequent</span></div></div>
-      <div class="opt"><h3>Car</h3><div class="seg"><button data-title="car:awd" data-lh-slot="title.car.awd">R5 4WD</button><button data-title="car:rwd" data-lh-slot="title.car.rwd">Classic RWD</button></div></div>
+      <div class="opt"><h3>Car</h3><button class="chip carBtn" id="carBtn" data-lh-slot="title.car"><span id="carName"></span><span aria-hidden="true">›</span></button></div>
     </div>
   </div>
   <div class="menuFoot"><button class="chip" id="menuBtn" data-lh-slot="title.settings"><img class="glyph" data-lh-glyph="view" alt="">Settings</button><span id="titleBest"></span><button class="go" id="driveBtn" data-lh-slot="title.drive"><img class="glyph" data-lh-glyph="menu" alt="">Drive</button></div>
+</div>
+
+<!-- garage (rally-spec R16-5): the car on show turns behind it; left / right steps the car -->
+<div id="garage" hidden>
+  <div class="garageRow">
+    <button class="garageStep" id="garagePrev" data-lh-slot="garage.prev" data-lh-nav-left="none" data-lh-nav-right="none" aria-label="Previous car"><img class="glyph" data-lh-glyph="prev" alt=""><span aria-hidden="true">‹</span></button>
+    <div class="garageCard"><div id="garageEra"></div><h2 id="garageName"></h2><div id="garageSpec"></div><div class="garageSpin" aria-hidden="true"></div></div>
+    <button class="garageStep" id="garageNext" data-lh-slot="garage.next" data-lh-nav-left="none" data-lh-nav-right="none" aria-label="Next car"><span aria-hidden="true">›</span><img class="glyph" data-lh-glyph="next" alt=""></button>
+  </div>
+  <p class="garageHint"><span class="noPad">Drag to turn the car</span><span class="padOnlyHint">Right stick turns the car</span></p>
+  <button class="go" id="garageDone" data-lh-slot="garage.done" data-lh-nav-left="none" data-lh-nav-right="none"><img class="glyph" data-lh-glyph="back" alt="">Done</button>
 </div>
 
 <!-- pause menu -->
@@ -364,7 +400,7 @@ button.go:focus-visible, .cardBtns button:focus-visible { outline: 2px solid var
     <div class="seg"><button data-set="rumble:off" data-lh-slot="settings.rumble.off">Off</button><button data-set="rumble:light" data-lh-slot="settings.rumble.light">Light</button><button data-set="rumble:full" data-lh-slot="settings.rumble.full">Full</button></div>
     <h3>Sound</h3>
     <div class="seg"><button data-set="sound:off" data-lh-slot="settings.sound.off">Off</button><button data-set="sound:quiet" data-lh-slot="settings.sound.quiet">Quiet</button><button data-set="sound:full" data-lh-slot="settings.sound.full">Full</button></div>
-    <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to get back onto the road, Shift+R (or hold Reset) to restart, Esc or P to pause, C for camera. A gamepad works too: triggers, left stick, A for the handbrake, bumpers to shift, Start to pause. In menus the arrow keys, D-pad or stick move, Enter or A selects, Esc or B goes back, and the bumpers change the highlighted option.</p>
+    <p>Keys: W/S or arrows to drive and brake, A/D to steer, Space for the handbrake, Q/E to shift, R to get back onto the road, Shift+R (or hold Reset) to restart, Esc or P to pause, C for camera. A gamepad works too: triggers, left stick or D-pad, A for the handbrake, bumpers to shift, Start to pause. In menus the arrow keys, D-pad or stick move, Enter or A selects, Esc or B goes back, and the bumpers change the highlighted option. In the garage left and right (or the bumpers) change the car, and the right stick or a drag turns it.</p>
     <p>Reverse: in Auto, hold brake when stopped; in Manual, shift down from 1st.</p>
   </div>
   <div class="sheetFoot"><button id="closeSheet" data-lh-slot="settings.close" aria-label="Close"><img class="glyph" data-lh-glyph="back" alt=""><span class="closeX" aria-hidden="true">×</span><span class="closeLbl">Back</span></button></div>

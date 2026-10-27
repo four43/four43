@@ -1,10 +1,11 @@
 // Rally settings (pure; storage lives in the view half). Field note #24.
 import { MODES } from './modes.js';
 import { LEVELS, LENGTH_NAMES } from '../gen/levels.js';
+import { CARS, DEFAULT_CAR } from '../cars.js';
 
-export const SETTINGS_V = 6;
+export const SETTINGS_V = 7;
 // style: 1 (tight) … 5 (flowing); obstacles: 1 (mild) … 5 (frequent) (rally spec R14-3, R14-4)
-export const DEFAULTS = { car: 'awd', surface: 'gravel', assist: false, gearbox: 'auto', mode: 'freeDrive', world: 'loop',
+export const DEFAULTS = { car: DEFAULT_CAR, surface: 'gravel', assist: false, gearbox: 'auto', mode: 'freeDrive', world: 'loop',
   theme: 'summer', obstacles: 2, style: 2, length: 'medium', units: 'mph',
   rumble: 'full', // rumble: the controller rumble's strength (off | light | full; view-only, rally-spec R7)
   sound: 'full' }; // sound: the engine sound's level (off | quiet | full; view-only, rally-spec R15)
@@ -20,6 +21,7 @@ export function normalizeSettings(saved = {}) {
   if (!LEVELS.includes(s.style)) s.style = DEFAULTS.style;
   if (!LEVELS.includes(s.obstacles)) s.obstacles = DEFAULTS.obstacles;
   if (!LENGTH_NAMES.includes(s.length)) s.length = DEFAULTS.length; // R14-5
+  if (!CARS[s.car]) s.car = DEFAULTS.car; // v7: the real cars replaced awd / rwd (R16-2)
   return s;
 }
 

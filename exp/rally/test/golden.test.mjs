@@ -21,7 +21,7 @@ const snapshot = (sim, P) => {
 };
 function run(seed = 'golden') {
   const track = generateTrack(seed, { kind: 'stage', theme: 'summer' });
-  const sim = benchSim({ world: new TrackWorld(track), car: 'awd', assist: true });
+  const sim = benchSim({ world: new TrackWorld(track), car: 'impreza-555', assist: true });
   const P = makeProgress(track); P.reset(0);
   const events = [], trail = [], inp = sim.car.input;
   let ctl = null;

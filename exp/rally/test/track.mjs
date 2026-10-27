@@ -33,7 +33,7 @@ for (const { seed, kind, theme } of CASES) {
   test(`${seed} ${kind} ${theme}`, () => {
     const track = generateTrack(seed, { kind, theme });
     const world = new TrackWorld(track);
-    const sim = benchSim({ world, car: 'awd', assist: true });
+    const sim = benchSim({ world, car: 'impreza-555', assist: true });
     const L = track.layout, loc = track.locator, t = track.terrain;
 
     // Spawn: settles on the road.
@@ -107,7 +107,7 @@ for (const { seed, kind, theme } of CASES) {
 for (const kind of ['loop', 'stage']) test(`t1 ${kind} world api`, () => {
   const track = generateTrack('t1', { kind, theme: 'summer' }), L = track.layout, loc = track.locator;
   const world = new TrackWorld(track);
-  const sim = benchSim({ world, car: 'awd', assist: true });
+  const sim = benchSim({ world, car: 'impreza-555', assist: true });
   const sec = track.surfaces.sections[0], nxt = track.surfaces.sections[1];
   const p = pointAt(L, sec.s1 - 5), a = surfaceOfKey(sec.road), b = surfaceOfKey(nxt.road);
   const m = world.surfaceAt(p.x, p.z);

@@ -16,7 +16,7 @@ await R.init();
 const material = new THREE.MeshStandardMaterial({ vertexColors: true });
 for (const theme of ['summer', 'winter']) {
   test(`${theme}: Rally's terrain mesh options drive the kit`, () => {
-    const track = generateTrack(`tm-${theme}`, { kind: 'loop', theme }), sim = benchSim({ world: new TrackWorld(track), car: 'awd' });
+    const track = generateTrack(`tm-${theme}`, { kind: 'loop', theme }), sim = benchSim({ world: new TrackWorld(track), car: 'impreza-555' });
     const opts = terrainMeshOptions(track, theme, roadDistance(track), noise2(`${track.seed}|look`));
     const mesh = createTerrainMesh(sim.world.terrain, { ...opts, material, now: () => 0 });
     const L = track.layout, cam = { position: { x: L.x[0], y: 0, z: L.z[0] } };

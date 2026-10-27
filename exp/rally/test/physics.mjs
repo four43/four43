@@ -21,7 +21,7 @@ const latAcc = (sim) => { // lateral acceleration from velocity x yaw rate (stea
   return Math.hypot(v.x, v.z) * Math.abs(w.y);
 };
 
-for (const car of ['awd', 'rwd']) {
+for (const car of ['impreza-555', 'escort-rs1800']) {
   test(`${car} static settle`, () => {
     const sim = mk(car, 'tarmac');
     run(sim, 3);
@@ -50,7 +50,7 @@ for (const car of ['awd', 'rwd']) {
     check('residual after 1.5 cycles / drop', Math.max(...after) / 0.06, 0, 0.08);
   });
 
-  for (const [surf, lo, hi] of car === 'awd'
+  for (const [surf, lo, hi] of car === 'impreza-555'
     // Loose surfaces top out in a drift since R5-4: plowing tires out-grip ~0.71 g grip driving.
     ? [['tarmac', 0.95, 1.05], ['hardpack', 0.75, 0.92], ['gravel', 0.68, 0.93], ['packed', 0.64, 0.84], ['ice', 0.44, 0.56]]
     : [['tarmac', 0.95, 1.05], ['gravel', 0.66, 0.87]]) {
@@ -83,7 +83,7 @@ for (const car of ['awd', 'rwd']) {
   }
 
   test(`${car} acceleration`, () => {
-    for (const [surf, lo, hi] of car === 'awd' ? [['tarmac', 4.2, 5.0], ['gravel', 4.3, 5.5]] : [['gravel', 6.5, 8.5]]) {
+    for (const [surf, lo, hi] of car === 'impreza-555' ? [['tarmac', 4.2, 5.0], ['gravel', 4.3, 5.5]] : [['gravel', 6.5, 8.5]]) {
       const sim = mk(car, surf, { assist: true, pos: { x: 0, y: 0.6, z: -250 } });
       run(sim, 1.5);
       let t100 = 0;
@@ -93,7 +93,7 @@ for (const car of ['awd', 'rwd']) {
   });
 
   test(`${car} braking`, () => {
-    for (const [surf, lo, hi] of car === 'awd' ? [['tarmac', 35, 40], ['gravel', 44, 56]] : [['tarmac', 35, 42], ['gravel', 44, 56]]) {
+    for (const [surf, lo, hi] of car === 'impreza-555' ? [['tarmac', 35, 40], ['gravel', 44, 56]] : [['tarmac', 35, 42], ['gravel', 44, 56]]) {
       const sim = mk(car, surf, { assist: true, pos: { x: 0, y: 0.5, z: -140 } });
       run(sim, 1);
       sim.car.body.setLinvel({ x: 0, y: 0, z: 100 / 3.6 }, true);
@@ -136,14 +136,15 @@ for (const car of ['awd', 'rwd']) {
     });
     const q = sim.car.body.rotation();
     const yaw = 2 * Math.atan2(q.y, q.w);
-    check('rear slip angle peak (deg)', maxSlip * 180 / Math.PI, 30, 90, '°');
+    // the Escort (R16-2: 2.40 m wheelbase, 0.28 m wheels) peaks just under the old RWD's 30°; it still swings round
+    check('rear slip angle peak (deg)', maxSlip * 180 / Math.PI, car === 'escort-rs1800' ? 26 : 30, 90, '°');
     check('yaw change (deg)', Math.abs(yaw) * 180 / Math.PI, 90, 270, '°');
   });
 }
 
 // --- Round 2 ---
 
-for (const car of ['awd', 'rwd']) {
+for (const car of ['impreza-555', 'escort-rs1800']) {
   test(`${car} reverse (auto: hold brake)`, () => {
     const sim = mk(car, 'gravel', { assist: true });
     run(sim, 1);
@@ -176,7 +177,7 @@ test('rwd slide control on a power-oversteer exit', () => {
   // Full throttle, 0.8 steer for 1.2 s from 54 km/h, then straighten up with no countersteer.
   // Sim mode spins; Assisted trims power and catches it.
   const maxBodySlip = (assist, surf) => {
-    const sim = mk('rwd', surf, { assist, pos: { x: 0, y: 0.6, z: -250 } });
+    const sim = mk('escort-rs1800', surf, { assist, pos: { x: 0, y: 0.6, z: -250 } });
     run(sim, 1);
     sim.car.body.setLinvel({ x: 0, y: 0, z: 15 }, true);
     for (const w of sim.car.wheels) w.omega = 15 / sim.car.cfg.radius;
@@ -223,7 +224,7 @@ const slideRun = (car, surf, { v0 = 20, beta0 = 0, yaw0 = 0, gear = 2, secs = 2.
   return out;
 };
 
-for (const car of ['awd', 'rwd']) {
+for (const car of ['impreza-555', 'escort-rs1800']) {
   test(`${car} auto downshifts keep the wheels rolling (R5-1)`, () => {
     // Light braking from 90 km/h in Auto: each downshift is one gear at a time, and the blip
     // matches revs so the driven wheels never slip past the tire's peak.
@@ -246,7 +247,7 @@ for (const car of ['awd', 'rwd']) {
     const out = slideRun(car, 'gravel', { secs: 2, gear: 3, fn: (c) => { c.input.steer = 0.06; c.input.throttle = 0.25; } });
     const w = out[out.length - 1].car.wheels;
     const aF = (Math.abs(w[0].alpha) + Math.abs(w[1].alpha)) / 2, aR = (Math.abs(w[2].alpha) + Math.abs(w[3].alpha)) / 2;
-    check('front / rear slip angle', aF / aR, car === 'awd' ? 1.7 : 1.35, 3); // was 1.43 / 1.21
+    check('front / rear slip angle', aF / aR, car === 'impreza-555' ? 1.7 : 1.35, 3); // was 1.43 / 1.21
   });
 
   test(`${car} recovers from a yaw kick hands-off (R5-2, R5-3)`, () => {

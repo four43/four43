@@ -17,7 +17,7 @@ function watch(sim, steps, each = () => {}) {
 
 test('driving on the flat pad: the body reports no contact', async () => {
   await R.init();
-  const sim = benchSim({ car: 'awd', surface: 'tarmac' });
+  const sim = benchSim({ car: 'impreza-555', surface: 'tarmac' });
   for (let i = 0; i < 240; i++) sim.step(); // settle
   sim.car.input.throttle = 0.6;
   const { total } = watch(sim, 720);
@@ -27,7 +27,7 @@ test('driving on the flat pad: the body reports no contact', async () => {
 
 test('upside down from 1.5 m: the roof lands as a contact of a few m/s', async () => {
   await R.init();
-  const sim = benchSim({ car: 'awd', surface: 'tarmac', pos: { x: 0, y: 2, z: 0 } });
+  const sim = benchSim({ car: 'impreza-555', surface: 'tarmac', pos: { x: 0, y: 2, z: 0 } });
   sim.car.body.setRotation({ x: 0, y: 0, z: 1, w: 0 }, true); // rolled over: the roof down
   const { peak } = watch(sim, 480);
   sim.dispose();

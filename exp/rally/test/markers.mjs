@@ -15,7 +15,7 @@ function check(name, val, lo, hi, unit = '') {
 }
 
 const track = generateTrack('markers', { kind: 'loop', style: 'flowing' }); // pinned: marker physics, not layout
-const sim = benchSim({ world: new TrackWorld(track), car: 'awd', assist: true });
+const sim = benchSim({ world: new TrackWorld(track), car: 'impreza-555', assist: true });
 const markers = () => sim.world.props.filter((p) => p.kind === 'marker');
 const speedOf = (b) => { const v = b.linvel(), w = b.angvel(); return { v: Math.hypot(v.x, v.y, v.z), w: Math.hypot(w.x, w.y, w.z) }; };
 

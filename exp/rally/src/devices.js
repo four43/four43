@@ -37,13 +37,14 @@ export const KEYS = {
 export const pedalRamp = (rise, fall) => (v, t, dt) => t > v ? Math.min(t, v + rise * dt) : Math.max(t, v - fall * dt);
 export const RAMPS = { steer: steerRamp, throttle: pedalRamp(5, 8), brake: pedalRamp(6, 9) };
 
-// Standard mapping: left stick with a slight expo, triggers, A = handbrake, bumpers shift, Y reset, X camera. In menus the
+// Standard mapping: left stick with a slight expo (or the D-pad), triggers, A = handbrake, bumpers shift, Y reset, X camera. In menus the
 // navigator owns the pad (A selects, B/Start go Back, LB/RB step an option) and Start opens pause (nav.open), so A is no
 // longer also `confirm` (#16: A on a focused title option would have started the run too).
 export const PAD = {
   deadZone: 0.08,
   axes: { 0: ['steer', -1, v => 0.35 * v * Math.abs(v) + 0.65 * v] },
-  buttons: { 7: ['throttle', 1], 6: ['brake', 1], 0: ['handbrake', 1], 5: 'shiftUp', 4: 'shiftDown', 3: 'reset', 2: 'camera' },
+  buttons: { 7: ['throttle', 1], 6: ['brake', 1], 0: ['handbrake', 1], 5: 'shiftUp', 4: 'shiftDown', 3: 'reset', 2: 'camera',
+    14: ['steer', 1], 15: ['steer', -1] }, // D-pad left / right: full lock (and the garage's previous / next car, R16-5)
 };
 
 // Touch buttons (bindHold, which keeps focus off the button so Space/Enter stay the handbrake/confirm keys, #42): pedals

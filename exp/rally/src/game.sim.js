@@ -45,7 +45,7 @@ export const rallyPhysics = rapier => ({ rapier, gravity: [0, -9.81, 0], groups:
 // (D9), and rallyGame does the same for tests and tools.
 export function rallySpec({ bests = makeBests() } = {}) {
   const { scene: stage, api } = makeStage({ bests });
-  const { title, pause, results, settings } = makeOverlays(api);
+  const { title, garage, pause, results, settings } = makeOverlays(api);
   // → window.engine.debug. The HUD fakes emit events or run the moved handler; they show after the next step's flush.
   const debug = e => ({
     get sim() { return e.scene.state.sim; }, get settings() { return e.scene.state.settings; },
@@ -65,7 +65,7 @@ export function rallySpec({ bests = makeBests() } = {}) {
   return {
     id: 'rally', sim: { hz: HZ, maxCatchUp: 12, maxFrame: 0.1 }, actions: ACTIONS, player: PLAYER_STATE, gameState: GAME_STATE, start: 'stage',
     defs: { materials: MATERIALS, models: PHYS },
-    scenes: { stage, title, pause, results, settings }, policies: { autopilot: autopilotPolicy }, state, debug,
+    scenes: { stage, title, garage, pause, results, settings }, policies: { autopilot: autopilotPolicy }, state, debug,
   };
 }
 

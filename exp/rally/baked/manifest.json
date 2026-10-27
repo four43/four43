@@ -8,19 +8,61 @@
       "sha256": "123f3ca9e5f7df7e016e41ba82b8a41b81025b395d84a3e19c8be6433cf2ff67",
       "options": "136c68da753499fe"
     },
-    "hatchback-sports": {
-      "glb": "models/hatchback-sports.glb",
+    "escort-rs1800": {
+      "glb": "models/escort-rs1800.glb",
       "anim": null,
-      "bytes": 23096,
-      "sha256": "3d81e22bf43e970923534929ebfc107db78eefbc11dd027cd08943280ebbb188",
-      "options": "8b12a8323d0428d5"
+      "bytes": 64512,
+      "sha256": "44d3871b2b319911e23fe6335bbf4020f79278fe40a8799153d41c5b6d10f54a",
+      "options": "90eed57074a5cf12"
     },
-    "sedan-sports": {
-      "glb": "models/sedan-sports.glb",
+    "impreza-555": {
+      "glb": "models/impreza-555.glb",
       "anim": null,
-      "bytes": 24260,
-      "sha256": "b3ebff4fe9a85197f72dcfd137a450731dc694f1649cab5baa397f49f6e71cdd",
-      "options": "8b12a8323d0428d5"
+      "bytes": 86924,
+      "sha256": "d87d80b937f708575b5000b8f8f7cdc9cfc6f2c586ad665a8ae2af6537719523",
+      "options": "90eed57074a5cf12"
+    },
+    "lancer-evo6": {
+      "glb": "models/lancer-evo6.glb",
+      "anim": null,
+      "bytes": 95344,
+      "sha256": "76d0b9341c9d6297fe427b09d4dfc20124dc05a339aac936f87867ac9c746f73",
+      "options": "90eed57074a5cf12"
+    },
+    "peugeot-205-t16": {
+      "glb": "models/peugeot-205-t16.glb",
+      "anim": null,
+      "bytes": 77372,
+      "sha256": "07b0827d471db18dc5fac2d3a833bdafc41f3925efa78334833ce0286bf62a3e",
+      "options": "90eed57074a5cf12"
+    },
+    "peugeot-206-wrc": {
+      "glb": "models/peugeot-206-wrc.glb",
+      "anim": null,
+      "bytes": 99480,
+      "sha256": "e88e12758b15acddd071b6aed580690a95cb322744e9a2e45bb20b9632ec1819",
+      "options": "90eed57074a5cf12"
+    },
+    "polo-r-wrc": {
+      "glb": "models/polo-r-wrc.glb",
+      "anim": null,
+      "bytes": 102904,
+      "sha256": "a603b3d72b1f79cff08b1e2b4af84bce0db4c723804a6bbee155f4e9043b09db",
+      "options": "90eed57074a5cf12"
+    },
+    "sport-quattro-s1": {
+      "glb": "models/sport-quattro-s1.glb",
+      "anim": null,
+      "bytes": 70892,
+      "sha256": "d7fa504328d059d0c9437a39360b94aebb7605609c421a79c370714165caf1f4",
+      "options": "90eed57074a5cf12"
+    },
+    "stratos-hf": {
+      "glb": "models/stratos-hf.glb",
+      "anim": null,
+      "bytes": 69224,
+      "sha256": "778b339493b5d2d88b74797eb9e8fd22201294e8167cb8ac9c690918e4cf9b7d",
+      "options": "90eed57074a5cf12"
     },
     "wheel-racing": {
       "glb": "models/wheel-racing.glb",
@@ -28,6 +70,20 @@
       "bytes": 5780,
       "sha256": "025b1b7fbb1cc58d15583d0a3cc6e757265db5628070bf76f2a4721a667e7524",
       "options": "8be0911da597a463"
+    },
+    "xsara-wrc": {
+      "glb": "models/xsara-wrc.glb",
+      "anim": null,
+      "bytes": 82316,
+      "sha256": "40e98d20da76966bceab7f3c4a435162600e1b00cd2111792b5eb788bd9abe7e",
+      "options": "90eed57074a5cf12"
+    },
+    "yaris-wrc": {
+      "glb": "models/yaris-wrc.glb",
+      "anim": null,
+      "bytes": 100920,
+      "sha256": "1331ca5c8653c9ac16661ed53f562e86ef9801c71b7e34299adcacd0f7356319",
+      "options": "90eed57074a5cf12"
     }
   }
 }

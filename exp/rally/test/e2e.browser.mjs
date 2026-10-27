@@ -217,7 +217,7 @@ test('desktop: shoulders step the mode, sliders follow the D-pad, View is settin
     for (let i = 0; i < 8; i++) await push({ up: true });
     assert.doesNotMatch(await focused(), /^title\.mode\./, 'the pad never reaches the mode row');
     // onto the obstacles rail from below: focus lands on the chosen stop and changes nothing; left/right then set it
-    await game.page.evaluate(() => document.querySelector('[data-testid="title.car.awd"]').focus());
+    await game.page.evaluate(() => document.querySelector('[data-testid="title.car"]').focus());
     await push({ up: true }); assert.equal(await focused(), 'title.obstacles.4');
     assert.deepEqual((await set()).slice(1), [2, 4]);
     await push({ left: true }, 1); await push({ left: true }, 1);
@@ -232,6 +232,53 @@ test('desktop: shoulders step the mode, sliders follow the D-pad, View is settin
     assert.equal(await game.page.evaluate(() => window.engine.scene.state.time), t0, 'and the run stands still under it');
     await push({ select: true }, 1); assert.deepEqual((await game.scene()).overlays, [], 'View closes it');
     await expectState(game, 'phase', 'running');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop: the garage - the pad steps the car (D-pad, stick, shoulders), the right stick turns it, B keeps it; a drag turns it too (R16-5)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 5, settings: { 'rally-sim-settings': { v: 6, mode: 'freeDrive', world: 'loop', seed: 'e2e6', car: 'awd' } } });
+  const push = async (state, steps = 1) => { await game.pad(state); await game.frames(); await game.step(steps); await game.pad({}); await game.frames(); await game.step(1); };
+  const car = () => game.page.evaluate(() => window.engine.scene.state.sim.car.cfg.id);
+  const angle = async () => (await game.page.evaluate(() => window.__rallyView.garage())).angle;
+  try {
+    await expectState(game, 'phase', 'title');
+    assert.equal(await car(), 'impreza-555', 'a stored awd loads as the default car');
+    assert.equal(await game.page.locator('#carName').textContent(), 'Subaru Impreza 555');
+    await game.pad({}); await game.frames();
+    await game.page.evaluate(() => document.querySelector('[data-testid="title.car"]').focus());
+    await push({ a: true }); assert.deepEqual((await game.scene()).overlays, ['title', 'garage']);
+    assert.equal(await game.page.locator('#title').isVisible(), false, 'the title steps aside');
+    assert.equal(await game.page.locator('#garageName').textContent(), 'Subaru Impreza 555');
+    await push({ right: true }); assert.equal(await car(), 'lancer-evo6', 'D-pad right: the next car');
+    assert.equal(await game.page.locator('#garageName').textContent(), 'Mitsubishi Lancer Evolution VI');
+    assert.equal(await game.page.locator('#garageEra').textContent(), '1990s');
+    assert.equal(await game.page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'garage.done', 'the D-pad never moves focus off Done');
+    await push({ axes: [-0.9, 0, 0, 0] }); assert.equal(await car(), 'impreza-555', 'stick left: the previous car');
+    for (let i = 0; i < 4; i++) await push({ lb: true });
+    assert.equal(await car(), 'stratos-hf'); await push({ lb: true }); assert.equal(await car(), 'yaris-wrc', 'LB wraps to the last car');
+    await game.page.waitForFunction(() => window.__rallyView.car()?.wheels === 4, null, { timeout: 15000 });
+    const a0 = await angle();
+    await game.pad({ axes: [0, 0, 1, 0] }); for (let i = 0; i < 20; i++) await game.frames(); await game.pad({}); await game.frames();
+    const a1 = await angle();
+    assert.ok(a1 < a0 - 0.3, `the right stick turns the car (${a0.toFixed(2)} → ${a1.toFixed(2)})`);
+    await push({ b: true }); assert.deepEqual((await game.scene()).overlays, ['title'], 'B closes the garage');
+    assert.equal(await car(), 'yaris-wrc', 'and keeps the car on show');
+    assert.equal(await game.page.evaluate(() => JSON.parse(localStorage.getItem('rally-sim-settings')).car), 'yaris-wrc', 'saved');
+    assert.equal(await game.page.locator('#carName').textContent(), 'Toyota Yaris WRC');
+    // a mouse: the button opens it, a drag on the stage turns the car, the arrows step it, Done closes it
+    await game.page.mouse.move(5, 5);
+    await game.tap('title.car'); await game.step(1);
+    const g0 = await angle();
+    await game.page.mouse.move(700, 200); await game.page.mouse.down(); await game.page.mouse.move(900, 210, { steps: 8 }); await game.page.mouse.up(); await game.frames();
+    const g1 = await angle();
+    assert.ok(Math.abs(g1 - g0 + 2) < 0.3, `a 200 px drag turns 2 rad (${g0.toFixed(2)} → ${g1.toFixed(2)})`);
+    await game.page.locator('#garageNext').click(); await game.step(1); assert.equal(await car(), 'stratos-hf', 'the › arrow wraps');
+    await game.page.locator('#garageDone').click(); await game.step(1); assert.deepEqual((await game.scene()).overlays, ['title']);
+    await game.page.waitForFunction(() => window.__rallyView.car()?.wheels === 4, null, { timeout: 15000 });
+    await game.tap('title.drive'); await game.until(s => s.phase === 'running', { maxSteps: 4000 });
+    assert.equal(await car(), 'stratos-hf');
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });

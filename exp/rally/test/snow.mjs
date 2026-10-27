@@ -40,7 +40,7 @@ test('field: fresh, pressed, polished', () => {
   check('clear restores fresh (m)', f.height(0, 0), SNOW.depth - 1e-3, SNOW.depth + 1e-3, ' m');
 });
 
-for (const car of ['awd', 'rwd']) {
+for (const car of ['impreza-555', 'escort-rs1800']) {
   test(`${car} sinks into the snow`, () => {
     const sim = mk(car, 'snow');
     run(sim, 3);
@@ -53,7 +53,7 @@ for (const car of ['awd', 'rwd']) {
 
 test('awd fresh snow drags more than packed', () => {
   const coast = (surf) => {
-    const sim = mk('awd', surf);
+    const sim = mk('impreza-555', surf);
     run(sim, 1); roll(sim, 0, 14);
     run(sim, 3, (s) => { s.car.input.throttle = 0; });
     return sim.car.speed;
@@ -64,7 +64,7 @@ test('awd fresh snow drags more than packed', () => {
 });
 
 test('awd driving in its own ruts drags less', () => {
-  const sim = mk('awd', 'snow');
+  const sim = mk('impreza-555', 'snow');
   run(sim, 1);
   const start = { ...sim.car.body.translation() };
   const pass = () => {
@@ -79,7 +79,7 @@ test('awd driving in its own ruts drags less', () => {
 
 test('awd sideways slide dies faster in fresh snow', () => {
   const slide = (surf) => {
-    const sim = mk('awd', surf);
+    const sim = mk('impreza-555', surf);
     run(sim, 1);
     const x0 = sim.car.body.translation().x;
     sim.car.body.setLinvel({ x: 6, y: 0, z: 0 }, true);
@@ -92,7 +92,7 @@ test('awd sideways slide dies faster in fresh snow', () => {
 });
 
 test('awd ruts pull the wheels in', () => {
-  const sim = mk('awd', 'snow');
+  const sim = mk('impreza-555', 'snow');
   const half = sim.car.cfg.track / 2;
   for (let z = -20; z < 80; z += SNOW.cell) for (const x of [-half, half]) sim.snow.press(x, z, 0, 1, 3000, 0, DT);
   const off = 0.08;
@@ -104,7 +104,7 @@ test('awd ruts pull the wheels in', () => {
 });
 
 test('rwd wheelspin polishes snow towards ice', () => {
-  const sim = mk('rwd', 'snow');
+  const sim = mk('escort-rs1800', 'snow');
   run(sim, 1);
   const rl = sim.car.wheels[2].point, at = { x: rl.x, z: rl.z };
   run(sim, 1.5, (s) => { s.car.input.throttle = 1; });
@@ -113,7 +113,7 @@ test('rwd wheelspin polishes snow towards ice', () => {
 
 test('awd top speed in fresh snow', () => {
   // Deep snow caps speed well under tarmac's 184 km/h (plow drag grows with v^2), but doesn't trap.
-  const sim = mk('awd', 'snow', { assist: true, pad: { ...PAD, size: 8000 }, pos: { x: 300, y: 0.6, z: -300 } });
+  const sim = mk('impreza-555', 'snow', { assist: true, pad: { ...PAD, size: 8000 }, pos: { x: 300, y: 0.6, z: -300 } });
   run(sim, 1);
   let top = 0;
   run(sim, 35, (s) => { s.car.input.throttle = 1; top = Math.max(top, s.car.speed * 3.6); });

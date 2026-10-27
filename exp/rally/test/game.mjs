@@ -24,13 +24,13 @@ function check(name, val, lo, hi, unit = '') {
   return ok;
 }
 const test = async (name, f) => { if (!only || name.includes(only)) { console.log(`\n# ${name}`); await f(); } };
-const trackSim = (seed, kind, car = 'awd', opts = {}) => {
+const trackSim = (seed, kind, car = 'impreza-555', opts = {}) => {
   const track = generateTrack(seed, { kind, theme: 'summer', ...opts });
   return { track, sim: benchSim({ world: new TrackWorld(track), car, assist: true }) };
 };
 
 await test('hold', () => {
-  for (const car of ['awd', 'rwd']) {
+  for (const car of ['impreza-555', 'escort-rs1800']) {
     const { sim } = trackSim('h1', 'stage', car);
     for (let i = 0; i < 1 / DT; i++) sim.step(); // settle on the spawn
     const c = sim.car, p0 = { ...c.body.translation() };
@@ -140,7 +140,7 @@ await test('bests', () => {
   bad.put('k', { time: 1 });
   check('broken storage: put is harmless, get → null', +(bad.get('k') === null), 1, 1);
   const track = { seed: 's', kind: 'stage', style: 'twisty', theme: 'summer', obstacles: 'mild' };
-  check(`key ${bestKey('stage', track, 'awd')}`, +(bestKey('stage', track, 'awd') === 'stage|s|stage|twisty|summer|mild|awd'), 1, 1);
+  check(`key ${bestKey('stage', track, 'impreza-555')}`, +(bestKey('stage', track, 'impreza-555') === 'stage|s|stage|twisty|summer|mild|impreza-555'), 1, 1);
 });
 
 // A headless Rally on a generated track (field note #27): the settings are the old trackSim's (assist on, summer).
@@ -197,7 +197,7 @@ await test('game stage', () => {
   console.log(`      run 1 ${fin.time.toFixed(3)} s, run 2 ${fin2.time.toFixed(3)} s`);
   check('the two runs differ', +(fin2.time !== fin.time), 1, 1);
   check('best kept only if faster', +(fin2.isBest === fin2.time < fin.time), 1, 1);
-  check('saved best is the faster', bests.get(bestKey('stage', track, 'awd')).time, Math.min(fin.time, fin2.time), Math.min(fin.time, fin2.time));
+  check('saved best is the faster', bests.get(bestKey('stage', track, 'impreza-555')).time, Math.min(fin.time, fin2.time), Math.min(fin.time, fin2.time));
 
   // Teleport over a checkpoint: missed, and the finish is blocked until it's driven through.
   retry(h);

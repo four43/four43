@@ -1,56 +1,100 @@
-// Car configurations. Dimensions are real-car values; the Kenney meshes are scaled
-// to fit the wheel positions, not the other way round. drive.engine is a lion-hawk ENGINE_PRESETS layout (its firing
-// order and exhaust feed the engine sound) with this car's numbers on top; drive.turbo is the powertrain's turbo.
+// Car configurations (rally-spec R16): ten real rally cars, in era order. Geometry comes from each car's model
+// (assets/models/<id>.glb: wheel nodes on their hubs, the spec's overall size; test/cars.test.mjs holds the numbers to the
+// GLB); mass, weight split, layout and engine are published figures, rounded. Tyres and surfaces are the same for every
+// car. drive.engine is a lion-hawk ENGINE_PRESETS layout (its firing order and exhaust feed the engine sound) with this
+// car's numbers on top; drive.turbo is the powertrain's turbo, and a turbo engine's torque is its peak over (1 + maxBoost).
 const deg = Math.PI / 180;
 
-export const CARS = {
-  awd: {
-    id: 'awd', name: 'R5 4WD', model: 'hatchback-sports',
-    mass: 1250, frontWeight: 0.58, comHeight: 0.45,
-    wheelbase: 2.40, track: 1.50,
-    inertia: { x: 1800, y: 1950, z: 480 }, // pitch, yaw, roll (kg m^2)
-    radius: 0.33, wheelInertia: 1.2,
+// Rally's diffs by era (R5 values as the base): 70s cars a rear plate LSD; four-wheel drive a viscous centre and front
+// and rear LSDs.
+const RWD_LSD = { preload: 50, rampPower: 0.40, rampCoast: 0.25, visc: 300 };
+const AWD = { frontSplit: 0.5, centreVisc: 150, centreCap: 400,
+  frontLsd: { preload: 40, rampPower: 0.30, rampCoast: 0.20, visc: 300 },
+  rearLsd: { preload: 60, rampPower: 0.50, rampCoast: 0.30, visc: 300 } };
+const BOX5 = [3.2, 2.2, 1.65, 1.3, 1.05], BOX6 = [3.2, 2.35, 1.85, 1.5, 1.25, 1.05];
+
+// geo: [wheelbase, track (mean of front and rear), wheel radius, [width, height, length], body z] from the model: the
+// overall bounds, and their centre ahead of the wheelbase midpoint (bodyZ, where the hull and cabin colliders centre).
+// mid: a mid-engined car (less yaw inertia for its size); top: the speed (m/s) at the redline in top gear, which sets
+// the final drive.
+function car({ id, name, years, era, power, geo: [wheelbase, track, radius, size, bodyZ], mass, frontWeight, comHeight = 0.45,
+  mid = false, top, drive, sound }) {
+  const [W, H, L] = size, box = (a, b) => mass * (a * a + b * b) / 12;
+  const rwd = drive.layout === 'rwd', gears = drive.gears;
+  const final = +((drive.engine.redline * 2 * Math.PI / 60) * radius / (gears[gears.length - 1] * top)).toFixed(2);
+  return {
+    id, name, years, era, power, model: id,
+    mass, frontWeight, comHeight, wheelbase, track, radius, size, bodyZ,
+    inertia: { x: Math.round(0.92 * box(L, H)), y: Math.round((mid ? 0.85 : 0.93) * box(L, W)), z: Math.round(0.92 * box(W, H)) }, // pitch, yaw, roll (kg m^2)
+    wheelInertia: +(1.2 * (radius / 0.33) ** 2).toFixed(2),
     travel: 0.25, fn: 1.6, zetaBump: 0.30, zetaReb: 0.60,
-    arbF: 10000, arbR: 5000,          // N per m of left/right compression difference
-    rcF: 0.08, rcR: 0.12,             // roll-centre heights (m)
-    maxLock: 30 * deg, ackermann: 0.5,
-    rearAp: 0.85,                     // rear peak slip angle × this: stiffer rear (toe-in, wider tires)
-    brakeTorque: 6000, brakeBias: 0.58, handbrakeTorque: 1500,
+    arbF: rwd ? 9000 : 10000, arbR: rwd ? 4000 : 5000, // N per m of left/right compression difference
+    rcF: 0.08, rcR: rwd ? 0.14 : 0.12,                 // roll-centre heights (m)
+    maxLock: (rwd ? 32 : 30) * deg, ackermann: 0.5,
+    rearAp: 0.85,                                       // rear peak slip angle × this: stiffer rear (toe-in, wider tires)
+    brakeTorque: Math.round(6000 * mass / 1250), brakeBias: mid ? 0.52 : rwd ? 0.62 : 0.58,
+    handbrakeTorque: 1500,                               // the hydraulic handbrake, the same lever on every car
     cda: 0.80,
-    body: { scale: [1.45, 1.45, 1.48], color: 0x2f6fd6 },
-    sound: { muffler: 'sport', pops: true }, // createEngineSound options (view only): crackle on the lift
-    drive: {
-      layout: 'awd',
-      // turbo 4: about 440 N m on full boost (from ~4000 rpm in 1st), less before the turbo spools
-      engine: { preset: 'i4', torque: 210, peakRpm: 4500, idle: 900, redline: 7500, limiter: 7700, inertia: 0.18 },
-      turbo: { maxBoost: 1.0, size: 0.2, bov: true },
-      gears: [3.2, 2.2, 1.65, 1.3, 1.05], reverse: 3.2, final: 4.8, shiftTime: 0.12,
-      frontSplit: 0.5, centreVisc: 150, centreCap: 400,
-      frontLsd: { preload: 40, rampPower: 0.30, rampCoast: 0.20, visc: 300 },
-      rearLsd: { preload: 60, rampPower: 0.50, rampCoast: 0.30, visc: 300 },
-    },
-  },
-  rwd: {
-    id: 'rwd', name: 'Classic RWD', model: 'sedan-sports',
-    mass: 1050, frontWeight: 0.50, comHeight: 0.48,
-    wheelbase: 2.25, track: 1.46,
-    inertia: { x: 1400, y: 1500, z: 380 },
-    radius: 0.33, wheelInertia: 1.1,
-    travel: 0.24, fn: 1.6, zetaBump: 0.30, zetaReb: 0.60,
-    arbF: 9000, arbR: 4000,
-    rcF: 0.08, rcR: 0.14,
-    maxLock: 32 * deg, ackermann: 0.5,
-    rearAp: 0.85,
-    brakeTorque: 5000, brakeBias: 0.62, handbrakeTorque: 1400,
-    cda: 0.75,
-    body: { scale: [1.45, 1.45, 1.70], color: 0xe8b323 },
-    sound: { muffler: 'straight', pops: true },
-    drive: {
-      layout: 'rwd',
-      // high-revving atmospheric 4: 230 N m at 6000 rpm
-      engine: { preset: 'i4', torque: 238, peakRpm: 6000, idle: 950, redline: 8000, limiter: 8200, inertia: 0.15 },
-      gears: [3.4, 2.3, 1.7, 1.3, 1.05], reverse: 3.3, final: 4.3, shiftTime: 0.12,
-      rearLsd: { preload: 50, rampPower: 0.40, rampCoast: 0.25, visc: 300 },
-    },
-  },
-};
+    sound,                                              // createEngineSound options (view only)
+    drive: { reverse: 3.2, shiftTime: 0.12, ...drive, final },
+  };
+}
+
+const turbo4 = { muffler: 'sport', pops: true }, open4 = { muffler: 'straight', pops: true };
+
+const LIST = [
+  car({ id: 'stratos-hf', name: 'Lancia Stratos HF', years: '1974-78', era: '1970s', power: 240,
+    geo: [2.18, 1.445, 0.31, [1.75, 1.11, 3.83], 0.09], mass: 980, frontWeight: 0.42, comHeight: 0.42, mid: true, top: 51,
+    sound: open4,
+    drive: { layout: 'rwd', engine: { preset: 'i4', torque: 230, peakRpm: 6500, idle: 1000, redline: 7800, limiter: 8000, inertia: 0.15 },
+      gears: [3.0, 2.1, 1.6, 1.25, 1.0], rearLsd: RWD_LSD } }),
+  car({ id: 'escort-rs1800', name: 'Ford Escort RS1800', years: '1975-81', era: '1970s', power: 245,
+    geo: [2.40, 1.36, 0.28, [1.74, 1.39, 4.20], -0.13], mass: 980, frontWeight: 0.53, comHeight: 0.47, top: 48.5,
+    sound: open4,
+    drive: { layout: 'rwd', engine: { preset: 'i4', torque: 215, peakRpm: 6500, idle: 1000, redline: 8500, limiter: 8800, inertia: 0.14 },
+      gears: [3.4, 2.3, 1.7, 1.3, 1.05], rearLsd: RWD_LSD } }),
+  car({ id: 'sport-quattro-s1', name: 'Audi Sport Quattro S1 E2', years: '1985-86', era: '1980s', power: 470,
+    geo: [2.224, 1.4835, 0.32, [1.80, 1.39, 4.23], 0.07], mass: 1090, frontWeight: 0.60, comHeight: 0.47, top: 55.5,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 204, peakRpm: 5500, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.18 },
+      turbo: { maxBoost: 1.4, size: 0.35, bov: true }, gears: BOX5, ...AWD } }),
+  car({ id: 'peugeot-205-t16', name: 'Peugeot 205 T16 Evo 2', years: '1985-86', era: '1980s', power: 450,
+    geo: [2.54, 1.43, 0.32, [1.70, 1.43, 4.01], 0.05], mass: 910, frontWeight: 0.42, comHeight: 0.45, mid: true, top: 55.5,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 204, peakRpm: 5500, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.16 },
+      turbo: { maxBoost: 1.4, size: 0.3, bov: true }, gears: BOX5, ...AWD, frontSplit: 0.35 } }),
+  car({ id: 'impreza-555', name: 'Subaru Impreza 555', years: '1993-96', era: '1990s', power: 300,
+    geo: [2.52, 1.465, 0.325, [1.72, 1.46, 4.42], 0.03], mass: 1230, frontWeight: 0.58, top: 53,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'flat4', torque: 235, peakRpm: 4000, idle: 900, redline: 7200, limiter: 7400, inertia: 0.18 },
+      turbo: { maxBoost: 1.0, size: 0.2, bov: true }, gears: BOX5, ...AWD } }),
+  car({ id: 'lancer-evo6', name: 'Mitsubishi Lancer Evolution VI', years: '1999', era: '1990s', power: 300,
+    geo: [2.51, 1.54, 0.325, [1.79, 1.43, 4.41], -0.04], mass: 1230, frontWeight: 0.58, top: 53,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 250, peakRpm: 3500, idle: 900, redline: 7000, limiter: 7200, inertia: 0.18 },
+      turbo: { maxBoost: 1.0, size: 0.2, bov: true }, gears: BOX5, ...AWD } }),
+  car({ id: 'peugeot-206-wrc', name: 'Peugeot 206 WRC', years: '1999-2003', era: '2000s', power: 300,
+    geo: [2.468, 1.534, 0.325, [1.81, 1.47, 4.13], 0.11], mass: 1230, frontWeight: 0.57, top: 53,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 268, peakRpm: 3500, idle: 900, redline: 7000, limiter: 7200, inertia: 0.17 },
+      turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
+  car({ id: 'xsara-wrc', name: 'Citroen Xsara WRC', years: '2001-06', era: '2000s', power: 315,
+    geo: [2.555, 1.568, 0.325, [1.82, 1.35, 4.21], 0.03], mass: 1230, frontWeight: 0.57, top: 53,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 285, peakRpm: 3000, idle: 900, redline: 6800, limiter: 7000, inertia: 0.17 },
+      turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
+  car({ id: 'polo-r-wrc', name: 'Volkswagen Polo R WRC', years: '2013-16', era: '2010s', power: 315,
+    geo: [2.48, 1.61, 0.325, [1.89, 1.42, 4.09], 0.13], mass: 1200, frontWeight: 0.56, top: 53,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 212, peakRpm: 5000, idle: 1000, redline: 7500, limiter: 7700, inertia: 0.14 },
+      turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
+  car({ id: 'yaris-wrc', name: 'Toyota Yaris WRC', years: '2017', era: '2010s', power: 380,
+    geo: [2.511, 1.63, 0.325, [1.92, 1.52, 4.19], 0.05], mass: 1190, frontWeight: 0.56, top: 54,
+    sound: turbo4,
+    drive: { layout: 'awd', engine: { preset: 'i4', torque: 225, peakRpm: 5000, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.14 },
+      turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
+];
+
+export const CARS = Object.fromEntries(LIST.map(c => [c.id, c]));
+export const CAR_IDS = LIST.map(c => c.id); // the garage's order
+export const DEFAULT_CAR = 'impreza-555';

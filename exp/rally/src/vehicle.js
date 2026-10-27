@@ -97,10 +97,11 @@ export class Vehicle {
   }
 
   createBody(pos, yaw) {
-    const c = this.cfg, len = c.wheelbase / 2 + 0.85;
+    const c = this.cfg, [W, H, L] = c.size, len = L / 2;
     // Rounded edges (0.2 m) so a nose that meets an upslope or a bump rides up it instead of digging in like a box corner
-    // (which stopped the car at 20+ g); low friction so it skids. Mass and inertia are the playtested cars.js values.
-    const round = 0.2;
+    // (which stopped the car at 20+ g); low friction so it skids. Mass and inertia are cars.js values. The hull is the
+    // car's overall width and length up to 0.68 m; the cabin box above it reaches the roof (R16-2).
+    const round = 0.2, cabinH = Math.max(0.2, (H - 0.68) / 2);
     this.e = this.lh.spawn({
       // Drawn by view sync (the model, shaped by render.js carView), wheels from the part poses. They start at the static
       // compression (seeded curr and prev), so a render before the first step has the wheels on their hubs.
@@ -108,8 +109,8 @@ export class Vehicle {
       partXf: Object.fromEntries(this.wheels.map((w, i) => [WHEEL_PARTS[i], { p: [w.local.x, w.local.y - Math.max(0, c.travel - this.staticComp), w.local.z], q: [0, 0, 0, 1] }])),
       body: { type: 'dynamic', ccd: true, canSleep: false, massProps: { mass: c.mass, com: [0, 0, 0], inertia: [c.inertia.x, c.inertia.y, c.inertia.z] } }, // lh-allow: massProps (D3): cars.js mass and inertia were tuned by playtest, not the colliders' volume
       colliders: [
-        { shape: 'box', half: [0.86 - round, 0.24 - round, len - round], round, p: [0, -c.comHeight + 0.20 + 0.24, this.zMid], q: [0, 0, 0, 1], material: 'car-hull' },
-        { shape: 'box', half: [0.72, 0.27, len * 0.5], p: [0, -c.comHeight + 0.68 + 0.27, this.zMid - 0.2], q: [0, 0, 0, 1], material: 'car-cabin' },
+        { shape: 'box', half: [W / 2 - 0.02 - round, 0.24 - round, len - round], round, p: [0, -c.comHeight + 0.20 + 0.24, this.zMid + c.bodyZ], q: [0, 0, 0, 1], material: 'car-hull' },
+        { shape: 'box', half: [W / 2 - 0.15, cabinH, len * 0.5], p: [0, -c.comHeight + 0.68 + cabinH, this.zMid + c.bodyZ - 0.2], q: [0, 0, 0, 1], material: 'car-cabin' },
       ],
       groups: { member: ['car'] },
       contacts: { min: BODY_CONTACT.dv * c.mass },
@@ -170,8 +171,11 @@ export class Vehicle {
       if (d.gear > 0 && d.shiftT <= 0) {
         // Downshifts go by road speed, not engine rpm: the engine sags while the clutch is open,
         // which used to cascade 3-2-1 in a quarter second and lock the driven wheels.
-        const road = roadRpm(pt, c, this.wheels);
-        if (d.rpm > red * 0.94 && d.gear < c.gears.length && thr > 0.1) shift(pt, +1);
+        // No upshift in the air (R16-6): free driven wheels let the engine flare to the limiter, which shifted up two gears
+        // mid-jump and landed the car bogged, the wheels spinning against the ground.
+        const road = roadRpm(pt, c, this.wheels), w = this.wheels;
+        const grounded = c.layout === 'awd' ? w[0].contact || w[1].contact || w[2].contact || w[3].contact : w[2].contact || w[3].contact;
+        if (grounded && d.rpm > red * 0.94 && d.gear < c.gears.length && thr > 0.1) shift(pt, +1);
         else if (d.gear > 1 && road < red * 0.48 && roadRpm(pt, c, this.wheels, d.gear - 1) < red * 0.80) shift(pt, -1);
       }
     }

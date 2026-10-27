@@ -1,16 +1,17 @@
-// The bake (lion-hawk overview §5.3-1): every Kenney model is baked, each mesh part keeps today's triangle count (the
-// counts the retired src/assets.json held at e03ed71; weld merges vertices once the palette step drops UVs, so vertex counts fall,
-// e.g. hatchback-sports 3709 → about 2048), and phys.json was baked against today's registry.
+// The bake (lion-hawk overview §5.3-1): every model is baked; each Kenney mesh part keeps today's triangle count (the
+// counts the retired src/assets.json held at e03ed71; weld merges vertices once the palette step drops UVs, so vertex counts fall),
+// and phys.json was baked against today's registry. The cars (R16-1) are held to their configs in cars.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import MATERIALS from '../src/defs/materials.js';
+import { CAR_IDS } from '../src/cars.js';
+
+const MODELS = () => [...Object.keys(COUNTS), ...CAR_IDS].sort();
 
 const COUNTS = { // node name → triangle count (index count / 3), from the retired src/assets.json at e03ed71
-  'hatchback-sports': { 'wheel-front-right': 332, 'wheel-front-left': 332, 'wheel-back-right': 332, 'wheel-back-left': 332, body: 760 },
-  'sedan-sports': { 'wheel-back-right': 332, body: 712, spoiler: 48, 'wheel-back-left': 332, 'wheel-front-left': 332, 'wheel-front-right': 332 },
   'wheel-racing': { 'wheel-racing': 332 },
   cone: { cone: 172 },
 };
@@ -29,8 +30,8 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies(
 const json = p => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
 const manifest = json('../baked/manifest.json'), phys = json('../baked/phys.json');
 
-test('every Kenney model is baked, no animation tables', () => {
-  assert.deepEqual(Object.keys(manifest.models).sort(), Object.keys(COUNTS).sort());
+test('every model is baked, no animation tables', () => {
+  assert.deepEqual(Object.keys(manifest.models).sort(), MODELS());
   for (const m of Object.values(manifest.models)) assert.equal(m.anim, null);
 });
 for (const [model, parts] of Object.entries(COUNTS)) {
@@ -47,5 +48,5 @@ for (const [model, parts] of Object.entries(COUNTS)) {
 }
 test('phys.json was baked against this registry', () => {
   assert.equal(phys.materials, MATERIALS.hash);
-  assert.deepEqual(Object.keys(phys.models).sort(), Object.keys(COUNTS).sort());
+  assert.deepEqual(Object.keys(phys.models).sort(), MODELS());
 });

@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { SnowView } from './snowView.js';
 import { PadView, SURF_LOOK } from './render/padView.js';
 import { createRallyCamera } from './render/camera.js';
-import { WHEEL_PARTS } from './vehicle.js';
 
 // Looks as light-rig presets (3e): sky = background and fog colour; snow (the snow pad, winter) gets a low raking sun
 // and less sky fill so ruts and berms throw shadows. Pad looks keep the short pad fog, track themes the long hill fog.
@@ -29,26 +28,23 @@ export const RENDER = {
 };
 
 // The car's static shaping for view sync: a create hook, once per car entity, on the model clone view sync drew (it waits for
-// the GLB). The body (and spoiler) go into a shell scaled to the real car's track and wheelbase; each wheel node is reset to
-// the origin, scaled to the car's radius and given tyre material. View sync then binds the wheel nodes and poses them from the
-// sim's part poses (each node's centre on its hub), interpolated with the body.
-export function carView(sync, mc, carOf) {
+// the GLB). The models are life-size with their origin on the ground under the wheelbase midpoint (rally-spec R16-3), so
+// the whole model moves into a shell at the sim body's frame (ground -comHeight below the centre of mass, the midpoint at
+// zMid); view sync then binds the wheel nodes (through their parent, the shell) and poses them from the sim's part
+// poses, interpolated with the body. The camera sockets go on obj.userData.sockets in the body frame.
+const BONNET_LIFT = 0.12; // m over sock-cam-bonnet, so the view clears a bonnet scoop (the Impreza's sits at the socket's height)
+export function carView(sync, carOf) {
   return sync.on('#car', {
     create(e, obj) {
       const car = carOf(e); if (!car || !obj) return;
-      const cfg = car.cfg, [sx, sy, sz] = cfg.body.scale, ws = cfg.radius / 0.3, tyre = mc.get('tyre', { vertexColors: true });
-      const wheels = WHEEL_PARTS.map((name) => {
-        const w = obj.getObjectByName(name); w.removeFromParent();
-        w.position.set(0, 0, 0); w.quaternion.identity(); w.scale.setScalar(ws);
-        w.traverse((o) => { if (o.isMesh) o.material = tyre; });
-        return w;
-      });
       const shell = new THREE.Group();
-      shell.scale.set(sx, sy, sz);
-      shell.position.set(0, -cfg.comHeight + cfg.radius - 0.3 * sy, car.zMid);
+      shell.position.set(0, -car.cfg.comHeight, car.zMid);
       for (const n of [...obj.children]) shell.add(n);
-      obj.add(shell, ...wheels);
+      obj.add(shell);
       obj.name = `car#${e.id}`;
+      const at = (name) => { const n = obj.getObjectByName(name); if (!n) return null; obj.updateMatrixWorld(true); const p = n.getWorldPosition(new THREE.Vector3()); obj.worldToLocal(p); return [p.x, p.y, p.z]; };
+      const bonnet = at('sock-cam-bonnet'); if (bonnet) bonnet[1] += BONNET_LIFT;
+      obj.userData.sockets = { bumper: at('sock-cam-bumper'), bonnet };
       obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } }); // as before: no self-shadow acne
     },
   });
@@ -59,6 +55,7 @@ export class Renderer {
     this.gfx = gfx; this.r = gfx.renderer; this.doc = gfx.renderer.domElement.ownerDocument; this.scene = gfx.scene; this.cam = gfx.camera; this.lights = gfx.lights;
     this.camMode = 0; // 0 chase, 1 bumper, 2 bonnet
     this.orbit = false; // title screen: circle the car instead
+    this.garage = null; // the garage's turntable { angle, idle } (game.view.js, R16-5): it wins over the orbit
     this.view = null; this.worldToken = 0; this.kit = null; this.drawn = null;
     this.camRig = createRallyCamera(this.cam); this.camCar = { p: null, q: null, v: null, zFront: 0 };
     this.setSurface('gravel');
@@ -115,8 +112,8 @@ export class Renderer {
 
   updateCamera(sim, dt) {
     const car = sim.car, xf = car.e.xf, c = this.camCar, o = this.drawn?.objectOf(car.e); // the car as view sync drew it this frame
-    c.p = o ? o.position : xf.p; c.q = o ? o.quaternion : xf.q; c.v = car.body.linvel(); c.zFront = car.wheels[0].local.z; // velocity is not in the pool
-    this.camRig.update(c, { orbit: this.orbit, mode: this.camMode, dt });
+    c.p = o ? o.position : xf.p; c.q = o ? o.quaternion : xf.q; c.v = car.body.linvel(); c.sockets = o?.userData.sockets ?? null; // velocity is not in the pool; the model's camera sockets
+    this.camRig.update(c, { orbit: this.orbit, garage: this.garage, mode: this.camMode, dt });
     const p = xf.p; this.lights.follow(p.x, p.z, p.y); // the sun at car + offset, aimed at the car (hilly tracks)
   }
 }

@@ -5,11 +5,19 @@
 // B/Esc/Start go Back (pause resumes, results goes to the main menu, settings closes; the title has no Back), and
 // Start/Esc open pause while driving. R14: on the title LB/RB step the mode (nav.shoulders; the pad never focuses that
 // row) and Start drives; View opens settings from every menu and while driving (settings pauses), and closes it.
+// R16-5: the garage, over the title, steps through the cars (each step is the car at once; leaving keeps it).
 import { DRIVING } from './stage.js';
+import { CAR_IDS } from '../cars.js';
 import { LEVELS, LENGTH_NAMES } from '../gen/levels.js';
 const settingsOpen = e => e.scene.overlays.includes('settings');
 const openSettings = e => { if (!settingsOpen(e)) e.overlay('settings'); };
 const canDrive = e => ['title', 'loading'].includes(e.scene.state.phase);
+const garageOpen = e => e.scene.overlays.includes('garage');
+// The previous (d = -1) or next car in garage order, wrapping.
+const stepCar = (e, api, d) => {
+  const i = CAR_IDS.indexOf(e.scene.state.settings.car), n = CAR_IDS.length;
+  api.choose(e, 'car', CAR_IDS[((i < 0 ? 0 : i) + d + n) % n]);
+};
 
 // A settings choice: pick(id, label, values, when) with values as plain values or { value, label }; the value is the label
 // unless given. Reads and applies through the stage settings (api.choose).
@@ -28,13 +36,32 @@ export function makeOverlays(api) {
       pick('style', 'Style', LEVELS); // 1 tight … 5 flowing
       pick('theme', 'Theme', ['summer', 'winter']);
       pick('obstacles', 'Obstacles', LEVELS); // 1 mild … 5 frequent
-      pick('car', 'Car', ['awd', 'rwd']);
+      u.button({ id: 'car', label: 'Car', action: e => e.overlay('garage', undefined, { once: true }) });
       u.field({ id: 'seed', label: 'Track seed', get: e => e.scene.state.settings.seed, set: (t, e) => api.setSeed(e, t) });
       u.button({ id: 'dice', label: 'New seed', action: e => api.rollSeed(e) });
       u.button({ id: 'settings', label: 'Settings', action: e => e.overlay('settings') });
       u.button({ id: 'drive', label: 'Drive', action: e => api.drive(e), when: canDrive });
     },
-    step(e) { if (e.input.snapshot.confirm.pressed && !settingsOpen(e)) api.drive(e); },
+    step(e) { if (e.input.snapshot.confirm.pressed && !settingsOpen(e) && !garageOpen(e)) api.drive(e); },
+  };
+  // The garage: the devices stay live under it (input 'shared'), so steering left/right (stick, A/D, arrow keys, the D-pad)
+  // and the shift buttons (LB/RB, Q/E) step the car; the buttons' left/right moves are turned off so the arrows and the
+  // D-pad never move focus off Done. Turning the car on show is the view's camera (R16-5).
+  const garage = {
+    nav: { modal: true, input: 'shared', initial: 'garage.done', back: e => e.close('garage'), buttons: { start: e => e.close('garage') } },
+    ui(u) {
+      u.button({ id: 'prev', label: 'Previous car', action: e => stepCar(e, api, -1) });
+      u.button({ id: 'next', label: 'Next car', action: e => stepCar(e, api, 1) });
+      u.button({ id: 'done', label: 'Done', action: e => e.close('garage') });
+    },
+    enter(e, ctx) { ctx.state.lean = 0; },
+    step(e, dt, ctx) {
+      const I = e.input.snapshot, st = ctx.state;
+      const lean = I.steer > 0.5 ? -1 : I.steer < -0.5 ? 1 : 0; // steer +1 = left: the previous car
+      if (lean && lean !== st.lean) stepCar(e, api, lean);
+      st.lean = lean;
+      if (I.shiftUp.pressed) stepCar(e, api, 1); else if (I.shiftDown.pressed) stepCar(e, api, -1);
+    },
   };
   const pause = {
     pauses: true, // #23: pause is this overlay, not a sub-state
@@ -71,5 +98,5 @@ export function makeOverlays(api) {
     },
     step(e) { if (e.input.snapshot.pause.pressed) e.close('settings'); }, // Esc closes the sheet before the pause menu
   };
-  return { title, pause, results, settings };
+  return { title, garage, pause, results, settings };
 }

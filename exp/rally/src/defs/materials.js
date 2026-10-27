@@ -49,6 +49,14 @@ export default defineMaterials({
   // The hull and cabin keep today's car-ground contact: Rapier averaged the old raw colliders (hull 0.3 with ground 0.8
   // gave 0.55, cabin 0.45 gave 0.625; restitution 0.1 with 0 gave 0.05), and the engine's √f Multiply gives √(f·0.8),
   // so f = pair² / 0.8 and restitution (Max) is the old pair value.
+  // The real cars' paint bakes to car-body (game.config.js, R16-1); their metal trim draws on these base ids, toned down
+  // from fully metallic: the scene has no environment map, so a metalness-1 rim
+  // reflects nothing and draws black.
+  steel:       { look: { metalness: 0.4, roughness: 0.4 } },
+  aluminium:   { look: { metalness: 0.35, roughness: 0.35 } },
+  // and opaque tinted glass: the base glass's transmission costs three.js a transmission pass every frame for windows that
+  // read as dark tint anyway (and one more shader program)
+  glass:       { look: { transmission: 0, roughness: 0.15, metalness: 0.2 } },
   'car-body':  { extends: 'steel', phys: { friction: 0.3, restitution: 0.1 }, look: { roughness: 0.45, metalness: 0.15 } },
   'car-hull':  { extends: 'steel', phys: { friction: 0.378125, restitution: 0.05 } },
   'car-cabin': { extends: 'steel', phys: { friction: 0.48828125, restitution: 0.05 } },

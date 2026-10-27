@@ -12,6 +12,7 @@ import { createRumble } from './rumble/index.js';
 import { rumbleOut } from './rumbleOut.js';
 import { STRENGTH, PARAMS } from './defs/rumble.js';
 import { DRIVING } from './game/stage.js';
+import { CARS, DEFAULT_CAR } from './cars.js';
 
 // Engine sound (rally-spec R15): the Sound setting's level for the sfx bus, the listening position per camera (chase,
 // bumper, bonnet), and the overlays that freeze the sim (the sound would hold its last note under them).
@@ -26,11 +27,14 @@ export const HELP = {
 };
 
 let renderer = null; // Rally's scene wiring over the engine's renderer, made on the first stage enter
-export const MODELS = ['hatchback-sports', 'sedan-sports', 'cone'];
+export const MODELS = ['cone']; // plus the car on show; another car's model loads when it is chosen (rally-spec R16-4)
 
 const lengthText = (m, units) => units === 'mph' ? `${(m / 1609.344).toFixed(1)} mi` : `${(m / 1000).toFixed(1)} km`;
 const BUILDING = 'Building the track…';
-const STAGE_CLASSES = ['onTrack', 'manual']; // game state; the screens follow the engine's <html data-lh-overlays>
+// The garage turntable (R16-5): start angle (rad from behind the car, a front three-quarter), drag rad per px, stick rad/s at
+// full tilt and its dead zone, the slow turn (rad/s, one turn in ~20 s) and the wait before it resumes (s).
+const GARAGE = { start: 2.4, drag: 0.01, stick: 2.5, dead: 0.15, spin: 2 * Math.PI / 20, wait: 2 };
+const STAGE_CLASSES = ['onTrack', 'manual', 'carLoading']; // game state; the screens follow the engine's <html data-lh-overlays>
 
 // Lap table for the pause card (lap modes), split table for the results card: the removed Menus' markup.
 function lapTable(s) {
@@ -68,7 +72,7 @@ function overlayHalves() {
     seen: null,
     enter(engine, view) {
       const doc = view.doc;
-      this.seen = { mode: null, best: undefined, style: null, obstacles: null };
+      this.seen = { mode: null, best: undefined, style: null, obstacles: null, car: null };
       unbindSliders?.(); unbindSliders = bindSliders(doc);
       // Enter submits the seed form: never navigate; blurring the field fires its change, which the adopted field commits
       // (so leaving the field commits it too).
@@ -90,6 +94,7 @@ function overlayHalves() {
         doc.getElementById('title').classList.toggle('free', mode === 'freeDrive');
         doc.getElementById('modeHelp').textContent = HELP[mode] ?? '';
       }
+      if (s.settings.car !== seen.car) { seen.car = s.settings.car; doc.getElementById('carName').textContent = CARS[seen.car]?.name ?? ''; }
       for (const key of ['style', 'obstacles']) {
         const v = s.settings[key]; if (v === seen[key]) continue;
         seen[key] = v;
@@ -149,7 +154,49 @@ function overlayHalves() {
       scrim.hidden = true; scrim.removeEventListener('click', scrimTap);
     },
   };
-  return { title, pause, results, settings };
+  // R16-5: the garage card for the car on show, and the turntable (the renderer's garage camera): the right stick or a drag
+  // on the stage turns it, and it turns slowly by itself (one turn in ~20 s) 2 s after the last turn. View-only.
+  let drag = null, unbindDrag = null, card = null;
+  const garage = {
+    enter(engine, view) {
+      const doc = view.doc, win = doc.defaultView, canvas = view.gfx.renderer.domElement;
+      doc.getElementById('garage').hidden = false; card = null;
+      renderer.garage = { angle: GARAGE.start, idle: GARAGE.wait };
+      const down = ev => { drag = { x: ev.clientX, id: ev.pointerId }; };
+      const move = ev => { if (drag?.id !== ev.pointerId) return; renderer.garage.angle -= (ev.clientX - drag.x) * GARAGE.drag; drag.x = ev.clientX; renderer.garage.idle = 0; };
+      const up = ev => { if (drag?.id === ev.pointerId) drag = null; };
+      canvas.addEventListener('pointerdown', down); win.addEventListener('pointermove', move);
+      win.addEventListener('pointerup', up); win.addEventListener('pointercancel', up);
+      unbindDrag = () => {
+        canvas.removeEventListener('pointerdown', down); win.removeEventListener('pointermove', move);
+        win.removeEventListener('pointerup', up); win.removeEventListener('pointercancel', up);
+      };
+      garage.frame(engine, 0, view);
+    },
+    exit(engine, view) {
+      view.doc.getElementById('garage').hidden = true; renderer.garage = null;
+      unbindDrag?.(); unbindDrag = null; drag = null; card = null;
+      view.doc.body.classList.remove('carLoading');
+    },
+    frame(engine, alpha, view) {
+      const s = engine.scene.state, doc = view.doc, g = renderer.garage; if (!g || !s.settings) return;
+      const car = CARS[s.settings.car];
+      if (car && car !== card) {
+        card = car;
+        doc.getElementById('garageEra').textContent = car.era;
+        doc.getElementById('garageName').textContent = car.name;
+        doc.getElementById('garageSpec').textContent =
+          `${car.years} · ${car.drive.layout === 'awd' ? 'Four-wheel drive' : 'Rear-wheel drive'} · ${car.power} hp · ${car.mass} kg`;
+      }
+      if (car) { const loading = !view.assets.has(car.model); if (doc.body.classList.contains('carLoading') !== loading) doc.body.classList.toggle('carLoading', loading); }
+      let rx = 0; // the right stick, from the seat's pads (the browser's Gamepad objects)
+      for (const p of view.localPlayers[0]?.pads ?? []) { const v = p.axes?.[2] ?? 0; if (Math.abs(v) > Math.abs(rx)) rx = v; }
+      if (Math.abs(rx) > GARAGE.dead) { g.angle -= rx * GARAGE.stick * view.dt; g.idle = 0; }
+      else if (!drag) g.idle += view.dt;
+      if (g.idle > GARAGE.wait) g.angle += GARAGE.spin * view.dt;
+    },
+  };
+  return { title, garage, pause, results, settings };
 }
 
 // rumble: the mixer (rally-spec R9; main.js makes it from the ?rumble panel's saved params, so the panel can drive it).
@@ -186,10 +233,10 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       seat0 = view.localPlayers[0]; haptics = view.haptics;
       renderer ??= new Renderer(view.gfx);
       // The models: view sync draws the car once its GLB is in, and the pad view's cones wait for them (Renderer.setWorld).
-      loaded ??= view.assets.preload(MODELS).then(() => { doc.getElementById('loading')?.remove(); });
+      loaded ??= view.assets.preload([...MODELS, CARS[engine.scene.state?.settings?.car]?.model ?? DEFAULT_CAR]).then(() => { doc.getElementById('loading')?.remove(); });
       view.wait(loaded);
       renderer.setKit({ assets: view.assets, mc: view.materials, loaded }); renderer.setSync(view.sync);
-      carHook ??= carView(view.sync, view.materials, (e) => (engine.scene.state?.sim?.car?.e === e ? engine.scene.state.sim.car : null));
+      carHook ??= carView(view.sync, (e) => (engine.scene.state?.sim?.car?.e === e ? engine.scene.state.sim.car : null));
       hud ??= new Hud(doc.body);
       ghud ??= new GameHud({ now: () => engine.time.sim });
       els ??= { toast: doc.getElementById('toast'), seedChip: doc.getElementById('seedChip') };
@@ -208,7 +255,7 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       doc.addEventListener('visibilitychange', hidden);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
-        info: () => ({ ...view.gfx.info() }), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats,
+        info: () => ({ ...view.gfx.info() }), garage: () => (renderer?.garage ? { ...renderer.garage } : null), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats,
         sound: () => ({ mode: sound?.mode ?? null, mic: MIC[seen?.cam] ?? null, sfx: view.audio.volume('sfx'), hushed: !!hush, unlocked: view.audio.unlocked }) };
       off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },
@@ -234,6 +281,7 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
         if (newWorld) { if (s !== seen.built || s.worldRev !== seen.builtRev) view.wait(renderer.setWorld(s.world)); seen.surface = null; seen.units = null; }
         if (s !== seen.s) seen.settingsRev = s.settingsRev; // a new stage (enter/jump) is not a settings change
         seen.s = s; seen.worldRev = s.worldRev; seen.carRev = s.carRev;
+        const model = s.sim.car.cfg.model; if (!view.assets.has(model)) view.assets.preload([model]); // view sync draws it once it is in
         cls(doc, 'onTrack', s.world.kind !== 'pad');
       }
       const st = s.settings;

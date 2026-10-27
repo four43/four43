@@ -2,7 +2,7 @@
 // world and steps it (overview §4.4). Rally's vehicle runs before Rapier's step (system rally.vehicle, preStep) and the
 // clock after it (rally.after, postStep).
 import { Vehicle, DT } from './vehicle.js';
-import { CARS } from './cars.js';
+import { CARS, DEFAULT_CAR } from './cars.js';
 import { SnowField } from './snow.js';
 import { PadWorld } from './world/padWorld.js';
 
@@ -17,7 +17,7 @@ export class Sim {
     this.R = lh.R;
     this.assist = opts.assist ?? true;
     this.time = 0;
-    this.carId = opts.car || 'awd';
+    this.carId = opts.car || DEFAULT_CAR;
     this.stepper = opts.step ?? null;
     this.world = null;
     this.setWorld(opts.world || new PadWorld({ pad: opts.pad, cones: opts.cones, surface: opts.surface }), opts.pos, opts.yaw);

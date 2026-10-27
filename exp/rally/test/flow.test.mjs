@@ -62,12 +62,32 @@ test('title choices rebuild the preview after a short loading hold; car and seed
   assert.equal(h.state().phase, 'loading');
   h.until(x => x.state().phase === 'title', { maxSteps: 60 });
   assert.equal(S().worldRev, rev + 1); assert.equal(S().world.track.theme, 'winter'); assert.deepEqual(h.scene.overlays, ['title']);
-  const car = S().carRev; h.tap('title.car.rwd');
-  assert.equal(S().sim.car.cfg.id, 'rwd'); assert.ok(S().carRev > car); assert.equal(h.state().phase, 'title'); // same track: no rebuild
+  const car = S().carRev; h.tap('title.car'); h.step(1); h.tap('garage.next');
+  assert.equal(S().sim.car.cfg.id, 'lancer-evo6'); assert.ok(S().carRev > car); assert.equal(h.state().phase, 'title'); // same track: no rebuild
+  h.tap('garage.done'); h.step(1); assert.deepEqual(h.scene.overlays, ['title']);
   h.fill('title.seed', 'abc'); h.until(x => x.state().phase === 'title', { maxSteps: 60 }); assert.equal(h.state().seed, 'abc');
   h.fill('title.seed', '   '); h.until(x => x.state().phase === 'title', { maxSteps: 60 }); assert.match(h.state().seed, /^[0-9a-z]{5}$/);
   assert.equal(h.engine.ui.tree().find(c => c.id === 'title.world.loop').enabled, false); // free drive only
   assert.ok(S().settingsRev >= 4);
+});
+
+test('garage: steering, the shift buttons and the arrows step the car, wrapping; Back keeps the car on show (R16-5)', () => {
+  const h = headless(game(), { args: { settings: { mode: 'freeDrive', world: 'loop', seed: 'g1' } } });
+  const id = () => h.engine.scene.state.sim.car.cfg.id;
+  assert.equal(id(), 'impreza-555'); // the default
+  h.tap('title.car'); h.step(2); assert.deepEqual(h.scene.overlays, ['title', 'garage']);
+  h.hold({ steer: -1 }); h.step(10); h.release('steer'); h.step(2);
+  assert.equal(id(), 'lancer-evo6', 'steering right is one step, however long it is held');
+  h.hold({ steer: 1 }); h.step(3); h.release('steer'); h.step(2); h.hold({ steer: 1 }); h.step(3); h.release('steer'); h.step(2);
+  assert.equal(id(), 'peugeot-205-t16');
+  h.hold({ shiftUp: true }); h.step(1); h.release('shiftUp'); h.step(1); assert.equal(id(), 'impreza-555');
+  for (let i = 0; i < 5; i++) h.tap('garage.prev');
+  assert.equal(id(), 'yaris-wrc', 'prev wraps from the first car to the last');
+  h.tap('garage.next'); assert.equal(id(), 'stratos-hf');
+  h.engine.command('lh.back'); h.step(2);
+  assert.deepEqual(h.scene.overlays, ['title']); assert.equal(id(), 'stratos-hf'); assert.equal(h.engine.scene.state.settings.car, 'stratos-hf');
+  h.tap('title.drive'); h.until(x => x.state().phase !== 'title', { maxSteps: 60 });
+  assert.equal(id(), 'stratos-hf');
 });
 
 test('settings overlay: options apply at once; Esc closes the sheet before the pause menu', () => {

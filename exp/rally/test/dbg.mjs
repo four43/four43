@@ -2,7 +2,7 @@ import R from '@dimforge/rapier3d-compat';
 import { benchSim } from './helpers/bench.mjs';
 import { DT } from '../src/sim.js';
 await R.init();
-const [car, surf] = [process.argv[2]||'rwd', process.argv[3]||'gravel'];
+const [car, surf] = [process.argv[2]||'escort-rs1800', process.argv[3]||'gravel'];
 const sim = benchSim({ car, surface: surf, cones: false, assist: true, pos:{x:0,y:0.6,z:-250} });
 for (let i=0;i<360;i++) sim.step();
 for (let i=0;i<240*11;i++){ sim.car.input.throttle=1; sim.step();
