@@ -1,8 +1,9 @@
-// Car configurations (rally-spec R16): ten real rally cars, in era order. Geometry comes from each car's model
-// (assets/models/<id>.glb: wheel nodes on their hubs, the spec's overall size; test/cars.test.mjs holds the numbers to the
-// GLB); mass, weight split, layout and engine are published figures, rounded. Tyres and surfaces are the same for every
-// car. drive.engine is a lion-hawk ENGINE_PRESETS layout (its firing order and exhaust feed the engine sound) with this
-// car's numbers on top; drive.turbo is the powertrain's turbo, and a turbo engine's torque is its peak over (1 + maxBoost).
+// Car configurations (rally-spec R16): ten cars based on real rally cars, under parody names, in era order. Geometry
+// comes from each car's model (assets/models/<id>.glb: wheel nodes on their hubs, the spec's overall size;
+// test/cars.test.mjs holds the numbers to the GLB); mass, weight split, layout and engine are published figures,
+// rounded. Tyres and surfaces are the same for every car. drive.engine is a lion-hawk ENGINE_PRESETS layout (its firing
+// order and exhaust feed the engine sound) with this car's numbers on top; drive.turbo is the powertrain's turbo, and a
+// turbo engine's torque is its peak over (1 + maxBoost).
 const deg = Math.PI / 180;
 
 // Rally's diffs by era (R5 values as the base): 70s cars a rear plate LSD; four-wheel drive a viscous centre and front
@@ -45,52 +46,52 @@ function car({ id, name, years, era, power, geo: [wheelbase, track, radius, size
 const antiLag = { muffler: 'sport', pops: true }, groupB = { muffler: 'sport', pops: false }, open4 = { muffler: 'straight', pops: false };
 
 const LIST = [
-  car({ id: 'stratos-hf', name: 'Lancia Stratos HF', years: '1974-78', era: '1970s', power: 240,
+  car({ id: 'stratos-hf', name: 'Lunchia Stratus HF', years: '1974-78', era: '1970s', power: 240,
     geo: [2.18, 1.445, 0.31, [1.75, 1.11, 3.83], 0.09], mass: 980, frontWeight: 0.42, comHeight: 0.42, mid: true, top: 51,
     sound: open4,
     drive: { layout: 'rwd', engine: { preset: 'i4', torque: 230, peakRpm: 6500, idle: 1000, redline: 7800, limiter: 8000, inertia: 0.15 },
       gears: [3.0, 2.1, 1.6, 1.25, 1.0], rearLsd: RWD_LSD } }),
-  car({ id: 'escort-rs1800', name: 'Ford Escort RS1800', years: '1975-81', era: '1970s', power: 245,
+  car({ id: 'escort-rs1800', name: 'Fjord Escapade 1800', years: '1975-81', era: '1970s', power: 245,
     geo: [2.40, 1.36, 0.28, [1.74, 1.39, 4.20], -0.13], mass: 980, frontWeight: 0.53, comHeight: 0.47, top: 48.5,
     sound: open4,
     drive: { layout: 'rwd', engine: { preset: 'i4', torque: 215, peakRpm: 6500, idle: 1000, redline: 8500, limiter: 8800, inertia: 0.14 },
       gears: [3.4, 2.3, 1.7, 1.3, 1.05], rearLsd: RWD_LSD } }),
-  car({ id: 'sport-quattro-s1', name: 'Audi Sport Quattro S1 E2', years: '1985-86', era: '1980s', power: 470,
+  car({ id: 'sport-quattro-s1', name: 'Outie Squattro S1', years: '1985-86', era: '1980s', power: 470,
     geo: [2.224, 1.4835, 0.32, [1.80, 1.39, 4.23], 0.07], mass: 1090, frontWeight: 0.60, comHeight: 0.47, top: 55.5,
     sound: groupB,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 204, peakRpm: 5500, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.18 },
       turbo: { maxBoost: 1.4, size: 0.35, bov: true }, gears: BOX5, ...AWD } }),
-  car({ id: 'peugeot-205-t16', name: 'Peugeot 205 T16 Evo 2', years: '1985-86', era: '1980s', power: 450,
+  car({ id: 'peugeot-205-t16', name: 'Pugeot Pupper T16', years: '1985-86', era: '1980s', power: 450,
     geo: [2.54, 1.43, 0.32, [1.70, 1.43, 4.01], 0.05], mass: 910, frontWeight: 0.42, comHeight: 0.45, mid: true, top: 55.5,
     sound: groupB,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 204, peakRpm: 5500, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.16 },
       turbo: { maxBoost: 1.4, size: 0.3, bov: true }, gears: BOX5, ...AWD, frontSplit: 0.35 } }),
-  car({ id: 'impreza-555', name: 'Subaru Impreza 555', years: '1993-96', era: '1990s', power: 300,
+  car({ id: 'impreza-555', name: 'Subaroo Impressa', years: '1993-96', era: '1990s', power: 300,
     geo: [2.52, 1.465, 0.325, [1.72, 1.46, 4.42], 0.03], mass: 1230, frontWeight: 0.58, top: 53,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'flat4', torque: 235, peakRpm: 4000, idle: 900, redline: 7200, limiter: 7400, inertia: 0.18 },
       turbo: { maxBoost: 1.0, size: 0.2, bov: true }, gears: BOX5, ...AWD } }),
-  car({ id: 'lancer-evo6', name: 'Mitsubishi Lancer Evolution VI', years: '1999', era: '1990s', power: 300,
+  car({ id: 'lancer-evo6', name: 'Mitsubiscuit Lancelot Evo VI', years: '1999', era: '1990s', power: 300,
     geo: [2.51, 1.54, 0.325, [1.79, 1.43, 4.41], -0.04], mass: 1230, frontWeight: 0.58, top: 53,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 250, peakRpm: 3500, idle: 900, redline: 7000, limiter: 7200, inertia: 0.18 },
       turbo: { maxBoost: 1.0, size: 0.2, bov: true }, gears: BOX5, ...AWD } }),
-  car({ id: 'peugeot-206-wrc', name: 'Peugeot 206 WRC', years: '1999-2003', era: '2000s', power: 300,
+  car({ id: 'peugeot-206-wrc', name: 'Pugeot Pupper Plus', years: '1999-2003', era: '2000s', power: 300,
     geo: [2.468, 1.534, 0.325, [1.81, 1.47, 4.13], 0.11], mass: 1230, frontWeight: 0.57, top: 53,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 268, peakRpm: 3500, idle: 900, redline: 7000, limiter: 7200, inertia: 0.17 },
       turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
-  car({ id: 'xsara-wrc', name: 'Citroen Xsara WRC', years: '2001-06', era: '2000s', power: 315,
+  car({ id: 'xsara-wrc', name: 'Citrus Sahara', years: '2001-06', era: '2000s', power: 315,
     geo: [2.555, 1.568, 0.325, [1.82, 1.35, 4.21], 0.03], mass: 1230, frontWeight: 0.57, top: 53,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 285, peakRpm: 3000, idle: 900, redline: 6800, limiter: 7000, inertia: 0.17 },
       turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
-  car({ id: 'polo-r-wrc', name: 'Volkswagen Polo R WRC', years: '2013-16', era: '2010s', power: 315,
+  car({ id: 'polo-r-wrc', name: 'Folkswagon Pollo R', years: '2013-16', era: '2010s', power: 315,
     geo: [2.48, 1.61, 0.325, [1.89, 1.42, 4.09], 0.13], mass: 1200, frontWeight: 0.56, top: 53,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 212, peakRpm: 5000, idle: 1000, redline: 7500, limiter: 7700, inertia: 0.14 },
       turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
-  car({ id: 'yaris-wrc', name: 'Toyota Yaris WRC', years: '2017', era: '2010s', power: 380,
+  car({ id: 'yaris-wrc', name: 'Toyoyo Yarn', years: '2017', era: '2010s', power: 380,
     geo: [2.511, 1.63, 0.325, [1.92, 1.52, 4.19], 0.05], mass: 1190, frontWeight: 0.56, top: 54,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 225, peakRpm: 5000, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.14 },

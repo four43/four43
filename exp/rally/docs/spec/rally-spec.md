@@ -931,18 +931,22 @@ cars (R5 4WD, Classic RWD).
   The engine sound's afterfire pops (`cfg.sound.pops`) are on only for the anti-lag turbo cars of the 1990s on (Impreza,
   Evo, the WRC cars); the 70s atmospheric cars and the Group B turbos lift quietly.
 
-  | id | Car | Layout | Mass | Front | Peak torque | Power |
-  |---|---|---|---|---|---|---|
-  | stratos-hf | Lancia Stratos HF (1974-78) | mid RWD | 980 kg | 0.42 | 230 Nm @ 6500 (NA) | 240 hp |
-  | escort-rs1800 | Ford Escort RS1800 Mk2 (1975-81) | front RWD | 980 kg | 0.53 | 215 Nm @ 6500 (NA) | 245 hp |
-  | sport-quattro-s1 | Audi Sport Quattro S1 E2 (1985-86) | front AWD | 1090 kg | 0.60 | 490 Nm @ 5500, 1.4 bar | 470 hp |
-  | peugeot-205-t16 | Peugeot 205 T16 Evo 2 (1985-86) | mid AWD | 910 kg | 0.42 | 490 Nm @ 5500, 1.4 bar | 450 hp |
-  | impreza-555 | Subaru Impreza 555 (1993-96) | front AWD | 1230 kg | 0.58 | 470 Nm @ 4000, 1.0 bar | 300 hp |
-  | lancer-evo6 | Mitsubishi Lancer Evolution VI (1999) | front AWD | 1230 kg | 0.58 | 500 Nm @ 3500, 1.0 bar | 300 hp |
-  | peugeot-206-wrc | Peugeot 206 WRC (1999-2003) | front AWD | 1230 kg | 0.57 | 535 Nm @ 3500, 1.0 bar | 300 hp |
-  | xsara-wrc | Citroen Xsara WRC (2001-06) | front AWD | 1230 kg | 0.57 | 570 Nm @ 3000, 1.0 bar | 315 hp |
-  | polo-r-wrc | Volkswagen Polo R WRC (2013-16) | front AWD | 1200 kg | 0.56 | 425 Nm @ 5000, 1.0 bar | 315 hp |
-  | yaris-wrc | Toyota Yaris WRC (2017) | front AWD | 1190 kg | 0.56 | 425 Nm @ 4500, 1.0 bar | 380 hp |
+  | id | Name | Based on | Layout | Mass | Front | Peak torque | Power |
+  |---|---|---|---|---|---|---|---|
+  | stratos-hf | Lunchia Stratus HF | Lancia Stratos HF (1974-78) | mid RWD | 980 kg | 0.42 | 230 Nm @ 6500 (NA) | 240 hp |
+  | escort-rs1800 | Fjord Escapade 1800 | Ford Escort RS1800 Mk2 (1975-81) | front RWD | 980 kg | 0.53 | 215 Nm @ 6500 (NA) | 245 hp |
+  | sport-quattro-s1 | Outie Squattro S1 | Audi Sport Quattro S1 E2 (1985-86) | front AWD | 1090 kg | 0.60 | 490 Nm @ 5500, 1.4 bar | 470 hp |
+  | peugeot-205-t16 | Pugeot Pupper T16 | Peugeot 205 T16 Evo 2 (1985-86) | mid AWD | 910 kg | 0.42 | 490 Nm @ 5500, 1.4 bar | 450 hp |
+  | impreza-555 | Subaroo Impressa | Subaru Impreza 555 (1993-96) | front AWD | 1230 kg | 0.58 | 470 Nm @ 4000, 1.0 bar | 300 hp |
+  | lancer-evo6 | Mitsubiscuit Lancelot Evo VI | Mitsubishi Lancer Evolution VI (1999) | front AWD | 1230 kg | 0.58 | 500 Nm @ 3500, 1.0 bar | 300 hp |
+  | peugeot-206-wrc | Pugeot Pupper Plus | Peugeot 206 WRC (1999-2003) | front AWD | 1230 kg | 0.57 | 535 Nm @ 3500, 1.0 bar | 300 hp |
+  | xsara-wrc | Citrus Sahara | Citroen Xsara WRC (2001-06) | front AWD | 1230 kg | 0.57 | 570 Nm @ 3000, 1.0 bar | 315 hp |
+  | polo-r-wrc | Folkswagon Pollo R | Volkswagen Polo R WRC (2013-16) | front AWD | 1200 kg | 0.56 | 425 Nm @ 5000, 1.0 bar | 315 hp |
+  | yaris-wrc | Toyoyo Yarn | Toyota Yaris WRC (2017) | front AWD | 1190 kg | 0.56 | 425 Nm @ 4500, 1.0 bar | 380 hp |
+
+  The game has no rights to the real makes, models or sponsors, so `name` is a parody of the car it is based on
+  (Lunchia, Fjord, Outie, Pugeot, Subaroo, Mitsubiscuit, Citrus, Folkswagon, Toyoyo), never the real name, and no
+  name carries "WRC" or a sponsor's mark such as "555". The "Based on" column is where the figures come from.
 
   Each entry carries a card: `name`, `years`, `era` (1970s, 1980s, 1990s, 2000s, 2010s), `layout` text, `power` (hp),
   `mass`. The default car is `impreza-555`; a stored `car` that is not a `CARS` id (`awd`, `rwd`) loads as the default.
@@ -956,7 +960,7 @@ cars (R5 4WD, Classic RWD).
   time it is chosen (garage or `setCar`); the garage shows a small spinner over the stage until it is in. View sync
   draws the car when its model is ready, as it does today.
 - **R16-5 Garage.** A `garage` overlay, opened from a title row that shows the current car's name (`title.car`,
-  "Car: Subaru Impreza 555 ›"); the `car` choice row leaves the title. The title's camera orbit frames the car.
+  "Car: Subaroo Impressa ›"); the `car` choice row leaves the title. The title's camera orbit frames the car.
   - Left / right (D-pad, left stick, A/D and the arrow keys: the `steer` action, one step per push), LB/RB and Q/E
     (`shiftUp` / `shiftDown`), and on-screen ‹ › buttons step to the previous / next car, wrapping. The garage is a
     modal menu with `input: 'shared'`, so the drive devices stay live under it; its buttons turn off the navigator's

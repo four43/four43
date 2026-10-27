@@ -245,14 +245,14 @@ test('desktop: the garage - the pad steps the car (D-pad, stick, shoulders), the
   try {
     await expectState(game, 'phase', 'title');
     assert.equal(await car(), 'impreza-555', 'a stored awd loads as the default car');
-    assert.equal(await game.page.locator('#carName').textContent(), 'Subaru Impreza 555');
+    assert.equal(await game.page.locator('#carName').textContent(), 'Subaroo Impressa');
     await game.pad({}); await game.frames();
     await game.page.evaluate(() => document.querySelector('[data-testid="title.car"]').focus());
     await push({ a: true }); assert.deepEqual((await game.scene()).overlays, ['title', 'garage']);
     assert.equal(await game.page.locator('#title').isVisible(), false, 'the title steps aside');
-    assert.equal(await game.page.locator('#garageName').textContent(), 'Subaru Impreza 555');
+    assert.equal(await game.page.locator('#garageName').textContent(), 'Subaroo Impressa');
     await push({ right: true }); assert.equal(await car(), 'lancer-evo6', 'D-pad right: the next car');
-    assert.equal(await game.page.locator('#garageName').textContent(), 'Mitsubishi Lancer Evolution VI');
+    assert.equal(await game.page.locator('#garageName').textContent(), 'Mitsubiscuit Lancelot Evo VI');
     assert.equal(await game.page.locator('#garageEra').textContent(), '1990s');
     assert.equal(await game.page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'garage.done', 'the D-pad never moves focus off Done');
     await push({ axes: [-0.9, 0, 0, 0] }); assert.equal(await car(), 'impreza-555', 'stick left: the previous car');
@@ -266,7 +266,7 @@ test('desktop: the garage - the pad steps the car (D-pad, stick, shoulders), the
     await push({ b: true }); assert.deepEqual((await game.scene()).overlays, ['title'], 'B closes the garage');
     assert.equal(await car(), 'yaris-wrc', 'and keeps the car on show');
     assert.equal(await game.page.evaluate(() => JSON.parse(localStorage.getItem('rally-sim-settings')).car), 'yaris-wrc', 'saved');
-    assert.equal(await game.page.locator('#carName').textContent(), 'Toyota Yaris WRC');
+    assert.equal(await game.page.locator('#carName').textContent(), 'Toyoyo Yarn');
     // a mouse: the button opens it, a drag on the stage turns the car, the arrows step it, Done closes it
     await game.page.mouse.move(5, 5);
     await game.tap('title.car'); await game.step(1);
