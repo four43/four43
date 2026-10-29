@@ -1,14 +1,14 @@
 // The pig skin (phase 3k; 3f C4/C6): the compiler's pigHide material with per-instance mud (COVERAGE_INSTANCED, lane w of
 // instanceCoverage) and wet (COVERAGE_WET, instanceWet) plus a game patch for closed eyelids at night (aEye on the face
-// vertices, aSleep per instance). The block is injected before emissivemap_fragment, so it runs after the compiler's mud
+// vertices, xyz; its w the head) and a per-pig aState (x asleep, y how green). The block is injected before emissivemap_fragment, so it runs after the compiler's mud
 // and wet: the eyes get their own clean vertex colour back (the mud is on the hide), and a sleeping muddy pig shows its lids. `fur: true` is the coat's shells (FUR), `false` the skin under them.
 export function pigSkin(mc, { fur = false } = {}) {
   const mud = mc.coverage(mc.get('pigHide', { instanced: true, vertexColors: true, fur })).material;
   return mc.extend(mud, 'eyelids', (sh, inject) => {
-    sh.vertexShader = inject(sh.vertexShader, 'common', 'attribute vec3 aEye; attribute float aSleep; attribute float aSick; attribute float aHead; varying vec3 vEye; varying float vSleep; varying float vSick;');
-    sh.vertexShader = inject(sh.vertexShader, 'begin_vertex', 'vEye = aEye; vSleep = aSleep; vSick = aSick * aHead;');
+    sh.vertexShader = inject(sh.vertexShader, 'common', 'attribute vec4 aEye; attribute vec2 aState; varying vec3 vEye; varying float vSleep; varying float vSick;');
+    sh.vertexShader = inject(sh.vertexShader, 'begin_vertex', 'vEye = aEye.xyz; vSleep = aState.x; vSick = aState.y * aEye.w;');
     sh.fragmentShader = inject(sh.fragmentShader, 'common', 'varying vec3 vEye; varying float vSleep; varying float vSick;');
-    // poorly (v3 §8.2): the head (aHead) goes a queasy green as aSick (per pig, eased) comes up; the eyes below keep theirs
+    // poorly (v3 §8.2): the head (aEye.w) goes a queasy green as aState.y (per pig, eased) comes up; the eyes below keep theirs
     sh.fragmentShader = inject(sh.fragmentShader, 'emissivemap_fragment', `diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.78, 0.30) * (0.55 + 0.45 * dot(diffuseColor.rgb, vec3(0.33))), vSick * 0.8);
 if (vEye.x > 0.5) {
   diffuseColor.rgb = diffuse * vColor.rgb; // the eye's own colour: no mud, no wet darkening

@@ -2,7 +2,7 @@
 import { COOP } from './defs/buildings.js';
 import { hit } from './flow.js';
 
-export const CST = { PECK: 0, ROAM: 1, GRAIN: 2, NEST: 3, LAY: 4, BROOD: 5, DUST: 6, FLEE: 7, ROOST: 8, ENTER: 9, INSIDE: 10, EXIT: 11, CARRIED: 12, LOST: 13, GRAB: 14, AIR: 15, HOME: 16, DEFEND: 17, CLINIC: 18 }; // CLINIC: at the vet's (clinic.js)
+export const CST = { PECK: 0, ROAM: 1, GRAIN: 2, NEST: 3, LAY: 4, BROOD: 5, DUST: 6, FLEE: 7, ROOST: 8, ENTER: 9, INSIDE: 10, EXIT: 11, CARRIED: 12, LOST: 13, GRAB: 14, AIR: 15, HOME: 16, DEFEND: 17, CLINIC: 18, VISIT: 19 }; // CLINIC: at the vet's (clinic.js); VISIT: saying hello to her at the run's fence (visits.js)
 export const CST_NAME = Object.keys(CST);
 export const FST = { AWAY: 0, PROWL: 1, CHASE: 2, CARRY: 3, FLEE: 4 };
 
@@ -506,6 +506,14 @@ export function createFlock(ctx) {
           }
           break;
         }
+        case CST.VISIT: { // come to the fence to say hello to the vet (visits.js), then wait for a scratch, facing her
+          const v = b.visit; if (!v) { setState(b, CST.PECK, 0.5); break; }
+          const d = seek(v.x, v.z, CP.walk * 1.4, null, 99);
+          v.stuck = d < 0.8 && b.speed < 0.08 ? (v.stuck ?? 0) + DT : 0; // jostled against the others: near enough
+          if (d < 0.15 || v.arrived || v.stuck > 1) { speed = 0; face = Math.atan2(v.vx - b.px, v.vz - b.pz); if (!v.arrived) { v.arrived = true; v.since = t; } }
+          else useFeelers = d > 0.8;
+          break;
+        }
         case CST.HOME: {
           if (b.timer <= 0) setState(b, CST.PECK, 1);
           flowTo(F.home, 1); speed = 1.2;
@@ -548,7 +556,11 @@ export function createFlock(ctx) {
   return {
     birds, eggs, handfuls, fox, F, buildFields, step, newDay, onNight, roostAt,
     // the clinic (clinic.js): sat down kinematic where it says, and back out on its feet to walk home to the run
-    toClinic(b, x, y, z, yaw) { if (grabbed === b.i) grabbed = -1; releaseClaims(b); setEnabled(b, false); b.hidden = false; b.roost = null; place(b, x, y, z); b.yaw = yaw; b.speed = 0; setState(b, CST.CLINIC); },
+    toClinic(b, x, y, z, yaw, speed = 0) { if (grabbed === b.i) grabbed = -1; releaseClaims(b); setEnabled(b, false); b.hidden = false; b.roost = null; place(b, x, y, z); b.yaw = yaw; b.speed = speed; setState(b, CST.CLINIC); },
+    // Dr. Emmy's rounds (visits.js): a grown bird pecking about the run may come over; visit(b, v) sends it, unvisit(b) lets it be
+    canVisit: b => b.kind !== 'chick' && b.enabled && (b.state === CST.PECK || b.state === CST.ROAM) && b.px > run.x0 && b.px < run.x1 && b.pz > run.z0 && b.pz < run.z1,
+    visit(b, v) { releaseClaims(b); b.visit = v; setState(b, CST.VISIT, 1e9); },
+    unvisit(b) { b.visit = null; if (b.state === CST.VISIT) setState(b, CST.PECK, 0.5 + rng() * 1.5); },
     fromClinic(b, x, z) { setEnabled(b, true); place(b, x, b.r, z); b.panic = 0; setState(b, CST.HOME, 30); },
     tapFox() { if (fox.state === FST.AWAY) return false; if (fox.carrying) { foxSpit('tap'); [fox.ex, fox.ez] = edgePoint(fox.x, fox.z); fox.state = FST.FLEE; fox.timer = 12; } else foxLeave(true); emit('yip', { x: fox.x, z: fox.z }); return true; }, scatterGrain, collectEgg, grainLeft, pick, grab, moveGrab, release,
     get basket() { return basket; }, get grabbed() { return grabbed; },

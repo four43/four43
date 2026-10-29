@@ -1,5 +1,6 @@
 // Pig Pens vet clinic: a chunky Kenney-style building (cream walls, teal trim, slate gable roof, paw-print sign) with its
-// rooms built in: waiting room (mint checker floor), exam room (exam table, sink, pegboard), the vet's studio (wood floor).
+// rooms built in: waiting room (mint checker floor), exam room (exam table, sink, pegboard), and down the east side the vet's
+// flat (wood floor; closet, hall and a tiled bathroom across the back).
 // Source for assets/models/custom/clinic.glb (spec: clinic.spec.json). Regenerate from exp/pig-pens with
 //   node tools/models/clinic.model.mjs   (under the usual systemd-run memory cap); needs the glb-author skill's kit.
 // Metres, +Y up, origin at the footprint centre on the ground, front (+Z) faces south; +X is the model's left.
@@ -16,7 +17,8 @@ const m = model('clinic');
 const W = CLINIC.w, D = CLINIC.d, T = CLINIC.wall, EAVE = CLINIC.eave, RIDGE = CLINIC.ridge, OV = CLINIC.overhang;
 const HX = W / 2, HZ = D / 2;
 const IN = CLINIC.inner;                          // inner faces of the outer walls
-const P = CLINIC.partitions, PT = P.t, PH = P.h;
+const P = CLINIC.partitions, PT = P.t, PH = P.h, A = CLINIC.apt;
+const PW = P.walls;
 const SP = CLINIC.spots;
 const DOOR = CLINIC.door;
 const INNER_DOOR_H = 2.1;                         // partition doorway height (header above, up to PH)
@@ -111,13 +113,14 @@ const corner = (b, s) => b.span('trim', s > 0 ? [HX - CORNER + CPROUD, HX + CPRO
 
 // ---- walls
 const walls = m.group('walls');
-const win = (c, w) => ({ c, w, y0: WIN_Y0, y1: WIN_Y1, kind: 'window' });
+const win = (c, w, y0 = WIN_Y0, y1 = WIN_Y1) => ({ c, w, y0, y1, kind: 'window' });
 
 // front: local x = model x (unrotated). Door at CLINIC.door; big windows either side.
 {
   const g = m.group('wall_front', { parent: walls, at: [0, 0, HZ - T / 2] });
   const b = bag(g, 'front');
-  wall(b, W, T, EAVE, [win(-2.6, 2.0), win(-0.35, 1.3), win(3.45, 1.1), { c: DOOR.x, w: DOOR.w, y0: 0, y1: DOOR.h, kind: 'door' }]);
+  // the waiting room's three, then the flat's: over the table, over the kitchen counter's end
+  wall(b, W, T, EAVE, [win(-4.6, 2.0), win(-2.35, 1.3), win(1.1, 1.0), win(3.5, 1.2), win(5.3, 0.9, 1.15), { c: DOOR.x, w: DOOR.w, y0: 0, y1: DOOR.h, kind: 'door' }]);
   for (const s of [-1, 1]) corner(b, s);
   const cy = DOOR.h + 0.28, z0 = T / 2 - EMBED;                                                  // little canopy over the door
   b.span('trim', [DOOR.x - DOOR.w / 2 - 0.3, DOOR.x + DOOR.w / 2 + 0.3], [cy, cy + 0.08], [z0, T / 2 + 0.42]);
@@ -141,17 +144,18 @@ const win = (c, w) => ({ c, w, y0: WIN_Y0, y1: WIN_Y1, kind: 'window' });
 {
   const g = m.group('wall_back', { parent: walls, at: [0, 0, -HZ + T / 2], rot: [0, 180, 0] });
   const b = bag(g, 'back');
-  wall(b, W, T, EAVE, [win(-1.0, 1.0), win(2.6, 1.0)]);       // local -1 -> model x 1.0? (rot 180: model x = -local x)
+  wall(b, W, T, EAVE, [win(4.6, 1.0), win(0, 1.0), win(-3.9, 0.6, 1.3)]); // rot 180: model x = -local x (exam room, waiting room, the flat's hall)
   for (const s of [-1, 1]) corner(b, s);
   b.flush();
 }
 // sides run between front and back walls; rot ±90 so local +z faces out
 const SIDE_LEN = D - 2 * T;                            // butt joints (an overlap would put two wall tops in one plane)
 {
-  // side L (+X): rot 90, local x -> model -z. Waiting room at the front (model z > 0 => local x < 0), studio behind.
+  // side L (+X): rot 90, local x -> model -z. The flat's east wall: over the kitchen counter (sill above the sink), over
+  // the desk, and a little high one in the bathroom over the toilet
   const g = m.group('wall_side_L', { parent: walls, at: [HX - T / 2, 0, 0], rot: [0, 90, 0] });
   const b = bag(g, 'sideL');
-  wall(b, SIDE_LEN, T, EAVE, [win(-2.0, 2.0), win(2.0, 1.6)]);
+  wall(b, SIDE_LEN, T, EAVE, [win(-2.15, 1.0, 1.15), win(0.2, 1.2), win(1.6, 0.5, 1.6, 2.2)]);
   b.flush();
 }
 {
@@ -161,19 +165,12 @@ const SIDE_LEN = D - 2 * T;                            // butt joints (an overla
   wall(b, SIDE_LEN, T, EAVE, [], { plinth: false });
   b.flush();
 }
-// inner partitions
-{
-  const g = m.group('wall_inner_across', { parent: walls, at: [0, 0, P.across.z] });
-  const b = bag(g, 'across');
-  wall(b, IN.x1 - IN.x0 + 4 * EMBED, PT, PH, P.across.doors.map(d => ({ c: d.x, w: d.w, y0: 0, y1: INNER_DOOR_H, kind: 'gap' })), { outer: false, base: EMBED }); // ends 2 cm into the side walls
-  b.flush();
-}
-{
-  const za = P.down.z0 - 2 * EMBED, zb = P.down.z1 - PT / 2;           // 2 cm into the back wall (taller), butts the across wall (same height)
-  const len = zb - za, cz = (za + zb) / 2;
-  const g = m.group('wall_inner_down', { parent: walls, at: [P.down.x, 0, cz], rot: [0, 90, 0] });
-  const b = bag(g, 'down');
-  wall(b, len, PT, PH, [], { outer: false, base: EMBED });
+// inner partitions (CLINIC.partitions.walls): one group per wall, rot 90 for those running along z (local x -> model -z)
+for (const [name, p] of Object.entries(PW)) {
+  const alongX = typeof p.z === 'number', [s0, s1] = alongX ? p.x : p.z, len = s1 - s0, c = (s0 + s1) / 2;
+  const g = m.group(`wall_inner_${name}`, { parent: walls, at: alongX ? [c, 0, p.z] : [p.x, 0, c], rot: alongX ? [0, 0, 0] : [0, 90, 0] });
+  const b = bag(g, name);
+  wall(b, len, PT, PH, (p.doors ?? []).map(([dc, dw]) => ({ c: alongX ? dc - c : -(dc - c), w: dw, y0: 0, y1: INNER_DOOR_H, kind: 'gap' })), { outer: false, base: EMBED });
   b.flush();
 }
 
@@ -181,20 +178,33 @@ const SIDE_LEN = D - 2 * T;                            // butt joints (an overla
 const interior = m.group('interior');
 const FY = [0.005, FLOOR_T];                      // floor slab y span (bottom lifted off the ground plane)
 {
-  const b = bag(interior, 'floor'), E = 0.015;        // floors run 1.5 cm under the walls
-  // waiting room: pale slab with mint squares (a coarse checker) over the whole front half; edges run 1 cm under the walls
-  const NX = 8, NZ = 4, wz0 = P.across.z, wz1 = IN.z1, tx = (IN.x1 - IN.x0) / NX, tz = (wz1 - wz0) / NZ;
-  b.span('pale', [IN.x0 - E, IN.x1 + E], FY, [wz0, wz1 + E]);
-  const edge = (v, lo, hi, inLo = false) => (Math.abs(v - lo) < 1e-6 ? (inLo ? lo + 0.003 : lo - 0.005) : Math.abs(v - hi) < 1e-6 ? hi + 0.005 : v); // tile ends off the slab's and the back floors' planes
-  for (let i = 0; i < NX; i++) for (let k = 0; k < NZ; k++) if ((i + k) % 2)
-    b.span('mint', [edge(IN.x0 + i * tx, IN.x0, IN.x1), edge(IN.x0 + (i + 1) * tx, IN.x0, IN.x1)], [0.012, FLOOR_T + 0.004],
-      [edge(wz0 + k * tz, wz0, wz1, true), edge(wz0 + (k + 1) * tz, wz0, wz1, true)]);
-  // exam room: pale. studio: wood planks (alternate planks 6 mm proud) over a dark base that shows in the gaps
-  b.span('pale', [IN.x0 - E, P.down.x], FY, [IN.z0 - E, P.across.z]);
-  const NP = 6, z0 = IN.z0 - E, pw = (P.across.z - z0) / NP;
-  for (let k = 0; k < NP; k++)
-    b.span('wood', [P.down.x, IN.x1 + E], [FY[0], FLOOR_T + (k % 2) * 0.006], [z0 + k * pw + (k ? 0.01 : 0), z0 + (k + 1) * pw - (k < NP - 1 ? 0.01 : 0)]);
-  b.span('dark', [P.down.x + 0.005, IN.x1 + E - 0.005], [0.012, FLOOR_T - 0.004], [z0 + 0.008, P.across.z - 0.008]);
+  const b = bag(interior, 'floor'), E = 0.015;        // floors run 1.5 cm under the outer walls
+  const EX = PW.exam_down.x, EZ = PW.exam_across.z, BX = PW.bath_down.x, BZ = PW.bath_across.z;
+  // checker tiles 3 mm proud of a slab, every other one, 3 mm in from the region's edges (no face on a slab's edge plane)
+  const checker = (mat, [x0, x1], [z0, z1], nx, nz) => {
+    const tx = (x1 - x0) / nx, tz = (z1 - z0) / nz, i3 = (v, lo, hi) => Math.min(hi - 0.003, Math.max(lo + 0.003, v));
+    for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) if ((i + k) % 2)
+      b.span(mat, [i3(x0 + i * tx, x0, x1), i3(x0 + (i + 1) * tx, x0, x1)], [0.012, FLOOR_T + 0.004], [i3(z0 + k * tz, z0, z1), i3(z0 + (k + 1) * tz, z0, z1)]);
+  };
+  // the waiting room: pale slab with mint squares, an L round the exam room: the front strip and the back bay beside it
+  b.span('pale', [IN.x0 - E, A], FY, [EZ, IN.z1 + E]);
+  b.span('pale', [EX, A], FY, [IN.z0 - E, EZ]);
+  checker('mint', [IN.x0, A], [EZ, IN.z1], 8, 4);
+  checker('mint', [EX, A], [IN.z0, EZ], 4, 4);
+  // exam room: pale
+  b.span('pale', [IN.x0 - E, EX], FY, [IN.z0 - E, EZ]);
+  // the flat: wood planks along x (alternate planks 6 mm proud) over a dark base that shows in the gaps; the bathroom's
+  // corner is left out for its own pale floor with a slate checker
+  const NP = 14, z0 = IN.z0 - E, z1 = IN.z1 + E, pw = (z1 - z0) / NP;
+  for (let k = 0; k < NP; k++) {
+    const a = z0 + k * pw + (k ? 0.01 : 0), e = z0 + (k + 1) * pw - (k < NP - 1 ? 0.01 : 0), y = [FY[0], FLOOR_T + (k % 2) * 0.006];
+    if (a < BZ) b.span('wood', [A, BX], y, [a, Math.min(e, BZ)]);
+    if (e > BZ) b.span('wood', [A, IN.x1 + E], y, [Math.max(a, BZ), e]);
+  }
+  b.span('dark', [A + 0.005, BX - 0.005], [0.012, FLOOR_T - 0.004], [z0 + 0.008, BZ]);
+  b.span('dark', [A + 0.005, IN.x1 + E - 0.005], [0.012, FLOOR_T - 0.004], [BZ, z1 - 0.008]);
+  b.span('pale', [BX, IN.x1 + E], FY, [IN.z0 - E, BZ]);
+  checker('slate', [BX, IN.x1], [IN.z0, BZ], 5, 7);
   b.flush();
 }
 {
@@ -261,11 +271,11 @@ function bench(name, at, rotY, L) {
   }
   b.flush();
 }
-// (a) along the east (+X) wall: back at inner.x1 - 5 mm, seat out to inner.x1 - 0.7, running z 0.35 .. 3.7.
-//     rot -90: local x -> model +z, local z -> model -x
-bench('bench_east', [IN.x1 - 0.005, 0, 0.35], -90, 3.7 - 0.35);
-// (b) along the waiting-room face of the across partition, x -1.0 .. 2.0 (clear of the studio doorway at 2.6 +- 0.55)
-bench('bench_partition', [-1.0, 0, P.across.z + PT / 2 + 0.005], 0, 3.0);
+// two facing each other across the waiting room's back bay, z -3.75 .. -0.4 (spots.benches):
+// (a) on the flat's wall, back 5 mm off its west face; rot -90: local x -> model +z, local z -> model -x
+bench('bench_apt', [A - PT / 2 - 0.005, 0, -3.75], -90, 3.35);
+// (b) on the exam room's east wall; rot 90: local x -> model -z, local z -> model +x
+bench('bench_exam', [PW.exam_down.x + PT / 2 + 0.005, 0, -0.4], 90, 3.35);
 
 // ---- roof: low gable, ridge along x. Underside line y = Y_PK - S*|z| passes through the wall top at the outer face (z = HZ)
 const roof = m.group('roof');

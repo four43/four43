@@ -1,0 +1,16 @@
+{
+  "title": "Doctor's bag",
+  "description": "Dr. Emmy's doctor's bag for the desk in her flat: a chunky Kenney-style Gladstone bag, dark red-brown leather with a rounded top split by a brass clasp, a carry handle on two brass mounts, a white patch with a red cross on the front, short feet. Static prop, no clips. Sized for the desk top (the game draws the Furniture Kit about twice its size).",
+  "size": [0.43, 0.42, 0.22],
+  "tolerance": 0.08,
+  "grounded": true,
+  "nodes": ["body", "lid", "clasp", "handle", "patch"],
+  "budget": { "tris": 600, "materials": 5, "kb": 60 },
+  "checks": [
+    "FRONT tile: a wide dark red-brown bag, wider than tall, with a rounded top",
+    "FRONT tile: a white square patch with a red cross sits on the front face, below the clasp line",
+    "FRONT tile: a brass band runs along the bag where the rounded top meets the body",
+    "3/4 tile: a dark grip stands on top on two short posts with brass mounts",
+    "LEFT tile: the bag's bottom sits on the grid line, nothing floats"
+  ]
+}

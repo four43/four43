@@ -148,7 +148,7 @@ test('desktop (v3 R3): a whole vet visit with the mouse: check in, the exam room
     await world(game, () => { const d = window.engine.debug; d.sicken('pig', 2, 'cold'); d.sim.clinic.admit('pig', 2); });
     const click = async w => { const at = await game.point({ world: w }); await game.page.mouse.click(at.x, at.y); await game.step(2); for (let k = 0; k < 40; k++) await frames(game); };
     await click([CLINIC.x, 4.2, CLINIC.z - 0.7]); await expectState(game, 'focus', 'clinic');
-    await click([CLINIC.x - 3.5, 0, CLINIC.z - 3.2]); await expectState(game, 'focus', 'clinic.exam');
+    await click([CLINIC.x + CLINIC.examRoom.x0 + 0.8, 0, CLINIC.z - 3.2]); await expectState(game, 'focus', 'clinic.exam');
     for (let i = 0; i < 40 && (await game.state()).clinic.exam !== 'patient'; i++) await game.step(30);
     assert.equal((await game.state()).clinic.exam, 'patient', 'on the table');
     for (let k = 0; k < 30; k++) await frames(game); // the close-up settles
@@ -163,7 +163,7 @@ test('desktop (v3 R3): a whole vet visit with the mouse: check in, the exam room
     };
     await drag('shot');
     assert.equal((await game.state()).clinic.exam, 'cured');
-    await game.step(60 * 4);
+    for (let i = 0; i < 40 && (await game.state()).clinic.exam !== 'empty'; i++) await game.step(30); // the lollipop, then walking out (2.9.0)
     const s = await game.state(); assert.deepEqual(s.clinic.queue, []); assert.deepEqual(s.sick, []);
   } finally { await game.close(); }
 });

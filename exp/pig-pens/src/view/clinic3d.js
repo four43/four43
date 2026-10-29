@@ -30,10 +30,14 @@ export function createExamRoom({ root, assets, sim }) {
       T.n.quaternion.slerp(held ? qHeld : qHang, held ? Math.min(1, dt * 12) : k);
       T.n.scale.setScalar(T.n.scale.x + ((held ? HELD : 1) - T.n.scale.x) * Math.min(1, dt * 10)); // a held tool is bigger in the hand
     }
-    // the lollipop: bobbing in front of the patient while it has its treat
-    const ex = sim.clinic.exam, p = ex.state === 'cured' ? sim.clinic.patient() : null;
+    // the lollipop: bobbing in front of the patient while it has its treat, and carried out of the door
+    const ex = sim.clinic.exam, p = ex.state === 'cured' || ex.state === 'leave' ? sim.clinic.patient() : null;
     lolly.visible = !!p;
-    if (p) { lolly.position.set(p.px + 0.45, p.py + 0.55 + 0.05 * Math.sin(t * 5), p.pz); lolly.quaternion.copy(q.setFromEuler(new THREE.Euler(0, Math.PI / 2, 0.25 * Math.sin(t * 3)))); }
+    if (p) { // on the table it faces the camera (east); walking out, it is in the patient's mouth
+      const fy = ex.state === 'leave' ? p.yaw : Math.PI / 2, s = Math.sin(fy), c = Math.cos(fy);
+      lolly.position.set(p.px + s * 0.45, p.py + 0.55 + 0.05 * Math.sin(t * 5), p.pz + c * 0.45);
+      lolly.quaternion.copy(q.setFromEuler(new THREE.Euler(0, fy, 0.25 * Math.sin(t * 3))));
+    }
   }
   return { update, dispose() { root.remove(group); } };
 }

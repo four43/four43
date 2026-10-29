@@ -118,7 +118,10 @@ test('a visit: into the exam room, “Next please!”, a check-up clue, a wrong 
   const { h, s, sim, dbg } = farm(); const p = adults(sim)[4];
   dbg.sicken('pig', p.i, 'cold'); sim.clinic.admit('pig', p.i);
   intoExam(h, s);
-  h.until(() => sim.clinic.exam.state === 'patient', { maxSteps: 60 * 30, message: 'the patient on the table' });
+  // in: walking (its walk clip runs off its speed), never closer to the vet than her footprint and its own
+  let walked = 0, gap = Infinity; const clear = () => { if (sim.vet.node === 'examVet' && !sim.vet.moving) gap = Math.min(gap, Math.hypot(p.px - sim.vet.x, p.pz - sim.vet.z)); };
+  h.until(() => { if (sim.clinic.exam.state === 'walk') { walked = Math.max(walked, p.speed); clear(); } return sim.clinic.exam.state === 'patient'; }, { maxSteps: 60 * 30, message: 'the patient on the table' });
+  assert.ok(walked > 0.5, `walked in (${walked})`);
   const T = CLINIC.spots.examTable.at;
   assert.ok(Math.hypot(p.px - CLINIC.x - T[0], p.pz - CLINIC.z - T[2]) < 1e-6 && p.py > CLINIC.spots.tableTop, 'up on the table');
   assert.equal(sim.vet.node, 'examVet');
@@ -128,7 +131,11 @@ test('a visit: into the exam room, “Next please!”, a check-up clue, a wrong 
   assert.equal(h.events.since(m).first('exam')?.what, 'oops'); assert.ok(p.sick, 'still poorly');
   m = h.mark(); useTool(h, sim, 'shot');
   assert.equal(h.events.since(m).first('exam')?.what, 'cured'); assert.equal(p.sick, null); assert.equal(sim.clinic.exam.state, 'cured');
-  h.until(() => !p.clinic, { maxSteps: 60 * 5 });
+  // out: down off the table and walking happy to the front door, round the vet again
+  h.until(() => sim.clinic.exam.state === 'leave', { maxSteps: 60 * 5, message: 'off home' });
+  let out = 0; h.until(() => { if (sim.clinic.exam.state === 'leave') { out = Math.max(out, p.speed); clear(); } return !p.clinic; }, { maxSteps: 60 * 20, message: 'out of the door' });
+  assert.ok(out > 1, `walked out, and quicker (${out})`);
+  assert.ok(gap > 0.6, `round the vet, not through her (${gap.toFixed(2)} m)`);
   assert.equal(p.state, ST.ZOOM); assert.ok(p.pz > sim.lay.clinic.z1, 'out of the front door');
   assert.equal(sim.clinic.queue.length, 0); assert.equal(sim.clinic.exam.state, 'empty');
 });

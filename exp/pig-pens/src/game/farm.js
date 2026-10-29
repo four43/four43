@@ -75,6 +75,7 @@ export function makeFarm() {
       if (t.kind === 'door') return api.toggleDoor(e);
       if (t.kind === 'building') return api.enter(e, t.id);
       if (t.kind === 'exam') return api.enter(e, 'clinic.exam');
+      if (t.kind === 'prop') { sim.clinic.useProp(t.id); return; }
       if (t.kind === 'outside') return api.leave(e);
       api.select(e, t);
     },

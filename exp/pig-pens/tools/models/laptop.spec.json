@@ -1,0 +1,14 @@
+{
+  "title": "Laptop",
+  "description": "Dr. Emmy's laptop for the desk in her flat, Kenney Furniture Kit style (pale grey shell, darker keys), at the game's furniture scale. Rest pose shut. The lid hangs from `lid`, a pivot on the base's back top edge: rotation.x -1.85 opens it to a working angle, its screen facing the front (+Z). Static: the game swings the lid.",
+  "size": [0.44, 0.048, 0.3],
+  "tolerance": 0.08,
+  "grounded": true,
+  "nodes": ["base", "lid", "lid_shell", "screen", "keys", "trackpad", "logo"],
+  "budget": { "tris": 300, "materials": 4, "kb": 40 },
+  "checks": [
+    "3/4 tile: a thin pale grey slab (the shut laptop), its lid sitting flat on the base with no gap or overlap",
+    "diag tile: the lid's pivot sits on the base's back top edge (-Z side)",
+    "LEFT tile: the base sits on the grid line, nothing floats"
+  ]
+}

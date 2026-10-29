@@ -99,7 +99,7 @@ export function classify(sim, r, focus = null) {
   if (bi >= 0) { const b = flock.birds[bi]; cands.push({ kind: 'bird', i: bi, d: dist(b.px, b.py, b.pz) - 0.4 }); }
   const f = flock.fox; if (foxHit(flock, r)) cands.push({ kind: 'fox', d: dist(f.x, 0.35, f.z) - 0.6 });
   if (dogHit(sim.dog, r)) cands.push({ kind: 'dog', d: dist(sim.dog.x, 0.4, sim.dog.z) });
-  if (focus?.startsWith('clinic') && vetHit(sim.vet, r)) cands.push({ kind: 'vet', d: dist(sim.vet.x, 0.75, sim.vet.z) });
+  if ((focus?.startsWith('clinic') || (!focus && sim.vet.outside)) && vetHit(sim.vet, r)) cands.push({ kind: 'vet', d: dist(sim.vet.x, 0.75, sim.vet.z) });
   const gh = rayGate(sim.lay, r); if (gh) cands.push({ kind: 'gate', id: gh.gate.id, d: gh.t1 });
   const ch = focus === 'coop' ? rayBox(r, sim.lay.coop.popPick) : rayCoop(sim.lay, r); if (ch) cands.push({ kind: 'door', d: ch.t1 });
   const bh = rayBuilding(sim.lay, r, focus); if (bh) cands.push({ kind: 'building', id: bh.b.id, d: bh.d });
@@ -110,6 +110,10 @@ export function classify(sim, r, focus = null) {
     if (focus === 'barn') { const i = sim.stallOwner[k]; if (i >= 0) cands.push({ kind: 'pig', i, d: hb.t0 - 0.05 }); }
     else { const b = sim.flock.birds.find(o => o.perch === k); if (b) cands.push({ kind: 'bird', i: b.i, d: hb.t0 - 0.05 }); }
   });
+  // in the clinic, the shower, the sinks, the toilet, the laptop and the fridge work (2.9.0)
+  if (focus === 'clinic') for (const box of sim.lay.buildings.find(b => b.id === 'clinic').props) {
+    const hb = rayBox(r, box); if (hb) cands.push({ kind: 'prop', id: box.id, d: hb.t0 });
+  }
   if (cands.length) { const c = cands.sort((a, b) => a.d - b.d)[0]; return c.i !== undefined ? { kind: c.kind, i: c.i } : c.id !== undefined ? { kind: c.kind, id: c.id } : { kind: c.kind }; }
   if (h) {
     if (focus && outsideFocus(sim.lay, focus, h.x, h.z)) return { kind: 'outside' }; // inside, the grass round it goes out first

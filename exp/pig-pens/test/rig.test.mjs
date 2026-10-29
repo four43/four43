@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import * as OLD from './fixtures/rig-v2.1.0.js';
 import { createRig, cameraMode } from '../src/view/rig.js';
+import { CLINIC } from '../src/defs/buildings.js';
 
 const canvas = (w, h) => ({ clientWidth: w, clientHeight: h, getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h }) });
 const same = (a, b, what) => {
@@ -35,7 +36,7 @@ test('going in and out (v3 §5.3): leaving one building and tapping another mid-
   const run = (focus, seconds) => { for (let i = 0; i < seconds * 60; i++) { followFocus(focus, 1 / 60); R.orbit.update(1 / 60); } };
   run('barn', 2); assert.ok(st.dist < farm.dist * 0.6, 'framed on the barn');
   run(null, 0.25);                       // on the way out…
-  run('clinic', 2); assert.ok(Math.abs(st.tx - 11.9) < 0.5, '…the clinic takes over');
+  run('clinic', 2); assert.ok(Math.abs(st.tx - CLINIC.x) < 0.5, '…the clinic takes over');
   run(null, 3);
   assert.ok(Math.hypot(st.tx - farm.tx, st.tz - farm.tz) < 0.05 && Math.abs(st.dist - farm.dist) < 0.05, `back at the farm view (${st.tx.toFixed(2)}, ${st.tz.toFixed(2)}, ${st.dist.toFixed(1)})`);
   assert.deepEqual(o.limits.bounds, { x: [-34, 34], z: [-30, 30] }, 'and the farm’s limits');

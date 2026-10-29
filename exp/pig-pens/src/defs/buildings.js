@@ -55,58 +55,93 @@ export const BARN = {
 }
 
 export const CLINIC = {
-  x: 11.9, z: -22.3,                 // x 7.4 … 16.4, butting up to the barn
-  w: 9.0, d: 8.0, wall: 0.2,
+  x: 13.9, z: -22.3,                 // x 7.4 … 20.4, butting up to the barn (13 m wide since 2.9.0: the vet's flat runs down the east side)
+  w: 13.0, d: 8.0, wall: 0.2,
   eave: 3.0, ridge: 4.3, overhang: 0.3,
-  door: { x: 1.6, w: 1.4, h: 2.3 },  // front door (decorative in R1: always shut)
-  // inner partitions (full height, cut to stubs whenever the clinic is in focus): one across the middle (local z 0) with a
-  // doorway into each back room, one down the middle of the back half between the exam room and the studio
+  door: { x: -0.4, w: 1.4, h: 2.3 }, // front door (decorative: always shut)
+  apt: 2.0,                          // the flat's west wall (local x): the clinic west of it, Dr. Emmy's flat east of it
+  // inner partitions (full height, cut to stubs whenever the clinic is in focus), by centre line in local x/z: `x` and a
+  // z span, or `z` and an x span. Ends that meet an outer wall run 2 cm into it; ends that meet another partition butt its
+  // face. Each doorway is [centre along the wall, width].
   partitions: {
-    across: { z: 0, doors: [{ x: -2.2, w: 1.3 }, { x: 2.6, w: 1.1 }] },
-    down: { x: 0, z0: -3.8, z1: 0 },
     t: 0.12, h: 2.6,
+    walls: {
+      exam_down:   { x: -2.0, z: [-3.82, 0.06] },                         // the exam room's east wall
+      exam_across: { z: 0, x: [-6.32, -2.06], doors: [[-4.2, 1.6]] },    // the exam room's front wall, its doorway on the lobby (wide: the vet and a patient pass)
+      apt:         { x: 2.0, z: [-3.82, 3.82], doors: [[1.2, 1.0]] },     // the flat's west wall: a doorway from the waiting room by the table
+      closet_down: { x: 3.4, z: [-3.82, -1.54], doors: [[-2.55, 0.8]] },  // the closet's east wall, its doorway on the hall
+      closet_across: { z: -1.6, x: [2.06, 3.34] },
+      bath_down:   { x: 4.4, z: [-3.82, -0.94], doors: [[-2.0, 0.75]] },  // the bathroom's west wall, its doorway on the hall
+      bath_across: { z: -1.0, x: [4.46, 6.32] },
+    },
   },
   // places (model-local [lx, ly, lz], yaw facing): the view furnishes them, the vet walks between them
   spots: {
-    desk:       { at: [-2.6, 0, 1.7], yaw: Math.PI / 2 },      // reception desk; the vet stands behind it at deskVet
-    deskVet:    { at: [-3.5, 0, 1.7], yaw: Math.PI / 2 },
-    waiting:    { at: [0.9, 0, 2.0], yaw: 0 },
-    examTable:  { at: [-2.2, 0, -2.2], yaw: 0 },
-    examVet:    { at: [-2.2, 0, -1.0], yaw: Math.PI },
-    pegboard:   { at: [-4.25, 1.5, -2.2], yaw: Math.PI / 2 },  // on the west wall of the exam room (R3)
-    sink:       { at: [-0.5, 0, -3.4], yaw: Math.PI },
-    bed:        { at: [3.3, 0, -2.6], yaw: -Math.PI / 2 },
-    kitchen:    { at: [1.0, 0, -3.4], yaw: Math.PI },
-    kitchenVet: { at: [1.0, 0, -2.5], yaw: Math.PI },
-    rug:        { at: [2.6, 0, -1.7], yaw: 0 },
-    catBed:     { at: [3.6, 0, -0.7], yaw: 0 },
-    plant:      { at: [-3.9, 0, 3.5], yaw: 0 },
-    // 6 waiting places for patients (R3) on the two animal benches (clinic.model.mjs bench_east, bench_partition: seat top
-    // 0.33): [x, seat y, z, yaw]; the east bench's sitters face the room (−x), the partition bench's face the front (+z)
-    benches: [[3.95, 0.33, 0.95, -Math.PI / 2], [3.95, 0.33, 2.05, -Math.PI / 2], [3.95, 0.33, 3.15, -Math.PI / 2],
-      [-0.5, 0.33, 0.42, 0], [0.5, 0.33, 0.42, 0], [1.5, 0.33, 0.42, 0]],
+    desk:       { at: [-4.6, 0, 1.7], yaw: Math.PI / 2 },      // reception desk; the vet stands behind it at deskVet
+    deskVet:    { at: [-5.5, 0, 1.7], yaw: Math.PI / 2 },
+    waiting:    { at: [0.0, 0, -1.2], yaw: 0 },
+    examTable:  { at: [-4.2, 0, -2.2], yaw: 0 },
+    examVet:    { at: [-4.6, 0, -1.05], yaw: Math.PI },          // at the table's west half: patients come round its east end
+    pegboard:   { at: [-6.25, 1.5, -2.2], yaw: Math.PI / 2 },  // on the west wall of the exam room (R3)
+    sink:       { at: [-2.5, 0, -3.4], yaw: Math.PI },
+    // the flat (2.9.0): closet and bathroom across a little hall at the back, the bed below the closet (pillow to the back
+    // wall), her desk across from it, the kitchenette down the east wall, a table for two by the doorway
+    bed:        { at: [2.64, 0, -0.45], yaw: 0 },              // the bed's middle; yaw 0: the pillow at -z
+    study:      { at: [4.95, 0, -0.2], yaw: Math.PI / 2 },     // in front of her desk on the east wall
+    kitchenVet: { at: [5.0, 0, 2.15], yaw: Math.PI / 2 },      // at the kitchen sink
+    dining:     { at: [3.7, 0, 1.35], yaw: 0 },                // at the head of the table
+    table:      { at: [3.7, 0, 2.4], yaw: Math.PI / 2 },       // long side along z
+    rug:        { at: [4.2, 0, -0.3], yaw: Math.PI / 2 },
+    catBed:     { at: [2.45, 0, 3.4], yaw: 0 },
+    plant:      { at: [-5.9, 0, 3.5], yaw: 0 },
+    // her rounds outside (2.9.0): along the north pens' fence (world z -15.3, 0.9 m out from it) and at the chicken run's
+    // south fence, facing them; the pigs and hens come to the fence to say hello
+    penEast:    { at: [-2.9, 0, 7.0], yaw: 0 },
+    penWest:    { at: [-23.4, 0, 7.0], yaw: 0 },
+    run:        { at: [-26.4, 0, 3.7], yaw: Math.PI },
+    // 6 waiting places for patients (R3) on the two animal benches facing each other across the waiting room (clinic.model.mjs
+    // bench_apt on the flat's wall, bench_exam on the exam room's; seat top 0.33): [x, seat y, z, yaw]
+    benches: [[1.59, 0.33, -3.15, -Math.PI / 2], [1.59, 0.33, -2.05, -Math.PI / 2], [1.59, 0.33, -0.95, -Math.PI / 2],
+      [-1.59, 0.33, -3.15, Math.PI / 2], [-1.59, 0.33, -2.05, Math.PI / 2], [-1.59, 0.33, -0.95, Math.PI / 2]],
     tableTop: 0.87,                                              // the exam table's pad (clinic.model.mjs)
-    frontDoor: [1.6, 0, 4.9],                                    // just outside the front door: where patients come out
+    frontDoor: [-0.4, 0, 4.9],                                   // just outside the front door: where patients come out
   },
   // the vet's walk graph: named points (local x, z) and the links she may walk straight along
   walk: {
     // the desk (spots.desk, about 0.8 × 1.6 m along z) stands between her place behind it and the lobby: she goes round its
-    // north end (deskEnd → aisle), never through it
-    points: { deskVet: [-3.5, 1.7], deskEnd: [-3.5, 0.55], aisle: [-1.6, 0.55], lobby: [0.0, 2.2], waiting: [2.4, 1.8],
-      examDoor: [-2.2, 0.0], examVet: [-2.2, -1.0], studioDoor: [2.6, 0.0], kitchenVet: [1.0, -2.5], bedSide: [2.4, -2.6] },
-    links: [['deskVet', 'deskEnd'], ['deskEnd', 'aisle'], ['aisle', 'lobby'], ['aisle', 'examDoor'], ['lobby', 'waiting'], ['lobby', 'examDoor'], ['examDoor', 'examVet'], ['lobby', 'studioDoor'],
-      ['waiting', 'studioDoor'], ['studioDoor', 'kitchenVet'], ['studioDoor', 'bedSide'], ['kitchenVet', 'bedSide']],
+    // north end (deskEnd → aisle), never through it. In the flat everything hangs off `hub`, clear of the bed's foot and the table
+    points: { deskVet: [-5.5, 1.7], deskEnd: [-5.5, 0.55], aisle: [-3.6, 0.55], lobby: [-1.0, 2.0], waiting: [0.0, -1.2],
+      examDoor: [-4.6, 0.0], examVet: [-4.6, -1.05], aptDoor: [2.0, 1.2], aptIn: [2.7, 1.2], hub: [3.9, 0.85],
+      bedSide: [3.65, -0.45], study: [4.95, -0.2], dining: [3.7, 1.35], kitchenVet: [5.0, 2.15],
+      // out of the front door (it opens for her) and along the strip of field between the buildings and the pens
+      frontIn: [-0.4, 3.0], frontOut: [-0.4, 5.0], yard: [-0.4, 6.6], penEast: [-2.9, 7.0], barnFront: [-14.3, 6.6], penWest: [-23.4, 7.0], run: [-26.4, 3.7] },
+    links: [['deskVet', 'deskEnd'], ['deskEnd', 'aisle'], ['aisle', 'lobby'], ['aisle', 'examDoor'], ['lobby', 'waiting'], ['lobby', 'examDoor'], ['examDoor', 'examVet'],
+      ['lobby', 'aptDoor'], ['waiting', 'aptDoor'], ['aptDoor', 'aptIn'], ['aptIn', 'hub'], ['hub', 'bedSide'], ['hub', 'study'], ['hub', 'dining'],
+      ['hub', 'kitchenVet'], ['bedSide', 'study'], ['dining', 'kitchenVet'],
+      ['lobby', 'frontIn'], ['frontIn', 'frontOut'], ['frontOut', 'yard'], ['yard', 'penEast'], ['penEast', 'barnFront'], ['barnFront', 'penWest'], ['penWest', 'run']],
   },
 };
 // The pegboard's tools (R3, vet-tools.model.mjs): where each hangs (its peg, model-local [x, y, z]; the board faces +x on
 // the exam room's west wall): the check-ups along the top, the treatments below. A tool hangs down from its peg, ~0.4 m.
 CLINIC.pegs = [
-  ...['stethoscope', 'otoscope', 'thermometer', 'magnifier'].map((tool, k) => ({ tool, at: [-4.22, 1.95, -2.2 - 0.57 + k * 0.38] })),
-  ...['shot', 'drops', 'spoon', 'tweezers', 'bandage'].map((tool, k) => ({ tool, at: [-4.22, 1.47, -2.2 - 0.64 + k * 0.32] })),
+  ...['stethoscope', 'otoscope', 'thermometer', 'magnifier'].map((tool, k) => ({ tool, at: [-6.22, 1.95, -2.2 - 0.57 + k * 0.38] })),
+  ...['shot', 'drops', 'spoon', 'tweezers', 'bandage'].map((tool, k) => ({ tool, at: [-6.22, 1.47, -2.2 - 0.64 + k * 0.32] })),
 ];
+// The flat's (and the exam room's) things a tap works (2.9.0, clinic.js PROPS): each one's tap box (local [x0, x1], [y0, y1],
+// [z0, z1]) and its water's spout (local [x, y, z]: the shower head, a tap) and basin (local [x, y, z, radius]: where a
+// sink's or the toilet's water lies). The view furnishes the Kenney pieces at these places.
+CLINIC.props = {
+  shower:      { box: [[5.1, 6.3], [0, 2.3], [-3.8, -2.6]], spout: [5.7, 2.12, -3.2], basin: [5.7, 0.1, -3.2, 0.5] },
+  bathSink:    { box: [[5.75, 6.3], [0.55, 1.25], [-2.6, -2.0]], spout: [6.16, 1.13, -2.3], basin: [6.02, 0.98, -2.3, 0.2] },
+  toilet:      { box: [[5.4, 6.3], [0, 0.9], [-1.85, -1.25]], basin: [5.66, 0.6, -1.55, 0.17] },
+  laptop:      { box: [[5.55, 6.1], [0.78, 1.25], [-0.2, 0.3]] },
+  fridge:      { box: [[5.65, 6.3], [0, 1.3], [0.75, 1.65]] },
+  kitchenSink: { box: [[5.35, 6.3], [0.6, 1.2], [1.65, 2.55]], spout: [5.98, 1.18, 2.1], basin: [5.86, 1.0, 2.22, 0.28] },
+  examSink:    { box: [[-2.95, -2.05], [0.5, 1.3], [-3.8, -3.2]], spout: [-2.5, 1.06, -3.54], basin: [-2.5, 0.88, -3.5, 0.24] },
+};
 // the exam room (local x0..x1, z0..z1) and the exam close-up's framing (the camera east of the table, looking west at it and the board)
-CLINIC.examRoom = { x0: -4.3, x1: -0.06, z0: -3.8, z1: -0.06 };
-CLINIC.examView = { target: [-3.0, 1.0, -2.2], dist: 5.4, pitch: 0.5, yaw: Math.PI / 2 };
+CLINIC.examRoom = { x0: -6.3, x1: -2.06, z0: -3.8, z1: -0.06 };
+CLINIC.examView = { target: [-5.0, 1.0, -2.2], dist: 5.4, pitch: 0.5, yaw: Math.PI / 2 };
 CLINIC.inner = { x0: -CLINIC.w / 2 + CLINIC.wall, x1: CLINIC.w / 2 - CLINIC.wall, z0: -CLINIC.d / 2 + CLINIC.wall, z1: CLINIC.d / 2 - CLINIC.wall };
 
 export const BUILDINGS = { coop: COOP, barn: BARN, clinic: CLINIC };
@@ -114,7 +149,7 @@ export const BUILDINGS = { coop: COOP, barn: BARN, clinic: CLINIC };
 // Node names every building model must carry (test/buildings.test.mjs; the view's cutaway drives them):
 //   roof            group: everything above the eave (roof, gable infill, ridge, chimney, sign on the roof)
 //   walls           group holding one group per wall face: wall_front, wall_back, wall_side_L, wall_side_R (+X is the
-//                   model's left), and the clinic's wall_inner_across, wall_inner_down. Each face group has its origin on
+//                   model's left), and the clinic's wall_inner_<name> per CLINIC.partitions.walls. Each face group has its origin on
 //                   the ground (y 0) so a y-scale shrinks it, and everything on it (trim, windows, door frame), to a stub
 //   interior        group: floor and fittings that always show (stalls, dividers, roost bar, counters built in)
 //   door_L, door_R  (barn) leaves, origin at the hinge, shut at rest; pop_door (coop); door (clinic)

@@ -1,8 +1,8 @@
 {
   "title": "Vet clinic",
-  "description": "Kenney-style vet clinic, 9 x 8 m: cream walls with teal trim and big teal-framed windows, a low slate gable roof with a white paw-print sign over the front, a slate front door. Built-in interior for the cutaway: mint checker waiting room, pale exam room with exam table, sink and pegboard, wood-floored studio, two low animal benches in the waiting room. roof / walls (6 face groups, origins on the ground) / interior.",
+  "description": "Kenney-style vet clinic, 13 x 8 m: cream walls with teal trim and big teal-framed windows, a low slate gable roof with a white paw-print sign over the front, a slate front door. Built-in interior for the cutaway: mint checker waiting room wrapped round a pale exam room (exam table, sink, pegboard), two low animal benches facing each other in the waiting room, and down the east side the vet's flat: wood floor, a closet and a slate-checker bathroom across a little hall at the back. roof / walls (4 faces + 7 partitions, origins on the ground) / interior.",
   "size": [
-    9.37,
+    13.37,
     4.32,
     8.8
   ],
@@ -14,36 +14,42 @@
   "grounded": true,
   "nodes": [
     "roof",
-    "bench_east",
-    "bench_partition",
+    "bench_apt",
+    "bench_exam",
     "walls",
     "wall_front",
     "wall_back",
     "wall_side_L",
     "wall_side_R",
-    "wall_inner_across",
-    "wall_inner_down",
     "door",
     "interior",
     "exam_table",
     "sink",
-    "pegboard"
+    "pegboard",
+    "wall_inner_exam_down",
+    "wall_inner_exam_across",
+    "wall_inner_apt",
+    "wall_inner_closet_down",
+    "wall_inner_closet_across",
+    "wall_inner_bath_down",
+    "wall_inner_bath_across"
   ],
   "budget": {
-    "tris": 6000,
+    "tris": 9000,
     "materials": 7,
-    "kb": 300
+    "kb": 450
   },
   "checks": [
-    "FRONT tile: cream front wall with a slate door (small window, handle) right of centre under a teal canopy, and big teal-framed windows on both sides of it",
+    "FRONT tile: cream front wall with a slate door (small window, handle) left of centre under a teal canopy, big teal-framed windows either side, and two more windows on the flat's (+X) end",
     "FRONT tile: a white sign board with a teal paw print (pad + 4 toes) and a teal cross stands on the front roof slope",
     "3/4 tile: low two-sided slate gable roof with teal fascia and rake trim, overhanging the walls; cream gable end on the left (+X) side with a vent; the -X end is flush (no overhang) where it butts the barn",
     "3/4 tile: teal corner boards at the corners, slate plinth band at the base; nothing floats",
     "zoom walls: wall tops are clean and level at eave height with no roof pieces left on them",
-    "zoom interior TOP: three floors read clearly: mint/pale checker across the front half, pale exam room back-right on screen (model +X is screen-right in top view? judge by position: x<0), wood studio",
+    "zoom interior TOP: floors read clearly: mint/pale checker waiting room wrapped round the pale exam room (x<-2, back), the flat's wood planks down the +X side, its bathroom's slate checker in the back +X corner",
     "zoom interior 3/4: exam table (grey with mint pad) and a sink unit against the back wall in the exam room; a tan pegboard with dark dots on the exam room's west wall",
-    "zoom interior: two low wooden slat benches with mint cushion strips: one along the east (+X) wall of the waiting room, one along the waiting-room face of the across partition, stopping before the studio doorway",
-    "zoom interior: the other Furniture Kit spots (desk, bed, kitchen, rug, plant, cat bed) are clear floor",
-    "zoom sink: rim, basin, splashback and tap read as separate clean pieces with no flicker/stripes"
+    "zoom interior: two low wooden slat benches with mint cushion strips face each other across the waiting room's back bay, one on the exam room's wall, one on the flat's wall",
+    "zoom interior TOP: the flat's partitions: a closet (back, by the flat's west wall) with its doorway on the hall, a bathroom (back +X corner) with its doorway on the hall, and a doorway from the waiting room into the flat near the front",
+    "zoom sink: rim, basin, splashback and tap read as separate clean pieces with no flicker/stripes",
+    "zoom interior: the Furniture Kit spots (desk, bed, kitchen, table, rug, plant, cat bed) are clear floor"
   ]
 }

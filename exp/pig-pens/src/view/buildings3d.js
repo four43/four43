@@ -9,6 +9,7 @@ import { geometryUnder } from './models.js';
 import { createPlaques } from './plaques.js';
 import { createExamRoom } from './clinic3d.js';
 import { createEmotes } from './emotes.js';
+import { createFlat } from './flat3d.js';
 
 export const CUT = {
   ease: 4.5,          // 1/s: how fast the roof lifts and the walls drop (about half a second)
@@ -16,30 +17,52 @@ export const CUT = {
   stub: 0.45,         // m a cut wall keeps above its base (the clipping plane's height over the wall's foot)
   near: 0.2,          // a wall is cut when its outward normal points this much toward the camera (cos of the angle)
   doorOpen: 1.75,     // rad: the barn's leaves swing out this far
+  doorIn: 1.45,       // rad: the clinic's front door swings in this far
+  doorNear: 1.6,      // m: it opens for someone this close to it
 };
 // each wall face's outward normal in its building's frame; inner walls (no normal) are cut whenever the building is
 const NORMAL = { wall_front: [0, 1], wall_back: [0, -1], wall_side_L: [1, 0], wall_side_R: [-1, 0] };
 
-// The clinic's furniture (Kenney Furniture Kit, baked as furn_<name>): model, local [x, z], yaw, on top of (y), scale.
-// The kit's pieces sit off their origin, so each is recentred on its footprint first.
+// The clinic's furniture (Kenney Furniture Kit, baked as furn_<name>; `k`: another model, the Food Kit's or our own): model,
+// local [x, z], yaw, on top of (y), scale. The kit's pieces sit off their origin, so each is recentred on its footprint
+// first (`flat`: laid on its back first). A `prop` piece moves (flat3d.js), so it stays out of the merged draw. Kit fronts face +z: yaw π/2 turns one to face +x, -π/2 to face -x (the flat's east wall pieces).
 const FS = 2.1; // the kit is about half size beside a 1.5 m vet
-const S = CLINIC.spots;
+const S = CLINIC.spots, E = -Math.PI / 2; // E: backed onto the east wall, facing into the flat
+const TABLE = 0.327 * FS * 0.9, DESK = 0.384 * FS, COUNTER = 0.45 * FS; // table, desk and counter tops (the kit's heights × scale)
 const FURNISH = [
-  { m: 'desk', at: [S.desk.at[0], S.desk.at[2]], yaw: S.desk.yaw },
-  { m: 'computerScreen', at: [S.desk.at[0], S.desk.at[2] - 0.2], yaw: S.desk.yaw + Math.PI, y: 0.384 * FS, s: FS * 0.8 },
-  { m: 'trashcan', at: [-1.9, 2.9], yaw: 0 },
+  // the waiting room
+  { m: 'desk', at: [S.desk.at[0], S.desk.at[2]], yaw: S.desk.yaw + Math.PI }, // its drawers on Dr. Emmy's side
+  { m: 'computerScreen', at: [S.desk.at[0], S.desk.at[2] - 0.2], yaw: S.desk.yaw + Math.PI, y: DESK, s: FS * 0.8 },
+  { m: 'trashcan', at: [-3.9, 2.9], yaw: 0 },
   { m: 'pottedPlant', at: [S.plant.at[0], S.plant.at[2]], yaw: 0.4 },
-  { m: 'pottedPlant', at: [3.9, -0.1], yaw: 1.3, s: FS * 0.8 },
-  { m: 'coatRackStanding', at: [0.5, 3.45], yaw: 0 },
-  { m: 'bookcaseOpenLow', at: [-1.1, 3.55], yaw: Math.PI },
-  { m: 'bedSingle', at: [S.bed.at[0], S.bed.at[2]], yaw: S.bed.yaw },
-  { m: 'kitchenFridgeSmall', at: [0.45, -3.4], yaw: 0 },
-  { m: 'kitchenSink', at: [1.35, -3.4], yaw: 0 },
-  { m: 'kitchenCabinet', at: [2.25, -3.4], yaw: 0 },
-  { m: 'kitchenCoffeeMachine', at: [2.25, -3.45], yaw: 0, y: 0.45 * FS, s: FS * 0.8 },
-  { m: 'rugRounded', at: [S.rug.at[0], S.rug.at[2]], yaw: 0 },
-  { m: 'lampRoundFloor', at: [0.45, -0.55], yaw: 0 },
-  { m: 'pillow', at: [S.catBed.at[0], S.catBed.at[2]], yaw: 0.3, s: FS * 1.3 },
+  { m: 'pottedPlant', at: [1.45, 3.45], yaw: 1.3, s: FS * 0.8 },
+  { m: 'coatRackStanding', at: [-1.55, 3.45], yaw: 0 },
+  { m: 'bookcaseOpenLow', at: [-3.1, 3.55], yaw: Math.PI },
+  { m: 'lampRoundFloor', at: [0, -3.45], yaw: 0 },             // between the benches, under the back window
+  // the flat: closet, bathroom, bed, desk, kitchenette, table for two
+  { m: 'bookcaseClosedWide', at: [2.34, -2.7], yaw: Math.PI / 2 }, // her wardrobe, along the closet's west wall
+  { m: 'coatRackStanding', at: [3.0, -3.45], yaw: 0.5 },
+  { m: 'shower', at: [5.7, -3.2], yaw: 0, prop: 'shower' },
+  { m: 'bathroomSink', at: [6.05, -2.3], yaw: E, y: 0.09, s: FS * 0.85 }, // wall-hung: its pedestal foot just off the floor
+  { m: 'toilet', at: [5.87, -1.55], yaw: E, s: FS * 0.85, prop: 'toilet' },
+  { m: 'bedSingle', at: [S.bed.at[0], S.bed.at[2]], yaw: S.bed.yaw, s: FS * 0.9 },
+  { m: 'rugRounded', at: [S.rug.at[0], S.rug.at[2]], yaw: S.rug.yaw },
+  { m: 'desk', at: [5.89, -0.2], yaw: E },
+  { k: 'laptop', at: [5.82, 0.05], yaw: E, y: DESK, s: 1, prop: 'laptop' },
+  { k: 'doctorBag', at: [5.92, -0.62], yaw: E + 0.35, y: DESK, s: 1.4 },
+  { m: 'kitchenFridgeSmall', at: [6.0, 1.2], yaw: E, prop: 'fridge' },
+  { m: 'kitchenSink', at: [5.83, 2.1], yaw: E },
+  { m: 'kitchenCabinet', at: [5.83, 3.0], yaw: E },
+  { m: 'kitchenCoffeeMachine', at: [6.05, 3.25], yaw: E, y: COUNTER, s: FS * 0.8 },
+  { k: 'banana', at: [5.7, 2.85], yaw: 0.4, y: COUNTER, s: 0.7 },
+  { k: 'apple', at: [6.0, 2.75], yaw: 0, y: COUNTER, s: 0.9 },
+  { m: 'table', at: [S.table.at[0], S.table.at[2]], yaw: S.table.yaw, s: FS * 0.9 },
+  { m: 'chair', at: [2.95, 2.4], yaw: Math.PI / 2 },
+  { m: 'chair', at: [4.45, 2.4], yaw: -Math.PI / 2 },
+  { k: 'cupTea', at: [3.6, 1.95], yaw: 0.6, y: TABLE, s: 0.9 },
+  { k: 'bread', at: [3.75, 2.75], yaw: 0.3, y: TABLE, s: 0.9 },
+  { k: 'apple', at: [3.85, 2.3], yaw: 0, y: TABLE, s: 0.9 },
+  { m: 'pillow', at: [S.catBed.at[0], S.catBed.at[2]], yaw: 0.3, s: FS * 1.3, flat: true }, // the cat's bed: the kit's pillow stands up, so it is laid down
 ];
 export const VET_SCALE = 1.8, VET_H = 0.72, CAT_SCALE = 0.32; // VET_H: Kenney's mini character is about 0.72 m tall
 
@@ -73,7 +96,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     const need = n => { const o = obj.getObjectByName(n); if (!o) throw new Error(`pig-pens: building '${id}' has no '${n}' node`); return o; };
     before?.(obj);
     // one draw per moving part: the roof, each wall face, each door, and everything else that stays put
-    const moving = ['roof', ...need('walls').children.map(w => w.name), 'door_L', 'door_R', 'pop_door'].map(n => obj.getObjectByName(n)).filter(Boolean);
+    const moving = ['roof', ...need('walls').children.map(w => w.name), 'door_L', 'door_R', 'pop_door', ...(id === 'clinic' ? ['door'] : [])].map(n => obj.getObjectByName(n)).filter(Boolean);
     for (const n of moving) flatten(n);
     const top = obj.getObjectByName(id) ?? obj, rest = new THREE.Group(); rest.name = 'static'; // the model's own root node
     top.add(rest); rest.updateMatrixWorld(true); // parented first, so attach keeps every part where it is
@@ -86,13 +109,23 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     return { id, B, obj, need, roof: need('roof'), walls, cut: 0 };
   };
   // the pegboard hangs on the exam room's west wall, so it drops with that wall when the walls are cut
-  const hangPegboard = obj => { const peg = obj.getObjectByName('pegboard'), wall = obj.getObjectByName('wall_side_R'); if (peg && wall) wall.attach(peg); };
-  const B = { coop: mount('coop'), barn: mount('barn'), clinic: mount('clinic', hangPegboard) };
+  // and the front door moves on its own, so it comes off the front wall (which is flattened into one mesh) onto the model's root
+  const clinicParts = obj => {
+    const peg = obj.getObjectByName('pegboard'), wall = obj.getObjectByName('wall_side_R'); if (peg && wall) wall.attach(peg);
+    (obj.getObjectByName('clinic') ?? obj).attach(obj.getObjectByName('door'));
+  };
+  const B = { coop: mount('coop'), barn: mount('barn'), clinic: mount('clinic', clinicParts) };
 
   const doorL = B.barn.need('door_L'), doorR = B.barn.need('door_R'), pop = B.coop.need('pop_door'), popY = pop.position.y;
+  // the clinic's front door (2.9.0) swings in on its hinge side (the handle's on its -x side) for Dr. Emmy and for a
+  // patient walking out
+  const clinicDoor = B.clinic.need('door'), hinge = new THREE.Group(); hinge.name = 'door_hinge';
+  clinicDoor.parent.add(hinge); hinge.position.copy(clinicDoor.position).x += CLINIC.door.w / 2; hinge.attach(clinicDoor);
+  const doorAt = [CLINIC.x + CLINIC.door.x, CLINIC.z + CLINIC.d / 2];
+  let clinicOpen = 0;
   // the doors are on the front wall: they are cut with it, by its plane
   const frontOf = b => b.walls.find(w => w.node.name === 'wall_front');
-  for (const [d, b] of [[doorL, B.barn], [doorR, B.barn], [pop, B.coop]]) d.children[0].material = frontOf(b).mat;
+  for (const [d, b] of [[doorL, B.barn], [doorR, B.barn], [pop, B.coop], [clinicDoor, B.clinic]]) d.children[0].material = frontOf(b).mat;
   let popAnim = lay.coop.open ? 1 : 0;
 
   // ---- name plaques (v3 §7): the coop's hang on its back wall, so they are cut with it
@@ -108,17 +141,20 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     lamp(CLINIC.x, CLINIC.eave - 0.4, CLINIC.z, 12, 10),
   ];
 
-  // ---- the clinic's furniture, merged into one draw
+  // ---- the clinic's furniture, merged into one draw, but for the pieces that move
   const furniture = new THREE.Group(); group.add(furniture);
+  const pieces = {};
   for (const f of FURNISH) {
-    const src = assets.clone(`furn_${f.m}`), s = f.s ?? FS;
+    const piece = assets.clone(f.k ?? `furn_${f.m}`), s = f.s ?? FS, src = new THREE.Group(); src.add(piece);
+    if (f.flat) piece.rotation.x = -Math.PI / 2;
     box.setFromObject(src); box.getCenter(v);
-    src.position.set(-v.x, 0, -v.z);                     // recentred on its footprint
+    src.position.set(-v.x, -box.min.y, -v.z);            // recentred on its footprint, its bottom on the floor
     const holder = new THREE.Group(); holder.add(src);
     holder.position.set(CLINIC.x + f.at[0], f.y ?? 0, CLINIC.z + f.at[1]); holder.rotation.y = f.yaw; holder.scale.setScalar(s);
-    furniture.add(holder);
+    if (f.prop) { holder.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); group.add(holder); pieces[f.prop] = holder; } else furniture.add(holder);
   }
   flatten(furniture);
+  const flat = createFlat({ root: group, sim, pieces });
 
   // ---- Dr. Emmy (Mini Characters, skinned, with Kenney's clips) and her cat
   const actor = (key, scale) => {
@@ -136,7 +172,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
   const vet = actor('vet', VET_SCALE), cat = actor('cat', CAT_SCALE);
   cat.o.position.set(CLINIC.x + S.catBed.at[0], 0.1, CLINIC.z + S.catBed.at[2]); cat.o.rotation.y = 2.2; cat.play('idle');
   const sv = sim.vet; let vetYaw = sv.yaw;
-  const bedTop = 0.26 * FS + 0.02; // on the covers (bedSingle: cover top 0.26 before FS)
+  const bedTop = 0.26 * FS * 0.9 + 0.02; // on the covers (bedSingle: cover top 0.26 before scaling, FURNISH's 0.9 FS)
   function updateVet(dt) {
     const asleep = sv.state === 'sleep';
     let d = sv.yaw - vetYaw; d = Math.atan2(Math.sin(d), Math.cos(d)); vetYaw += d * Math.min(1, dt * 8);
@@ -147,7 +183,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
       vet.play('idle');
     } else {
       vet.o.position.set(sv.x, 0, sv.z); vet.o.rotation.set(0, vetYaw, 0);
-      vet.play(sv.moving ? 'walk' : sv.state === 'waking' ? 'sit' : 'idle');
+      vet.play(sv.moving ? 'walk' : sv.state === 'waking' ? 'sit' : sv.pet ? 'interact-right' : 'idle');
     }
     vet.mixer.update(dt * (asleep ? 0.25 : 1)); cat.mixer.update(dt * 0.4);
   }
@@ -175,12 +211,16 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     doorL.rotation.y = CUT.doorOpen * g; doorR.rotation.y = -CUT.doorOpen * g;
     popAnim += Math.sign((lay.coop.open ? 1 : 0) - popAnim) * Math.min(Math.abs((lay.coop.open ? 1 : 0) - popAnim), dt * 2.5);
     pop.position.y = popY + popAnim * COOP.popDoor.h;
+    const ex = sim.clinic.exam, out = ex.state === 'leave' ? sim.clinic.patient() : null;
+    const by = (x, z) => Math.hypot(x - doorAt[0], z - doorAt[1]) < CUT.doorNear;
+    clinicOpen += ((by(sv.x, sv.z) || (out && by(out.px, out.pz)) ? 1 : 0) - clinicOpen) * Math.min(1, dt * 6);
+    hinge.rotation.y = -CUT.doorIn * smooth(clinicOpen);
     for (const { l, k } of lamps) l.intensity = night * k;
-    updateVet(dt); plaques.update(frame++); exam.update(dt, s); emotes.update(dt);
+    updateVet(dt); plaques.update(frame++); exam.update(dt, s); emotes.update(dt); flat.update(dt);
   }
   return {
     update, cured: (kind, i) => emotes.cured(kind, i),
-    dispose() { exam.dispose(); emotes.dispose(); // world.dispose frees the group with the farm root (the wall materials are ours: not shared)
+    dispose() { exam.dispose(); emotes.dispose(); flat.dispose(); // world.dispose frees the group with the farm root (the wall materials are ours: not shared)
       vet.mixer.stopAllAction(); cat.mixer.stopAllAction(); plaques.dispose();
     },
   };

@@ -6,9 +6,10 @@ import { headless } from 'lion-hawk/test';
 import { pigPensGame } from '../src/game.sim.js';
 import { FOCUS_HINT } from '../src/game/farm.js';
 import { buildLayout, REGION } from '../src/layout.js';
+import { ST } from '../src/sim.js';
 import { classify, rayBuilding } from '../src/game/pick.js';
 import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
-import { VET_STOPS } from '../src/clinic.js';
+import { VET_STOPS, PROPS } from '../src/clinic.js';
 import { farmSim } from './farmSim.mjs';
 import { rayTo, tapAt, tool } from './rays.mjs';
 await R.init();
@@ -99,10 +100,11 @@ test('the barn doors open and shut from a tap on the doorway, like a gate; shut,
   tapAt(h, [door.x, 1.2, door.z + 0.1], { ray: rayTo([door.x, 1.2, door.z + 0.1], 2, 10) }); assert.equal(door.open, true);
 });
 
-test('Dr. Maple: about her clinic by day, off to bed at night, up again in the morning; never leaves the clinic', () => {
+test('Dr. Emmy: about her clinic and her rounds by day, off to bed at night, up again in the morning', () => {
   const { h, sim } = farm(), v = sim.vet, C = sim.lay.clinic, seen = new Set();
-  const inside = () => v.x > C.x0 && v.x < C.x1 && v.z > C.z0 && v.z < C.z1;
-  h.until(() => { if (v.state === 'idle') seen.add(v.node); assert.ok(inside(), 'in the clinic'); return seen.size >= 3; }, { maxSteps: 60 * 240, message: 'three stops' });
+  // in the clinic, or out on the strip of field between the buildings and the pens (her rounds, 2.9.0)
+  const inside = () => (v.x > C.x0 && v.x < C.x1 && v.z > C.z0 && v.z < C.z1) || (v.z > C.z1 - 0.1 && v.z < lay.complex.z0 - 0.5) || (v.x < lay.buildings[1].x0 && v.z > lay.run.z1);
+  h.until(() => { if (v.state === 'idle') seen.add(v.node); assert.ok(inside(), `in the clinic or on her rounds (${v.x.toFixed(1)}, ${v.z.toFixed(1)})`); return seen.size >= 3; }, { maxSteps: 60 * 240, message: 'three stops' });
   assert.ok([...seen].every(k => k in VET_STOPS), [...seen].join());
   h.tap('farm.night'); h.until(() => v.state === 'sleep', { maxSteps: 60 * 60, message: 'bed' });
   const bed = CLINIC.spots.bed.at; assert.ok(Math.hypot(v.x - (CLINIC.x + bed[0]), v.z - (CLINIC.z + bed[2])) < 1e-6, 'in her bed');
@@ -180,4 +182,59 @@ test('the aisles are an upside-down T: the stem runs from the barn doors down to
     const twin = lay.gates.find(o => o.dir === 'z' && Math.abs(o.x + g.x) < 1e-9 && Math.abs(o.z - g.z) < 1e-9);
     if (twin && twin !== g) assert.equal(g.swing, -twin.swing, `gate ${g.id} swings opposite its twin ${twin.id}`);
   }
+});
+
+test('in the clinic, the flat’s things work from a tap: shower, sinks, toilet, laptop, fridge (2.9.0)', () => {
+  const { h, s, sim } = farm(), P = sim.clinic.props;
+  const mid = id => { const [[x0, x1], [y0, y1], [z0, z1]] = CLINIC.props[id].box; return [CLINIC.x + (x0 + x1) / 2, (y0 + y1) / 2, CLINIC.z + (z0 + z1) / 2]; };
+  const tap = id => tapAt(h, mid(id), { ray: rayTo(mid(id), 10, 1) });
+  for (const id of Object.keys(CLINIC.props)) assert.notEqual(classify(sim, rayTo(mid(id), 10, 1))?.kind, 'prop', `outside, the roof hides the ${id}`);
+  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); assert.equal(s.focus, 'clinic');
+  for (const id of Object.keys(CLINIC.props)) assert.deepEqual(classify(sim, rayTo(mid(id), 10, 1), 'clinic'), { kind: 'prop', id }, id);
+  const secs = t => h.step(Math.ceil(t * 60) + 2);
+  // the shower runs a while, or until tapped again
+  tap('shower'); assert.equal(P.shower.state, 'on'); secs(PROPS.shower); assert.equal(P.shower.state, 'off');
+  tap('shower'); tap('shower'); assert.equal(P.shower.state, 'off');
+  // the bathroom basin: the tap runs while it fills, it stands full, it drains; a tap meanwhile changes nothing
+  tap('bathSink'); assert.equal(P.bathSink.state, 'run'); tap('bathSink'); assert.equal(P.bathSink.state, 'run');
+  secs(PROPS.bathSink.run); assert.equal(P.bathSink.state, 'full');
+  secs(PROPS.bathSink.full); assert.equal(P.bathSink.state, 'drain');
+  secs(PROPS.bathSink.drain); assert.equal(P.bathSink.state, 'off');
+  // the other taps: a little splash
+  for (const id of ['kitchenSink', 'examSink']) { tap(id); assert.equal(P[id].state, 'on', id); secs(PROPS.sink); assert.equal(P[id].state, 'off', id); }
+  // the toilet: the lid up, then a flush, and the lid comes down
+  assert.equal(P.toilet.state, 'shut'); tap('toilet'); assert.equal(P.toilet.state, 'open');
+  tap('toilet'); assert.equal(P.toilet.state, 'flush'); secs(PROPS.flush); assert.equal(P.toilet.state, 'shut');
+  // the laptop (open to start with) and the fridge (shut) open and shut
+  tap('laptop'); assert.equal(P.laptop.state, 'shut'); tap('laptop'); assert.equal(P.laptop.state, 'open');
+  tap('fridge'); assert.equal(P.fridge.state, 'open'); tap('fridge'); assert.equal(P.fridge.state, 'shut');
+  assert.equal(s.focus, 'clinic', 'and none of it leaves the clinic');
+  assert.deepEqual(h.state().clinic.props, Object.fromEntries(Object.keys(CLINIC.props).map(id => [id, P[id].state])));
+});
+
+test('Dr. Emmy’s rounds: out of the front door to the pens; pigs come to their fence for a scratch, and keep out of her way', () => {
+  const { h, sim } = farm(), v = sim.vet, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('penEast'); h.until(() => v.node === 'penEast' && v.state === 'idle', { maxSteps: 60 * 60, message: 'at the pens' });
+  assert.ok(v.outside); assert.equal(v.doing, VET_STOPS.penEast);
+  let m = h.mark(), close = Infinity;
+  h.until(() => {
+    for (const p of sim.pigs) close = Math.min(close, Math.hypot(p.px - v.x, p.pz - v.z) - p.r);
+    return h.events.since(m).first('pet');
+  }, { maxSteps: 60 * 60, message: 'a scratch' });
+  const pet = h.events.since(m).first('pet'), p = sim.pigs[pet.i];
+  assert.equal(pet.kind, 'pig'); assert.ok(lay.region(p.px, p.pz) < lay.pens.length || Math.hypot(p.px - v.x, p.pz - v.z) < 1.4, `${p.name} at the fence of its pen, or by her`);
+  assert.ok(Math.hypot(p.px - v.x, p.pz - v.z) < 3, `${p.name} came over`);
+  assert.ok(close > 0.2, `nobody walked through her (${close.toFixed(2)} m)`);
+  assert.notEqual(p.state, ST.VISIT, 'and off it goes');
+});
+
+test('Dr. Emmy’s rounds: at the chicken run, the hens come to the fence; and she hurries back for a patient', () => {
+  const { h, sim } = farm(), v = sim.vet, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('run'); h.until(() => v.node === 'run' && v.state === 'idle', { maxSteps: 60 * 90, message: 'at the run' });
+  const m = h.mark(); h.until(() => h.events.since(m).first('pet'), { maxSteps: 60 * 60, message: 'a scratch' });
+  const pet = h.events.since(m).first('pet'), b = sim.flock.birds[pet.i], r = lay.run;
+  assert.equal(pet.kind, 'bird'); assert.ok(b.px > r.x0 && b.px < r.x1 && b.pz > r.z0 && b.pz < r.z1, `${b.name} stayed in the run`);
+  // a patient waiting and you in the exam room: back she comes, quick
+  const p = sim.pigs.find(q => !q.piglet); dbg.sicken('pig', p.i, 'cold'); sim.clinic.admit('pig', p.i); sim.clinic.open = true;
+  h.until(() => v.node === 'examVet' && v.state === 'idle', { maxSteps: 60 * 45, message: 'back in the exam room' });
 });

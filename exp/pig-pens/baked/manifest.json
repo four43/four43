@@ -8,6 +8,13 @@
       "sha256": "6ea48fa6a5638858fd0109677251444bd581bd8fc72e88f77b16c37c5c4a02dd",
       "options": "00ea732d4a8bd02c"
     },
+    "banana": {
+      "glb": "models/banana.glb",
+      "anim": null,
+      "bytes": 6240,
+      "sha256": "ed4fa192f872c5bee70bf0ae9a3a5cbb72b672b2cf4bde7d123469be13e11856",
+      "options": "00ea732d4a8bd02c"
+    },
     "barn": {
       "glb": "models/barn.glb",
       "anim": null,
@@ -21,6 +28,13 @@
       "bytes": 10620,
       "sha256": "08f60365eef35fc54e7c3a3416e2f7c5e8d4279a14d4c68f17622ffd6c6cb701",
       "options": "c885a87a987946ff"
+    },
+    "bread": {
+      "glb": "models/bread.glb",
+      "anim": null,
+      "bytes": 4696,
+      "sha256": "79557b36eceedc091688645ff97897b9245698f33f42b1f2cd30f24719f2a271",
+      "options": "00ea732d4a8bd02c"
     },
     "bush": {
       "glb": "models/bush.glb",
@@ -67,8 +81,8 @@
     "clinic": {
       "glb": "models/clinic.glb",
       "anim": null,
-      "bytes": 111568,
-      "sha256": "58a9a37607708840fc40ba1ef2b2497934a17a46bea2113cbed84e242bc7e4d7",
+      "bytes": 142216,
+      "sha256": "d26253c100b018312f38cc6825566c6faf948f6f565165c345a6f6f8ecb2e8bd",
       "options": "0ac307800b139544"
     },
     "cob": {
@@ -91,6 +105,20 @@
       "bytes": 9288,
       "sha256": "b346b2a59c1bff0da201f539debc55d36d022d3c330758f44d19125afb607687",
       "options": "e97fc75ca206e284"
+    },
+    "cupTea": {
+      "glb": "models/cupTea.glb",
+      "anim": null,
+      "bytes": 5060,
+      "sha256": "7cadeeea90b5fdf56b64a3fc7be9ee9fa653cd9fded404caa6a5c5ed7954be41",
+      "options": "00ea732d4a8bd02c"
+    },
+    "doctorBag": {
+      "glb": "models/doctorBag.glb",
+      "anim": null,
+      "bytes": 14016,
+      "sha256": "18b1ae51f14c506f7e30e4dae22b0f57cf053e301322111bc00e796ad1f7a205",
+      "options": "38121219c9ce0ea4"
     },
     "dog": {
       "glb": "models/dog.glb",
@@ -141,6 +169,13 @@
       "sha256": "b149dc080c51ec029758e84c39294d03e84f54b6ee44f211a73ac1d7f07cd0a4",
       "options": "d56a718f4bc8198d"
     },
+    "furn_bathroomSink": {
+      "glb": "models/furn_bathroomSink.glb",
+      "anim": null,
+      "bytes": 9976,
+      "sha256": "5fd8c2c402b55ba17f6eeb101630259a7c09a4f2e581c93ad234aaa205b04ce3",
+      "options": "829cae375206be4a"
+    },
     "furn_bedSingle": {
       "glb": "models/furn_bedSingle.glb",
       "anim": null,
@@ -148,11 +183,25 @@
       "sha256": "c6eb2516d8409d5510d11fb8fbd22fd8b091de77c2261e008fa6ba8cb6ba17fc",
       "options": "829cae375206be4a"
     },
+    "furn_bookcaseClosedWide": {
+      "glb": "models/furn_bookcaseClosedWide.glb",
+      "anim": null,
+      "bytes": 7308,
+      "sha256": "d4030e662ba851be21de81862b93339f40562b6ce2e8cf8d592fc4866e113c72",
+      "options": "829cae375206be4a"
+    },
     "furn_bookcaseOpenLow": {
       "glb": "models/furn_bookcaseOpenLow.glb",
       "anim": null,
       "bytes": 4500,
       "sha256": "5b2c1f4e2592ca6b40b7c5bc87c2212d89680f975bfe1a8b71cc9d5289d594e3",
+      "options": "829cae375206be4a"
+    },
+    "furn_chair": {
+      "glb": "models/furn_chair.glb",
+      "anim": null,
+      "bytes": 4368,
+      "sha256": "3f5818665dff905f90f083f050acacaba1408d4f21f4d135184d6f6d53c07538",
       "options": "829cae375206be4a"
     },
     "furn_chairDesk": {
@@ -239,6 +288,27 @@
       "sha256": "5dae8b9231ee246732bd57a1a86ab6ab7377b1c8e686d102bb108c78e209a9b9",
       "options": "829cae375206be4a"
     },
+    "furn_shower": {
+      "glb": "models/furn_shower.glb",
+      "anim": null,
+      "bytes": 21152,
+      "sha256": "1c0b6f25c832e9c754b1218d71778beff8cb7e08d4aceffd2a3ef983e2ebd625",
+      "options": "829cae375206be4a"
+    },
+    "furn_table": {
+      "glb": "models/furn_table.glb",
+      "anim": null,
+      "bytes": 3860,
+      "sha256": "3dc8d1de8efafa36ac568c1f95398c63a4c909e51487ceccd6c1d2a0cb2733ec",
+      "options": "829cae375206be4a"
+    },
+    "furn_toilet": {
+      "glb": "models/furn_toilet.glb",
+      "anim": null,
+      "bytes": 10800,
+      "sha256": "f13134f6e788eba9323807728c0a758f2d1746d2fc607b3b9d22ec4d48cdfe50",
+      "options": "829cae375206be4a"
+    },
     "furn_trashcan": {
       "glb": "models/furn_trashcan.glb",
       "anim": null,
@@ -280,6 +350,13 @@
       "bytes": 15844,
       "sha256": "b43aa80d1a52aa358953bdd03428845b8c4561412e82954e63330ad812e3ba98",
       "options": "417db14385274bd6"
+    },
+    "laptop": {
+      "glb": "models/laptop.glb",
+      "anim": null,
+      "bytes": 8736,
+      "sha256": "0f4419c69aae9faf0161d2d0a1f07f46f014356355e009b283b01d06f3501b63",
+      "options": "7afd7b80d333f696"
     },
     "oak": {
       "glb": "models/oak.glb",

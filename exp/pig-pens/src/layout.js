@@ -129,6 +129,9 @@ export function buildLayout() {
   // the name plaques' tap volumes (v3 §5.5: a tap on one opens its owner's card), by stall and by perch
   const plaqueBox = ([x, y, z], { w, h }, pad = 0.06) => ({ x0: x - w / 2 - pad, x1: x + w / 2 + pad, y0: y - h / 2 - pad, y1: y + h / 2 + pad, z0: z - 0.1, z1: z + 0.1 });
   barn.plaques = BARN.stalls.map(s => plaqueBox([BARN.x + s.plaque[0], s.plaque[1], BARN.z + s.plaque[2]], BARN.plaque));
+  // the clinic's working things' tap volumes (2.9.0: the shower, the sinks, the toilet, the laptop, the fridge)
+  clinic.props = Object.entries(CLINIC.props).map(([id, { box: [[x0, x1], [y0, y1], [z0, z1]] }]) =>
+    ({ id, x0: CLINIC.x + x0, x1: CLINIC.x + x1, y0, y1, z0: CLINIC.z + z0, z1: CLINIC.z + z1 }));
   buildings[0].plaques = Array.from({ length: COOP.perches }, (_, k) => { const [x, y, z] = COOP.plaqueAt(k); return plaqueBox([COOP.x + x, y, COOP.z + z], COOP.plaque, 0.03); });
 
   // ---- static obstacles (physics + flow-field rasterisation) ---------------
@@ -195,7 +198,8 @@ export function buildLayout() {
   // chicken run props
   decor.push({ m: 'sack', x: TX(1.5) + 2.0, z: run.z1 - 0.45, rot: 0.4, s: 1.3 });
   decor.push({ m: 'sack', x: TX(1.5) + 2.5, z: run.z1 - 0.5, rot: -0.3, s: 1.2 });
-  for (let i = 0; i < 9; i++) decor.push({ m: 'wheat', x: 22.4 - (i % 3) * 1.2, z: TZ(-4.3) + Math.floor(i / 3) * 1.1, rot: rng() * 6, s: 2.4 });
+  for (let i = 0; i < 9; i++) decor.push({ m: 'wheat', x: 24.0 - (i % 3) * 1.1, // east of the clinic (2.9.0: it grew 4 m)
+     z: TZ(-4.3) + Math.floor(i / 3) * 1.1, rot: rng() * 6, s: 2.4 });
   // scenery beyond the boundary (no collision)
   for (let i = 0; i < 70; i++) {
     const a = rng() * Math.PI * 2, rr = 40 + rng() * 45;

@@ -53,6 +53,15 @@
     "furniture-kit/coatRackStanding.glb": { "sha256": "d8231c22dab63ceb", "from": "Furniture Kit/Models/GLTF format/coatRackStanding.glb" },
     "mini-characters/character-female-f.glb": { "sha256": "2ff4311897bfaf99", "from": "Mini Characters/Models/GLB format/character-female-f.glb" },
     "mini-characters/Textures/colormap.png": { "sha256": "0d4947d34ff32acf", "from": "Mini Characters/Models/GLB format/Textures/colormap.png" },
-    "cube-pets/animal-cat.glb": { "sha256": "1e73aaf7d497dd7d", "from": "Cube Pets/Models/GLB format/animal-cat.glb" }
+    "cube-pets/animal-cat.glb": { "sha256": "1e73aaf7d497dd7d", "from": "Cube Pets/Models/GLB format/animal-cat.glb" },
+    "furniture-kit/bookcaseClosedWide.glb": { "sha256": "55b9903e9646dc40", "from": "Furniture Kit/Models/GLTF format/bookcaseClosedWide.glb" },
+    "furniture-kit/shower.glb": { "sha256": "25c1cebad681fe36", "from": "Furniture Kit/Models/GLTF format/shower.glb" },
+    "furniture-kit/toilet.glb": { "sha256": "16165cfd03c56c2c", "from": "Furniture Kit/Models/GLTF format/toilet.glb" },
+    "furniture-kit/bathroomSink.glb": { "sha256": "39d4f19608cab7e0", "from": "Furniture Kit/Models/GLTF format/bathroomSink.glb" },
+    "furniture-kit/table.glb": { "sha256": "ff1a94498d023957", "from": "Furniture Kit/Models/GLTF format/table.glb" },
+    "furniture-kit/chair.glb": { "sha256": "c8a11eec93e89e31", "from": "Furniture Kit/Models/GLTF format/chair.glb" },
+    "food-kit/bread.glb": { "sha256": "9bd9db117db654cf", "from": "Food Kit/Models/GLB format/bread.glb" },
+    "food-kit/banana.glb": { "sha256": "67c90aa8bef35b88", "from": "Food Kit/Models/GLB format/banana.glb" },
+    "food-kit/cup-tea.glb": { "sha256": "c2d60aeca48197b7", "from": "Food Kit/Models/GLB format/cup-tea.glb" }
   }
 }

@@ -64,7 +64,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
           case 'sick': hint(`${ev.name} isn’t feeling well. Grab ${ev.name} and drop them on the vet’s clinic!`, 5); break;
           case 'clinic': hint({ in: `${ev.name} is in the waiting room. Tap the clinic, then the exam room.`, healthy: `${ev.name}’s fit as a fiddle!`, full: 'The waiting room’s full.', out: `${ev.name} is all better!` }[ev.what], 3.5); break;
           case 'exam': hud?.say(ev.text, ev.what === 'cured' ? 3 : 2.4, engine.time.sim); break;
-          case 'cured': world?.cured(ev.kind, ev.i); break;
+          case 'cured': case 'pet': world?.cured(ev.kind, ev.i); break; // a heart: made better, or a scratch from the vet
         }
       });
       offs.push(bindCamera(engine, canvas), off);

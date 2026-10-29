@@ -46,6 +46,7 @@ export function createFlock3d({ root, assets, mc, sim, spawnFeathers }) {
   function birdClip(b) {
     switch (b.state) {
       case CST.GRAB: case CST.AIR: case CST.CARRIED: return ['dance', 2.6];
+      case CST.VISIT: if (sim.vet.pet?.a === b) return ['dance', 1.4]; break; // a scratch from the vet
       case CST.LAY: case CST.BROOD: return ['idle', 0.5];
       case CST.DUST: return b.dusting ? ['dance', 0.8] : null;
       case CST.PECK: if (b.speed < 0.1) return ['eat', 1.2]; break;

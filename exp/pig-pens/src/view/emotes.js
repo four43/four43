@@ -34,12 +34,13 @@ export function createEmotes({ root, sim }) {
       s.position.set(a.px, a.py + (kind === 'pig' ? 0.75 * a.scale / 0.62 : 0.55) + 0.06 * Math.sin(t * 3 + a.i), a.pz);
       s.scale.setScalar(0.55 * big);
     };
-    const onTable = a => sim.clinic.exam.who && sim.clinic.patient() === a; // in the close-up its bubble would cover the pegboard
+    const ex = sim.clinic.exam, onTable = a => ex.who && ex.state !== 'leave' && sim.clinic.patient() === a; // in the close-up its bubble would cover the pegboard
+    if (ex.state === 'leave') { const a = sim.clinic.patient(); show(a, 'heart', ex.who.kind); } // walking out happy
     for (const p of sim.pigs) if (p.sick && !onTable(p)) show(p, AILMENTS[p.sick.ailment].emote, 'pig');
     for (const b of sim.flock.birds) if (b.sick && !b.hidden && !onTable(b)) show(b, AILMENTS[b.sick.ailment].emote, 'bird');
     for (const [key, left] of happy) {
       if (left <= 0) { happy.delete(key); continue; } happy.set(key, left - dt);
-      const [kind, i] = key.split(':'), a = kind === 'pig' ? sim.pigs[+i] : sim.flock.birds[+i]; if (a && !a.sick) show(a, 'heart', kind);
+      const [kind, i] = key.split(':'), a = kind === 'pig' ? sim.pigs[+i] : sim.flock.birds[+i]; if (a && !a.sick && !(ex.state === 'leave' && sim.clinic.patient() === a)) show(a, 'heart', kind); // a leaving patient has its own
     }
     for (let k = n; k < pool.length; k++) pool[k].visible = false;
   }

@@ -8,6 +8,7 @@ import { createAssets, createMaterialCompiler } from 'lion-hawk/view';
 import { modelGeometry, partGeometry } from '../src/view/models.js';
 import { pigSkin } from '../src/view/pigSkin.js';
 import MATERIALS from '../src/defs/materials.js';
+import { CLINIC } from '../src/defs/buildings.js';
 
 const root = new URL('../', import.meta.url), OLD = JSON.parse(readFileSync(new URL('test/fixtures/assets-v2.1.0.json', root), 'utf8'));
 const MANIFEST = JSON.parse(readFileSync(new URL('baked/manifest.json', root), 'utf8'));
@@ -59,7 +60,7 @@ test('v3 buildings carry the nodes the cutaway drives (defs/buildings.js); the v
     const scene = assets.get(id).scene, has = n => !!scene.getObjectByName(n);
     for (const n of ['roof', 'walls', 'interior', ...need[id]]) assert.ok(has(n), `${id}: ${n}`);
     const walls = scene.getObjectByName('walls').children.map(c => c.name).sort();
-    assert.deepEqual(walls, [...faces, ...(id === 'clinic' ? ['wall_inner_across', 'wall_inner_down'] : [])].sort(), id);
+    assert.deepEqual(walls, [...faces, ...(id === 'clinic' ? Object.keys(CLINIC.partitions.walls).map(k => `wall_inner_${k}`) : [])].sort(), id);
     for (const w of scene.getObjectByName('walls').children) assert.ok(Math.abs(w.position.y) < 1e-6, `${id}/${w.name} stands on the ground`);
   }
   for (const [n, x] of [['door_L', 1], ['door_R', -1]]) { const d = assets.get('barn').scene.getObjectByName(n); assert.ok(Math.abs(d.position.x - x * 1.6) < 1e-3, `${n} hinges at the opening's side`); }

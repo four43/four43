@@ -4,10 +4,11 @@ import { FlowGrid, hit } from './flow.js';
 import { createFlock, CST } from './chickens.js';
 import { createVet, createClinic } from './clinic.js';
 import { createSickness } from './sickness.js';
+import { createVisits, VET_R } from './visits.js';
 import { BED, assignStalls, doorOut, stallAt, stallFace, pathIn, pathOut } from './barn.js';
 
 export const DT = 1 / 60;
-export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10, BED: 11, CLINIC: 12 }; // BED: walking to or from its stall (barn.js); CLINIC: at the vet's (clinic.js)
+export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10, BED: 11, CLINIC: 12, VISIT: 13 }; // BED: walking to or from its stall (barn.js); CLINIC: at the vet's (clinic.js); VISIT: saying hello to her (visits.js)
 export const ST_NAME = Object.keys(ST);
 // Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64.
 export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox'];
@@ -161,7 +162,7 @@ export function createSim(world, opts = {}) {
     for (const p of pigs) {
       const tr = p.body.translation(), lv = p.body.linvel();
       p.px = tr.x; p.py = tr.y; p.pz = tr.z; p.vx = lv.x; p.vy = lv.y; p.vz = lv.z;
-      p.speed = Math.hypot(lv.x, lv.z);
+      p.speed = p.state === ST.CLINIC ? p.walkSpeed ?? 0 : Math.hypot(lv.x, lv.z); // the clinic walks a patient: its body is off
       const q = p.body.rotation(); p.rot[0] = q.x; p.rot[1] = q.y; p.rot[2] = q.z; p.rot[3] = q.w;
     }
     const d = dog.body.translation(), dv = dog.body.linvel();
@@ -259,11 +260,11 @@ export function createSim(world, opts = {}) {
   // the clinic (v3 §9): pigs sit kinematic on the benches and the table (body off), and come out of the front door
   const clinic = createClinic({ vet, clock, emit, now: () => t, animal: (kind, i) => (kind === 'pig' ? pigs[i] : flock.birds[i]),
     cure: (kind, a) => sickness.cure(kind, a),
-    hold(kind, a, x, y, z, yaw) {
-      if (kind === 'bird') return flock.toClinic(a, x, y, z, yaw);
+    hold(kind, a, x, y, z, yaw, speed = 0) { // speed: how fast the clinic walks it (its walk clip)
+      if (kind === 'bird') return flock.toClinic(a, x, y, z, yaw, speed);
       if (grabbed === a.i) grabbed = -1;
       if (a.state !== ST.CLINIC) { dropClaims(a); a.body.lockRotations(true, true); world.setMaterial(a, '*', 'pet'); a.body.setEnabled(false); setState(a, ST.CLINIC); }
-      world.place(a, { at: [x, y, z] }, { q: [0, 0, 0, 1] }); a.px = x; a.py = y; a.pz = z; a.yaw = yaw; a.getUp = 0;
+      world.place(a, { at: [x, y, z] }, { q: [0, 0, 0, 1] }); a.px = x; a.py = y; a.pz = z; a.yaw = yaw; a.getUp = 0; a.walkSpeed = speed;
     },
     letGo(kind, a, x, z) { // out of the door with a happy hop, then off where it belongs
       if (kind === 'bird') return flock.fromClinic(a, x, z);
@@ -271,6 +272,19 @@ export function createSim(world, opts = {}) {
       a.body.setEnabled(true); a.body.lockRotations(true, true); world.setMaterial(a, '*', 'pet');
       world.place(a, { at: [x, a.r + 0.05, z] }, { q: [0, 0, 0, 1] }); a.px = x; a.pz = z; a.panic = 0; a.getUp = 0;
       a.threatX = x; a.threatZ = z - 2; setState(a, ST.ZOOM, 1.6); emit('oink', { i: a.i, x, z, happy: 1 });
+    } });
+
+  // Dr. Emmy's rounds (2.9.0, visits.js): calm pigs and hens near her stop come to their fence for a scratch
+  const visitFields = {}; // by her stop: the way to her for a pig out in the open
+  const visits = createVisits({ vet, pigs, birds: () => flock.birds, lay, emit, now: () => t, seed: opts.seed ?? 1,
+    can: (kind, a) => !clock.night && !a.sick && !a.clinic && (kind === 'pig'
+      ? !a.piglet && !a.bed && a.panic < 0.1 && (a.state === ST.ROAM || a.state === ST.GRAZE)
+      : flock.canVisit(a)),
+    start(kind, a, visit) { if (kind === 'bird') return flock.visit(a, visit); dropClaims(a); a.visit = visit; setState(a, ST.VISIT, 1e9); },
+    end(kind, a, petted) {
+      if (kind === 'bird') return flock.unvisit(a);
+      if (a.state === ST.VISIT) setState(a, ST.ROAM, 2 + rng() * 2);
+      if (petted) emit('oink', { i: a.i, x: a.px, z: a.pz, happy: 1 });
     } });
 
   // things that frighten animals this step
@@ -351,7 +365,7 @@ export function createSim(world, opts = {}) {
   const counts = new Array(REGION.count).fill(0); // by lay.region: pens 0–4, then REGION's aisle, field and barn
   function think() {
     t += DT; clock.t = t;
-    vet.step(DT); sickness.step(DT); clinic.step(DT);
+    vet.step(DT); sickness.step(DT); clinic.step(DT); visits.step(DT);
     updateThreats();
     // farmer tops up one trough at a time, which keeps the herd moving between pens
     refillT -= DT;
@@ -455,6 +469,11 @@ export function createSim(world, opts = {}) {
         if (d < P.alignR) { ax += o.vx; az += o.vz; an++; }
         cx += o.px; cz += o.pz; cn++;
         if (d < P.contagionR && o.panic > nbPanic) { nbPanic = o.panic; nbTX = o.threatX; nbTZ = o.threatZ; }
+      }
+      // out on the farm, the vet is someone to walk round, not through
+      if (vet.outside) {
+        const dx = p.px - vet.x, dz = p.pz - vet.z, d = Math.hypot(dx, dz) + 1e-4, sr = p.r + VET_R;
+        if (d < sr) { const k = (sr - d) / sr * 2; sep[0] += dx / d * k; sep[1] += dz / d * k; }
       }
       // ---- fear ----------------------------------------------------------------
       {
@@ -591,6 +610,17 @@ export function createSim(world, opts = {}) {
           const dx = hose.x - p.px, dz = hose.z - p.pz, d = Math.hypot(dx, dz) || 1;
           if (d > P.hoseR * 0.6) { if (d > 2.5 && hose.field && flowTo(hose.field, 1)) {} else { dvx = dx / d; dvz = dz / d; } speed = Math.min(1.8, 0.4 + d * 0.5); }
           else face = Math.atan2(hose.sx - p.px, hose.sz - p.pz);
+          break;
+        }
+        case ST.VISIT: { // come to say hello to the vet (visits.js): to its place, then wait there for a scratch, facing her
+          const v = p.visit; if (!v) { setState(p, ST.ROAM, 1); break; }
+          const dx = v.x - p.px, dz = v.z - p.pz, d = Math.hypot(dx, dz);
+          v.stuck = d < 1.5 && p.speed < 0.15 ? (v.stuck ?? 0) + DT : 0; // jostled up against its neighbours: near enough
+          if (d > 0.35 && !v.arrived && v.stuck < 1.2) {
+            const field = v.open && d > 2 ? (visitFields[vet.goal] ??= grid.field(vet.x, vet.z, 1.2)) : null;
+            if (!field || !flowTo(field, 1)) { dvx = dx / d; dvz = dz / d; }
+            speed = Math.min(P.roamSpeed * 1.6, 0.3 + d); useFeelers = d > 1.2;
+          } else { if (!v.arrived) { v.arrived = true; v.since = t; } face = Math.atan2(v.vx - p.px, v.vz - p.pz); }
           break;
         }
         case ST.ZOOM: { // freshly clean: happy sprint away from the hose

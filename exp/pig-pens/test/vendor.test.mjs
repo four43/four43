@@ -10,7 +10,7 @@ const SOURCES = JSON.parse(readFileSync(new URL('SOURCES.json', dir), 'utf8'));
 const sha16 = f => createHash('sha256').update(readFileSync(new URL(f, dir))).digest('hex').slice(0, 16);
 
 test('every vendored file is present and matches its pinned sha256', () => {
-  assert.equal(Object.keys(SOURCES.files).length, 53); // 49 models, 4 palettes
+  assert.equal(Object.keys(SOURCES.files).length, 62); // 58 models, 4 palettes
   for (const [f, { sha256 }] of Object.entries(SOURCES.files)) assert.equal(sha16(f), sha256, f);
 });
 test('each kit folder carries its Kenney licence (CC0)', () => {

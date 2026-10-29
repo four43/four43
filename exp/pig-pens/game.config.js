@@ -7,7 +7,8 @@ const PET_CLIPS = ['idle', 'walk', 'run', 'eat', 'dance', 'gesture-negative'];
 const custom = (f, mats) => ({ file: `custom/${f}.glb`, rename: { materials: Object.fromEntries(mats.map(m => [m, 'wood'])) } });
 // the clinic's furniture (Kenney Furniture Kit: factor colours, no texture); all of it draws as wood (no metal: no env map)
 const FURNITURE = ['desk', 'chairDesk', 'computerScreen', 'bedSingle', 'pillow', 'kitchenCabinet', 'kitchenSink', 'kitchenFridgeSmall',
-  'kitchenCoffeeMachine', 'rugRounded', 'pottedPlant', 'lampRoundFloor', 'bookcaseOpenLow', 'trashcan', 'coatRackStanding'];
+  'kitchenCoffeeMachine', 'rugRounded', 'pottedPlant', 'lampRoundFloor', 'bookcaseOpenLow', 'trashcan', 'coatRackStanding',
+  'bookcaseClosedWide', 'shower', 'toilet', 'bathroomSink', 'table', 'chair'];
 const FURN_MATS = ['wood', 'woodDark', 'metal', 'metalLight', 'metalMedium', 'metalDark', 'glass', 'plant', 'carpet', 'carpetWhite', 'carpetDarker', 'lamp', '_defaultMat'];
 export const furnId = f => `furn_${f}`;
 
@@ -30,6 +31,7 @@ export default {
       apple: kit('food-kit', 'apple', 'produce'), carrot: kit('food-kit', 'carrot', 'produce'), cabbage: kit('food-kit', 'cabbage', 'produce'),
       cob: kit('food-kit', 'corn', 'produce'), egg: kit('food-kit', 'egg', 'produce'), barrel: kit('food-kit', 'barrel', 'wood'),
       sack: kit('food-kit', 'bag', 'fabric'),
+      bread: kit('food-kit', 'bread', 'produce'), banana: kit('food-kit', 'banana', 'produce'), cupTea: kit('food-kit', 'cup-tea', 'produce'),
       pig: { ...kit('cube-pets', 'animal-pig', 'pet'), animTable: { fps: 30, clips: PET_CLIPS } },
       chick: { ...kit('cube-pets', 'animal-chick', 'plumage'), animTable: { fps: 30, clips: PET_CLIPS } },
       dog: kit('cube-pets', 'animal-dog', 'pet'), fox: kit('cube-pets', 'animal-fox', 'pet'),
@@ -39,6 +41,7 @@ export default {
       coop: custom('coop', ['wood', 'wall', 'trim', 'roof', 'plank', 'straw']),
       barn: custom('barn', ['barnRed', 'trim', 'roofGrey', 'straw', 'wood', 'lampGlow']),
       clinic: custom('clinic', ['wall', 'trim', 'slate', 'mint', 'pale', 'wood', 'dark']),
+      doctorBag: custom('doctor-bag', ['leather', 'brass', 'dark', 'white', 'red']), laptop: custom('laptop', ['shell', 'dark', 'screen', 'logo']),
       vetTools: custom('vet-tools', ['white', 'metal', 'teal', 'red', 'pink', 'yellow', 'glass', 'dark']),
       ...Object.fromEntries(FURNITURE.map(f => [furnId(f), { file: `furniture-kit/${f}.glb`, rename: { materials: Object.fromEntries(FURN_MATS.map(m => [m, 'wood'])) } }])),
       vet: kit('mini-characters', 'character-female-f', 'pet'),

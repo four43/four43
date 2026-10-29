@@ -6,8 +6,8 @@ import { ST } from '../sim.js';
 import { AILMENTS } from '../sickness.js';
 import { rig } from './rig.js';
 
-const PIG_DOING = s => ({ [ST.BED]: 'Off to bed in the barn', [ST.ROAM]: 'Wandering about', [ST.GRAZE]: 'Nibbling the grass', [ST.EAT]: 'Eating at the trough', [ST.FLEE]: 'Running away!', [ST.SNACK]: 'Chasing a snack', [ST.GRAB]: 'Squealing in your hand', [ST.AIR]: 'Flying!', [ST.SHOWER]: 'Waiting for a bath', [ST.ZOOM]: 'Squeaky clean and zooming' }[s]);
-const BIRD_DOING = { 0: 'Pecking at the ground', 1: 'Strutting about', 2: 'Going for grain', 3: 'Off to a nest box', 4: 'Laying an egg', 5: 'Sitting on an egg', 6: 'Taking a dust bath', 7: 'Panicking!', 8: 'Heading to bed', 9: 'Climbing the ramp', 10: 'Asleep in the coop', 11: 'Coming out', 12: 'Inside the fox’s cheeks!', 13: 'Lost in the woods', 14: 'Flapping in your hand', 15: 'Flapping through the air', 16: 'Walking home', 17: 'Chasing the fox!' };
+const PIG_DOING = s => ({ [ST.BED]: 'Off to bed in the barn', [ST.ROAM]: 'Wandering about', [ST.GRAZE]: 'Nibbling the grass', [ST.EAT]: 'Eating at the trough', [ST.FLEE]: 'Running away!', [ST.SNACK]: 'Chasing a snack', [ST.GRAB]: 'Squealing in your hand', [ST.AIR]: 'Flying!', [ST.SHOWER]: 'Waiting for a bath', [ST.ZOOM]: 'Squeaky clean and zooming', [ST.VISIT]: 'Saying hello to Dr. Emmy' }[s]);
+const BIRD_DOING = { 0: 'Pecking at the ground', 1: 'Strutting about', 2: 'Going for grain', 3: 'Off to a nest box', 4: 'Laying an egg', 5: 'Sitting on an egg', 6: 'Taking a dust bath', 7: 'Panicking!', 8: 'Heading to bed', 9: 'Climbing the ramp', 10: 'Asleep in the coop', 11: 'Coming out', 12: 'Inside the fox’s cheeks!', 13: 'Lost in the woods', 14: 'Flapping in your hand', 15: 'Flapping through the air', 16: 'Walking home', 17: 'Chasing the fox!', 19: 'Saying hello to Dr. Emmy' };
 const bar = (label, v, cls) => `<div class="bar ${cls}"><span>${label}</span><i><b style="width:${Math.round(Math.max(0, Math.min(1, v)) * 100)}%"></b></i></div>`;
 // poorly, waiting at the vet's, or on the table (v3 §8.2, §9): the card's line, over what it would say otherwise
 function sickLine(sim, a, kind) {

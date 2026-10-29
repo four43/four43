@@ -29,7 +29,8 @@ function state(e) {
     ring: s.ring ? [s.ring[0], s.ring[1]] : null, grabbed: { pig: sim.grabbed, bird: f.grabbed },
     counts: [...sim.counts], time: sim.time,
     sick: [...sim.pigs.filter(p => p.sick).map(p => ({ kind: 'pig', i: p.i, ailment: p.sick.ailment })), ...f.birds.filter(b => b.sick).map(b => ({ kind: 'bird', i: b.i, ailment: b.sick.ailment }))],
-    clinic: { queue: sim.clinic.queue.map(q => ({ ...q })), exam: sim.clinic.exam.state, drag: s.exam?.drag?.tool ?? null },
+    clinic: { queue: sim.clinic.queue.map(q => ({ ...q })), exam: sim.clinic.exam.state, drag: s.exam?.drag?.tool ?? null,
+      props: Object.fromEntries(Object.entries(sim.clinic.props).map(([id, p]) => [id, p.state])) },
   };
 }
 
@@ -46,6 +47,8 @@ export function pigPensGame() {
     // v3 §8.5: make an animal poorly / better through the sim (kind 'pig' | 'bird')
     sicken: (kind, i, ailment) => { const sim = e.scene.state.sim; return sim.sickness.sicken(kind, kind === 'pig' ? sim.pigs[i] : sim.flock.birds[i], ailment, 'debug'); },
     cure: (kind, i) => { const sim = e.scene.state.sim; return sim.sickness.cure(kind, kind === 'pig' ? sim.pigs[i] : sim.flock.birds[i]); },
+    // 2.9.0: send Dr. Emmy to one of her stops (clinic.js VET_STOPS: 'penEast', 'run', …) now
+    vetTo: stop => e.scene.state.sim.vet.send(stop),
   });
   return defineGame({
     id: 'pig-pens', sim: { hz: 1 / DT, maxCatchUp: 4, maxFrame: 0.1 }, actions: ACTIONS, start: 'farm',
