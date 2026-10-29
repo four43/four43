@@ -13,7 +13,7 @@ import { createFlat } from './flat3d.js';
 
 export const CUT = {
   ease: 4.5,          // 1/s: how fast the roof lifts and the walls drop (about half a second)
-  lift: 5,            // m the roof rises before it is hidden
+  lift: 10,           // m the roof rises before it is hidden (2.10.0: twice 2.6.0's, so it is well up and away first)
   stub: 0.45,         // m a cut wall keeps above its base (the clipping plane's height over the wall's foot)
   near: 0.2,          // a wall is cut when its outward normal points this much toward the camera (cos of the angle)
   doorOpen: 1.75,     // rad: the barn's leaves swing out this far

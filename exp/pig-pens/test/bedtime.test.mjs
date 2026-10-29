@@ -11,7 +11,7 @@ import { BARN, COOP } from '../src/defs/buildings.js';
 import { classify } from '../src/game/pick.js';
 import { CST } from '../src/chickens.js';
 import { farmSim } from './farmSim.mjs';
-import { rayTo, tapAt } from './rays.mjs';
+import { rayTo, tapAt, arrive } from './rays.mjs';
 await R.init();
 
 const adultsOf = sim => sim.pigs.filter(p => !p.piglet);
@@ -119,7 +119,7 @@ test('the coop: every grown bird roosts on its own perch at night, chicks beside
 
 test('inside the barn a tap on a plaque opens that stall’s pig; in the coop, that perch’s bird', () => {
   const h = headless(pigPensGame(), { seed: 3, args: { night: true } }), s = h.engine.scene.state, sim = s.sim; h.step(30);
-  tapAt(h, [BARN.x + 3, BARN.ridge, BARN.z]); assert.equal(s.focus, 'barn');
+  tapAt(h, [BARN.x + 3, BARN.ridge, BARN.z]); arrive(h, 'barn'); assert.equal(s.focus, 'barn');
   const st = BARN.stalls[5], at = [BARN.x + st.plaque[0], st.plaque[1], BARN.z + st.plaque[2]];
   const ray = rayTo(at, 4, 6 * st.out);
   assert.deepEqual(classify(sim, ray, 'barn'), { kind: 'pig', i: sim.stallOwner[5] });

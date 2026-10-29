@@ -24,3 +24,6 @@ export function waitFor(h, at, kind, opts = {}) {
   const sim = () => h.engine.scene.state.sim;
   return h.until(() => classify(sim(), rayTo(at, 20, 0.01))?.kind === kind, { maxSteps: 600, message: `waitFor(${kind})`, ...opts });
 }
+// The camera got to a building (or back out): headless there is no view, so the test sends the view's `focus` command
+// itself (rig.js nearFocus, 2.10.0), as the camera would on arriving after a roof tap's flight
+export function arrive(h, id) { h.command('focus', { id }); return h.step(1); }

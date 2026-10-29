@@ -8,6 +8,11 @@ import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
 const ENTRY = process.env.PIGPENS_ENTRY ?? 'src/main.js';
 const ARGS = { pigs: 24 };
 const frames = game => game.page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); // devices update per frame
+// frames (and a sim step each) until the focus is `want`: the camera flies, and the view sends `focus` when it gets there
+async function focusBecomes(game, want, frameCap = 240) {
+  for (let k = 0; k < frameCap && (await game.state()).focus !== want; k++) { await frames(game); await game.step(1); }
+  await expectState(game, 'focus', want);
+}
 const world = (game, fn) => game.page.evaluate(fn);
 let chrome, site, skip = false;
 before(async () => {
@@ -122,7 +127,7 @@ test('iPhone: the toolbar and top bar are tappable and inside the safe area (#63
   } finally { await game.close(); }
 });
 
-test('desktop (v3): a click on a roof goes into that building; the Outside button and Escape come back out', async t => {
+test('desktop (2.10.0): a click on a roof flies in and the roof comes off; Outside and Escape fly back out; the wheel zooms in and out of a building', async t => {
   if (skip) return t.skip(skip);
   const game = await openGame(chrome.browser, site.url, { preset: 'desktop', seed: 3, args: ARGS });
   try {
@@ -130,13 +135,22 @@ test('desktop (v3): a click on a roof goes into that building; the Outside butto
     for (const [id, roof] of [['barn', [BARN.x + 3, 6.0, BARN.z]], ['clinic', [CLINIC.x, 4.2, CLINIC.z - 0.7]], ['coop', [COOP.x - 0.6, 2.4, COOP.z]]]) {
       const at = await game.point({ world: roof });
       await game.page.mouse.click(at.x, at.y); await game.step(2);
-      await expectState(game, 'focus', id);
-      await frames(game); await expectTappable(game, 'farm.back');
+      await focusBecomes(game, id);
+      await expectTappable(game, 'farm.back');
       if (id === 'clinic') { await game.page.keyboard.press('Escape'); await frames(game); await game.step(2); }
       else { await game.tap('farm.back'); await game.step(2); }
-      await expectState(game, 'focus', null);
-      for (let k = 0; k < 40; k++) await frames(game); // the camera eases back before the next roof is aimed at
+      await focusBecomes(game, null);
+      for (let k = 0; k < 40; k++) await frames(game); // the camera settles before the next roof is aimed at
     }
+    // by hand: fly to the clinic, then the wheel takes the camera out (the roof goes back on) and in again (off)
+    const at = await game.point({ world: [CLINIC.x, 4.2, CLINIC.z - 0.7] });
+    await game.page.mouse.click(at.x, at.y); await game.step(2); await focusBecomes(game, 'clinic');
+    for (let k = 0; k < 40; k++) await frames(game);
+    await game.page.mouse.move(640, 360);
+    const wheelUntil = async (dy, want) => { for (let k = 0; k < 12 && (await game.state()).focus !== want; k++) { await game.page.mouse.wheel(0, dy); await frames(game); await frames(game); await game.step(1); } await expectState(game, 'focus', want); };
+    await wheelUntil(150, null);
+    await wheelUntil(-150, 'clinic');
+    assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });
 
@@ -147,7 +161,7 @@ test('desktop (v3 R3): a whole vet visit with the mouse: check in, the exam room
     await expectScene(game, 'farm');
     await world(game, () => { const d = window.engine.debug; d.sicken('pig', 2, 'cold'); d.sim.clinic.admit('pig', 2); });
     const click = async w => { const at = await game.point({ world: w }); await game.page.mouse.click(at.x, at.y); await game.step(2); for (let k = 0; k < 40; k++) await frames(game); };
-    await click([CLINIC.x, 4.2, CLINIC.z - 0.7]); await expectState(game, 'focus', 'clinic');
+    await click([CLINIC.x, 4.2, CLINIC.z - 0.7]); await focusBecomes(game, 'clinic'); for (let k = 0; k < 40; k++) await frames(game);
     await click([CLINIC.x + CLINIC.examRoom.x0 + 0.8, 0, CLINIC.z - 3.2]); await expectState(game, 'focus', 'clinic.exam');
     for (let i = 0; i < 40 && (await game.state()).clinic.exam !== 'patient'; i++) await game.step(30);
     assert.equal((await game.state()).clinic.exam, 'patient', 'on the table');

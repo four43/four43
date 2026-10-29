@@ -1,7 +1,7 @@
 {
   "name": "pigs",
   "private": true,
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -18,8 +18,8 @@
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/extensions": "^4.5.1",
     "esbuild": "^0.28.2",
+    "lion-hawk": "github:four43/lion-hawk-engine#v0.16.0",
     "pngjs": "^7.0.0",
-    "lion-hawk": "github:four43/lion-hawk-engine#v0.15.0",
     "three": "^0.186.0"
   },
   "type": "module",

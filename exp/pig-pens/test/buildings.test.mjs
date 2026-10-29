@@ -11,7 +11,7 @@ import { classify, rayBuilding } from '../src/game/pick.js';
 import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
 import { VET_STOPS, PROPS } from '../src/clinic.js';
 import { farmSim } from './farmSim.mjs';
-import { rayTo, tapAt, tool } from './rays.mjs';
+import { rayTo, tapAt, tool, arrive } from './rays.mjs';
 await R.init();
 
 const lay = buildLayout();
@@ -65,24 +65,29 @@ test('picks: a roof from above goes in, an animal or the coop door in front wins
   assert.equal(classify(sim, rayTo([BARN.x + 2, 0, BARN.z], 20, 0.5), 'barn'), null, 'the barn floor is no target');
 });
 
-test('focus: a roof tap goes in (with its hint), Outside and Escape come back out, a selection closes first', () => {
+const flights = (h, m) => h.events.since(m).of('fly').map(e => e.to);
+test('focus (2.10.0): a roof tap, Outside, Escape and the grass only fly the camera; the camera arriving goes in and out', () => {
   const { h, s } = farm();
   let m = h.mark(); tapAt(h, [BARN.x + 3, BARN.ridge, BARN.z]);
+  assert.deepEqual(flights(h, m), ['barn']); assert.equal(s.focus, null, 'a tap alone does not go in');
+  m = h.mark(); arrive(h, 'barn');
   assert.equal(s.focus, 'barn'); assert.equal(h.state().focus, 'barn');
   assert.deepEqual(h.events.since(m).of('focus').map(e => e.focus), ['barn']); assert.deepEqual(hints(h, m), [FOCUS_HINT.barn]);
   assert.equal(h.enabled('farm.back'), true);
-  m = h.mark(); tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); assert.equal(s.focus, 'clinic', 'another roof switches buildings');
-  h.tap('farm.back'); h.step(1); assert.equal(s.focus, null); assert.equal(h.enabled('farm.back'), false);
-  tapAt(h, [COOP.x - 0.6, COOP.ridge - 0.2, COOP.z]); assert.equal(s.focus, 'coop');
+  m = h.mark(); tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); assert.deepEqual(flights(h, m), ['clinic']); arrive(h, 'clinic'); assert.equal(s.focus, 'clinic', 'another roof switches buildings');
+  m = h.mark(); h.tap('farm.back'); h.step(1); assert.deepEqual(flights(h, m), [null]); assert.equal(s.focus, 'clinic', 'Outside flies out…');
+  arrive(h, null); assert.equal(s.focus, null, '…and the camera pulling away leaves'); assert.equal(h.enabled('farm.back'), false);
+  tapAt(h, [COOP.x - 0.6, COOP.ridge - 0.2, COOP.z]); arrive(h, 'coop'); assert.equal(s.focus, 'coop');
   s.selected = { kind: 'dog' };
-  h.step(1, { back: true }); h.step(1); assert.equal(s.selected, null); assert.equal(s.focus, 'coop', 'Escape closes the card first');
-  h.step(1, { back: true }); h.step(1); assert.equal(s.focus, null);
-  tapAt(h, [BARN.x + 3, BARN.ridge, BARN.z]); tapAt(h, [BARN.x, 0, BARN.z + BARN.d / 2 + 6]); assert.equal(s.focus, null, 'a ground tap outside leaves');
+  m = h.mark(); h.step(1, { back: true }); h.step(1); assert.equal(s.selected, null); assert.deepEqual(flights(h, m), [], 'Escape closes the card first');
+  m = h.mark(); h.step(1, { back: true }); h.step(1); assert.deepEqual(flights(h, m), [null]);
+  m = h.mark(); tapAt(h, [BARN.x, 0, BARN.z + BARN.d / 2 + 6]); assert.deepEqual(flights(h, m), [null], 'a ground tap outside flies out');
+  assert.throws(() => arrive(h, 'moon'), /no building 'moon'/);
 });
 
 test('inside, Shoo, Feed and Hose stay outside (a hint, nothing happens); the Hand and Grab still work', () => {
   const { h, s, sim } = farm();
-  tapAt(h, [BARN.x + 3, BARN.ridge, BARN.z]); assert.equal(s.focus, 'barn');
+  tapAt(h, [BARN.x + 3, BARN.ridge, BARN.z]); arrive(h, 'barn'); assert.equal(s.focus, 'barn');
   for (const t of ['shoo', 'feed', 'hose']) {
     h.tap(`farm.tool.${t}`); h.step(1);
     const m = h.mark(); const foods = sim.foods.length;
@@ -123,19 +128,20 @@ test('in the clinic, a tap on Dr. Emmy opens her card; outside it, her roof hide
   h.until(() => v.state === 'idle', { maxSteps: 60 * 30 });
   const at = [v.x, 0.9, v.z];
   assert.notEqual(classify(sim, rayTo(at, 30, 12))?.kind, 'vet', 'outside: the roof');
-  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); assert.equal(s.focus, 'clinic');
+  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); arrive(h, 'clinic'); assert.equal(s.focus, 'clinic');
   tapAt(h, at, { ray: rayTo(at, 12, 6) }); assert.deepEqual(s.selected, { kind: 'vet' });
 });
 
 test('inside the coop: the grass in front of it goes back out; only the pop door itself opens and shuts it', () => {
   const { h, s, sim } = farm(), c = sim.lay.coop;
-  tapAt(h, [COOP.x - 0.6, COOP.ridge - 0.2, COOP.z]); assert.equal(s.focus, 'coop');
+  tapAt(h, [COOP.x - 0.6, COOP.ridge - 0.2, COOP.z]); arrive(h, 'coop'); assert.equal(s.focus, 'coop');
   const door = [c.doorX, COOP.floor + 0.3, c.doorZ];
   tapAt(h, door, { ray: rayTo(door, 6, 5) }); assert.equal(c.open, false, 'the pop door shuts'); assert.equal(s.focus, 'coop');
   tapAt(h, door, { ray: rayTo(door, 6, 5) }); assert.equal(c.open, true);
   for (const g of [[c.doorX, 0, c.rampZ + 0.9], [c.x - c.hx - 1, 0, c.doorZ + 0.6], [c.x, 0, c.rampZ + 2]]) {
-    tapAt(h, [COOP.x - 0.6, COOP.ridge - 0.2, COOP.z]); assert.equal(s.focus, 'coop');
-    tapAt(h, g, { ray: rayTo(g, 6, 5) }); assert.equal(s.focus, null, `grass at ${g} leaves`); assert.equal(c.open, true, 'and leaves the door alone');
+    tapAt(h, [COOP.x - 0.6, COOP.ridge - 0.2, COOP.z]); arrive(h, 'coop'); assert.equal(s.focus, 'coop');
+    const m = h.mark(); tapAt(h, g, { ray: rayTo(g, 6, 5) }); assert.deepEqual(flights(h, m), [null], `grass at ${g} flies out`); assert.equal(c.open, true, 'and leaves the door alone');
+    arrive(h, null);
   }
 });
 
@@ -189,7 +195,7 @@ test('in the clinic, the flat’s things work from a tap: shower, sinks, toilet,
   const mid = id => { const [[x0, x1], [y0, y1], [z0, z1]] = CLINIC.props[id].box; return [CLINIC.x + (x0 + x1) / 2, (y0 + y1) / 2, CLINIC.z + (z0 + z1) / 2]; };
   const tap = id => tapAt(h, mid(id), { ray: rayTo(mid(id), 10, 1) });
   for (const id of Object.keys(CLINIC.props)) assert.notEqual(classify(sim, rayTo(mid(id), 10, 1))?.kind, 'prop', `outside, the roof hides the ${id}`);
-  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); assert.equal(s.focus, 'clinic');
+  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); arrive(h, 'clinic'); assert.equal(s.focus, 'clinic');
   for (const id of Object.keys(CLINIC.props)) assert.deepEqual(classify(sim, rayTo(mid(id), 10, 1), 'clinic'), { kind: 'prop', id }, id);
   const secs = t => h.step(Math.ceil(t * 60) + 2);
   // the shower runs a while, or until tapped again

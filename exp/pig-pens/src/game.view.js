@@ -8,15 +8,18 @@ import MANIFEST from '../baked/manifest.json' with { type: 'json' };
 import { buildWorld } from './view/world.js';
 import { createHud } from './view/hud.js';
 import { bindSnacks } from './view/snacks3d.js';
-import { rig, attach, bindCamera, followFocus } from './view/rig.js';
+import { rig, attach, bindCamera, followFocus, fly, nearFocus, roofPanel } from './view/rig.js';
 import { Sound } from './sound.js';
+import { dof, dofPanel } from './view/dofPanel.js';
 
 export const MODEL_KEYS = Object.keys(MANIFEST.models);
 const SKY = '#bfe6f5';
 const tilts = new WeakMap(); // one tilt-shift pass (and its render targets) per renderer, reused when the farm is re-entered
+// 2.10.0: tuned in the ?debug=dof panel: a wide sharp band, a gentle ramp either side, and a fade over the whole zoom range
+const DOF = { band: 0.41, scale: 0.3, nearScale: 0.5, fullAt: 2, offAt: 80 };
 
 export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
-  let world = null, hud = null, sound = null, frame = 0, offs = [];
+  let world = null, hud = null, sound = null, frame = 0, offs = [], asked; // asked: the focus last sent, until the sim has it
 
   const farm = {
     enter(engine, view) {
@@ -26,8 +29,10 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
       offs = [];
       sound ??= new Sound(view.audio); view.audio.listen(gfx.camera);
       // 3e's gfx.post seam: boot's gfx.render() draws through the tilt-shift pass; the pass is ours (one per renderer, reused)
-      let fx = tilts.get(gfx.renderer); if (!fx) tilts.set(gfx.renderer, fx = createTiltShift(gfx.renderer, { on: tilt })); fx.params.on = tilt;
+      let fx = tilts.get(gfx.renderer); if (!fx) tilts.set(gfx.renderer, fx = createTiltShift(gfx.renderer, { ...DOF, on: tilt })); fx.params.on = tilt;
       gfx.post = fx; offs.push(() => { if (gfx.post === fx) gfx.post = null; });
+      offs.push(view.debug.panel(dofPanel(fx, () => rig.orbit.state.dist))); // ?debug=dof (lion-hawk 0.16.0 D-9)
+      offs.push(view.debug.panel(roofPanel)); // ?debug=roofs
       view.orbit = attach(gfx.camera, canvas); view.project = rig.project;
       // R1 measurement: draw calls and programs of the last drawn frame (read with ?tilt=0: one render per frame)
       view.perf = () => { const i = gfx.info(); return { calls: i.calls, triangles: i.triangles, programs: i.programs }; };
@@ -52,6 +57,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
           case 'scatter': sound.scatter(); break;
           case 'bell': sound.bell(); break;
           case 'door': sound.gate(); break;
+          case 'fly': fly(ev.to, s.focus); break; // a roof tap or Outside: the camera on its way
           case 'feathers': world?.feathers(ev); break;
           case 'hint': hint(ev.text, ev.seconds); break;
           case 'egg': hud?.event(ev, flock.basket); break;
@@ -82,7 +88,10 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
       const s = engine.scene.state, dt = view.dt;
       world.update(dt, s, frame, alpha); hud.update(engine, s, frame, dt);
       rig.locked = s.focus === 'clinic.exam'; followFocus(s.focus, dt); rig.orbit.update(dt, view.rawDt);
-      const post = view.gfx.post; if (post?.params) post.params.focus = rig.orbit.state.dist;
+      // the roof comes off when the camera gets near a building and goes back on when it pulls away (the sim's focus)
+      const near = nearFocus(s.focus);
+      if (near === s.focus) asked = undefined; else if (near !== asked) { asked = near; engine.command('focus', { id: near }); }
+      const post = view.gfx.post; if (post?.params && !dof.hold) post.params.focus = Math.round(rig.orbit.state.dist * 100) / 100; // to the cm: the dof panel shows it
       frame++;
     },
   };

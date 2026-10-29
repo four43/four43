@@ -1,6 +1,7 @@
 // Pig Pens' engine browser entry (lion-hawk 2e P6; phase 3k): Rapier first (#6), then boot the sim half with the view half
 // and the devices. boot's seed 1 is today's default farm; ?seed= and ?lh-test win inside boot (#58). ?shading picks the
-// compiler tier (lambert by default, D5), ?tilt=0 turns the tilt-shift off, ?fps times the Rapier step (#106).
+// compiler tier (lambert by default, D5), ?tilt=0 turns the tilt-shift off, ?fps times the Rapier step (#106),
+// ?debug=dof opens the depth-of-field panel (view/dofPanel.js).
 import { boot } from 'lion-hawk/view';
 import { pigPensGame, initPhysics } from './game.sim.js';
 import { pigPensView } from './game.view.js';

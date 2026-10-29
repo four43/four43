@@ -10,7 +10,7 @@ import { SICK, AILMENTS } from '../src/sickness.js';
 import { CLINIC, BARN } from '../src/defs/buildings.js';
 import { EXAM_DRAG } from '../src/game/farm.js';
 import { farmSim } from './farmSim.mjs';
-import { rayTo, tapAt } from './rays.mjs';
+import { rayTo, tapAt, arrive } from './rays.mjs';
 import { grabTarget } from '../src/game/pick.js';
 await R.init();
 
@@ -29,7 +29,7 @@ function useTool(h, sim, tool) {
   cmd(h, 'up', fromEast(onto, 2.5, 1.5)); h.step(1);
 }
 function intoExam(h, s) {
-  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); assert.equal(s.focus, 'clinic');
+  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); arrive(h, 'clinic'); assert.equal(s.focus, 'clinic');
   // a bit of the exam room's floor away from Dr. Emmy (a tap on her opens her card)
   const R0 = CLINIC.examRoom, v = s.sim.vet, spots = [[R0.x0 + 0.6, R0.z0 + 0.6], [R0.x1 - 0.6, R0.z0 + 0.6], [R0.x0 + 0.6, R0.z1 - 0.6]].map(([x, z]) => [CLINIC.x + x, 0, CLINIC.z + z]);
   const at = spots.find(p => Math.hypot(p[0] - v.x, p[2] - v.z) > 1.4);
@@ -159,14 +159,15 @@ test('a tool let go away from the patient goes back on the board; nobody is call
   const away = [p.px, p.py + 1.0, p.pz + 1.4];
   cmd(h, 'move', fromEast(away, 2.5, 1.5)); cmd(h, 'up', fromEast(away, 2.5, 1.5)); h.step(1);
   assert.equal(s.exam.drag, null); assert.ok(p.sick, 'not used');
-  h.step(1, { back: true }); h.step(1); assert.equal(s.focus, 'clinic', 'Back: out to the clinic'); h.step(1, { back: true }); h.step(1); assert.equal(s.focus, null);
+  h.step(1, { back: true }); h.step(1); assert.equal(s.focus, 'clinic', 'Back: out to the clinic');
+  const m = h.mark(); h.step(1, { back: true }); h.step(1); assert.deepEqual(h.events.since(m).of('fly').map(e => e.to), [null], 'then Outside flies out');
 });
 
 test('night: the vet is asleep, the exam room shut (a hint), but drop-offs still wait on the benches', () => {
   const { h, s, sim, dbg } = farm(); const p = adults(sim)[7];
   h.tap('farm.night'); h.until(() => sim.vet.state === 'sleep', { maxSteps: 60 * 60 });
   dbg.sicken('pig', p.i, 'cold'); assert.equal(sim.clinic.admit('pig', p.i), 'in');
-  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]);
+  tapAt(h, [CLINIC.x, CLINIC.ridge, CLINIC.z - 1]); arrive(h, 'clinic');
   const R0 = CLINIC.examRoom, at = [CLINIC.x + (R0.x0 + R0.x1) / 2, 0, CLINIC.z + (R0.z0 + R0.z1) / 2];
   const m = h.mark(); tapAt(h, at, { ray: rayTo(at, 10, 4) });
   assert.equal(s.focus, 'clinic'); assert.match(hints(h, m).join(), /vet’s asleep/);

@@ -20,7 +20,7 @@ export const START_HINT = 'Tap an animal to meet it. Two fingers turn, pan and z
 export const TAP = { move: 12, seconds: 0.45 }, ORBIT_PX = 10, LIFT = { hose: 55, grab: 80 };
 export const GRAB_EASE = 0.18, GRAB_Y = 1.7, TOSS_GAP = 0.18;
 // The farm's own event types (never a createSim type), so the engine-path golden can filter them out (#57).
-export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter', 'focus']);
+export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter', 'focus', 'fly']);
 // The exam room (v3 §9.4): the tools' tap volumes on the pegboard (world boxes), the height a dragged tool is held at,
 // and how near the patient a tool has to be let go to be used on it
 const PEG_BOX = CLINIC.pegs.map(({ tool, at: [x, y, z] }) => ({ tool,
@@ -30,7 +30,7 @@ const PEG_BOX = CLINIC.pegs.map(({ tool, at: [x, y, z] }) => ({ tool,
 export const EXAM_DRAG = { y: 1.15, front: 0.6, reach: 0.9, lift: 0.25 };
 // Going inside (v3 §5): the building in focus, its hint, and the tools that stay outside
 export const FOCUS_HINT = {
-  coop: 'The coop. Tap Outside or the grass to go back out.',
+  coop: 'The coop. Zoom out, or tap Outside or the grass, to go back out.',
   barn: 'The barn. Tap the doors to open or shut them.',
   clinic: 'The vet’s clinic. Tap the exam room to see a patient.',
   'clinic.exam': 'Drag a tool from the pegboard onto the patient.',
@@ -73,13 +73,16 @@ export function makeFarm() {
       if (t.kind === 'gate') { const g = sim.lay.gates[t.id]; sim.setGate(t.id, !g.open); api.hint(e, g.open ? 'Gate open.' : 'Gate shut.', 1.2); return; }
       if (t.kind === 'fox' && sim.flock.fox.carrying) { sim.flock.tapFox(); return; }
       if (t.kind === 'door') return api.toggleDoor(e);
-      if (t.kind === 'building') return api.enter(e, t.id);
+      if (t.kind === 'building') return api.fly(e, t.id);
       if (t.kind === 'exam') return api.enter(e, 'clinic.exam');
       if (t.kind === 'prop') { sim.clinic.useProp(t.id); return; }
-      if (t.kind === 'outside') return api.leave(e);
+      if (t.kind === 'outside') return api.fly(e, null);
       api.select(e, t);
     },
-    // Into a building (a roof tap): the camera frames it and its roof lifts (the view); another building's roof switches.
+    // A roof tap (or Outside) only starts the camera on its way (the view's rig.fly, which any camera gesture stops); the
+    // building comes into focus when the camera gets close (the view's `focus` command, rig.js nearFocus)
+    fly(e, id) { e.emit('fly', { to: id }); },
+    // Into a building: its roof lifts and its walls cut away (the view); another building's roof switches.
     enter(e, id) {
       if (!FOCUS_HINT[id]) throw new Error(`pig-pens: no building '${id}'`);
       const s = S(e); if (s.focus === id) return;
@@ -89,7 +92,7 @@ export function makeFarm() {
     },
     leave(e) { const s = S(e); if (s.focus) setFocus(e, s, null); },
     // Back (Escape, the Outside button): a selection closes first, then the exam room, then the building
-    back(e) { const s = S(e); if (s.selected) api.select(e, null); else if (s.focus === 'clinic.exam') setFocus(e, s, 'clinic'); else api.leave(e); },
+    back(e) { const s = S(e); if (s.selected) api.select(e, null); else if (s.focus === 'clinic.exam') setFocus(e, s, 'clinic'); else if (s.focus) api.fly(e, null); },
     // A grabbed animal let go over the clinic is checked in (v3 §9.1)
     admit(e, kind, i) {
       const s = S(e), r = s.sim.clinic.admit(kind, i);
@@ -265,6 +268,12 @@ export function makeFarm() {
         me.eggs = Math.min(0xffff, s.sim.flock.basket); g.night = s.sim.clock.night; for (let i = 0; i < c.length; i++) g.pens[i] = c[i];
       }, { stage: 'post' });
       ctx.command('tool', (e, d) => api.pointer(e, d));
+      // the camera reached a building or left it (rig.js nearFocus): a building's id, or null for outside
+      ctx.command('focus', (e, d) => {
+        if (d.id === null) return api.leave(e);
+        if (!BUILDINGS[d.id]) throw new Error(`pig-pens: focus: no building '${d.id}'`);
+        api.enter(e, d.id);
+      });
       ctx.command('tune', (e, d) => s.sim.sickness.tune(d.key, d.value)); // ?tune=key=value,… (main.js): SICK values (sickness.js)
       api.hint(e, START_HINT, 5);
     },
