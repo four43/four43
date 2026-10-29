@@ -7,9 +7,12 @@ const KEY = 'rally-sim-bests';
 // Style 2 and 4 and obstacles 2 are the old twisty, flowing and mild tracks, so they keep the old names in the key (and
 // their bests); the old wild bests were on taller obstacles and are not carried over (rally spec R14-4).
 const styleName = (v) => ({ 2: 'twisty', 4: 'flowing' })[styleLevel(v)] ?? `style${v}`, obstaclesName = (v) => (obstacleLevel(v) === 2 ? 'mild' : `obstacles${obstacleLevel(v)}`);
+// GEN: the track generation the bests were set on. R18 reshaped every road (widths, narrows, jumps, a loop's line),
+// so the bests from before it are set aside, not compared (rally spec R18-6).
+const GEN = 'r18';
 export const bestKey = (modeId, track, carId) =>
   [modeId, track.seed, track.kind, styleName(track.style), track.theme, obstaclesName(track.obstacles), carId].join('|') +
-  (!track.size || track.size === 'medium' ? '' : `|${track.size}`); // medium: the tracks (and keys) from before R14-5
+  (!track.size || track.size === 'medium' ? '' : `|${track.size}`) + `|${GEN}`; // medium: the tracks (and keys) from before R14-5
 
 // In-memory default keeps the sim half pure; the view half passes localStorage.
 export function memoryStore() { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => { m.set(k, String(v)); } }; }

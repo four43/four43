@@ -140,7 +140,7 @@ await test('bests', () => {
   bad.put('k', { time: 1 });
   check('broken storage: put is harmless, get → null', +(bad.get('k') === null), 1, 1);
   const track = { seed: 's', kind: 'stage', style: 'twisty', theme: 'summer', obstacles: 'mild' };
-  check(`key ${bestKey('stage', track, 'impreza-555')}`, +(bestKey('stage', track, 'impreza-555') === 'stage|s|stage|twisty|summer|mild|impreza-555'), 1, 1);
+  check(`key ${bestKey('stage', track, 'impreza-555')}`, +(bestKey('stage', track, 'impreza-555') === 'stage|s|stage|twisty|summer|mild|impreza-555|r18'), 1, 1);
 });
 
 // A headless Rally on a generated track (field note #27): the settings are the old trackSim's (assist on, summer).

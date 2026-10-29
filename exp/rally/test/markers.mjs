@@ -56,7 +56,7 @@ console.log('\n# the car hits a post at 72 km/h');
   const tilt = Math.acos(Math.min(1, 1 - 2 * (q.x * q.x + q.z * q.z))) * 180 / Math.PI;
   check('post was hit', hit ? 1 : 0, 1, 1);
   check('post knocked over (tilt deg)', tilt, 45, 180, '°');
-  check('time until it stops after the hit (s)', tStop || 99, 0, 3.5, ' s');
+  check('time until it stops after the hit (s)', tStop || 99, 0, 5, ' s'); // R18: on the narrower road this post stands on a falling verge and rolls on (4 s)
   check('distance it ends up from home (m)', Math.hypot(p1.x - p0.x, p1.z - p0.z), 0.5, 20, ' m');
 }
 

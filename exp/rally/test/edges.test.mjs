@@ -49,21 +49,32 @@ test('edges: tarmac edges wander less locally than loose ones (the base width dr
   assert.ok(mean(spread.tarmac) < mean(spread.loose) * 0.5, `tarmac ${mean(spread.tarmac).toFixed(3)} vs loose ${mean(spread.loose).toFixed(3)}`);
 });
 
-test('edges: narrow lanes and wide stretches, wider on the inside of bends, standard at the start gate (R12)', () => {
-  const half = [], inside = [], outside = [], tight = [];
-  for (const t of ['w1', 'w2', 'w3', 'w4'].map(s => generateTrack(s, { kind: 'loop' }))) {
+test('edges: three car widths, single lanes only through narrows, wider on the inside of bends, standard at the start gate (R12, R18-2)', () => {
+  const width = [], squeezed = [], inside = [], outside = [], tight = [];
+  let narrows = 0;
+  for (const t of ['w1', 'w2', 'w3', 'w4', 'w5', 'w6'].flatMap(s => ['loop', 'stage'].map(kind => generateTrack(s, { kind, obstacles: 5 })))) {
     const { left, right } = t.edges, K = t.layout.curvature, Kbar = average(K, 15, true);
+    const ns = t.features.filter(f => f.type === 'narrow'), inNarrow = (s) => ns.some(f => s >= f.s0 && s <= f.s1);
+    narrows += ns.length;
+    for (const f of ns) {
+      const mid = Math.round((f.s0 + f.s1) / 2 / t.layout.ds);
+      squeezed.push(left[mid] + right[mid]);
+      for (let s = f.s0; s <= f.s1; s++) assert.ok(Math.abs(K[Math.round(s) % t.layout.n]) <= 1 / 120 + 1e-6, 'a narrow sits on a straight');
+    }
     for (let i = 0; i < t.layout.n; i++) {
-      half.push((left[i] + right[i]) / 2);
+      if (!inNarrow(i * t.layout.ds)) width.push(left[i] + right[i]);
       if (Math.abs(Kbar[i]) >= 1 / 40) tight.push(left[i] + right[i]);
       if (Math.abs(K[i]) > 1 / 30) { inside.push(K[i] > 0 ? left[i] : right[i]); outside.push(K[i] > 0 ? right[i] : left[i]); }
     }
     const g = Math.round(40 / t.layout.ds);
     assert.ok(Math.abs(left[g] - EDGE.half) < 0.05 && Math.abs(right[g] - EDGE.half) < 0.05, 'standard width at the start gate');
-    assert.ok(Math.abs(left[0] - left[t.layout.n - 1]) < 0.15, 'no step where the loop closes');
+    if (t.layout.closed) assert.ok(Math.abs(left[0] - left[t.layout.n - 1]) < 0.15, 'no step where the loop closes');
   }
   const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
-  assert.ok(Math.min(...half) < 1.8 && Math.max(...half) > 7.5, `half-widths ${Math.min(...half).toFixed(2)} … ${Math.max(...half).toFixed(2)} m`);
+  assert.ok(mean(width) > 5.2 && mean(width) < 7.5, `mean road width ${mean(width).toFixed(2)} m (three to four car widths)`);
+  const lanes = width.filter(w => w < 4).length / width.length;
+  assert.ok(lanes < 0.01, `outside narrows, ${(100 * lanes).toFixed(1)}% of the road under 4 m`);
+  assert.ok(narrows > 0 && squeezed.every(w => w < 3.4), `narrows squeeze to a lane: ${squeezed.map(w => w.toFixed(1)).join(', ')} m`);
   assert.ok(tight.length > 50 && Math.min(...tight) >= 3.5 - 1e-4, `tight bends at least 2 car widths: narrowest ${Math.min(...tight).toFixed(2)} m`);
   assert.ok(inside.length > 50 && mean(inside) > mean(outside) + 0.3, `tight bends: inside ${mean(inside).toFixed(2)} vs outside ${mean(outside).toFixed(2)} m`);
 });

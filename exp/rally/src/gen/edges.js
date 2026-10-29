@@ -1,5 +1,6 @@
-// Road edges (rally spec R10-1, R12): the half-width of the road on each side, per layout sample. A base width that drifts
-// between single-car lanes and 20 m wide stretches over a couple of hundred metres (on a log scale, so ~7 m is typical), the inside of bends widened where cars cut
+// Road edges (rally spec R10-1, R12, R18-2): the half-width of the road on each side, per layout sample. A base width
+// that drifts between ~5 and ~7 m of road (three to four car widths) over a couple of hundred metres, squeezed to a
+// single lane through a `narrow` obstacle (eased in and out over its ramps), the inside of bends widened where cars cut
 // them, then a slow wobble shared by both sides (~25 m) and a ragged per-side wander (~5 m), both scaled by the section's
 // surface (tarmac keeps a near-laid edge, gravel frays). Tight bends are at least two car widths wide. Around the start / finish gates (on loops that spans the seam)
 // it eases back to the standard width, so the gates frame the road and a loop closes without a step. The wheels
@@ -10,9 +11,9 @@ import { roadSurfaceAt } from './surfaces.js';
 import { ROADSIDE } from './roadside.js';
 
 export const EDGE = {
-  half: 3.5, min: 1.3, max: 10,       // m: the standard half-width (gates), and the clamp (1.5 car widths … 20 m of road)
+  half: 3, min: 1.3, max: 5,         // m: the standard half-width (gates), and the clamp (1.5 car widths … 10 m of road)
   shoulder: 2,                        // m of flat shoulder past the edge (terrain, ribbon); markers stand 1 m past it
-  base: [1.4, 9.5], baseScale: 220,   // m: single-car lane … 19 m road, log-interpolated, drifting over ~baseScale m
+  base: [2.6, 3.6], baseScale: 220,   // m: a 5.2 … 7.2 m road, log-interpolated, drifting over ~baseScale m
   corner: { gain: 30, max: 1.2, smooth: 15 }, // the inside of a bend widens |κ| (smoothed over ±smooth samples) × gain m, ≤ max
   tight: { width: 3.5, k: [1 / 80, 1 / 40] }, // m of road (2 car widths) at least in a bend, ramped in as |κ| goes radius 80 → 40 m
   gate: { reach: 35, blend: 70 },     // m: standard width within reach of a gate, eased back over blend
@@ -41,18 +42,20 @@ export function average(a, rad, closed) {
   return out;
 }
 
-// → { left: Float32Array(n), right: Float32Array(n) }, half-widths in m (positive), one per layout sample.
-export function generateEdges(layout, surfaces, r) {
+// → { left: Float32Array(n), right: Float32Array(n) }, half-widths in m (positive), one per layout sample. features:
+// the narrows among them squeeze the road.
+export function generateEdges(layout, surfaces, r, features = []) {
   const n = layout.n, L = n * layout.ds, left = new Float32Array(n), right = new Float32Array(n);
   const wide = noise2(r.fork('width').int(0, 0x7fffffff)), rag = noise2(r.fork('rag').int(0, 0x7fffffff));
   const base = noise2(r.fork('base').int(0, 0x7fffffff));
   const bend = average(layout.curvature, EDGE.corner.smooth, layout.closed);
+  const narrows = features.filter(f => f.type === 'narrow');
   const gates = layout.closed ? [ROADSIDE.gateS, ROADSIDE.gateS + L, ROADSIDE.gateS - L] : [ROADSIDE.gateS, L - ROADSIDE.gateS];
   for (let i = 0; i < n; i++) {
     const s = i * layout.ds, at = roadSurfaceAt(surfaces, s);
     const a = EDGE.surface[at.road] ?? FALLBACK, b = at.next ? EDGE.surface[at.next.road] ?? FALLBACK : a;
     const width = a.width + (b.width - a.width) * at.t, rg = a.rag + (b.rag - a.rag) * at.t;
-    const hw = EDGE.base[0] * (EDGE.base[1] / EDGE.base[0]) ** smooth(0.5 + 0.9 * base(s / EDGE.baseScale, 1.5)); // log scale; time at both ends
+    const hw = EDGE.base[0] * (EDGE.base[1] / EDGE.base[0]) ** smooth(0.5 + 0.6 * base(s / EDGE.baseScale, 1.5)); // log scale
     const cut = Math.min(EDGE.corner.max, Math.abs(bend[i]) * EDGE.corner.gain), inLeft = bend[i] > 0; // + curvature = left bend
     const w = width * wide(s / EDGE.widthScale, 0.5);
     const g = smooth((Math.min(...gates.map(x => Math.abs(s - x))) - EDGE.gate.reach) / EDGE.gate.blend); // 0 at a gate, 1 away
@@ -61,6 +64,13 @@ export function generateEdges(layout, surfaces, r) {
     let le = EDGE.half + (l - EDGE.half) * g, ri = EDGE.half + (rt - EDGE.half) * g;
     const need = 2 * EDGE.min + (EDGE.tight.width - 2 * EDGE.min) * smooth((Math.abs(bend[i]) - EDGE.tight.k[0]) / (EDGE.tight.k[1] - EDGE.tight.k[0]));
     if (le + ri < need) { const k = need / (le + ri); le *= k; ri *= k; } // too narrow for the bend: widen both sides, centre kept
+    for (const f of narrows) { // a narrow: the lane's half-width plus a little of the fray, eased in over its ramps
+      const u = Math.min(s - f.s0, f.s1 - s) / f.ramp;
+      if (u <= 0) continue;
+      const k = smooth(u);
+      le += (f.half + 0.3 * rg * rag(s / EDGE.ragScale, 3.5) - le) * k;
+      ri += (f.half + 0.3 * rg * rag(s / EDGE.ragScale, 9.5) - ri) * k;
+    }
     left[i] = clamp(le);
     right[i] = clamp(ri);
   }

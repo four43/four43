@@ -210,14 +210,16 @@ test('twisty obstacles', () => {
         n++;
         if (style > 3) continue; // 1–3 place features as tight roads do
         for (let s = f.s0 - 40; s <= f.s1 + 30; s++) if (kAt(s) > 1 / 60 + 1e-6) { bad++; break; }
-        if (f.type === 'kicker' || f.type === 'crest') for (let s = f.s0 - 40; s <= f.s1; s++) if (kAt(s) > 1 / 120 + 1e-6) { badLaunch++; break; }
+        // R18-3: a jump's flat-out flight lands within 1.5 m of its line (κ X² / 2), and a narrow sits on a straight
+        if (f.flight) { let k = 0; for (let s = f.s0; s <= f.s0 + f.lipS + f.flight; s++) k = Math.max(k, kAt(s)); if (k * f.flight ** 2 / 2 > 1.5 + 1e-6) badLaunch++; }
+        if (f.type === 'narrow') for (let s = f.s0; s <= f.s1; s++) if (kAt(s) > 1 / 120 + 1e-6) { badLaunch++; break; }
       }
       km += L.length / 1000;
     }
     per[`${style} ${kind}`] = n / km;
     if (style <= 3) {
       check(`style ${style} ${kind}: obstacles with a curvy run-up/out (1/60 over [s0-40, s1+30])`, bad, 0, 0);
-      check(`style ${style} ${kind}: kickers/crests on a bend (1/120 over [s0-40, s1])`, badLaunch, 0, 0);
+      check(`style ${style} ${kind}: jumps whose flight the road bends > 1.5 m, narrows on a bend (> 1/120)`, badLaunch, 0, 0);
     }
   }
   console.log('  obstacles/km (mild): ' + Object.entries(per).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', '));

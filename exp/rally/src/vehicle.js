@@ -24,6 +24,7 @@ export const ALIGN = { vFrom: 3, vTo: 8, rFull: 0.15 };
 // Suspension jolt (rally-spec R7-6), for the controller rumble only: each wheel keeps a decaying peak of its compression
 // speed (m/s), so a landing or a bump between two rendered frames is still there when the view reads it. Hitting the
 // bump stop adds `stop`. Nothing in the physics reads it.
+const BUMP_STOP = { len: 0.08, force: 30000, back: 0.2 }; // m, N at full travel, share pushed back while extending
 export const JOLT = { decay: Math.exp(-Math.LN2 / (0.05 * 240)), stop: 1.5 }; // half-life 50 ms at the 240 Hz chassis step
 // Body contacts (rally-spec R9-3), for the controller rumble only: the car's colliders report contact impulses (lion-hawk
 // M-5 `contact` events) above `dv` m/s × mass per step. The wheels are raycasts, so driving never touches the body; resting
@@ -281,10 +282,13 @@ export class Vehicle {
       w.xPrev = w.x;
       const x = Math.min(w.x, c.travel);
       let fs = w.k * x + (xd > 0 ? w.cBump : w.cReb) * xd;
-      const bs = c.travel - 0.04;               // progressive bump stop, last 4 cm
+      // Hydraulic bump stop over the last BUMP_STOP.len of travel (rally spec R18-4): a cubic rise to BUMP_STOP.force,
+      // ~600 J a corner, so a landing at ~3 m/s into the slope is caught before the hull touches. It soaks the landing
+      // up rather than springing it back: extending, it pushes at BUMP_STOP.back of that.
+      const bs = c.travel - BUMP_STOP.len;
       if (xd > w.jolt) w.jolt = xd;
-      if (w.x > bs && xd > 0) w.jolt = Math.max(w.jolt, xd + JOLT.stop);
-      if (w.x > bs) fs += 2.0e6 * (w.x - bs) ** 2;
+      if (w.x > c.travel - 0.04 && xd > 0) w.jolt = Math.max(w.jolt, xd + JOLT.stop); // the rumble's bump-stop knock: the last 4 cm
+      if (w.x > bs) fs += BUMP_STOP.force * Math.min(1, (w.x - bs) / BUMP_STOP.len) ** 3 * (xd > 0 ? 1 : BUMP_STOP.back);
       if (w.x > c.travel) fs += 30 * w.k * (w.x - c.travel); // bottomed out
       const mate = this.wheels[i ^ 1];
       const arb = w.front ? c.arbF : c.arbR;
@@ -311,6 +315,7 @@ export class Vehicle {
     const hs = DT / SUB, I = c.wheelInertia;
     const sumFx = [0, 0, 0, 0], sumFy = [0, 0, 0, 0];
     const brk = this.out.brake, hb = this.input.handbrake;
+    let spinL = 0; // angular momentum (about the axles, + = rolling forward) brakes and drive put into wheels in the air
     for (let s = 0; s < SUB; s++) {
       splitDrive(c.drive, Tshaft, this.wheels, this.tq);
       for (let i = 0; i < 4; i++) {
@@ -327,8 +332,9 @@ export class Vehicle {
         let Tb = brk * this.absF[i] * c.brakeTorque * (w.front ? c.brakeBias : 1 - c.brakeBias) / 2;
         if (!w.front) Tb += hb * c.handbrakeTorque;
         const wFree = w.omega + (w.drive - fx * r - troll) * hs / I;
-        const dB = Tb * hs / I;
+        const dB = Tb * hs / I, w0 = w.omega;
         w.omega = Math.abs(wFree) <= dB ? 0 : wFree - Math.sign(wFree) * dB;
+        if (!w.contact) spinL += I * (w.omega - w0);
         sumFx[i] += fx; sumFy[i] += fy;
       }
     }
@@ -346,9 +352,19 @@ export class Vehicle {
     }
     if (snow) this.snowContact(snow, frames, pv);
     this.surfaceDrag(pv);
-    // Aerodynamic drag at the CoM.
-    const sp = Math.hypot(v.x, v.y, v.z);
+    // A wheel in the air reacts on the body (rally spec R18-4): braking it drops the nose, driving it lifts it. Rolling
+    // forward is + about the body's left axis, so the body takes the opposite.
+    const Lx = qrot(q, v3(1, 0, 0));
+    if (spinL !== 0) b.applyTorqueImpulse(mul(Lx, -spinL), true);
+    // Aero: drag at the CoM; downforce (lift if negative) at the axles along the body's down, from the forward airspeed;
+    // the air resisting pitch.
+    const sp = Math.hypot(v.x, v.y, v.z), vF2 = dot(v, F) ** 2, df = 0.5 * 1.2 * c.cla * vF2 * DT;
     if (sp > 0.1) b.applyImpulse(mul(v, -0.5 * 1.2 * c.cda * sp * DT), true);
+    if (df !== 0) {
+      b.applyImpulseAtPoint(mul(down, df * c.aeroFront), add(p, qrot(q, v3(0, 0, this.wheels[0].local.z))), true);
+      b.applyImpulseAtPoint(mul(down, df * (1 - c.aeroFront)), add(p, qrot(q, v3(0, 0, this.wheels[2].local.z))), true);
+    }
+    b.applyTorqueImpulse(mul(Lx, -c.pitchDamp * sp * dot(av, Lx) * DT), true);
     this.writeParts();
   }
 

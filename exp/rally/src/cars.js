@@ -12,6 +12,14 @@ const RWD_LSD = { preload: 50, rampPower: 0.40, rampCoast: 0.25, visc: 300 };
 const AWD = { frontSplit: 0.5, centreVisc: 150, centreCap: 400,
   frontLsd: { preload: 40, rampPower: 0.30, rampCoast: 0.20, visc: 300 },
   rearLsd: { preload: 60, rampPower: 0.50, rampCoast: 0.30, visc: 300 } };
+// Aero by era (rally spec R18-4): [drag CdA (m²), downforce ClA (m², negative = lift), front share of it]. The 70s
+// cars lift a little; Group B's wings and the 90s/2000s WRC aero press down more each decade; the 2017 cars' big
+// wings and diffusers the most (AERO_2017).
+const AERO = { '1970s': [0.70, -0.10, 0.5], '1980s': [0.80, 0.35, 0.35], '1990s': [0.80, 0.45, 0.40], '2000s': [0.85, 0.60, 0.40], '2010s': [0.85, 0.70, 0.40] };
+const AERO_2017 = [0.95, 1.20, 0.40];
+// The air resists pitching: a torque −pitchDamp · v · ω about the car's axle line, pitchDamp = inertia ÷ (PITCH_TAU ·
+// 30 m/s), so at 30 m/s a pitch rate decays over PITCH_TAU s.
+const PITCH_TAU = 3;
 const BOX5 = [3.2, 2.2, 1.65, 1.3, 1.05], BOX6 = [3.2, 2.35, 1.85, 1.5, 1.25, 1.05];
 
 // geo: [wheelbase, track (mean of front and rear), wheel radius, [width, height, length], body z] from the model: the
@@ -19,14 +27,15 @@ const BOX5 = [3.2, 2.2, 1.65, 1.3, 1.05], BOX6 = [3.2, 2.35, 1.85, 1.5, 1.25, 1.
 // mid: a mid-engined car (less yaw inertia for its size); top: the speed (m/s) at the redline in top gear, which sets
 // the final drive.
 function car({ id, name, years, era, power, geo: [wheelbase, track, radius, size, bodyZ], mass, frontWeight, comHeight = 0.45,
-  mid = false, top, drive, sound }) {
+  mid = false, top, drive, sound, aero = AERO[era] }) {
   const [W, H, L] = size, box = (a, b) => mass * (a * a + b * b) / 12;
   const rwd = drive.layout === 'rwd', gears = drive.gears;
   const final = +((drive.engine.redline * 2 * Math.PI / 60) * radius / (gears[gears.length - 1] * top)).toFixed(2);
+  const inertia = { x: Math.round(0.92 * box(L, H)), y: Math.round((mid ? 0.85 : 0.93) * box(L, W)), z: Math.round(0.92 * box(W, H)) }; // pitch, yaw, roll (kg m^2)
   return {
     id, name, years, era, power, model: id,
     mass, frontWeight, comHeight, wheelbase, track, radius, size, bodyZ,
-    inertia: { x: Math.round(0.92 * box(L, H)), y: Math.round((mid ? 0.85 : 0.93) * box(L, W)), z: Math.round(0.92 * box(W, H)) }, // pitch, yaw, roll (kg m^2)
+    inertia,
     wheelInertia: +(1.2 * (radius / 0.33) ** 2).toFixed(2),
     travel: 0.25, fn: 1.6, zetaBump: 0.30, zetaReb: 0.60,
     arbF: rwd ? 9000 : 10000, arbR: rwd ? 4000 : 5000, // N per m of left/right compression difference
@@ -35,7 +44,7 @@ function car({ id, name, years, era, power, geo: [wheelbase, track, radius, size
     rearAp: 0.85,                                       // rear peak slip angle × this: stiffer rear (toe-in, wider tires)
     brakeTorque: Math.round(6000 * mass / 1250), brakeBias: mid ? 0.52 : rwd ? 0.62 : 0.58,
     handbrakeTorque: 1500,                               // the hydraulic handbrake, the same lever on every car
-    cda: 0.80,
+    cda: aero[0], cla: aero[1], aeroFront: aero[2], pitchDamp: +(inertia.x / (PITCH_TAU * 30)).toFixed(1),
     sound,                                              // createEngineSound options (view only)
     drive: { reverse: 3.2, shiftTime: 0.12, ...drive, final },
   };
@@ -92,7 +101,7 @@ const LIST = [
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 212, peakRpm: 5000, idle: 1000, redline: 7500, limiter: 7700, inertia: 0.14 },
       turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),
   car({ id: 'yaris-wrc', name: 'Toyoyo Yarn', years: '2017', era: '2010s', power: 380,
-    geo: [2.511, 1.63, 0.325, [1.92, 1.52, 4.19], 0.05], mass: 1190, frontWeight: 0.56, top: 54,
+    geo: [2.511, 1.63, 0.325, [1.92, 1.52, 4.19], 0.05], mass: 1190, frontWeight: 0.56, top: 54, aero: AERO_2017,
     sound: antiLag,
     drive: { layout: 'awd', engine: { preset: 'i4', torque: 225, peakRpm: 5000, idle: 1000, redline: 8000, limiter: 8200, inertia: 0.14 },
       turbo: { maxBoost: 1.0, size: 0.15, bov: true }, gears: BOX6, ...AWD } }),

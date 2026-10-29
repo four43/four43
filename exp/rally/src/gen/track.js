@@ -12,8 +12,11 @@ import { generateEdges } from './edges.js';
 import { generateWear } from './wear.js';
 import { generateBumps } from './bumps.js';
 import { styleLevel, obstacleLevel } from './levels.js';
+import { flatOut, lineSpot, turnLoop } from './speed.js';
+import { ROADSIDE } from './roadside.js';
 
 export const ROAD_WIDTH = 7;
+const LINE_MU = { summer: 0.8, winter: 0.7 }; // gravel; packed snow with some ice
 
 // style: 1 (tight, rallycross-like) … 5 (open and fast); obstacles: 1 (few) … 5 (frequent); both 2 by default, old names
 // read (levels.js). Style 4 keeps the original seed string (the tracks seeds gave before styles existed) and 2 the old
@@ -24,10 +27,13 @@ const seedKey = (seed, kind, style, length) => (style === 4 ? `${seed}|${kind}` 
 export function generateTrack(seed, { kind = 'loop', theme = 'summer', obstacles: ob = 2, style: sv = 2, length = 'medium' } = {}) {
   const style = styleLevel(sv), obstacles = obstacleLevel(ob);
   const r = rng(seedKey(seed, kind, style, length));
-  const layout = generateLayout(r.fork('layout'), { kind, style, length });
-  const features = placeFeatures(layout, r.fork('features'), { obstacles, style });
+  // A loop is turned so its line sits where a flat-out crossing can still brake for what follows (rally spec R18-5).
+  // The surfaces aren't laid yet, so the theme's loose-road grip stands in.
+  let layout = generateLayout(r.fork('layout'), { kind, style, length });
+  if (layout.closed) layout = turnLoop(layout, lineSpot(layout, LINE_MU[theme] ?? 0.8).i, ROADSIDE.gateS);
   const surfaces = generateSurfaces(layout, r.fork('surfaces'), { theme });
-  const edges = generateEdges(layout, surfaces, r.fork('edges'));
+  const features = placeFeatures(layout, r.fork('features'), { obstacles, style, speed: flatOut(layout, surfaces) });
+  const edges = generateEdges(layout, surfaces, r.fork('edges'), features);
   const bumps = generateBumps(layout, surfaces, edges, features, r.fork('bumps'), { obstacles });
   const terrain = generateTerrain(layout, features, r.fork('terrain'), { roadBumps: bumps, edges });
   const heightFn = (x, z) => heightAt(terrain, x, z);

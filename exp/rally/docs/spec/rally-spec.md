@@ -96,7 +96,8 @@ the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and 
 - Each wheel casts its own ray down the body's up axis (length = travel + radius) against ground
   only.
 - **Suspension:** spring rate from target natural frequency `fn` per corner mass; separate bump /
-  rebound damping ratios; progressive bump stop over the last 4 cm; hard stop beyond travel;
+  rebound damping ratios; hydraulic bump stop over the last 8 cm (cubic to 30 kN, 20% while extending, R18-4);
+  hard stop beyond travel;
   anti-roll bar force from left/right compression difference. Force applied along body up.
 - **Tire forces** applied at the contact point raised by the axle's roll-centre height (gives
   geometric weight transfer).
@@ -108,7 +109,8 @@ the GLBs actually used into `assets/models/` (plus `Textures/colormap.png`) and 
   exactly the lock asked for.
 - **Brakes:** total torque with front bias; handbrake on rears only. Brake applied as an
   impulse-limited torque that can stop but not reverse the wheel.
-- **Rolling resistance** per surface (`crr`); **aero drag** `0.5 ρ CdA v²` at the CoM.
+- **Rolling resistance** per surface (`crr`); **aero** per car by era (R18-4): drag `0.5 ρ CdA v²` at the CoM,
+  downforce `0.5 ρ ClA v_fwd²` at the axles, pitch damping; a wheel's spin-up or braking in the air reacts on the body.
 
 ### Tire model (`tire.js`)
 - Brush-style contact-patch deflection state (`dx`, `dy`) with relaxation lengths
@@ -1037,3 +1039,83 @@ jumps are now shaped for ~70–100 km/h (the user's pick: the roads are narrow a
   each, none over 1.5 s, take-off no faster than −30°/s, worst landing ≥ −16°, mean landing per type ≥ −12°. Against
   the old shapes it fails 8 of 13. Goldens and the other suites unchanged.
 
+
+## Round 18: narrows, jumps sized for their speed, aero, and a line you can cross flat out (0.13.0, 2026-10-28)
+
+Playtest: single-lane stretches came far too often (fun on a straight now and then, annoying at this rate); jumps
+taken at speed still launched and tumbled the car; and on a loop, a best lap meant crossing the line flat out and then
+overshooting the first corner, needing a full reset. The user's calls: narrow is an obstacle and most roads are three
+car widths; size each jump for its take-off speed; do the agreed aero round; the line must be crossable flat out.
+
+- **R18-1 Measured first.**
+  - Width (`build/widths.mjs`, 8 seeds × stage and loop, 41 km): 20% of the road was under 4 m, about one such
+    stretch every 370 m, ~70 m long, as often in bends as on straights.
+  - Jumps (`build/jumpspeed.mjs`: every jump on the t1–t4 wild stages, approach held at a set speed): no tumbles at
+    90 km/h; at 130 km/h about 3 in 7 clean approaches tumbled, flights 2–4 s; at 160 km/h nearly all. Jumps sit on
+    straights, where players are at 130 km/h or more; R17 shaped them for 70–100. Past ~110 km/h the car overflew the
+    landing onto the flat, 20–30° nose-down from the lip's edge effect (R17-3), and landed from ~2 m up.
+- **R18-2 Road width: three car widths, narrows are obstacles** (`gen/edges.js`, `gen/features.js`; replaces
+  R12-1's base drift).
+  - The base half-width drifts between 2.6 and 3.6 m (a 5.2–7.2 m road, 3–4 car widths of ~1.8 m), log-interpolated;
+    the standard (gate) half-width is 3 m, the clamp 1.3–5 m. Bends still widen on the inside and tight ones keep two
+    car widths; R10-1's wobble and fray stay. No 19 m stretches.
+  - `narrow` is a new obstacle type: 40–100 m squeezed to a half-width of 1.3–1.5 m (a 2.6–3 m road, 1.5 car widths)
+    plus 30% of the fray, eased in and out over 15 m (`NARROW_RAMP`), only where the whole narrow is at |κ| ≤ 1/120.
+    It is drawn with the other obstacles (weights kicker 4, crest 3, tabletop 3, whoops 2, narrow 4), so the obstacles
+    level sets how often: at the default level about one every 4.5 km (8 seeds, 41 km: 10), at 'wild' one every 3 km.
+    Outside narrows under 1% of the road is under 4 m.
+- **R18-3 Jumps sized for their take-off speed** (`gen/speed.js` new, `gen/features.js`).
+  - `flatOut(layout, surfaces)`: the fastest a player could arrive anywhere: corners at 0.8 μg, full acceleration out
+    of them (0.7 g from rest, falling with (v / 56 m/s)² for drag), capped at the fastest car's 56 m/s. It does not
+    brake for what is ahead (full throttle). The surfaces are now laid before the obstacles (their own rng fork, so
+    the draws are unchanged) so the jumps see each section's grip.
+  - Each kicker, crest and tabletop is built for `v`, the highest flat-out speed over its first 40 m:
+    - the angle a car meets the landing at is about take-off θ + landing n for any speed, so θ + n = `impact` / v with
+      `impact` 2.8–3.6 m/s (θ takes 40–50% on kickers, 30–40% crests, 45–55% tabletops), each at least 2° and at
+      most R17's angles (kicker 7.5 / 12°, crest 7 / 9°, tabletop 8 / 12°);
+    - the entry is a concave bend of at least max(entryR, v² / g) (~1 g), then the ≥ 3 m straight to the lip;
+    - the landing straight runs past the flat-out touchdown (found by flying the parabola over the profile) by
+      max(5 m, 0.4 s at v), so the suspension recovers before the foot, and at least down to the road;
+    - the foot and the climb back to the road are bends of at least max(LAND_R, 2 v² / g) (half a g); the depth below
+      the road follows (0–3 m on the fast ones);
+    - a tabletop's top is at most 70% of the flat-out flight back to lip height (at least 4 m);
+    - a slower car lands earlier on the same slope at the same angle, so being slower never hurts.
+  - A car flies straight: under the flight (lip to touchdown, X m) the road may bend it at most 1.5 m off its line
+    (|κ| ≤ 3 / X²). This replaces the twisty roads' 1/120 rule for kickers and crests. More type draws per spot
+    (twisty 6, flowing 3) keep jumps about as common as before (8 seeds, default level: 25, R17 31).
+  - The outcome: jumps 0.2–0.5 m high, take-offs 2–4°, flights 0.3–0.9 s at any speed up to design. The first cut
+    (impact 4.5–5.5 m/s) bottomed the suspension on landing; the hull struck and kicked the car into a roll.
+- **R18-4 Aero and landings** (`vehicle.js`, `cars.js`), replacing the shared CdA 0.80:
+  - per era, [CdA m², ClA m², front share]: 1970s [0.70, −0.10 (lift), 0.5], 1980s [0.80, 0.35, 0.35], 1990s
+    [0.80, 0.45, 0.40], 2000s [0.85, 0.60, 0.40], 2010s [0.85, 0.70, 0.40], the 2017 Yaris [0.95, 1.20, 0.40].
+    Downforce `0.5 ρ ClA v_fwd²` is applied at the axles along the body's down; drag at the CoM as before.
+  - the air resists pitching: `−pitchDamp · v · ω_pitch` about the axle line, pitchDamp = pitch inertia ÷ (3 s ×
+    30 m/s), so at 30 m/s a pitch rate decays over ~3 s.
+  - a wheel in the air reacts on the body: the angular momentum brakes and drive put into it goes the other way into
+    the body, so braking in the air drops the nose (4 wheels braked from 120 km/h: ~15°/s) and throttle lifts it.
+  - hydraulic bump stops: the old one (last 4 cm, ~40 J) let a 3 m/s landing bottom out and the hull strike. Now the
+    last 8 cm rise cubically to 30 kN (~600 J a corner) and push back at 20% while extending, so a landing is soaked
+    up, not sprung back into a second flight. The rumble's bump-stop knock keeps the last 4 cm.
+- **R18-5 The line on a loop** (`gen/speed.js`, `gen/track.js`): the loop is turned so lap distance 40 (the gate) sits
+  where a car crossing at the flat-out speed, not braking for 0.5 s, can brake at 0.6 μg for what follows with 10%
+  speed to spare (`lineSpot`, on the theme's loose grip: summer 0.8, winter 0.7). Of the spots that pass, the fastest
+  crossing; with none, the one with the most room. Everything else (surfaces, obstacles, edges, scenery, gates) is
+  laid on the turned loop. Lines cross at 100–185 km/h depending on style; every test loop passes.
+- **R18-6 Bests**: the key ends `|r18`, so bests from earlier tracks are set aside rather than compared.
+- **Validation:**
+  - `test/line.test.mjs` (new): the flat-out profile (from rest on a stage, under corner and top speed), turnLoop,
+    every style's line passes its braking check and is its loop's best spot, and every jump's flight drifts ≤ 1.5 m.
+  - `test/line.mjs` (new, in `npm test`): on loops of every style the Impreza is pinned flat out from the last corner
+    before the line, crosses at ≥ 80% of the flat-out speed, then the autopilot brakes; for 300 m it stays on the
+    road or its 2 m shoulder, the right way up. 30/30.
+  - `test/jumps.mjs` (rewritten): every jump on the t1–t6 wild stages, Impreza and Escort, no assists, at its design
+    speed and 15% over, from 25 m out on the centreline: no flight over 1.5 s (longest 0.85 s), no car upside down
+    within a jump, worst landing −4° against the ground. Probes (`build/jumpspeed.mjs`, five cars): clean approaches
+    0 tumbles at 1× and 1.15×, 1 in 28 at 1.3×; the rest of the probe's tumbles come from approaches 2–12 m off line.
+  - `test/edges.test.mjs`: three car widths (mean 5.2–7.5 m), < 1% under 4 m outside narrows, narrows squeeze below
+    3.4 m on straights; `test/gen-terrain.mjs`: the R18 shapes (touchdown on the landing slope with 5 m to spare,
+    entry and foot radii from v, θ + n = impact / v unless capped, depth reached); `test/gen-layout.mjs`: the flight
+    drift and narrows-on-straights rules on every style.
+  - Re-baselined: goldens re-blessed; `test/markers.mjs` post settle ≤ 5 s (on the narrower road a test post rolls
+    down a falling verge, 4 s on R17 physics too); `test/verge.mjs` half throttle on grass ≤ 62 km/h (the turned
+    loop's sample holds 61 on R17 physics, 60 on R18's).
