@@ -29,6 +29,7 @@ export const P = {
   hungerSeek: 0.68, eatRate: 0.2, troughCap: 10, refillEvery: 14,
   smell: 16, smellHungry: 26,
   mudWallowRest: 0.16, mudWallowWalk: 0.07, mudDry: 0.0015, muddy: 0.3,
+  dogVisitSpeed: 1.3, dogRadiusVisit: 0.6, dogCalm: 30, // m/s, m, s: Biscuit going to say hello to the vet, and home after: an easy trot, a calm dog
   dogBored: 25, dogPorch: 2.6, dogBed: 0.96, // seconds idle before Biscuit trots home; porch and bed, metres out from the house centre
   hoseR: 1.4, hoseLure: 11, washRate: 0.45, soakRate: 1.5, dryTime: 45, zoomSpeed: 3.7,
   foodCap: 5, foodEatTime: 2.5, foodPursuers: 3, foodLife: 20, foodFade: 1.5,
@@ -133,7 +134,7 @@ export function createSim(world, opts = {}) {
   // ---- dog ------------------------------------------------------------------
   const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'pig', 'food', 'chick', 'fox'] }, 'pet',
     { tags: ['dog'], model: 'dog', draw: false, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0,
-      home: 0, bored: 0, lie: 0 }); // home: 0 out, 1 to the porch, 2 in through the door, 3 lying with his head out
+      home: 0, bored: 0, lie: 0, name: 'Biscuit', visit: null, calm: -1 }); // home: 0 out, 1 to the porch, 2 in through the door, 3 lying with his head out; visit: saying hello to the vet (visits.js)
 
   // ---- food -------------------------------------------------------------------
   const foods = []; let foodSeq = 0;
@@ -156,7 +157,7 @@ export function createSim(world, opts = {}) {
     emit('daynight', { night: n });
   }
   const tmp = [0, 0];
-  const vet = createVet({ clock, seed: opts.seed ?? 1 }); // the clinic's vet (v3 §9.2): her own rng, after the herd's
+  const vet = createVet({ clock, seed: (opts.seed ?? 1) ^ (opts.rounds ?? 0) }); // the clinic's vet (v3 §9.2): her own rng, after the herd's
 
   function readState() {
     for (const p of pigs) {
@@ -274,15 +275,22 @@ export function createSim(world, opts = {}) {
       a.threatX = x; a.threatZ = z - 2; setState(a, ST.ZOOM, 1.6); emit('oink', { i: a.i, x, z, happy: 1 });
     } });
 
-  // Dr. Emmy's rounds (2.9.0, visits.js): calm pigs and hens near her stop come to their fence for a scratch
+  // Dr. Emmy's rounds (2.9.0, visits.js): calm pigs and hens near her stop come to their fence for a scratch, and
+  // Biscuit, when Shoo is not sending him, trots over for as many as he can get. opts.rounds (a number per page, main.js)
+  // mixes into her rng and theirs, so her rounds and who comes differ from visit to visit of the page.
   const visitFields = {}; // by her stop: the way to her for a pig out in the open
-  const visits = createVisits({ vet, pigs, birds: () => flock.birds, lay, emit, now: () => t, seed: opts.seed ?? 1,
-    can: (kind, a) => !clock.night && !a.sick && !a.clinic && (kind === 'pig'
+  const visits = createVisits({ vet, pigs, birds: () => flock.birds, dog, lay, emit, now: () => t, seed: (opts.seed ?? 1) ^ (opts.rounds ?? 0),
+    can: (kind, a) => !clock.night && (kind === 'dog' ? !a.active : !a.sick && !a.clinic && (kind === 'pig'
       ? !a.piglet && !a.bed && a.panic < 0.1 && (a.state === ST.ROAM || a.state === ST.GRAZE)
-      : flock.canVisit(a)),
-    start(kind, a, visit) { if (kind === 'bird') return flock.visit(a, visit); dropClaims(a); a.visit = visit; setState(a, ST.VISIT, 1e9); },
+      : flock.canVisit(a))),
+    start(kind, a, visit) {
+      if (kind === 'bird') return flock.visit(a, visit);
+      if (kind === 'dog') { a.visit = visit; a.home = 0; a.bored = 0; return; } // up out of his house if he was in it
+      dropClaims(a); a.visit = visit; setState(a, ST.VISIT, 1e9);
+    },
     end(kind, a, petted) {
       if (kind === 'bird') return flock.unvisit(a);
+      if (kind === 'dog') { a.calm = t + P.dogCalm; a.home = 1; if (petted) emit('woof', { x: a.x, z: a.z }); return; } // a happy woof, and an easy trot home
       if (a.state === ST.VISIT) setState(a, ST.ROAM, 2 + rng() * 2);
       if (petted) emit('oink', { i: a.i, x: a.px, z: a.pz, happy: 1 });
     } });
@@ -291,7 +299,8 @@ export function createSim(world, opts = {}) {
   const threats = [];
   function updateThreats() {
     threats.length = 0;
-    threats.push({ kind: 'dog', x: dog.x, z: dog.z, R: dog.active || dog.speed > 1.5 ? P.dogRadiusActive : P.dogRadiusIdle });
+    // Biscuit trotting over to the vet, or sitting with her, is calm: the animals saying hello beside him stay put
+    threats.push({ kind: 'dog', x: dog.x, z: dog.z, R: dog.active || dog.speed > 1.5 ? P.dogRadiusActive : dog.visit || t < dog.calm ? P.dogRadiusVisit : P.dogRadiusIdle });
     const f = flock.fox; if (f.state !== 0) threats.push({ kind: 'fox', x: f.x, z: f.z, R: 6 });
   }
 
@@ -330,7 +339,7 @@ export function createSim(world, opts = {}) {
   }
   function setDog(x, z, active) {
     dog.active = active;
-    if (active) { dog.home = 0; dog.bored = 0; } // a job: up and out
+    if (active) { dog.home = 0; dog.bored = 0; dog.visit = null; } // a job: up and out (and off from the vet's)
     if (x !== null) { dog.tx = Math.max(field.x0 + 1, Math.min(field.x1 - 1, x)); dog.tz = Math.max(field.z0 + 1, Math.min(field.z1 - 1, z)); }
   }
   function tossFood(fx, fy, fz, tx, tz, kind) {
@@ -382,17 +391,22 @@ export function createSim(world, opts = {}) {
     // dog: with no job for a while he trots home, in through the door, and lies down with his head out
     {
       const H = lay.dogHouse, fx = Math.sin(H.rot), fz = Math.cos(H.rot);
-      if (!dog.active && dog.home === 0 && (dog.bored += DT) > P.dogBored && dog.speed < 0.3) dog.home = 1;
+      if (dog.visit && !dog.active) { // saying hello to the vet: to his place beside her, then sits facing her for his scratches
+        const v = dog.visit, d = Math.hypot(v.x - dog.x, v.z - dog.z);
+        dog.tx = v.x; dog.tz = v.z; if (!v.arrived && d < 0.3) { v.arrived = true; v.since = t; }
+      }
+      if (!dog.active && !dog.visit && dog.home === 0 && (dog.bored += DT) > P.dogBored && dog.speed < 0.3) dog.home = 1;
       if (dog.home === 1) { dog.tx = H.x + fx * P.dogPorch; dog.tz = H.z + fz * P.dogPorch; if (Math.hypot(dog.tx - dog.x, dog.tz - dog.z) < 0.35) dog.home = 2; }
       if (dog.home === 2) { dog.tx = H.x + fx * P.dogBed; dog.tz = H.z + fz * P.dogBed; if (Math.hypot(dog.tx - dog.x, dog.tz - dog.z) < 0.15) dog.home = 3; }
       dog.lie += ((dog.home === 3 ? 1 : 0) - dog.lie) * Math.min(1, DT * 2);
       const dx = dog.tx - dog.x, dz = dog.tz - dog.z, d = Math.hypot(dx, dz);
-      const sp = dog.active ? Math.min(8, d * 3) : Math.min(3, d * 2);
+      const sp = dog.active ? Math.min(8, d * 3) : Math.min(dog.visit || t < dog.calm ? P.dogVisitSpeed : 3, d * 2);
       const vdx = d > 0.05 ? dx / d * sp : 0, vdz = d > 0.05 ? dz / d * sp : 0;
       let ax = (vdx - dog.vx) / 0.15, az = (vdz - dog.vz) / 0.15; const al = Math.hypot(ax, az);
       if (al > 16) { ax *= 16 / al; az *= 16 / al; }
       dog.body.applyImpulse({ x: ax * 25 * DT, y: 0, z: az * 25 * DT }, true);
       if (dog.home === 3) dog.yaw = turnToward(dog.yaw, H.rot, 4 * DT); // turns round to look out of the door
+      else if (dog.visit?.arrived) dog.yaw = turnToward(dog.yaw, Math.atan2(vet.x - dog.x, vet.z - dog.z), 6 * DT);
       else if (dog.speed > 0.4) dog.yaw = turnToward(dog.yaw, Math.atan2(dog.vx, dog.vz), 9 * DT);
       // visual hop over fences (the dog does not collide with fences)
       let near = false; for (const o of fenceObs) if (hit(o, dog.x, dog.z, 0.45)) { near = true; break; }

@@ -51,7 +51,7 @@ export function pigPensView({ tilt = true, shading = 'lambert' } = {}) {
         sound.event(ev);
         switch (ev.type) {
           case 'select': sound.pop(); break;
-          case 'bark': sound.bark(); break;
+          case 'bark': case 'woof': sound.bark(); break; // woof: Biscuit had his fill of scratches (visits.js)
           case 'hose': sound.hose(ev.on); break;
           case 'toss': sound.whoosh(); break;
           case 'scatter': sound.scatter(); break;

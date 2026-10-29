@@ -14,7 +14,9 @@ async function start() {
   const q = new URLSearchParams(location.search), canvas = $('c');
   const shading = ['physical', 'standard', 'lambert'].includes(q.get('shading')) ? q.get('shading') : 'lambert';
   const { view } = boot(pigPensGame(), pigPensView({ tilt: q.get('tilt') !== '0', shading }), {
-    canvas, args: { pigs: +q.get('pigs') || 22 }, seed: 1, devices: devices(document),
+    // rounds: a number per page for the vet's rounds and who comes to say hello (sim.js), so they differ each visit;
+    // ?seed= keeps them as that seed's (0), like the rest of the farm
+    canvas, args: { pigs: +q.get('pigs') || 22, rounds: q.has('seed') ? 0 : (Math.random() * 2 ** 31) >>> 0 }, seed: 1, devices: devices(document),
     timer: q.has('fps') ? () => performance.now() : undefined,
   });
   useSeats(view, document); // lion-hawk C-5, C-10: keys through the 'farm' context

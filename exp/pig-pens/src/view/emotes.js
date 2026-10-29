@@ -26,6 +26,8 @@ export function createEmotes({ root, sim }) {
   const pool = [], happy = new Map(); // key "kind:i" → seconds left of the heart
   const get = k => { while (pool.length <= k) { const s = new THREE.Sprite(mats.heart); s.visible = false; s.renderOrder = 2; root.add(s); pool.push(s); } return pool[k]; };
   let t = 0;
+  const dogPos = { px: 0, py: 0, pz: 0, i: 0 }; // Biscuit keeps x, z: his heart sits over him like a hen's
+  const dogAt = () => { const d = sim.dog; dogPos.px = d.x; dogPos.py = 0.15; dogPos.pz = d.z; return dogPos; };
   function update(dt) {
     t += dt; let n = 0;
     const show = (a, icon, kind) => {
@@ -40,12 +42,12 @@ export function createEmotes({ root, sim }) {
     for (const b of sim.flock.birds) if (b.sick && !b.hidden && !onTable(b)) show(b, AILMENTS[b.sick.ailment].emote, 'bird');
     for (const [key, left] of happy) {
       if (left <= 0) { happy.delete(key); continue; } happy.set(key, left - dt);
-      const [kind, i] = key.split(':'), a = kind === 'pig' ? sim.pigs[+i] : sim.flock.birds[+i]; if (a && !a.sick && !(ex.state === 'leave' && sim.clinic.patient() === a)) show(a, 'heart', kind); // a leaving patient has its own
+      const [kind, i] = key.split(':'), a = kind === 'dog' ? dogAt() : kind === 'pig' ? sim.pigs[+i] : sim.flock.birds[+i]; if (a && !a.sick && !(ex.state === 'leave' && sim.clinic.patient() === a)) show(a, 'heart', kind); // a leaving patient has its own
     }
     for (let k = n; k < pool.length; k++) pool[k].visible = false;
   }
   return {
-    update, cured(kind, i) { happy.set(`${kind}:${i}`, 3); },
+    update, cured(kind, i) { happy.set(kind === 'dog' ? 'dog:0' : `${kind}:${i}`, 3); },
     dispose() { for (const s of pool) root.remove(s); for (const m of Object.values(mats)) { m.map.dispose(); m.dispose(); } },
   };
 }

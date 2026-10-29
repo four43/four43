@@ -249,7 +249,7 @@ export function makeFarm() {
     enter(e, ctx) {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
-        sim: createSim(ctx.world, { pigs: a.pigs ?? 22, seed: a.seed ?? e.seed, night: !!a.night }), // #58: boot's seed 1 = today's farm
+        sim: createSim(ctx.world, { pigs: a.pigs ?? 22, seed: a.seed ?? e.seed, night: !!a.night, rounds: a.rounds ?? 0 }), // #58: boot's seed 1 = today's farm
         tool: 'hand', selected: null, focus: null, exam: { drag: null }, gesture: null, grab: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });

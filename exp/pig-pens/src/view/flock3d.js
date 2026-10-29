@@ -96,7 +96,8 @@ export function createFlock3d({ root, assets, mc, sim, spawnFeathers }) {
   const tuft = new THREE.Mesh(tuftGeo, tuftMat); tuft.position.set(0.05, 0.62, 0.98); fox.obj.add(tuft);
   const foxA = { t: 0, puff: 0 };
   function updateDog(dt) {
-    const d = sim.dog, name = d.speed < 0.2 ? 'idle' : d.speed < 2.5 ? 'walk' : 'run', rate = name === 'idle' ? 1 - 0.7 * d.lie : name === 'walk' ? d.speed / 0.7 : d.speed / 2.4;
+    const d = sim.dog, petted = sim.vet.pet?.a === d; // a scratch from the vet: a happy wiggle (visits.js)
+    const name = petted ? 'dance' : d.speed < 0.2 ? 'idle' : d.speed < 2.5 ? 'walk' : 'run', rate = petted ? 1.3 : name === 'idle' ? 1 - 0.7 * d.lie : name === 'walk' ? d.speed / 0.7 : d.speed / 2.4;
     // lying down: the body (0.18 up on its legs in the model) sinks onto its belly, legs tucked under the ground; slow idle breathing
     dog.obj.matrix.compose(v.set(d.x, Math.sin(Math.min(1, d.hop) * Math.PI / 2) * 1.05 - d.lie * 0.2 * 0.62, d.z), q.setFromAxisAngle(UP, d.yaw), s.setScalar(0.62)); dog.obj.matrixWorldNeedsUpdate = true;
     dog.play(name, rate, dt);

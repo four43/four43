@@ -9,7 +9,8 @@ import { buildLayout, REGION } from '../src/layout.js';
 import { ST } from '../src/sim.js';
 import { classify, rayBuilding } from '../src/game/pick.js';
 import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
-import { VET_STOPS, PROPS } from '../src/clinic.js';
+import { VET_STOPS, PROPS, OUTSIDE_STOPS, createVet } from '../src/clinic.js';
+import { VISIT, GAIN } from '../src/visits.js';
 import { farmSim } from './farmSim.mjs';
 import { rayTo, tapAt, tool, arrive } from './rays.mjs';
 await R.init();
@@ -225,22 +226,70 @@ test('Dr. Emmy’s rounds: out of the front door to the pens; pigs come to their
   let m = h.mark(), close = Infinity;
   h.until(() => {
     for (const p of sim.pigs) close = Math.min(close, Math.hypot(p.px - v.x, p.pz - v.z) - p.r);
-    return h.events.since(m).first('pet');
+    return h.events.since(m).of('pet').find(e => e.kind === 'pig');
   }, { maxSteps: 60 * 60, message: 'a scratch' });
-  const pet = h.events.since(m).first('pet'), p = sim.pigs[pet.i];
+  const pet = h.events.since(m).of('pet').find(e => e.kind === 'pig'), p = sim.pigs[pet.i];
   assert.equal(pet.kind, 'pig'); assert.ok(lay.region(p.px, p.pz) < lay.pens.length || Math.hypot(p.px - v.x, p.pz - v.z) < 1.4, `${p.name} at the fence of its pen, or by her`);
   assert.ok(Math.hypot(p.px - v.x, p.pz - v.z) < 3, `${p.name} came over`);
   assert.ok(close > 0.2, `nobody walked through her (${close.toFixed(2)} m)`);
-  assert.notEqual(p.state, ST.VISIT, 'and off it goes');
 });
 
 test('Dr. Emmy’s rounds: at the chicken run, the hens come to the fence; and she hurries back for a patient', () => {
   const { h, sim } = farm(), v = sim.vet, dbg = h.engine.game.debug(h.engine);
   dbg.vetTo('run'); h.until(() => v.node === 'run' && v.state === 'idle', { maxSteps: 60 * 90, message: 'at the run' });
-  const m = h.mark(); h.until(() => h.events.since(m).first('pet'), { maxSteps: 60 * 60, message: 'a scratch' });
-  const pet = h.events.since(m).first('pet'), b = sim.flock.birds[pet.i], r = lay.run;
+  const m = h.mark(), hen = () => h.events.since(m).of('pet').find(e => e.kind === 'bird');
+  h.until(hen, { maxSteps: 60 * 60, message: 'a scratch' });
+  const pet = hen(), b = sim.flock.birds[pet.i], r = lay.run;
   assert.equal(pet.kind, 'bird'); assert.ok(b.px > r.x0 && b.px < r.x1 && b.pz > r.z0 && b.pz < r.z1, `${b.name} stayed in the run`);
   // a patient waiting and you in the exam room: back she comes, quick
   const p = sim.pigs.find(q => !q.piglet); dbg.sicken('pig', p.i, 'cold'); sim.clinic.admit('pig', p.i); sim.clinic.open = true;
   h.until(() => v.node === 'examVet' && v.state === 'idle', { maxSteps: 60 * 45, message: 'back in the exam room' });
+});
+
+test('Dr. Emmy’s rounds (2.11.0): her first stop outside is any of the three, by the page’s rounds number, and a round can take in several', () => {
+  const firsts = new Set(), lengths = new Set();
+  for (let seed = 1; seed <= 24; seed++) {
+    const v = createVet({ clock: { night: false }, seed }), seen = [];
+    for (let k = 0; k < 60 * 60 * 30 && seen.length < 12; k++) {
+      v.step(1 / 60);
+      if (v.state === 'idle' && v.node === v.goal && seen.at(-1) !== v.goal) seen.push(v.goal);
+    }
+    const out = seen.findIndex(g => OUTSIDE_STOPS.includes(g)); assert.ok(out >= 0, `seed ${seed} goes outside`);
+    firsts.add(seen[out]);
+    let n = 0; while (OUTSIDE_STOPS.includes(seen[out + n])) n++; lengths.add(n);
+  }
+  assert.deepEqual([...firsts].sort(), [...OUTSIDE_STOPS].sort(), 'each stop comes first for some page');
+  assert.ok(lengths.size > 1, `rounds of different lengths (${[...lengths]})`);
+  const a = headless(pigPensGame(), { seed: 3, args: { pigs: 24, rounds: 1 } }), b = headless(pigPensGame(), { seed: 3, args: { pigs: 24, rounds: 99 } });
+  a.step(60 * 120); b.step(60 * 120);
+  const path = h => h.engine.scene.state.sim.vet.goal;
+  assert.ok(a.engine.scene.state.sim.vet.x !== b.engine.scene.state.sim.vet.x || path(a) !== path(b), 'a different rounds number, a different day for her');
+});
+
+test('wanting a scratch (2.11.0): a pig takes two and goes off happy, then stays away until its satisfaction fades', () => {
+  const { h, sim } = farm(), v = sim.vet, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('penEast'); h.until(() => v.node === 'penEast' && v.state === 'idle', { maxSteps: 60 * 60, message: 'at the pens' });
+  const m = h.mark(), pigPets = () => h.events.since(m).of('pet').filter(e => e.kind === 'pig');
+  let who = null;
+  h.until(() => { const c = {}; for (const e of pigPets()) if ((c[e.i] = (c[e.i] ?? 0) + 1) === 1 / GAIN.pig) who = e.i; return who !== null; }, { maxSteps: 60 * 90, message: 'one pig has had its fill' });
+  const p = sim.pigs[who]; h.step(2);
+  assert.equal(p.fond, 1); assert.notEqual(p.state, ST.VISIT, `${p.name} goes off happy`);
+  const t = h.engine.time.sim, more = () => pigPets().filter(e => e.i === who).length > 1 / GAIN.pig;
+  h.until(() => more() || h.engine.time.sim - t > VISIT.fade * (1 - VISIT.want) - 5 || !v.outside, { maxSteps: 60 * 200 });
+  assert.equal(more(), false, `${p.name} does not come back while it is still happy`);
+});
+
+test('Biscuit (2.11.0): with no job he trots over to her for scratch after scratch until satisfied, calm enough that the pigs stay; Shoo calls him off', () => {
+  const { h, sim } = farm(), v = sim.vet, dog = sim.dog, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('penEast'); h.until(() => v.node === 'penEast' && v.state === 'idle', { maxSteps: 60 * 60, message: 'at the pens' });
+  sim.world.place(dog, { at: [v.x + 6, dog.r, v.z + 4] }); dog.tx = v.x + 6; dog.tz = v.z + 4;
+  const m = h.mark(), dogPets = () => h.events.since(m).of('pet').filter(e => e.kind === 'dog').length;
+  h.until(() => dog.visit?.arrived, { maxSteps: 60 * 20, message: 'Biscuit comes over' });
+  assert.ok(Math.hypot(dog.x - v.x, dog.z - v.z) < VISIT.ring + 0.4, 'beside her');
+  h.until(() => !dog.visit, { maxSteps: 60 * 60, message: 'until he has had his fill' });
+  assert.equal(dogPets(), 1 / GAIN.dog, 'four scratches'); assert.equal(h.events.since(m).of('woof').length, 1, 'and a happy woof');
+  // when he wants more later, Shoo sending him on a job takes him away from her
+  dog.fond = 0; h.until(() => dog.visit, { maxSteps: 60 * 20, message: 'back for more' });
+  sim.setDog(v.x - 10, v.z + 10, true); h.step(2);
+  assert.equal(dog.visit, null, 'off on his job');
 });

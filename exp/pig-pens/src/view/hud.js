@@ -35,7 +35,7 @@ function cardInfo(sim, sel) {
   }
   if (sel.kind === 'fox') { const f = flock.fox; return { name: 'The fox', sub: 'Fox · up to no good', doing: f.carrying ? `Cheeks full of ${f.carrying.name}! Tap to make it spit.` : ['Gone', 'Sniffing around', 'Chasing a chicken!', 'Very pleased with itself', 'Running away'][f.state], bars: bar('Nerve', 1 - Math.min(1, f.fear / 0.6), 'fright'), at: f.state ? [f.x, f.z] : null }; }
   if (sel.kind === 'vet') { const v = sim.vet; return { name: v.name, sub: 'Vet · looks after every animal on the farm', doing: v.doing, bars: '', at: [v.x, v.z] }; }
-  return { name: 'Biscuit', sub: 'Sheepdog · good dog', doing: sim.dog.active ? 'Herding' : sim.dog.home === 3 ? 'Napping in his dog house' : sim.dog.home ? 'Trotting home' : 'Waiting for a job', bars: '', at: [sim.dog.x, sim.dog.z] };
+  return { name: 'Biscuit', sub: 'Sheepdog · good dog', doing: sim.dog.active ? 'Herding' : sim.dog.visit ? (sim.vet.pet?.a === sim.dog ? 'Getting a scratch from Dr. Emmy' : 'Saying hello to Dr. Emmy') : sim.dog.home === 3 ? 'Napping in his dog house' : sim.dog.home ? 'Trotting home' : 'Waiting for a job', bars: '', at: [sim.dog.x, sim.dog.z] };
 }
 
 export function createHud(doc, { world }) {

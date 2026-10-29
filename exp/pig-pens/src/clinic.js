@@ -15,8 +15,10 @@ export const VET = {
   wakeDelay: 2.5,                       // seconds after morning before she gets up
   lingerOut: [18, 28],                  // seconds at a stop outside (the animals take a while to come over)
   hurry: 1.8,                           // × speed when a patient is waiting for her
+  rounds: 0.35,                         // the chance her next stop starts a round outside (1 to 3 of OUTSIDE_STOPS, shuffled)
 };
-// where she goes in the day (picked in turn with a little shuffle) and what she does there (her card's line)
+// where she goes in the day and what she does there (her card's line): inside stops at random, and now and then a round
+// outside, the pens and the run in a shuffled order (2.11.0: no longer always the run first)
 export const VET_STOPS = { deskVet: 'At the front desk', waiting: 'Tidying the waiting room', examVet: 'Getting the exam room ready', kitchenVet: 'Making a cup of tea',
   study: 'Writing up her notes', dining: 'Having lunch', penEast: 'Saying hello at the pens', penWest: 'Saying hello at the pens', run: 'Saying hello to the chickens' };
 const STOP_PLACE = { deskVet: 'front desk', waiting: 'waiting room', examVet: 'exam room', kitchenVet: 'kitchenette', study: 'desk in her flat', dining: 'table',
@@ -55,15 +57,23 @@ export function createVet({ clock, seed = 1 }) {
     outside: false, pet: null,          // pet: { kind, i, t } while she gives an animal a scratch (visits.js)
   };
   if (clock.night) { vet.x = bedAt[0]; vet.z = bedAt[1]; vet.yaw = bed.yaw; }
-  const stops = Object.keys(VET_STOPS);
+  const inside = Object.keys(VET_STOPS).filter(k => !OUTSIDE_STOPS.includes(k)), round = []; // round: the outside stops still to go
   const goTo = goal => { vet.goal = goal; vet.path = route(adj, vet.node, goal); vet.state = 'walk'; };
-  const nextStop = () => { const o = stops.filter(k => k !== vet.node); return o[Math.floor(rng() * o.length)]; };
+  function nextStop() {
+    if (!round.length && !OUTSIDE_STOPS.includes(vet.node) && rng() < VET.rounds) {
+      const o = [...OUTSIDE_STOPS]; for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
+      round.push(...o.slice(0, 1 + Math.floor(rng() * o.length)));
+    }
+    if (round.length) return round.shift();
+    const o = inside.filter(k => k !== vet.node); return o[Math.floor(rng() * o.length)];
+  }
 
   function step(dt) {
     const night = clock.night;
     vet.moving = false; vet.outside = outOfClinic(vet.x, vet.z);
     // a patient on the way or on the table: she goes to the exam room and stays there
     if (vet.busy && !night && vet.state !== 'sleep' && vet.state !== 'waking') {
+      round.length = 0; // the rest of her round can wait
       if (vet.goal !== 'examVet') { goTo('examVet'); vet.doing = 'Off to see a patient'; }
       if (vet.state === 'idle') { vet.timer = 1e9; vet.doing = 'With a patient'; return; }
     } else if (vet.state === 'idle' && vet.timer > 1e8) vet.timer = 1 + rng() * 2; // the patient's gone: back to her day
@@ -76,7 +86,7 @@ export function createVet({ clock, seed = 1 }) {
       if ((vet.timer -= dt) > 0) return;
       vet.node = 'bedSide'; vet.x = pts.bedSide[0]; vet.z = pts.bedSide[1]; goTo('kitchenVet'); vet.doing = 'Off to make a cup of tea'; return;
     }
-    if (night && vet.goal !== 'bedSide') { goTo('bedSide'); vet.doing = 'Off to bed'; }
+    if (night && vet.goal !== 'bedSide') { goTo('bedSide'); vet.doing = 'Off to bed'; round.length = 0; }
     if (vet.state === 'walk') {
       if (!vet.path.length) { arrive(); return; }
       const [tx, tz] = pts[vet.path[0]], dx = tx - vet.x, dz = tz - vet.z, d = Math.hypot(dx, dz), s = VET.speed * (vet.busy ? VET.hurry : 1) * dt;
