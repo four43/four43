@@ -189,7 +189,7 @@ export function buildLayout() {
   for (const p of pens) { const t = p.trough; const bx = t.x + (t.len / 2 + 0.75) * (p.col === 2 ? -1 : 1); decor.push({ m: 'barrel', x: bx, z: t.z, rot: rng() * 6, s: 1.45, upright: true }); obstacles.push({ type: 'circle', x: bx, z: t.z, r: 0.52, h: 1.1 }); }
   // field: a few shade trees, a hay stack and Biscuit's dog house on the right, its door toward the farm
   const dogHouse = { x: TX(18.4), z: -10.5, s: 1.5, rot: -0.6 }; // the door faces (sin rot, cos rot); the front wall is 0.77 s out
-  { const { x, z, s, rot } = dogHouse; decor.push({ m: 'dogHouse', x, z, rot, s }); obstacles.push({ type: 'box', x, z, hx: 0.66 * s, hz: 0.77 * s, h: 1.5 * s, rot }); }
+  { const { x, z, s, rot } = dogHouse; decor.push({ m: 'dogHouse', x, z, rot, s }); obstacles.push({ type: 'box', x, z, hx: 0.66 * s, hz: 0.77 * s, h: 1.5 * s, rot, dogHouse: true }); }
   addSolid('oak', 26.5, -21, 0.4, 3.2, 0.45); // east of the clinic (the run took its corner, 2.6.0)
   addSolid('tree', TX(18), TZ(14.5), 1.2, 3.4, 0.4);
   addSolid('treeFat', -26, 9, 2.0, 3.0, 0.45);   // moved off the clinic's corner (v3 §3.2)

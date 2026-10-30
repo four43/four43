@@ -1,7 +1,7 @@
 // Pig herd simulation. No rendering dependencies so it runs headless in Node.
 import { buildLayout, mulberry32, FENCE_H, REGION } from './layout.js';
 import { FlowGrid, hit } from './flow.js';
-import { createFlock, CST } from './chickens.js';
+import { createFlock, CST, aroundBuildings } from './chickens.js';
 import { createVet, createClinic } from './clinic.js';
 import { createSickness } from './sickness.js';
 import { createVisits, VET_R } from './visits.js';
@@ -11,9 +11,14 @@ export const DT = 1 / 60;
 export const ST = { ROAM: 0, GRAZE: 1, TRAVEL: 2, EAT: 3, FLEE: 4, REST: 5, SNACK: 6, GRAB: 7, AIR: 8, SHOWER: 9, ZOOM: 10, BED: 11, CLINIC: 12, VISIT: 13 }; // BED: walking to or from its stall (barn.js); CLINIC: at the vet's (clinic.js); VISIT: saying hello to her (visits.js)
 export const ST_NAME = Object.keys(ST);
 // Collision groups by name (overview §4.1), in 2.1.0's bit order: ground 1, static 2, pig 4, food 8, dog 16, chick 32, fox 64.
-export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox'];
+export const GROUPS = ['ground', 'static', 'pig', 'food', 'dog', 'chick', 'fox', 'tall'];
 const not = (...xs) => GROUPS.filter(g => !xs.includes(g));
-const G_STATIC = { member: ['static'], filter: not('dog', 'fox') }; // the dog and the fox hop fences
+// the world's solid things: `static` ones the dog and the fox hop (fences and gates, and anything low: troughs, bales,
+// barrels, the stall dividers; and the dog's own house, which he walks into), and `tall` ones nobody gets through (2.12.0:
+// the buildings' walls, the coop and the trees; Biscuit ran through walls)
+const G_STATIC = { member: ['static'], filter: not('dog', 'fox') }, G_TALL = { member: ['tall'], filter: GROUPS };
+export const TALL = 1.5; // m: a thing this high (not a fence) is too tall to hop
+const isTall = o => !o.fence && !o.dogHouse && o.h >= TALL;
 const PET_BODY = { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, angularDamping: 1.2, ccd: true, canSleep: false };
 export const DAY_LEN = 300; // seconds for 24 game hours
 const PIG_NAMES = ['Truffle', 'Pudding', 'Hamlet', 'Peaches', 'Rosie', 'Bacon Bits', 'Clover', 'Mudpie', 'Biscuit Jr', 'Snuffles', 'Petunia', 'Porkchop', 'Bramble', 'Toffee', 'Wiggles', 'Daisy', 'Turnip', 'Pickles', 'Gus', 'Hazelnut', 'Marshmallow', 'Oinkers', 'Parsnip', 'Squiggle', 'Bluebell', 'Chestnut', 'Dumpling', 'Fudge', 'Ginger Snap', 'Honey', 'Jellybean', 'Kipper', 'Lulu', 'Muffin', 'Nutmeg', 'Olive', 'Pepper', 'Quince', 'Rhubarb', 'Sprout', 'Tater', 'Ulla', 'Violet', 'Waddles', 'Yam', 'Ziggy', 'Bun', 'Pip', 'Sage', 'Tulip', 'Mabel', 'Otis', 'Noodle', 'Beetroot', 'Crumpet', 'Plum', 'Radish', 'Scone', 'Trotters', 'Wilma'];
@@ -30,6 +35,7 @@ export const P = {
   smell: 16, smellHungry: 26,
   mudWallowRest: 0.16, mudWallowWalk: 0.07, mudDry: 0.0015, muddy: 0.3,
   dogVisitSpeed: 1.3, dogRadiusVisit: 0.6, dogCalm: 30, // m/s, m, s: Biscuit going to say hello to the vet, and home after: an easy trot, a calm dog
+  dogBuildingMargin: 0.6, // m: how wide Biscuit keeps of a building he walks round (2.12.0)
   dogBored: 25, dogPorch: 2.6, dogBed: 0.96, // seconds idle before Biscuit trots home; porch and bed, metres out from the house centre
   hoseR: 1.4, hoseLure: 11, washRate: 0.45, soakRate: 1.5, dryTime: 45, zoomSpeed: 3.7,
   foodCap: 5, foodEatTime: 2.5, foodPursuers: 3, foodLife: 20, foodFade: 1.5,
@@ -51,7 +57,9 @@ export function createSim(world, opts = {}) {
     return o.type === 'circle' ? { shape: 'cylinder', halfHeight: h, r: o.r, p: [o.x, h, o.z], q, material: 'fencing' }
       : { shape: 'box', half: [o.hx, h, o.hz], p: [o.x, h, o.z], q, material: 'fencing' };
   };
-  world.spawn({ body: 'fixed', tags: ['obstacles'], groups: G_STATIC, colliders: lay.obstacles.filter(o => o.active !== false).map(obstacleCollider) });
+  const solid = lay.obstacles.filter(o => o.active !== false);
+  world.spawn({ body: 'fixed', tags: ['obstacles'], groups: G_STATIC, colliders: solid.filter(o => !isTall(o)).map(obstacleCollider) });
+  world.spawn({ body: 'fixed', tags: ['obstacles', 'tall'], groups: G_TALL, colliders: solid.filter(isTall).map(obstacleCollider) });
   const staticEntity = o => world.spawn({ body: 'fixed', tags: ['gate'], groups: G_STATIC, colliders: [obstacleCollider(o)] });
   const grid = new FlowGrid(field, 0.4, lay.obstacles, 0.48);
   const cgrid = new FlowGrid(field, 0.4, lay.obstacles, 0.24); // chickens are small: narrower margins
@@ -132,7 +140,7 @@ export function createSim(world, opts = {}) {
   }
 
   // ---- dog ------------------------------------------------------------------
-  const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'pig', 'food', 'chick', 'fox'] }, 'pet',
+  const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'tall', 'pig', 'food', 'chick', 'fox'] }, 'pet',
     { tags: ['dog'], model: 'dog', draw: false, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0,
       home: 0, bored: 0, lie: 0, name: 'Biscuit', visit: null, calm: -1 }); // home: 0 out, 1 to the porch, 2 in through the door, 3 lying with his head out; visit: saying hello to the vet (visits.js)
 
@@ -173,7 +181,7 @@ export function createSim(world, opts = {}) {
 
   // ---- raycast feelers --------------------------------------------------------
   const ray = new world.R.Ray({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 });
-  const RAY_GROUPS = world.groups.mask(GROUPS, ['static']);
+  const RAY_GROUPS = world.groups.mask(GROUPS, ['static', 'tall']);
   // ---- gates ----
   const gateCols = new Map();
   function setGate(id, open) {
@@ -399,9 +407,11 @@ export function createSim(world, opts = {}) {
       if (dog.home === 1) { dog.tx = H.x + fx * P.dogPorch; dog.tz = H.z + fz * P.dogPorch; if (Math.hypot(dog.tx - dog.x, dog.tz - dog.z) < 0.35) dog.home = 2; }
       if (dog.home === 2) { dog.tx = H.x + fx * P.dogBed; dog.tz = H.z + fz * P.dogBed; if (Math.hypot(dog.tx - dog.x, dog.tz - dog.z) < 0.15) dog.home = 3; }
       dog.lie += ((dog.home === 3 ? 1 : 0) - dog.lie) * Math.min(1, DT * 2);
-      const dx = dog.tx - dog.x, dz = dog.tz - dog.z, d = Math.hypot(dx, dz);
+      // round a building in the way, not into its wall (2.12.0); straight on for the last bit, or at his house
+      const [gx, gz] = dog.home >= 2 ? [dog.tx, dog.tz] : aroundBuildings(lay.buildings, P.dogBuildingMargin, dog.x, dog.z, dog.tx, dog.tz);
+      const dx = gx - dog.x, dz = gz - dog.z, d = Math.hypot(dog.tx - dog.x, dog.tz - dog.z);
       const sp = dog.active ? Math.min(8, d * 3) : Math.min(dog.visit || t < dog.calm ? P.dogVisitSpeed : 3, d * 2);
-      const vdx = d > 0.05 ? dx / d * sp : 0, vdz = d > 0.05 ? dz / d * sp : 0;
+      const dl = Math.hypot(dx, dz) || 1, vdx = d > 0.05 ? dx / dl * sp : 0, vdz = d > 0.05 ? dz / dl * sp : 0;
       let ax = (vdx - dog.vx) / 0.15, az = (vdz - dog.vz) / 0.15; const al = Math.hypot(ax, az);
       if (al > 16) { ax *= 16 / al; az *= 16 / al; }
       dog.body.applyImpulse({ x: ax * 25 * DT, y: 0, z: az * 25 * DT }, true);

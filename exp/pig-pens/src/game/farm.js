@@ -3,7 +3,8 @@
 // in its closure lives in ctx.state ([S-4], #4): the tool, the selection and the per-gesture state.
 // Step order: lh.ui → lh.input → farm.ease → lh.commands → farm.keys → lh.scene → farm.think → lh.physics.step → read →
 // events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
-import { createSim } from '../sim.js';
+import { createSim, ST } from '../sim.js';
+import { CST } from '../chickens.js';
 import { planeHit, classify, grabTarget, rayBox } from './pick.js';
 import { BUILDINGS, CLINIC } from '../defs/buildings.js';
 
@@ -16,9 +17,14 @@ export const TOOL_HINT = {
   hose: 'Drag to spray. Muddy pigs come for a bath.',
   grab: 'Drag a pig or a chicken to lift it. Flick to throw.',
 };
-export const START_HINT = 'Tap an animal to meet it. Two fingers turn, pan and zoom.';
+export const START_HINT = 'Tap an animal to meet it. Drag to look around. Pinch to zoom.';
 export const TAP = { move: 12, seconds: 0.45 }, ORBIT_PX = 10, LIFT = { hose: 55, grab: 80 };
 export const GRAB_EASE = 0.18, GRAB_Y = 1.7, TOSS_GAP = 0.18;
+// Checking in (v3 §9.1; 2.12.0: a much bigger target for small hands): an animal let go over the clinic (`side` m round its
+// walls) or over the strip of grass in front of it (`front` m out, short of the pens' fence) is checked in; one thrown is
+// checked in as soon as it gets there, against the front wall or on the grass (farm.checkIn)
+export const CHECK_IN = { side: 0.6, front: 2.6 };
+const atClinic = (c, x, z) => x > c.x0 - CHECK_IN.side && x < c.x1 + CHECK_IN.side && z > c.z0 - CHECK_IN.side && z < c.z1 + CHECK_IN.front;
 // The farm's own event types (never a createSim type), so the engine-path golden can filter them out (#57).
 export const FARM_EVENTS = new Set(['hint', 'select', 'door', 'bark', 'hose', 'toss', 'scatter', 'focus', 'fly']);
 // The exam room (v3 §9.4): the tools' tap volumes on the pegboard (world boxes), the height a dragged tool is held at,
@@ -170,11 +176,21 @@ export function makeFarm() {
     if (g.tool === 'shoo') { sim.setDog(null, null, false); s.ring = null; }
     else if (g.tool === 'hose') { sim.setHose(null, null, false); e.emit('hose', { on: false }); }
     else if (g.tool === 'grab' && s.grab) {
-      // let go over the clinic: checked in (it sits down in the waiting room); anywhere else: dropped (or thrown)
+      // let go over the clinic or the grass in front of it: checked in (it sits down in the waiting room); anywhere else:
+      // dropped (or thrown, and checked in if it gets there)
       const kind = s.grab.kind, i = kind === 'pig' ? sim.grabbed : sim.flock.grabbed, h = planeHit(s.grab.ray, GRAB_Y), c = sim.lay.clinic;
       (kind === 'pig' ? sim : sim.flock).release(); s.grab = null;
-      if (h && i >= 0 && h.x > c.x0 - 0.3 && h.x < c.x1 + 0.3 && h.z > c.z0 - 0.3 && h.z < c.z1 + 0.6) api.admit(e, kind, i);
+      if (i < 0) return;
+      const a = kind === 'pig' ? sim.pigs[i] : sim.flock.birds[i];
+      if ((h && atClinic(c, h.x, h.z)) || atClinic(c, a.px, a.pz)) api.admit(e, kind, i); else s.thrown = { kind, i };
     }
+  }
+  // farm.checkIn (each step): the animal last let go, while it is still in the air, is checked in once it reaches the clinic
+  function checkIn(e, s) {
+    const T = s.thrown; if (!T) return;
+    const sim = s.sim, a = T.kind === 'pig' ? sim.pigs[T.i] : sim.flock.birds[T.i];
+    if (!a || a.state !== (T.kind === 'pig' ? ST.AIR : CST.AIR)) { s.thrown = null; return; } // landed (or picked up again)
+    if (atClinic(sim.lay.clinic, a.px, a.pz)) { s.thrown = null; api.admit(e, T.kind, T.i); }
   }
   // Ends the gesture in progress (a stray down): its lift, then no tap.
   function endGesture(e, s) {
@@ -250,7 +266,7 @@ export function makeFarm() {
       const a = ctx.args ?? {};
       const s = Object.assign(ctx.state, {
         sim: createSim(ctx.world, { pigs: a.pigs ?? 22, seed: a.seed ?? e.seed, night: !!a.night, rounds: a.rounds ?? 0 }), // #58: boot's seed 1 = today's farm
-        tool: 'hand', selected: null, focus: null, exam: { drag: null }, gesture: null, grab: null, ring: null, lastToss: -Infinity,
+        tool: 'hand', selected: null, focus: null, exam: { drag: null }, gesture: null, grab: null, thrown: null, ring: null, lastToss: -Infinity,
         hose: { tx: 0, tz: 0, gx: 0, gz: 0, nx: 0, nz: 0, bx: 0, bz: 1 },
       });
       // grab lift and hose nozzle easing, before the step's commands (#60)
@@ -259,6 +275,7 @@ export function makeFarm() {
       // the farm step around the engine's Rapier step (overview §4.4): think before lh.physics.step, settle after the events
       ctx.system('farm.think', () => s.sim.think(), { stage: 'physics.world', before: ['lh.physics.step'] });
       ctx.system('farm.settle', () => s.sim.settle(), { stage: 'physics.world', after: ['lh.physics.events'] });
+      ctx.system('farm.checkIn', () => checkIn(e, s), { stage: 'physics.world', after: ['farm.settle'] });
       // #57: the sim's own queue, bridged in order, unfiltered, once per step
       ctx.system('farm.events', () => {
         const q = s.sim.events;

@@ -241,9 +241,13 @@ test('Dr. Emmy’s rounds: at the chicken run, the hens come to the fence; and s
   h.until(hen, { maxSteps: 60 * 60, message: 'a scratch' });
   const pet = hen(), b = sim.flock.birds[pet.i], r = lay.run;
   assert.equal(pet.kind, 'bird'); assert.ok(b.px > r.x0 && b.px < r.x1 && b.pz > r.z0 && b.pz < r.z1, `${b.name} stayed in the run`);
-  // a patient waiting and you in the exam room: back she comes, quick
+  // a patient waiting and you in the exam room: no walk back from the run (2.12.0), she is in the lobby, just out of the
+  // close-up's view, and walks the last few steps in
   const p = sim.pigs.find(q => !q.piglet); dbg.sicken('pig', p.i, 'cold'); sim.clinic.admit('pig', p.i); sim.clinic.open = true;
-  h.until(() => v.node === 'examVet' && v.state === 'idle', { maxSteps: 60 * 45, message: 'back in the exam room' });
+  h.step(2); assert.equal(v.outside, false, 'back inside straight away'); assert.equal(v.goal, 'examVet');
+  const lobby = CLINIC.walk.points.lobby; assert.ok(Math.hypot(v.x - CLINIC.x - lobby[0], v.z - CLINIC.z - lobby[1]) < 0.2, 'from the lobby');
+  assert.equal(v.pet, null, 'the hens left at the fence');
+  h.until(() => v.node === 'examVet' && v.state === 'idle', { maxSteps: 60 * 4, message: 'a few steps to the exam room' });
 });
 
 test('Dr. Emmy’s rounds (2.11.0): her first stop outside is any of the three, by the page’s rounds number, and a round can take in several', () => {
@@ -292,4 +296,21 @@ test('Biscuit (2.11.0): with no job he trots over to her for scratch after scrat
   dog.fond = 0; h.until(() => dog.visit, { maxSteps: 60 * 20, message: 'back for more' });
   sim.setDog(v.x - 10, v.z + 10, true); h.step(2);
   assert.equal(dog.visit, null, 'off on his job');
+});
+
+test('Biscuit and the walls (2.12.0): sent past the clinic he goes round its corner, never through it; sent into a building he stops at its wall', () => {
+  const { h, sim } = farm(), dog = sim.dog, c = sim.lay.clinic, B = sim.lay.buildings;
+  const inside = () => B.find(b => dog.x > b.x0 + 0.05 && dog.x < b.x1 - 0.05 && dog.z > b.z0 + 0.05 && dog.z < b.z1 - 0.05 && b.id !== 'barn');
+  const put = (x, z) => { dog.body.setTranslation({ x, y: dog.r, z }, true); dog.body.setLinvel({ x: 0, y: 0, z: 0 }, true); h.step(1); };
+  // from in front of the clinic to its east side, the straight line through it
+  put(c.x0 + 7.5, c.z1 + 1.3); const to = [c.x1 + 1.5, c.z0 + 1.5];
+  sim.setDog(to[0], to[1], true);
+  h.until(() => { assert.equal(inside()?.id, undefined, `in the ${inside()?.id} at (${dog.x.toFixed(2)}, ${dog.z.toFixed(2)})`); return Math.hypot(dog.x - to[0], dog.z - to[1]) < 0.6; },
+    { maxSteps: 60 * 10, message: 'round to the east side' });
+  // into the clinic and the coop: up against the wall, no further
+  for (const b of B.filter(b => b.id !== 'barn')) {
+    put((b.x0 + b.x1) / 2, b.z1 + 3); sim.setDog((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, true); h.step(60 * 3);
+    assert.equal(inside(), undefined, `kept out of the ${b.id}`); assert.ok(dog.z > b.z1 - 0.05, `at the ${b.id}’s front wall (${dog.z.toFixed(2)})`);
+  }
+  sim.setDog(null, null, false);
 });

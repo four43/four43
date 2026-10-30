@@ -6,6 +6,7 @@
   "start_url": "/exp/piggie-game/",
   "scope": "/exp/piggie-game/",
   "display": "fullscreen",
+  "orientation": "landscape",
   "display_override": ["fullscreen", "standalone"],
   "background_color": "#bfe6f5",
   "theme_color": "#bfe6f5",

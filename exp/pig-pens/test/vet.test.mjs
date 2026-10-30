@@ -8,7 +8,7 @@ import { ST } from '../src/sim.js';
 import { CST } from '../src/chickens.js';
 import { SICK, AILMENTS } from '../src/sickness.js';
 import { CLINIC, BARN } from '../src/defs/buildings.js';
-import { EXAM_DRAG } from '../src/game/farm.js';
+import { EXAM_DRAG, CHECK_IN } from '../src/game/farm.js';
 import { farmSim } from './farmSim.mjs';
 import { rayTo, tapAt, arrive } from './rays.mjs';
 import { grabTarget } from '../src/game/pick.js';
@@ -112,6 +112,27 @@ test('Grab: a poorly pig let go over the clinic is checked in; a chicken too', (
     assert.ok(a.clinic, `${a.name} is in the waiting room`);
   }
   assert.equal(b.state, CST.CLINIC); assert.equal(sim.clinic.queue.length, 2);
+});
+
+test('checking in (2.12.0): let go anywhere over the grass in front of the clinic; thrown at it, checked in on the way', () => {
+  const { h, sim, dbg } = farm(), c = sim.lay.clinic, [p, q] = adults(sim).slice(4, 6);
+  dbg.sicken('pig', p.i, 'cold'); dbg.sicken('pig', q.i, 'tummy');
+  assert.ok(c.z1 + CHECK_IN.front < Math.min(...sim.lay.pens.map(r => r.z0)), 'the strip stops short of the pens’ fence');
+  h.tap('farm.tool.grab'); h.step(1);
+  const carry = (a, over) => {
+    h.command('tool', { phase: 'down', pointer: 1, button: 0, kind: 'touch', ray: rayTo([a.px, a.py, a.pz], 20, 0.01) }); h.step(2);
+    assert.equal(sim.grabbed, a.i, `holding ${a.name}`);
+    h.command('tool', { phase: 'move', pointer: 1, button: 0, kind: 'touch', ray: rayTo(over, 20, 0.01) }); h.step(30);
+    h.command('tool', { phase: 'up', pointer: 1, button: 0, kind: 'touch', ray: rayTo(over, 20, 0.01) }); h.step(1);
+  };
+  // on the grass, 2.2 m out from the front wall and off to one side of the door
+  carry(p, [c.x0 + 2, 0, c.z1 + 2.2]); assert.ok(p.clinic, `${p.name} let go in front of the clinic is in the waiting room`);
+  // let go in front of the barn next door and thrown along the front toward the clinic: in as it gets there
+  const barn = [c.x0 - 4, 0, c.z1 + 1.4];
+  carry(q, barn); assert.ok(!q.clinic, 'in front of the barn is not the clinic'); assert.equal(q.state, ST.AIR);
+  q.body.setTranslation({ x: barn[0], y: 1.7, z: barn[2] }, true); q.body.setLinvel({ x: 9, y: 2.5, z: 0 }, true);
+  h.until(() => q.clinic || q.state !== ST.AIR, { maxSteps: 60 * 4 });
+  assert.ok(q.clinic, `${q.name} thrown at the clinic is in the waiting room`); assert.equal(sim.clinic.queue.length, 2);
 });
 
 test('a visit: into the exam room, “Next please!”, a check-up clue, a wrong tool, the cure, a lollipop, and out home', () => {

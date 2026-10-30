@@ -22,6 +22,8 @@ export const CUT = {
 };
 // each wall face's outward normal in its building's frame; inner walls (no normal) are cut whenever the building is
 const NORMAL = { wall_front: [0, 1], wall_back: [0, -1], wall_side_L: [1, 0], wall_side_R: [-1, 0] };
+// walls never cut (2.12.0): the clinic's west wall, which the pegboard of tools hangs on
+const KEEP = new Set(['clinic.wall_side_R']);
 
 // The clinic's furniture (Kenney Furniture Kit, baked as furn_<name>; `k`: another model, the Food Kit's or our own): model,
 // local [x, z], yaw, on top of (y), scale. The kit's pieces sit off their origin, so each is recentred on its footprint
@@ -104,11 +106,11 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     flatten(rest);
     const walls = need('walls').children.map(w => {
       box.setFromObject(w); const mesh = w.children[0], mat = clipped(mesh.material); mesh.material = mat;
-      return { node: w, n: NORMAL[w.name] ?? null, base: box.min.y, top: box.max.y + 0.05, mat, plane: mat.clippingPlanes[0], cut: 0 };
+      return { node: w, n: NORMAL[w.name] ?? null, keep: KEEP.has(`${id}.${w.name}`), base: box.min.y, top: box.max.y + 0.05, mat, plane: mat.clippingPlanes[0], cut: 0 };
     });
     return { id, B, obj, need, roof: need('roof'), walls, cut: 0 };
   };
-  // the pegboard hangs on the exam room's west wall, so it drops with that wall when the walls are cut
+  // the pegboard hangs on the exam room's west wall (never cut, KEEP)
   // and the front door moves on its own, so it comes off the front wall (which is flattened into one mesh) onto the model's root
   const clinicParts = obj => {
     const peg = obj.getObjectByName('pegboard'), wall = obj.getObjectByName('wall_side_R'); if (peg && wall) wall.attach(peg);
@@ -200,7 +202,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
       // which walls face the camera, from where the camera stands round this building
       const cx = camera.position.x - b.B.x, cz = camera.position.z - b.B.z, cl = Math.hypot(cx, cz) || 1;
       for (const w of b.walls) {
-        const near = !w.n || (w.n[0] * cx + w.n[1] * cz) / cl > CUT.near;
+        const near = !w.keep && (!w.n || (w.n[0] * cx + w.n[1] * cz) / cl > CUT.near);
         w.cut = ease(w.cut, on && near ? 1 : 0, dt * 1.4); if (w.cut < 1e-3) w.cut = 0;
         w.plane.constant = w.cut ? w.top + (w.base + CUT.stub - w.top) * smooth(w.cut) : NO_CUT; // keep y ≤ constant
         w.node.children[0].castShadow = w.cut < 0.5; // the shadow pass ignores the plane: a cut wall casts none

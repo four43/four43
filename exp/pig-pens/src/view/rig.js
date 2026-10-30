@@ -9,16 +9,30 @@ import { BUILDINGS, CLINIC } from '../defs/buildings.js';
 // 2.1.0's rig.js values; min 2.5, max 80, pitch 0.28..1.48 and ground 0 are the rig's defaults
 export const ORBIT = {
   target: { x: 0, y: 0.5, z: 1 }, distance: 46, pitch: 0.92, bounds: { x: [-34, 34], z: [-30, 30] },
-  fit: { portrait: { yaw: Math.PI / 2, dist: 60, tx: -3, tz: -9 }, landscape: { yaw: 0, dist: 46, tx: -1, tz: -4 } },
+  fit: { portrait: { yaw: 0, dist: 80, tx: 1, tz: -6 }, landscape: { yaw: 0, dist: 46, tx: -1, tz: -4 } },
 };
 export const rig = { orbit: null, project: null, camera: null, canvas: null, downTool: 'hand', locked: false }; // locked: the exam room's fixed close-up
 
 // the one-finger drag: a Hand drag orbits past ORBIT_PX, other tools leave the camera alone
 export const cameraMode = downTool => downTool === 'hand' && !rig.locked ? 'orbit' : 'none';
 
-// framed by the canvas aspect, as 2.1.0's fitCam (on phones the long axis of the pens runs up the screen)
+// framed by the canvas aspect, as 2.1.0's fitCam
+// 2.12.0: everywhere but the exam close-up the camera looks north at the buildings at ORBIT.pitch, so a small child can't
+// tip it or turn it round and get lost. The engine's orbit drag (one finger with the Hand, a mouse right-drag) pans the
+// ground under the finger instead (its turn and tilt read back as the screen move they came from); a pinch's turn is
+// dropped. A flight eases its own way between the poses (the exam close-up looks west).
+export const FACE = { yaw: 0, orbit: { yaw: 0.006, pitch: 0.005 } }; // orbit: the engine's radians per px of an orbit drag
 export function createRig(camera, canvas) {
-  const o = createOrbitRig(camera, { ...ORBIT, bounds: { ...ORBIT.bounds }, canvas });
+  const o = createOrbitRig(camera, { ...ORBIT, bounds: { ...ORBIT.bounds }, canvas }), apply = o.apply;
+  o.apply = () => {
+    const st = o.state;
+    if (!rig.locked && !flight.goal) {
+      const dyaw = st.yaw - FACE.yaw, dpitch = st.pitch - ORBIT.pitch;
+      st.yaw = FACE.yaw; st.pitch = ORBIT.pitch;
+      if (o.gesture === 'orbit') o.panBy(-dyaw / FACE.orbit.yaw, dpitch / FACE.orbit.pitch);
+    }
+    apply();
+  };
   o.fit(canvas.clientWidth / canvas.clientHeight); return o;
 }
 // once per page: the first scene entry frames by aspect, later ones keep the pose (2.1.0's rig.ready)
@@ -41,7 +55,7 @@ export function bindCamera(engine, canvas) {
 // room is the one place the sim puts the camera: its close-up holds while it is in focus. Reads the focus, never writes it.
 // ROOF: in when the camera's target is over the building and nearer than `in` × its framing distance; out past `out` ×
 // (or once the target is `off` m past its walls), so the roof never flickers at the edge
-export const FOCUS = { pitch: 0.95, margin: 1.2, ease: 3.2, minK: 0.45, maxK: 1.6, give: 4 }; // give: s before an ease that can't land lets go
+export const FOCUS = { pitch: ORBIT.pitch, margin: 1.2, ease: 3.2, minK: 0.45, maxK: 1.6, give: 4 }; // give: s before an ease that can't land lets go
 export const ROOF = { in: 1.3, out: 1.8, off: 1.5 };
 const flight = { goal: null, t: 0, saved: null, exam: null }; // saved: the farm's pose from before the first flight in; exam: the limits it replaced
 export function focusFrame(id, camera) {

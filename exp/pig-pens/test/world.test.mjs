@@ -4,10 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { farmSim } from './farmSim.mjs';
 
-test('entities: 48 pigs, a dog, 11 birds, a fox, the ground and one obstacles entity; nothing else at start', () => {
+test('entities: 48 pigs, a dog, 11 birds, a fox, the ground and two obstacles entities (low and tall, 2.12.0); nothing else at start', () => {
   const sim = farmSim({ pigs: 48, seed: 3 }), h = sim.h;
   assert.equal(h.find('pig').length, 48); assert.equal(h.find('dog').length, 1); assert.equal(h.find('bird').length, 11);
-  assert.equal(h.find('fox').length, 1); assert.equal(h.find('obstacles').length, 1);
+  assert.equal(h.find('fox').length, 1); assert.equal(h.find('obstacles').length, 2); assert.equal(h.find('tall').length, 1);
   assert.equal(h.find('ground').length, 1); assert.equal(h.find('gate').length, 0); assert.equal(h.find('food').length, 0);
   assert.ok(sim.pigs[0] === h.find('pig')[0], "the pig record is the entity"); // the pig record is the entity (E-4)
   assert.equal(h.world.materialOf(sim.pigs[0].colliders[0].collider.handle), 'pet');

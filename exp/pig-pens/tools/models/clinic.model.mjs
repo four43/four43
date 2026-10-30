@@ -239,12 +239,12 @@ const FY = [0.005, FLOOR_T];                      // floor slab y span (bottom l
 }
 {
   // pegboard at spots.pegboard on the exam room's west wall (inner face x = IN.x0), facing +x; backing and board sunk into the wall
-  const [, py, pz] = SP.pegboard.at, PW = 1.6, PHt = 1.0;
+  const [, py, pz] = SP.pegboard.at, [PW, PHt] = SP.pegboard.size;
   const g = m.group('pegboard', { parent: interior, at: [IN.x0, py, pz] });
   const b = bag(g, 'peg');
   b.span('trim', [-EMBED, 0.03], [-PHt / 2 - 0.04, PHt / 2 + 0.04], [-PW / 2 - 0.04, PW / 2 + 0.04]); // teal border
   b.span('wood', [-0.005, 0.04], [-PHt / 2, PHt / 2], [-PW / 2, PW / 2]);
-  const NZ = 7, NY = 4, hs = 0.0225;
+  const NZ = 13, NY = 5, hs = 0.0225;
   for (let i = 0; i < NZ; i++) for (let k = 0; k < NY; k++) {
     const y = -PHt / 2 + (k + 0.5) * PHt / NY, z = -PW / 2 + (i + 0.5) * PW / NZ;
     b.span('dark', [0.035, 0.05], [y - hs, y + hs], [z - hs, z + hs]);

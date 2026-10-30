@@ -82,7 +82,7 @@ export const CLINIC = {
     waiting:    { at: [0.0, 0, -1.2], yaw: 0 },
     examTable:  { at: [-4.2, 0, -2.2], yaw: 0 },
     examVet:    { at: [-4.6, 0, -1.05], yaw: Math.PI },          // at the table's west half: patients come round its east end
-    pegboard:   { at: [-6.25, 1.5, -2.2], yaw: Math.PI / 2 },  // on the west wall of the exam room (R3)
+    pegboard:   { at: [-6.25, 2.15, -2.2], yaw: Math.PI / 2, size: [3.0, 1.1] }, // on the west wall of the exam room (R3); 2.12.0: wide and up high, over the patient's head in the close-up (size: along the wall, up)
     sink:       { at: [-2.5, 0, -3.4], yaw: Math.PI },
     // the flat (2.9.0): closet and bathroom across a little hall at the back, the bed below the closet (pillow to the back
     // wall), her desk across from it, the kitchenette down the east wall, a table for two by the doorway
@@ -124,8 +124,8 @@ export const CLINIC = {
 // The pegboard's tools (R3, vet-tools.model.mjs): where each hangs (its peg, model-local [x, y, z]; the board faces +x on
 // the exam room's west wall): the check-ups along the top, the treatments below. A tool hangs down from its peg, ~0.4 m.
 CLINIC.pegs = [
-  ...['stethoscope', 'otoscope', 'thermometer', 'magnifier'].map((tool, k) => ({ tool, at: [-6.22, 1.95, -2.2 - 0.57 + k * 0.38] })),
-  ...['shot', 'drops', 'spoon', 'tweezers', 'bandage'].map((tool, k) => ({ tool, at: [-6.22, 1.47, -2.2 - 0.64 + k * 0.32] })),
+  ...['stethoscope', 'otoscope', 'thermometer', 'magnifier'].map((tool, k) => ({ tool, at: [-6.22, 2.6, -2.2 - 0.9 + k * 0.6] })),
+  ...['shot', 'drops', 'spoon', 'tweezers', 'bandage'].map((tool, k) => ({ tool, at: [-6.22, 2.12, -2.2 - 1.0 + k * 0.5] })),
 ];
 // The flat's (and the exam room's) things a tap works (2.9.0, clinic.js PROPS): each one's tap box (local [x0, x1], [y0, y1],
 // [z0, z1]) and its water's spout (local [x, y, z]: the shower head, a tap) and basin (local [x, y, z, radius]: where a

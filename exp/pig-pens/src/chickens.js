@@ -55,7 +55,7 @@ export function createFlock(ctx) {
     };
     const b = world.spawn({
       body: { type: 'dynamic', lock: { rot: true }, linearDamping: 0.05, ccd: true, canSleep: false, mass },
-      colliders: [{ shape: 'sphere', r, material: 'bird' }], groups: { member: ['chick'], filter: ['ground', 'static', 'pig', 'food', 'dog', 'chick'] },
+      colliders: [{ shape: 'sphere', r, material: 'bird' }], groups: { member: ['chick'], filter: ['ground', 'static', 'tall', 'pig', 'food', 'dog', 'chick'] },
       at: [x, r, z], tags: ['bird'], model: 'chick', draw: false, ...fields, // drawn by the flock crowds (view/flock3d.js)
     });
     b.yaw = yaw;
@@ -108,7 +108,7 @@ export function createFlock(ctx) {
   // ---- fox ------------------------------------------------------------------------
   const fox = world.spawn({
     body: { type: 'dynamic', lock: { rot: true }, canSleep: false, mass: 7 }, colliders: [{ shape: 'sphere', r: 0.26, material: 'foxPelt' }],
-    groups: { member: ['fox'], filter: ['ground', 'pig', 'dog'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox', draw: false,
+    groups: { member: ['fox'], filter: ['ground', 'tall', 'pig', 'dog'] }, at: [0, -50, 0], tags: ['fox'], model: 'fox', draw: false,
     state: FST.AWAY, wa: 0, x: 0, z: -50, vx: 0, vz: 0, speed: 0, target: null, carrying: null, fear: 0, cooldown: 30, timer: 0, hop: 0, raids: 0, steals: 0, ex: 0, ez: 0,
   });
   fox.yaw = 0; // a game field (`yaw` in a desc is the spawn pose)
@@ -212,7 +212,7 @@ export function createFlock(ctx) {
     if (fox.state === FST.AWAY) return;
     // steer round the buildings (the fox runs through fences, not walls): past the corner of one in the way, and out of
     // any footprint it has strayed into
-    [tx, tz] = aroundBuildings(fox.x, fox.z, tx, tz);
+    [tx, tz] = aroundBuildings(lay.buildings, CP.foxBuildingMargin, fox.x, fox.z, tx, tz);
     let dx = tx - fox.x, dz = tz - fox.z; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
     for (const b of lay.buildings) { // inside the margin: straight out through the nearest wall, harder the deeper it is
       const m = CP.foxBuildingMargin, cx = fox.x - b.x, cz = fox.z - b.z, ox = b.hx + m - Math.abs(cx), oz = b.hz + m - Math.abs(cz);
@@ -226,31 +226,6 @@ export function createFlock(ctx) {
     fox.hop += ((near ? 1 : 0) - fox.hop) * Math.min(1, DT * 14);
   }
 
-  // The fox's way past the buildings: when the straight line to (tx, tz) crosses a building (with a margin), it walks
-  // round that building's corners, clockwise or anticlockwise, whichever is the shorter way to where it can see (tx, tz),
-  // with no leg through any building (a neighbour's corner or wall ends that way); it returns the next corner, else (tx, tz).
-  function aroundBuildings(x, z, tx, tz) {
-    const m = CP.foxBuildingMargin, c = m + 0.3, B = lay.buildings;
-    const blocked = (ax, az, bx, bz) => B.some(b => segBox(ax, az, bx, bz, b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m) !== null); // by any building
-    let hit = null, ht = Infinity;
-    for (const b of B) { const t = segBox(x, z, tx, tz, b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m); if (t !== null && t < ht) { ht = t; hit = b; } }
-    if (!hit) return [tx, tz];
-    const cs = [[hit.x0 - c, hit.z0 - c], [hit.x1 + c, hit.z0 - c], [hit.x1 + c, hit.z1 + c], [hit.x0 - c, hit.z1 + c]];
-    const ok = cs.map(([cx, cz]) => !B.some(b => b !== hit && cx > b.x0 - m && cx < b.x1 + m && cz > b.z0 - m && cz < b.z1 + m));
-    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]), me = [x, z], to = [tx, tz];
-    let best = null, bd = Infinity;
-    for (let i = 0; i < 4; i++) {
-      if (!ok[i] || blocked(x, z, cs[i][0], cs[i][1])) continue;
-      for (const dir of [1, -1]) {
-        let j = i, len = dist(me, cs[i]), k = 0, fine = true;
-        while (blocked(cs[j][0], cs[j][1], tx, tz) && k++ < 4) { const n = (j + dir + 4) % 4; if (!ok[n] || blocked(cs[j][0], cs[j][1], cs[n][0], cs[n][1])) { fine = false; break; } len += dist(cs[j], cs[n]); j = n; }
-        if (!fine) continue;
-        len += dist(cs[j], to);
-        if (len < bd) { bd = len; best = dist(me, cs[i]) < 0.6 && j !== i ? cs[(i + dir + 4) % 4] : cs[i]; } // at a corner: the next one
-      }
-    }
-    return best ?? [tx, tz];
-  }
 
   // ---- grain ------------------------------------------------------------------------
   function scatterGrain(fx, fy, fz, tx, tz) {
@@ -565,6 +540,33 @@ export function createFlock(ctx) {
     tapFox() { if (fox.state === FST.AWAY) return false; if (fox.carrying) { foxSpit('tap'); [fox.ex, fox.ez] = edgePoint(fox.x, fox.z); fox.state = FST.FLEE; fox.timer = 12; } else foxLeave(true); emit('yip', { x: fox.x, z: fox.z }); return true; }, scatterGrain, collectEgg, grainLeft, pick, grab, moveGrab, release,
     get basket() { return basket; }, get grabbed() { return grabbed; },
   };
+}
+
+// The way past the buildings B (the fox's; 2.12.0: Biscuit's too): when the straight line to (tx, tz) crosses a building
+// (`m` m wide of its walls), it walks round that building's corners, clockwise or anticlockwise, whichever is the shorter
+// way to where it can see (tx, tz), with no leg through any building (a neighbour's corner or wall ends that way); it
+// returns the next corner, else (tx, tz).
+export function aroundBuildings(B, m, x, z, tx, tz) {
+  const c = m + 0.3;
+  const blocked = (ax, az, bx, bz) => B.some(b => segBox(ax, az, bx, bz, b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m) !== null); // by any building
+  let hit = null, ht = Infinity;
+  for (const b of B) { const t = segBox(x, z, tx, tz, b.x0 - m, b.z0 - m, b.x1 + m, b.z1 + m); if (t !== null && t < ht) { ht = t; hit = b; } }
+  if (!hit) return [tx, tz];
+  const cs = [[hit.x0 - c, hit.z0 - c], [hit.x1 + c, hit.z0 - c], [hit.x1 + c, hit.z1 + c], [hit.x0 - c, hit.z1 + c]];
+  const ok = cs.map(([cx, cz]) => !B.some(b => b !== hit && cx > b.x0 - m && cx < b.x1 + m && cz > b.z0 - m && cz < b.z1 + m));
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]), me = [x, z], to = [tx, tz];
+  let best = null, bd = Infinity;
+  for (let i = 0; i < 4; i++) {
+    if (!ok[i] || blocked(x, z, cs[i][0], cs[i][1])) continue;
+    for (const dir of [1, -1]) {
+      let j = i, len = dist(me, cs[i]), k = 0, fine = true;
+      while (blocked(cs[j][0], cs[j][1], tx, tz) && k++ < 4) { const n = (j + dir + 4) % 4; if (!ok[n] || blocked(cs[j][0], cs[j][1], cs[n][0], cs[n][1])) { fine = false; break; } len += dist(cs[j], cs[n]); j = n; }
+      if (!fine) continue;
+      len += dist(cs[j], to);
+      if (len < bd) { bd = len; best = dist(me, cs[i]) < 0.6 && j !== i ? cs[(i + dir + 4) % 4] : cs[i]; } // at a corner: the next one
+    }
+  }
+  return best ?? [tx, tz];
 }
 
 // Where the segment (x0, z0) → (x1, z1) first enters the box [bx0, bx1] × [bz0, bz1], as a fraction 0..1 of the way

@@ -109,6 +109,12 @@ export function createVet({ clock, seed = 1 }) {
     vet.yaw = CLINIC.spots[vet.goal].yaw;
   }
   vet.step = step;
+  // 2.12.0: called back from the farm while you wait in the exam room: she is put at `node` (the lobby, out of the close-up's
+  // view) and walks the last few steps in
+  vet.jump = node => {
+    vet.node = node; [vet.x, vet.z] = pts[node]; vet.pet = null; round.length = 0; vet.outside = false;
+    goTo('examVet'); vet.doing = 'Off to see a patient';
+  };
   vet.send = goal => { if (!(goal in VET_STOPS)) throw new Error(`pig-pens: the vet has no stop '${goal}'`); goTo(goal); vet.doing = 'Walking to the ' + STOP_PLACE[goal]; };
   return vet;
 }
@@ -214,6 +220,7 @@ export function createClinic({ vet, clock, emit, now, animal, hold, letGo, cure 
     exam.t += dt;
     const awake = !clock.night && vet.state !== 'sleep' && vet.state !== 'waking';
     vet.busy = awake && (exam.state !== 'empty' || (C.open && queue.length > 0));
+    if (vet.busy && C.open && vet.outside) vet.jump('lobby'); // out on the farm while you wait in the exam room: no long walk back
     if (exam.state === 'empty') {
       if (C.open && awake && queue.length && vet.node === 'examVet' && exam.t > CLINIC_T.call) callNext();
       return;

@@ -81,8 +81,8 @@
     "clinic": {
       "glb": "models/clinic.glb",
       "anim": null,
-      "bytes": 142216,
-      "sha256": "d26253c100b018312f38cc6825566c6faf948f6f565165c345a6f6f8ecb2e8bd",
+      "bytes": 151740,
+      "sha256": "331a2f9ce1af015238a012cce595eb40a4758c8168dbe73089c7b79e2f55038a",
       "options": "0ac307800b139544"
     },
     "cob": {

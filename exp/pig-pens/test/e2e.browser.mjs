@@ -73,11 +73,23 @@ test('desktop: card and Escape; bell and night hints and label; Feed badge', asy
   } finally { await game.close(); }
 });
 
+// 2.12.0: played sideways; held upright a phone gets the "Turn me sideways!" card over the game
 const PHONE = 'iPhone 15 Pro portrait', WIDE = 'iPhone 15 Pro landscape';
 
-test('iPhone: Shoo and Hose drags; Grab lifts a pig by touch and throws it (#54)', async t => {
+test('iPhone held upright: “Turn me sideways!” covers the game', async t => {
   if (skip) return t.skip(skip);
   const game = await openGame(chrome.browser, site.url, { preset: PHONE, seed: 3, args: ARGS });
+  try {
+    assert.equal(await game.page.evaluate(() => getComputedStyle(document.getElementById('turn')).display), 'flex');
+    const hit = await game.page.evaluate(() => document.elementFromPoint(innerWidth / 2, innerHeight - 60)?.closest('#turn') !== null);
+    assert.ok(hit, 'the toolbar is under the card');
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('iPhone landscape: Shoo and Hose drags; Grab lifts a pig by touch and throws it (#54)', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: WIDE, seed: 3, args: ARGS });
   try {
     const pen = await world(game, () => { const q = window.engine.debug.sim.lay.pens[1]; return [q.cx, 0, q.cz]; });
     await game.tap('farm.tool.shoo');
@@ -116,9 +128,9 @@ test('iPhone landscape: a pinch zooms the camera', async t => {
   } finally { await game.close(); }
 });
 
-test('iPhone: the toolbar and top bar are tappable and inside the safe area (#63)', async t => {
+test('iPhone landscape: the toolbar and top bar are tappable and inside the safe area (#63)', async t => {
   if (skip) return t.skip(skip);
-  const game = await openGame(chrome.browser, site.url, { preset: PHONE, seed: 3, args: ARGS });
+  const game = await openGame(chrome.browser, site.url, { preset: WIDE, seed: 3, args: ARGS });
   try {
     for (const id of ['hand', 'shoo', 'feed', 'hose', 'grab']) await expectTappable(game, `farm.tool.${id}`);
     await expectTappable(game, 'farm.bell'); await expectTappable(game, 'farm.night');
