@@ -165,7 +165,7 @@ export function createSim(world, opts = {}) {
     emit('daynight', { night: n });
   }
   const tmp = [0, 0];
-  const vet = createVet({ clock, seed: (opts.seed ?? 1) ^ (opts.rounds ?? 0) }); // the clinic's vet (v3 §9.2): her own rng, after the herd's
+  const vet = createVet({ clock, seed: (opts.seed ?? 1) ^ (opts.rounds ?? 0), emit }); // the clinic's vet (v3 §9.2): her own rng, after the herd's
 
   function readState() {
     for (const p of pigs) {

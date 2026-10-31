@@ -26,7 +26,7 @@ const NORMAL = { wall_front: [0, 1], wall_back: [0, -1], wall_side_L: [1, 0], wa
 const KEEP = new Set(['clinic.wall_side_R']);
 
 // The clinic's furniture (Kenney Furniture Kit, baked as furn_<name>; `k`: another model, the Food Kit's or our own): model,
-// local [x, z], yaw, on top of (y), scale. The kit's pieces sit off their origin, so each is recentred on its footprint
+// local [x, z], yaw, on top of (y), scale; `fix`: a basin with a tap whose water flat3d.js places on the piece. The kit's pieces sit off their origin, so each is recentred on its footprint
 // first (`flat`: laid on its back first). A `prop` piece moves (flat3d.js), so it stays out of the merged draw. Kit fronts face +z: yaw π/2 turns one to face +x, -π/2 to face -x (the flat's east wall pieces).
 const FS = 2.1; // the kit is about half size beside a 1.5 m vet
 const S = CLINIC.spots, E = -Math.PI / 2; // E: backed onto the east wall, facing into the flat
@@ -45,7 +45,7 @@ const FURNISH = [
   { m: 'bookcaseClosedWide', at: [2.34, -2.7], yaw: Math.PI / 2 }, // her wardrobe, along the closet's west wall
   { m: 'coatRackStanding', at: [3.0, -3.45], yaw: 0.5 },
   { m: 'shower', at: [5.7, -3.2], yaw: 0, prop: 'shower' },
-  { m: 'bathroomSink', at: [6.05, -2.3], yaw: E, y: 0.09, s: FS * 0.85 }, // wall-hung: its pedestal foot just off the floor
+  { m: 'bathroomSink', at: [6.05, -2.3], yaw: E, y: 0.09, s: FS * 0.85, fix: 'bathSink' }, // wall-hung: its pedestal foot just off the floor
   { m: 'toilet', at: [5.87, -1.55], yaw: E, s: FS * 0.85, prop: 'toilet' },
   { m: 'bedSingle', at: [S.bed.at[0], S.bed.at[2]], yaw: S.bed.yaw, s: FS * 0.9 },
   { m: 'rugRounded', at: [S.rug.at[0], S.rug.at[2]], yaw: S.rug.yaw },
@@ -53,7 +53,7 @@ const FURNISH = [
   { k: 'laptop', at: [5.82, 0.05], yaw: E, y: DESK, s: 1, prop: 'laptop' },
   { k: 'doctorBag', at: [5.92, -0.62], yaw: E + 0.35, y: DESK, s: 1.4 },
   { m: 'kitchenFridgeSmall', at: [6.0, 1.2], yaw: E, prop: 'fridge' },
-  { m: 'kitchenSink', at: [5.83, 2.1], yaw: E },
+  { m: 'kitchenSink', at: [5.83, 2.1], yaw: E, fix: 'kitchenSink' },
   { m: 'kitchenCabinet', at: [5.83, 3.0], yaw: E },
   { m: 'kitchenCoffeeMachine', at: [6.05, 3.25], yaw: E, y: COUNTER, s: FS * 0.8 },
   { k: 'banana', at: [5.7, 2.85], yaw: 0.4, y: COUNTER, s: 0.7 },
@@ -67,6 +67,17 @@ const FURNISH = [
   { m: 'pillow', at: [S.catBed.at[0], S.catBed.at[2]], yaw: 0.3, s: FS * 1.3, flat: true }, // the cat's bed: the kit's pillow stands up, so it is laid down
 ];
 export const VET_SCALE = 1.8, VET_H = 0.72, CAT_SCALE = 0.32; // VET_H: Kenney's mini character is about 0.72 m tall
+// 2.13.0: sitting up in bed, how far toward the pillow from the bed's middle and up off the covers (m: her legs, out in
+// front in Kenney's sit, just under them)
+const SIT = { back: 0.35, lift: 0.1 };
+// the frosted oval round her (m, from where she stands or sits, turned with her): its middle `fwd` in front of her and `y`
+// up, its half-sizes across, up and along her facing; its tint, how much it lets through (transmission), how blurred
+// (roughness) and how much it glows its own tint, and how fast it comes and goes (1/s)
+export const FROST = {
+  1: { fwd: 0.18, y: 0.32, r: [0.42, 0.32, 0.6] },   // on the toilet: from her waist down, her legs out in front
+  2: { fwd: 0, y: 0.42, r: [0.52, 0.44, 0.42] },     // in the shower: up to her shoulders (her arms out to the sides)
+  skin: '#e3a57c', clear: 0.6, rough: 0.6, milk: 0.35, ease: 4, // skin: her skin's tan, so what shows blurred reads as her, not her clothes
+};
 
 export function createBuildings({ root, assets, sim, camera, renderer }) {
   const lay = sim.lay, group = new THREE.Group(); group.name = 'buildings'; root.add(group);
@@ -145,7 +156,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
 
   // ---- the clinic's furniture, merged into one draw, but for the pieces that move
   const furniture = new THREE.Group(); group.add(furniture);
-  const pieces = {};
+  const pieces = {}, fixtures = {}; // fixtures: the kit model's own frame → the group's, by prop id (flat3d.js FIXTURE)
   for (const f of FURNISH) {
     const piece = assets.clone(f.k ?? `furn_${f.m}`), s = f.s ?? FS, src = new THREE.Group(); src.add(piece);
     if (f.flat) piece.rotation.x = -Math.PI / 2;
@@ -153,10 +164,12 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     src.position.set(-v.x, -box.min.y, -v.z);            // recentred on its footprint, its bottom on the floor
     const holder = new THREE.Group(); holder.add(src);
     holder.position.set(CLINIC.x + f.at[0], f.y ?? 0, CLINIC.z + f.at[1]); holder.rotation.y = f.yaw; holder.scale.setScalar(s);
+    const id = f.fix ?? f.prop;
+    if (id) { holder.updateMatrix(); src.updateMatrix(); piece.updateMatrix(); fixtures[id] = holder.matrix.clone().multiply(src.matrix).multiply(piece.matrix); }
     if (f.prop) { holder.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); group.add(holder); pieces[f.prop] = holder; } else furniture.add(holder);
   }
   flatten(furniture);
-  const flat = createFlat({ root: group, sim, pieces });
+  const flat = createFlat({ root: group, sim, pieces, fixtures });
 
   // ---- Dr. Emmy (Mini Characters, skinned, with Kenney's clips) and her cat
   const actor = (key, scale) => {
@@ -175,6 +188,22 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
   cat.o.position.set(CLINIC.x + S.catBed.at[0], 0.1, CLINIC.z + S.catBed.at[2]); cat.o.rotation.y = 2.2; cat.play('idle');
   const sv = sim.vet; let vetYaw = sv.yaw;
   const bedTop = 0.26 * FS * 0.9 + 0.02; // on the covers (bedSingle: cover top 0.26 before scaling, FURNISH's 0.9 FS)
+  // 2.13.0: frosted glass where she is private (sim.vet.blur: 1 her bottom half on the toilet, 2 shoulders down in the
+  // shower): a soft oval of real refraction round her, so she shows blurred from any side; it swells in and fades out
+  const frost = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 18), new THREE.MeshPhysicalMaterial({
+    color: FROST.skin, emissive: FROST.skin, emissiveIntensity: FROST.milk, transmission: FROST.clear, roughness: FROST.rough,
+    thickness: 0.5, attenuationColor: FROST.skin, attenuationDistance: 0.4, ior: 1.2,
+    transparent: true, opacity: 0, depthWrite: false }));
+  frost.visible = false; frost.renderOrder = 2; group.add(frost);
+  let frostK = 0, frostOf = FROST[1];
+  function updateFrost(dt, yaw) {
+    if (sv.blur) frostOf = FROST[sv.blur];
+    frostK += ((sv.blur ? 1 : 0) - frostK) * Math.min(1, dt * FROST.ease); if (frostK < 0.01) frostK = 0;
+    frost.visible = frostK > 0; if (!frost.visible) return;
+    const F = frostOf, p = vet.o.position, k = 0.75 + 0.25 * frostK;
+    frost.position.set(p.x + Math.sin(yaw) * F.fwd, p.y + F.y, p.z + Math.cos(yaw) * F.fwd); frost.rotation.set(0, yaw, 0);
+    frost.scale.set(F.r[0] * k, F.r[1] * k, F.r[2] * k); frost.material.opacity = frostK;
+  }
   function updateVet(dt) {
     const asleep = sv.state === 'sleep';
     let d = sv.yaw - vetYaw; d = Math.atan2(Math.sin(d), Math.cos(d)); vetYaw += d * Math.min(1, dt * 8);
@@ -183,10 +212,16 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
       vet.o.rotation.order = 'YXZ'; vet.o.rotation.set(-Math.PI / 2, y, 0);
       vet.o.position.set(sv.x + Math.sin(y) * half, bedTop, sv.z + Math.cos(y) * half);
       vet.play('idle');
+    } else if (sv.state === 'waking') { // 2.13.0: sitting up in bed on the covers, her back to the pillow, her legs down the bed (Kenney's sit is on the floor)
+      const y = CLINIC.spots.bed.yaw;
+      vet.o.position.set(sv.x - Math.sin(y) * SIT.back, bedTop + SIT.lift, sv.z - Math.cos(y) * SIT.back); vet.o.rotation.set(0, y, 0); vetYaw = y;
+      vet.play('sit');
     } else {
-      vet.o.position.set(sv.x, 0, sv.z); vet.o.rotation.set(0, vetYaw, 0);
-      vet.play(sv.moving ? 'walk' : sv.state === 'waking' ? 'sit' : sv.pet ? 'interact-right' : 'idle');
+      const y = sv.seat ? CLINIC.spots.seat.at[1] : !sv.moving && sv.node === 'shower' ? CLINIC.spots.shower.at[1] : 0; // on the toilet's seat; up on the shower's tray
+      vet.o.position.set(sv.x, y, sv.z); vet.o.rotation.set(0, vetYaw, 0);
+      vet.play(sv.moving ? 'walk' : sv.seat ? 'sit' : sv.pet || sv.reach ? 'interact-right' : 'idle');
     }
+    updateFrost(dt, vetYaw);
     vet.mixer.update(dt * (asleep ? 0.25 : 1)); cat.mixer.update(dt * 0.4);
   }
 
@@ -223,7 +258,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
   return {
     update, cured: (kind, i) => emotes.cured(kind, i),
     dispose() { exam.dispose(); emotes.dispose(); flat.dispose(); // world.dispose frees the group with the farm root (the wall materials are ours: not shared)
-      vet.mixer.stopAllAction(); cat.mixer.stopAllAction(); plaques.dispose();
+      vet.mixer.stopAllAction(); cat.mixer.stopAllAction(); plaques.dispose(); frost.geometry.dispose(); frost.material.dispose();
     },
   };
 }

@@ -1,7 +1,8 @@
 // The flat's working things (2.9.0, clinic.js PROPS; places: CLINIC.props): water from the shower head and the taps, the
 // bathroom basin filling and draining, the toilet's lid and its flush, the laptop's lid, the fridge door. View only: reads
-// sim.clinic.props, never writes it. createFlat({ root, sim, pieces }) → { update(dt), dispose() } (pieces: the furnished
-// pieces that move, by prop id: the Kenney toilet and fridge, our laptop)
+// sim.clinic.props, never writes it. createFlat({ root, sim, pieces, fixtures }) → { update(dt), dispose() } (pieces: the
+// furnished pieces that move, by prop id: the Kenney toilet and fridge, our laptop; fixtures: the Kenney toilet's and
+// sinks' own frames, by prop id, for FIXTURE)
 import * as THREE from 'three';
 import { CLINIC } from '../defs/buildings.js';
 import { PROPS } from '../clinic.js';
@@ -14,9 +15,16 @@ const SPRAY = {
   shower: { rate: 160, down: 0.5, spread: 0.2 },
   tap:    { rate: 80, up: [1.0, 1.7], out: 0.5 },
 };
-const MAX = 700, DEPTH = 0.06, STREAM = 0.35; // droplets at once; how far a full basin's water lies below its rim; how far
-// toward the basin's middle a tap's stream lands (of the way from the spout)
+const MAX = 700, STREAM = 0.35; // droplets at once; how far toward the basin's middle a tap's stream lands (of the way from the spout)
 const world = ([x, y, z]) => [CLINIC.x + x, y, CLINIC.z + z];
+// 2.13.0: the Kenney pieces' water, in each kit model's own frame (metres, before it is furnished; its front at +z), read off
+// the models' vertices: the tap's mouth (spout), the water's middle when full (basin), the basin's floor (floor: where a
+// draining basin empties to) and the water's half-widths across x and z (r: the bowls are oval)
+const FIXTURE = {
+  toilet:      { basin: [0.156, 0.19, 0.29], r: [0.05, 0.12] },
+  bathSink:    { spout: [0.17, 0.125, -0.125], basin: [0.17, 0.065, -0.11], floor: 0.02, r: [0.12, 0.065] },
+  kitchenSink: { spout: [0.218, 0.455, -0.275], basin: [0.215, 0.37, -0.21] },
+};
 
 // a dot of water, soft-edged
 function dropTexture() {
@@ -59,7 +67,7 @@ function glaze(piece, glass) {
   });
 }
 
-export function createFlat({ root, sim, pieces }) {
+export function createFlat({ root, sim, pieces, fixtures }) {
   const props = sim.clinic.props, group = new THREE.Group(); group.name = 'flat'; root.add(group);
   const glass = new THREE.MeshLambertMaterial({ color: '#d4ece6', transparent: true, opacity: 0.32, depthWrite: false });
   glaze(pieces.shower, glass);
@@ -80,8 +88,11 @@ export function createFlat({ root, sim, pieces }) {
   const drops = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.11, map: dropMap, color: '#a8e0ff', transparent: true, depthWrite: false }));
   drops.frustumCulled = false; group.add(drops);
   const streamMat = new THREE.MeshLambertMaterial({ color: '#bfe8ff', transparent: true, opacity: 0.7, depthWrite: false });
-  const emitters = Object.entries(CLINIC.props).filter(([, P]) => P.spout).map(([id, P]) => {
-    const e = { id, spout: world(P.spout), basin: world(P.basin), kind: id === 'shower' ? SPRAY.shower : SPRAY.tap, acc: 0, stream: null, foot: null };
+  const onPiece = (id, p) => new THREE.Vector3(...p).applyMatrix4(fixtures[id]).toArray(); // a FIXTURE point, in the group's frame
+  const taps = Object.entries(CLINIC.props).filter(([id, P]) => P.spout || FIXTURE[id]?.spout)
+    .map(([id, P]) => (P.spout ? [id, world(P.spout), world(P.basin)] : [id, onPiece(id, FIXTURE[id].spout), onPiece(id, FIXTURE[id].basin)]));
+  const emitters = taps.map(([id, spout, basin]) => {
+    const e = { id, spout, basin, kind: id === 'shower' ? SPRAY.shower : SPRAY.tap, acc: 0, stream: null, foot: null };
     if (id !== 'shower') { // a tap's stream: a thin glassy column from the spout down into the basin, flickering while it runs
       const [sx, sy, sz] = e.spout, [bx, by, bz] = e.basin, end = new THREE.Vector3(sx + (bx - sx) * STREAM, by, sz + (bz - sz) * STREAM);
       const from = new THREE.Vector3(sx, sy, sz), len = from.distanceTo(end);
@@ -123,24 +134,27 @@ export function createFlat({ root, sim, pieces }) {
     n = w; geo.setDrawRange(0, n); geo.attributes.position.needsUpdate = true;
   }
 
-  // ---- standing water: the bathroom basin (fills, stands, drains with a swirl) and the toilet bowl (swirls when flushed)
+  // ---- standing water: the bathroom basin (fills, stands, drains with a swirl) and the toilet bowl (swirls when flushed).
+  // Each lies in its piece's own frame (FIXTURE): an oval the bowl's shape, turning about its middle
   const swirlMap = swirlTexture();
   const pool = (id, opacity) => {
-    const [x, y, z] = world(CLINIC.props[id].basin), r = CLINIC.props[id].basin[3];
-    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 24).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: swirlMap, transparent: true, opacity, depthWrite: false }));
-    m.position.set(x, y, z); m.userData.y = y; m.renderOrder = 1; group.add(m); return m;
+    const F = FIXTURE[id], frame = new THREE.Group(); frame.matrixAutoUpdate = false; frame.matrix.copy(fixtures[id]); group.add(frame);
+    const oval = new THREE.Group(); oval.position.set(...F.basin); oval.userData = { y: F.basin[1], r: F.r }; frame.add(oval);
+    const m = new THREE.Mesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: swirlMap, transparent: true, opacity, depthWrite: false }));
+    m.renderOrder = 1; oval.add(m); return { oval, m };
   };
   const basin = pool('bathSink', 0.85), bowl = pool('toilet', 0.9);
+  const shape = ({ oval }, y, k) => { const [rx, rz] = oval.userData.r; oval.position.y = y; oval.scale.set(rx * k, 1, rz * k); };
   function pools(dt) {
     const p = props.bathSink, T = PROPS.bathSink, u = Math.min(1, p.t / (T[p.state] ?? 1));
-    const level = { off: 0, run: u, full: 1, drain: 1 - u }[p.state];
-    basin.visible = level > 0.02;
-    basin.position.y = basin.userData.y - DEPTH * (1 - level); basin.scale.setScalar(0.55 + 0.45 * level);
-    if (p.state === 'drain') basin.rotation.y -= dt * 7;
+    const level = { off: 0, run: u, full: 1, drain: 1 - u }[p.state], floor = FIXTURE.bathSink.floor;
+    basin.oval.visible = level > 0.02;
+    shape(basin, floor + (basin.oval.userData.y - floor) * level, 0.55 + 0.45 * level);
+    if (p.state === 'drain') basin.m.rotation.y -= dt * 7;
     const f = props.toilet, k = f.state === 'flush' ? Math.min(1, f.t / PROPS.flush) : 0, dip = Math.sin(Math.PI * k); // down and back up
-    bowl.visible = swing.toilet.a > 0.05;                    // only seen with the lid up
-    bowl.position.y = bowl.userData.y - 0.08 * dip; bowl.scale.setScalar(1 - 0.45 * dip);
-    if (f.state === 'flush') bowl.rotation.y -= dt * (6 + 10 * dip);
+    bowl.oval.visible = swing.toilet.a > 0.05;                    // only seen with the lid up
+    shape(bowl, bowl.oval.userData.y - 0.04 * dip, 1 - 0.45 * dip);
+    if (f.state === 'flush') bowl.m.rotation.y -= dt * (6 + 10 * dip);
   }
 
   function update(dt) {
@@ -152,6 +166,6 @@ export function createFlat({ root, sim, pieces }) {
   }
   return {
     update,
-    dispose() { root.remove(group); geo.dispose(); drops.material.dispose(); streamMat.dispose(); glass.dispose(); for (const e of emitters) e.stream?.geometry.dispose(); dropMap.dispose(); swirlMap.dispose(); for (const m of [basin, bowl]) { m.geometry.dispose(); m.material.dispose(); } },
+    dispose() { root.remove(group); geo.dispose(); drops.material.dispose(); streamMat.dispose(); glass.dispose(); for (const e of emitters) e.stream?.geometry.dispose(); dropMap.dispose(); swirlMap.dispose(); for (const { m } of [basin, bowl]) { m.geometry.dispose(); m.material.dispose(); } },
   };
 }

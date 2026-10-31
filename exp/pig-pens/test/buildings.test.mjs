@@ -9,7 +9,7 @@ import { buildLayout, REGION } from '../src/layout.js';
 import { ST } from '../src/sim.js';
 import { classify, rayBuilding } from '../src/game/pick.js';
 import { BARN, CLINIC, COOP } from '../src/defs/buildings.js';
-import { VET_STOPS, PROPS, OUTSIDE_STOPS, createVet } from '../src/clinic.js';
+import { VET_STOPS, PROPS, OUTSIDE_STOPS, BATHROOM, BATHROOM_DONE, createVet } from '../src/clinic.js';
 import { VISIT, GAIN } from '../src/visits.js';
 import { farmSim } from './farmSim.mjs';
 import { rayTo, tapAt, tool, arrive } from './rays.mjs';
@@ -313,4 +313,63 @@ test('Biscuit and the walls (2.12.0): sent past the clinic he goes round its cor
     assert.equal(inside(), undefined, `kept out of the ${b.id}`); assert.ok(dog.z > b.z1 - 0.05, `at the ${b.id}’s front wall (${dog.z.toFixed(2)})`);
   }
   sim.setDog(null, null, false);
+});
+
+// 2.13.0: Dr. Emmy uses the bathroom, step by step, and always washes her hands
+const bathSteps = (h, v, P) => { // what she does at each step, and what the bathroom's things were doing
+  const seen = []; let last = null;
+  h.until(() => {
+    if (v.chore?.on && v.doing !== last) { last = v.doing; seen.push({ doing: v.doing, node: v.node, seat: v.seat, blur: v.blur, toilet: P.toilet.state, bathSink: P.bathSink.state, shower: P.shower.state }); }
+    if (!v.chore && seen.length) return true;
+    if (v.blur) assert.ok(v.seat || v.node === 'shower', `the frost only on the toilet or in the shower (${v.doing})`);
+    return false;
+  }, { maxSteps: 60 * 90, message: 'out of the bathroom' });
+  return seen;
+};
+test('the bathroom (2.13.0): lid up, on the toilet (frosted), up again, flush, and always her hands washed at the basin', () => {
+  const { h, sim } = farm(), v = sim.vet, P = sim.clinic.props, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('bathroom');
+  const seen = bathSteps(h, v, P);
+  assert.deepEqual(seen.map(s => s.doing), BATHROOM.loo.map(s => s.doing), 'every step, in order');
+  const [lid, sit, flush, wash] = seen;
+  assert.equal(lid.toilet, 'open', 'the lid up'); assert.equal(lid.blur, 0);
+  assert.ok(sit.seat && sit.blur === 1, 'on the seat, frosted from the waist down');
+  const S = CLINIC.spots.seat.at; assert.equal(flush.seat, false, 'up off the seat'); assert.equal(flush.blur, 0, 'no frost once she’s up');
+  assert.equal(flush.toilet, 'flush');
+  assert.equal(wash.node, 'washVet'); assert.equal(wash.bathSink, 'run', 'the basin’s tap on');
+  assert.equal(v.doing, BATHROOM_DONE.loo); assert.equal(v.state, 'walk', 'and on with her day');
+  assert.ok(Math.hypot(v.x - CLINIC.x - S[0], v.z - CLINIC.z - S[2]) > 0.3, 'not left on the seat');
+});
+
+test('the bathroom (2.13.0): a patient waiting hurries her, but she still flushes and washes her hands before the exam room', () => {
+  const { h, sim } = farm(), v = sim.vet, P = sim.clinic.props, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('bathroom'); h.until(() => v.seat, { maxSteps: 60 * 60, message: 'on the toilet' });
+  const m = h.mark(), p = sim.pigs.find(q => !q.piglet); dbg.sicken('pig', p.i, 'cold'); sim.clinic.admit('pig', p.i); sim.clinic.open = true;
+  const t0 = h.engine.time.sim, seen = bathSteps(h, v, P), took = h.engine.time.sim - t0;
+  assert.deepEqual(seen.map(s => s.doing), ['Using the toilet', 'Flushing', 'Washing her hands'], 'the rest of it, hands and all');
+  assert.ok(took < BATHROOM.loo.slice(1).reduce((a, s) => a + s.t, 0) * 0.6 + 4, `quicker (${took.toFixed(1)} s)`);
+  assert.match(h.events.since(m).of('vet')[0]?.text ?? '', /Coming!.*wash my hands/, 'she calls out');
+  h.until(() => v.node === 'examVet' && v.state === 'idle', { maxSteps: 60 * 30, message: 'then to the exam room' });
+});
+
+test('the bathroom (2.13.0): a shower, frosted from the shoulders down while it runs; no basin after', () => {
+  const { h, sim } = farm(), v = sim.vet, P = sim.clinic.props, dbg = h.engine.game.debug(h.engine);
+  dbg.vetTo('shower');
+  const seen = bathSteps(h, v, P);
+  assert.deepEqual(seen.map(s => s.doing), ['Having a shower']);
+  assert.equal(seen[0].shower, 'on'); assert.equal(seen[0].blur, 2);
+  assert.equal(P.shower.state, 'off', 'the water off as she steps out'); assert.equal(v.blur, 0);
+  assert.equal(v.doing, BATHROOM_DONE.shower);
+});
+
+test('the bathroom (2.13.0): some mornings a shower, some a cup of tea; and now and then the bathroom in her day', () => {
+  const firsts = new Set(); let loo = 0;
+  for (let seed = 1; seed <= 16; seed++) {
+    const clock = { night: true }, v = createVet({ clock, seed }); clock.night = false;
+    for (let k = 0; k < 60 * 6 && v.state !== 'walk'; k++) v.step(1 / 60);
+    firsts.add(v.goal);
+    for (let k = 0; k < 60 * 60 * 10; k++) { v.step(1 / 60); if (v.chore?.list === 'loo') { loo++; break; } }
+  }
+  assert.deepEqual([...firsts].sort(), ['kitchenVet', 'shower']);
+  assert.ok(loo >= 8, `most days take in the bathroom within ten minutes (${loo} of 16)`);
 });

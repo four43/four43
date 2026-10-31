@@ -93,6 +93,12 @@ export const CLINIC = {
     table:      { at: [3.7, 0, 2.4], yaw: Math.PI / 2 },       // long side along z
     rug:        { at: [4.2, 0, -0.3], yaw: Math.PI / 2 },
     catBed:     { at: [2.45, 0, 3.4], yaw: 0 },
+    // 2.13.0: the bathroom (through the hall's doorway): in front of the toilet (she lifts its lid and flushes it from here),
+    // on its seat (y: the seat's top; facing out), at the basin, under the shower (facing out of it)
+    bathroom:   { at: [5.12, 0, -1.55], yaw: Math.PI / 2 },
+    seat:       { at: [5.8, 0.41, -1.55], yaw: -Math.PI / 2 },
+    washVet:    { at: [5.45, 0, -2.3], yaw: Math.PI / 2 },
+    shower:     { at: [5.7, 0.17, -3.15], yaw: 0 },              // y: the tray's floor
     plant:      { at: [-5.9, 0, 3.5], yaw: 0 },
     // her rounds outside (2.9.0): along the north pens' fence (world z -15.3, 0.9 m out from it) and at the chicken run's
     // south fence, facing them; the pigs and hens come to the fence to say hello
@@ -113,11 +119,15 @@ export const CLINIC = {
     points: { deskVet: [-5.5, 1.7], deskEnd: [-5.5, 0.55], aisle: [-3.6, 0.55], lobby: [-1.0, 2.0], waiting: [0.0, -1.2],
       examDoor: [-4.6, 0.0], examVet: [-4.6, -1.05], aptDoor: [2.0, 1.2], aptIn: [2.7, 1.2], hub: [3.9, 0.85],
       bedSide: [3.65, -0.45], study: [4.95, -0.2], dining: [3.7, 1.35], kitchenVet: [5.0, 2.15],
+      // 2.13.0: down the hall, through the bathroom's doorway, to the toilet, the basin and into the shower
+      hall: [3.9, -2.0], bathIn: [4.85, -2.0], bathroom: [5.12, -1.55], washVet: [5.45, -2.3], showerStep: [5.55, -2.45], shower: [5.7, -3.15],
       // out of the front door (it opens for her) and along the strip of field between the buildings and the pens
       frontIn: [-0.4, 3.0], frontOut: [-0.4, 5.0], yard: [-0.4, 6.6], penEast: [-2.9, 7.0], barnFront: [-14.3, 6.6], penWest: [-23.4, 7.0], run: [-26.4, 3.7] },
     links: [['deskVet', 'deskEnd'], ['deskEnd', 'aisle'], ['aisle', 'lobby'], ['aisle', 'examDoor'], ['lobby', 'waiting'], ['lobby', 'examDoor'], ['examDoor', 'examVet'],
       ['lobby', 'aptDoor'], ['waiting', 'aptDoor'], ['aptDoor', 'aptIn'], ['aptIn', 'hub'], ['hub', 'bedSide'], ['hub', 'study'], ['hub', 'dining'],
       ['hub', 'kitchenVet'], ['bedSide', 'study'], ['dining', 'kitchenVet'],
+      ['hub', 'hall'], ['bedSide', 'hall'], ['hall', 'bathIn'], ['bathIn', 'bathroom'], ['bathIn', 'washVet'], ['bathroom', 'washVet'],
+      ['bathIn', 'showerStep'], ['showerStep', 'shower'],
       ['lobby', 'frontIn'], ['frontIn', 'frontOut'], ['frontOut', 'yard'], ['yard', 'penEast'], ['penEast', 'barnFront'], ['barnFront', 'penWest'], ['penWest', 'run']],
   },
 };
@@ -128,15 +138,16 @@ CLINIC.pegs = [
   ...['shot', 'drops', 'spoon', 'tweezers', 'bandage'].map((tool, k) => ({ tool, at: [-6.22, 2.12, -2.2 - 1.0 + k * 0.5] })),
 ];
 // The flat's (and the exam room's) things a tap works (2.9.0, clinic.js PROPS): each one's tap box (local [x0, x1], [y0, y1],
-// [z0, z1]) and its water's spout (local [x, y, z]: the shower head, a tap) and basin (local [x, y, z, radius]: where a
-// sink's or the toilet's water lies). The view furnishes the Kenney pieces at these places.
+// [z0, z1]); the shower's and the exam sink's spout (local [x, y, z]: the shower head, a tap) and basin (local [x, y, z,
+// radius]: where its water lands). The view furnishes the Kenney pieces at these places; the Kenney basins' and taps'
+// water is placed on the pieces themselves (flat3d.js FIXTURE).
 CLINIC.props = {
   shower:      { box: [[5.1, 6.3], [0, 2.3], [-3.8, -2.6]], spout: [5.7, 2.12, -3.2], basin: [5.7, 0.1, -3.2, 0.5] },
-  bathSink:    { box: [[5.75, 6.3], [0.55, 1.25], [-2.6, -2.0]], spout: [6.16, 1.13, -2.3], basin: [6.02, 0.98, -2.3, 0.2] },
-  toilet:      { box: [[5.4, 6.3], [0, 0.9], [-1.85, -1.25]], basin: [5.66, 0.6, -1.55, 0.17] },
+  bathSink:    { box: [[5.75, 6.3], [0.55, 1.25], [-2.6, -2.0]] },
+  toilet:      { box: [[5.4, 6.3], [0, 0.9], [-1.85, -1.25]] },
   laptop:      { box: [[5.55, 6.1], [0.78, 1.25], [-0.2, 0.3]] },
   fridge:      { box: [[5.65, 6.3], [0, 1.3], [0.75, 1.65]] },
-  kitchenSink: { box: [[5.35, 6.3], [0.6, 1.2], [1.65, 2.55]], spout: [5.98, 1.18, 2.1], basin: [5.86, 1.0, 2.22, 0.28] },
+  kitchenSink: { box: [[5.35, 6.3], [0.6, 1.2], [1.65, 2.55]] },
   examSink:    { box: [[-2.95, -2.05], [0.5, 1.3], [-3.8, -3.2]], spout: [-2.5, 1.06, -3.54], basin: [-2.5, 0.88, -3.5, 0.24] },
 };
 // the exam room (local x0..x1, z0..z1) and the exam close-up's framing (the camera east of the table, looking west at it and the board)
