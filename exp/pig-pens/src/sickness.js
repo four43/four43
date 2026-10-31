@@ -16,7 +16,7 @@ export const SICK = {
   tummyWindow: 40,       // …within this many s
   splinterChance: 0.5,   // on a hard knock…
   splinterImpact: 5,     // …a sudden stop of at least this many m/s near a fence (thrown)
-  earInterval: 600,      // s between random ear aches (only when nobody is sick)
+  earInterval: 600,      // s between random ailments (only when nobody is sick): an ear ache for a pig, the sniffles for a hen
   earChance: 1,          // the chance one comes when the interval is up
   maxSick: 3,            // poorly animals on the farm at once
   cooldown: 300,         // s after a cure before it can fall ill again
@@ -70,7 +70,7 @@ export function createSickness({ pigs, birds, clock, seed = 1, emit, now, outsid
   function onNight() { coldAt = now() + T.coldCheck; }
   // a pig ate a snack / a bird pecked a grain: too many in the window gives a tummy ache
   function onEat(kind, a) {
-    const t = now(), w = (a.ate ||= []); w.push(t);
+    const t = now(), w = (a.ateAt ||= []); w.push(t); // ateAt: its meal times (a bird's `ate` is its grain count, chickens.js)
     while (w.length && w[0] < t - T.tummyWindow) w.shift();
     if (w.length >= (kind === 'pig' ? T.tummySnacks : T.tummyGrain)) { w.length = 0; maybe(kind, a, 'tummy', T.tummyChance, 'too many treats'); }
   }
@@ -89,12 +89,12 @@ export function createSickness({ pigs, birds, clock, seed = 1, emit, now, outsid
       }
     }
     if (!clock.night) coldAt = Infinity;
-    // the odd ear ache, when nobody is poorly
+    // the odd ailment out of the blue, when nobody is poorly (2.14.0: a grown pig's ear ache, or a hen's sniffles)
     if (sickCount() === 0) {
       if ((earT += dt) > T.earInterval) {
         earT = 0;
-        const can = pigs.filter(p => !p.piglet && canSicken(p));
-        if (can.length && rng() < T.earChance) sicken('pig', can[Math.floor(rng() * can.length)], 'ear', 'out of the blue');
+        const can = [...pigs.filter(p => !p.piglet && canSicken(p)).map(p => ['pig', p]), ...birds().filter(b => b.kind === 'hen' && canSicken(b)).map(b => ['bird', b])];
+        if (can.length && rng() < T.earChance) { const [kind, a] = can[Math.floor(rng() * can.length)]; sicken(kind, a, kind === 'pig' ? 'ear' : 'cold', 'out of the blue'); }
       }
     } else earT = 0;
     // green in and out, and the symptoms

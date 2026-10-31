@@ -67,7 +67,10 @@ test('a tummy ache from too many snacks; a splinter from a hard knock; the odd e
   S.onEat('pig', d); S.onEat('pig', d); assert.ok(!d.sick, 'three poorly already: maxSick');
   for (const x of [a, b, c]) S.cure('pig', x);
   S.onEat('pig', a); S.onEat('pig', a); assert.ok(!a.sick, 'just cured: cooldown');
-  h.step(60 * 3); assert.equal(sim.pigs.filter(p => p.sick?.ailment === 'ear').length, 1, 'an ear ache out of the blue when nobody is poorly');
+  h.step(60 * 3);
+  const blue = [...sim.pigs.filter(p => p.sick), ...sim.flock.birds.filter(b => b.sick)];
+  assert.equal(blue.length, 1, 'something out of the blue when nobody is poorly');
+  assert.ok(blue[0].sick.ailment === (blue[0].kind === 'hen' ? 'cold' : 'ear'), `a pig's ear ache or a hen's sniffles (${blue[0].name}: ${blue[0].sick.ailment})`);
 });
 
 test('a poorly pig goes green, slows down, and leaves the snacks and troughs alone', () => {
@@ -201,4 +204,52 @@ test('tune: the SICK values are this farm’s own, through the `tune` command; a
   assert.equal(a.sim.sickness.T.coldChance, 1); assert.equal(b.sim.sickness.T.coldChance, SICK.coldChance, 'not shared');
   assert.throws(() => a.sim.sickness.tune('nope', 1), /no SICK value 'nope'/);
   assert.throws(() => a.sim.sickness.tune('coldChance', 'lots'), /needs a number/);
+});
+
+// 2.14.0: chickens get poorly too
+test('hens: pecking lots of grain no longer crashes the farm, and too much of it gives a tummy ache', () => {
+  const { h, sim } = farm(); const S = sim.sickness, F = sim.flock, r = sim.lay.run, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+  S.tune('tummyChance', 1); S.tune('tummyGrain', 4);
+  for (let k = 0; k < 4; k++) { F.scatterGrain(cx, 1.6, cz + 2, cx, cz); h.step(60 * 20); }
+  assert.ok(F.birds.some(b => b.ate > 4), 'they ate it');
+  assert.ok(F.birds.some(b => b.sick?.ailment === 'tummy'), 'and a greedy one has a tummy ache');
+});
+
+test('hens: out of the blue it is sometimes a hen’s sniffles, not always a pig’s ear ache', () => {
+  const kinds = new Set();
+  for (let seed = 1; seed <= 12 && kinds.size < 2; seed++) {
+    const { h, sim } = farm({}, seed); sim.sickness.tune('earInterval', 2); h.step(60 * 3);
+    if (sim.flock.birds.some(b => b.sick?.ailment === 'cold')) kinds.add('hen');
+    if (sim.pigs.some(p => p.sick?.ailment === 'ear')) kinds.add('pig');
+  }
+  assert.deepEqual([...kinds].sort(), ['hen', 'pig']);
+});
+
+test('better (2.14.0): out of the exam room’s doorway one is better and the next called, while it walks on out of the front door', () => {
+  const { h, s, sim, dbg } = farm(); const [p, q] = adults(sim);
+  dbg.sicken('pig', p.i, 'cold'); sim.clinic.admit('pig', p.i); dbg.sicken('pig', q.i, 'tummy'); sim.clinic.admit('pig', q.i);
+  intoExam(h, s);
+  h.until(() => sim.clinic.exam.state === 'patient', { maxSteps: 60 * 30, message: 'the first on the table' });
+  assert.equal(sim.clinic.queue.length, 2);
+  useTool(h, sim, 'shot');
+  const m = h.mark(); h.until(() => h.events.since(m).first('clinic')?.what === 'out', { maxSteps: 60 * 20, message: 'better' });
+  const R = CLINIC.examRoom; let lx = p.px - CLINIC.x, lz = p.pz - CLINIC.z;
+  assert.ok(lz > R.z1 - 0.5 && lz < R.z1 + 1, `at the exam room’s doorway (${lx.toFixed(2)}, ${lz.toFixed(2)})`);
+  assert.equal(sim.clinic.queue.length, 1, 'one patient fewer'); assert.ok(p.clinic, 'still in the clinic, walking out');
+  assert.deepEqual(sim.clinic.out.map(w => w.i), [p.i]);
+  h.until(() => sim.clinic.exam.who?.i === q.i, { maxSteps: 60 * 5, message: 'the next one called' });
+  assert.ok(p.clinic, 'called while the first is still on its way out');
+  h.until(() => !p.clinic, { maxSteps: 60 * 20, message: 'out of the front door' });
+  assert.ok(p.pz > sim.lay.clinic.z1, 'out of the front door'); assert.equal(sim.clinic.out.length, 0);
+});
+
+test('a hen’s visit (2.14.0): checked in, on the table, the cure, and better out of the exam room', () => {
+  const { h, s, sim, dbg } = farm(); const b = sim.flock.birds.find(x => x.kind === 'hen');
+  assert.ok(dbg.sicken('bird', b.i, 'cold')); assert.equal(sim.clinic.admit('bird', b.i), 'in');
+  intoExam(h, s);
+  h.until(() => sim.clinic.exam.state === 'patient', { maxSteps: 60 * 30, message: 'the hen on the table' });
+  assert.ok(b.py > CLINIC.spots.tableTop, 'up on the table');
+  useTool(h, sim, 'shot'); assert.equal(b.sick, null);
+  const m = h.mark(); h.until(() => h.events.since(m).first('clinic')?.what === 'out', { maxSteps: 60 * 20, message: 'better' });
+  h.until(() => !b.clinic, { maxSteps: 60 * 20, message: 'home' });
 });

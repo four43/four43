@@ -90,6 +90,12 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 #outside svg{width:24px;height:24px}
 #outside:active{transform:translateY(2px);box-shadow:0 2px 0 var(--mud)}
 #outside:focus-visible{outline:3px solid #2f7de1;outline-offset:2px}
+/* 2.14.0: in the exam room, how many patients still need help (a face each), counting down as each walks out better */
+#patients{position:fixed;left:50%;top:calc(var(--lh-sa-top,env(safe-area-inset-top,0px)) + 12px);transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;height:46px;padding:0 18px 0 10px;border-radius:23px;font-weight:800;font-size:22px;color:var(--ink);white-space:nowrap;pointer-events:none}
+#patients[hidden]{display:none}
+#patients svg{width:30px;height:30px;flex:none}
+#patients.done{padding-left:18px}
+#patients.bump{animation:eggbump .35s ease-out}
 #loading{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;font-weight:800;color:#5a3820;background:var(--sky);z-index:10}
 :is(#daynight,#bell,#outside).chunk{background:var(--panel);border:2.5px solid var(--mud);box-shadow:0 4px 0 var(--mud)}
 #bell.chunk{background:var(--hay)}
@@ -100,7 +106,7 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
 @keyframes turn{0%,25%{transform:rotate(0)}55%,100%{transform:rotate(-90deg)}}
 @media (orientation:portrait) and (pointer:coarse){#turn{display:flex}}
 @media (prefers-reduced-motion: reduce){#turn svg{animation:none;transform:rotate(-90deg)}}
-@media (prefers-reduced-motion: reduce){#hint,#tools button{transition:none} #eggs.bump{animation:none}}
+@media (prefers-reduced-motion: reduce){#hint,#tools button{transition:none} #eggs.bump,#patients.bump{animation:none}}
 @media (min-width:700px){#tools button{width:80px;font-size:15px}}
 </style>
 </head>
@@ -122,6 +128,7 @@ body{margin:0;position:relative;background:var(--sky);color:var(--ink);-webkit-u
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Outside</button>
 <div id="hint" class="chunk" role="status" aria-live="polite"></div>
 <div id="say" class="chunk" hidden aria-live="polite"></div>
+<div id="patients" class="chunk" hidden role="status" aria-live="polite"><span id="patientFaces" aria-hidden="true"></span><span id="patientCount"></span></div>
 <nav id="tools" class="chunk" aria-label="Tools">
   <button data-tool="hand" data-lh-slot="farm.tool.hand" aria-pressed="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V4.5a1.5 1.5 0 0 1 3 0V10"/><path d="M12 9.5a1.5 1.5 0 0 1 3 0V11"/><path d="M15 10.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.6a5 5 0 0 1-4-2l-3-4a1.5 1.5 0 0 1 2.3-1.9L9 15"/><path d="M5 4.5 3.5 3M14.5 3 16 1.5"/></svg>Hand</button>

@@ -11,7 +11,11 @@ const BIRD_DOING = { 0: 'Pecking at the ground', 1: 'Strutting about', 2: 'Going
 const bar = (label, v, cls) => `<div class="bar ${cls}"><span>${label}</span><i><b style="width:${Math.round(Math.max(0, Math.min(1, v)) * 100)}%"></b></i></div>`;
 // poorly, waiting at the vet's, or on the table (v3 §8.2, §9): the card's line, over what it would say otherwise
 function sickLine(sim, a, kind) {
-  if (a.clinic) { const k = sim.clinic.queue.findIndex(q => q.kind === kind && q.i === a.i); return k === 0 && sim.clinic.exam.who ? 'On the exam table' : `Waiting to see Dr. Emmy (${k + 1}${['st', 'nd', 'rd'][k] ?? 'th'} in line)`; }
+  if (a.clinic) {
+    const k = sim.clinic.queue.findIndex(q => q.kind === kind && q.i === a.i);
+    if (k < 0) return 'All better! Off home'; // 2.14.0: made better, walking out
+    return k === 0 && sim.clinic.exam.who ? 'On the exam table' : `Waiting to see Dr. Emmy (${k + 1}${['st', 'nd', 'rd'][k] ?? 'th'} in line)`;
+  }
   if (a.sick) return `Feeling poorly: ${AILMENTS[a.sick.ailment].label}. Take ${a.name} to the vet!`;
   return null;
 }
@@ -38,10 +42,18 @@ function cardInfo(sim, sel) {
   return { name: 'Biscuit', sub: 'Sheepdog · good dog', doing: sim.dog.active ? 'Herding' : sim.dog.visit ? (sim.vet.pet?.a === sim.dog ? 'Getting a scratch from Dr. Emmy' : 'Saying hello to Dr. Emmy') : sim.dog.home === 3 ? 'Napping in his dog house' : sim.dog.home ? 'Trotting home' : 'Waiting for a job', bars: '', at: [sim.dog.x, sim.dog.z] };
 }
 
+// 2.14.0: the exam room's patients counter, a little face for each patient in the clinic (sim.clinic.queue)
+const FACE = {
+  pig: '<svg viewBox="0 0 32 32"><path d="M7 9 4 3l9 4M25 9l3-6-9 4" fill="#e98aa4" stroke="#6b4428" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="17" r="12" fill="#f6a9bd" stroke="#6b4428" stroke-width="2"/><ellipse cx="16" cy="21" rx="6" ry="4.2" fill="#e98aa4" stroke="#6b4428" stroke-width="1.8"/><circle cx="14" cy="21" r="1.1" fill="#6b4428"/><circle cx="18" cy="21" r="1.1" fill="#6b4428"/><circle cx="11" cy="13.5" r="1.6" fill="#3a2414"/><circle cx="21" cy="13.5" r="1.6" fill="#3a2414"/></svg>',
+  bird: '<svg viewBox="0 0 32 32"><path d="M11 7c0-4 3-5 4-3 1-3 5-2 4 1 3-1 4 2 2 4" fill="#e8483f" stroke="#6b4428" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="18" r="11" fill="#fffaf0" stroke="#6b4428" stroke-width="2"/><path d="M13 19h6l-3 5z" fill="#f2a33a" stroke="#6b4428" stroke-width="1.6" stroke-linejoin="round"/><path d="M15 24.5q1 3 2 0" fill="#e8483f" stroke="#6b4428" stroke-width="1.4"/><circle cx="12" cy="15" r="1.6" fill="#3a2414"/><circle cx="20" cy="15" r="1.6" fill="#3a2414"/></svg>',
+};
+export function patientsLabel(n) { return n ? `${n} patient${n === 1 ? '' : 's'}` : 'All better!'; }
+
 export function createHud(doc, { world }) {
   const $ = id => doc.getElementById(id), win = doc.defaultView;
   const card = $('card'), hintEl = $('hint'), badge = $('snacks'), feedBtn = doc.querySelector('[data-tool="feed"]');
   const dn = $('daynight'), eggTxt = $('eggCount'), eggBox = $('eggs'), outside = $('outside'), say = $('say');
+  const pBox = $('patients'), pFaces = $('patientFaces'), pCount = $('patientCount'); let pKey = null;
   let sayUntil = null; const sayV = new THREE.Vector3();
   const stillMotion = win.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   let selKey = null, hintUntil = null, shownLeft = -1, lastEggs = -1, night = null;
@@ -102,11 +114,23 @@ export function createHud(doc, { world }) {
           say.style.transform = `translate(${(sayV.x + 1) / 2 * rig.canvas.clientWidth}px, ${(1 - sayV.y) / 2 * rig.canvas.clientHeight}px) translate(-50%, -100%)`;
         } else say.hidden = true;
       }
+      // the patients still to see, while you're in the exam room
+      if (pBox) {
+        const q = sim.clinic.queue, inExam = s.focus === 'clinic.exam', key = inExam ? q.map(w => w.kind).join() : null;
+        if (key !== pKey) {
+          const fewer = pKey !== null && key !== null && key.split(',').filter(Boolean).length < pKey.split(',').filter(Boolean).length;
+          pKey = key; pBox.hidden = !inExam;
+          if (inExam) {
+            pFaces.innerHTML = q.map(w => FACE[w.kind]).join(''); pCount.textContent = patientsLabel(q.length); pBox.classList.toggle('done', !q.length);
+            if (fewer) { pBox.classList.remove('bump'); void pBox.offsetWidth; pBox.classList.add('bump'); }
+          }
+        }
+      }
       updateEggPops(dt);
     },
     dispose() {
       for (const p of eggPops) p.el.remove(); eggPops.length = 0;
-      card.hidden = true; hintEl.classList.remove('on');
+      card.hidden = true; hintEl.classList.remove('on'); if (pBox) pBox.hidden = true;
     },
   };
 }

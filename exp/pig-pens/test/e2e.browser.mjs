@@ -178,6 +178,8 @@ test('desktop (v3 R3): a whole vet visit with the mouse: check in, the exam room
     for (let i = 0; i < 40 && (await game.state()).clinic.exam !== 'patient'; i++) await game.step(30);
     assert.equal((await game.state()).clinic.exam, 'patient', 'on the table');
     for (let k = 0; k < 30; k++) await frames(game); // the close-up settles
+    const counter = () => game.page.evaluate(() => { const e = document.getElementById('patients'); return e.hidden ? null : [e.textContent, e.querySelectorAll('svg').length]; });
+    assert.deepEqual(await counter(), ['1 patient', 1], 'the patients counter (2.14.0): one, a face for it');
     const drag = async tool => {
       const peg = CLINIC.pegs.find(p => p.tool === tool);
       const pat = await world(game, () => { const p = window.engine.debug.sim.clinic.patient(); return [p.px + 0.6, p.py + 0.25, p.pz]; });
@@ -191,5 +193,6 @@ test('desktop (v3 R3): a whole vet visit with the mouse: check in, the exam room
     assert.equal((await game.state()).clinic.exam, 'cured');
     for (let i = 0; i < 40 && (await game.state()).clinic.exam !== 'empty'; i++) await game.step(30); // the lollipop, then walking out (2.9.0)
     const s = await game.state(); assert.deepEqual(s.clinic.queue, []); assert.deepEqual(s.sick, []);
+    await frames(game); assert.deepEqual(await counter(), ['All better!', 0], 'better out of the exam room: none left');
   } finally { await game.close(); }
 });

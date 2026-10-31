@@ -171,6 +171,7 @@ const [TX, , TZ] = CLINIC.spots.examTable.at, FD = CLINIC.spots.frontDoor;
 const EXAM = { lobby: [0, 0, 0.6], door: [TX + 0.4, 0, 0.75], inside: [TX + 0.4, 0, -0.35], mid: [TX + 0.95, 0, -1.25], side: [TX + 0.85, 0, TZ],
   hall: [FD[0] - 0.6, 0, 2.4], frontIn: [FD[0], 0, 3.2] };
 const HOP_REACH = 1.2; // a leg that changes height over less than this is a hop
+const LEAVE_DOOR = 4;  // the way out's point at the exam room's doorway (leave(): table, side, mid, inside, door, …)
 
 // The flat's working things (2.9.0; their places: CLINIC.props): a tap runs the shower, runs a sink, lifts the toilet's lid
 // (a second tap flushes it and shuts it), opens or shuts the laptop and the fridge. Times in seconds.
@@ -232,7 +233,10 @@ export function createClinic({ vet, clock, emit, now, animal, hold, letGo, cure 
   const places = new Array(WAIT_PLACES).fill(null);   // who sits where
   const exam = { state: 'empty', who: null, t: 0, step: 0, path: null, k: 0 }; // empty | walk | patient | cured
   const flat = vet.props; // she works the bathroom's things too
-  const C = { queue, places, exam, open: false, props: flat.props };
+  // 2.14.0: the patients made better, walking out happy ({ kind, i, path, k, t }). Out of the exam room's doorway one is
+  // better: off the patients (queue) and the next one called; through the front door it is back on the farm
+  const out = [];
+  const C = { queue, places, exam, out, open: false, props: flat.props };
   const door = L(CLINIC.spots.frontDoor);
 
   function admit(kind, i) {
@@ -271,6 +275,7 @@ export function createClinic({ vet, clock, emit, now, animal, hold, letGo, cure 
   function step(dt) {
     flat.step(dt);
     exam.t += dt;
+    walkOut(dt);
     const awake = !clock.night && vet.state !== 'sleep' && vet.state !== 'waking';
     vet.busy = awake && (exam.state !== 'empty' || (C.open && queue.length > 0));
     if (vet.busy && C.open && vet.outside) vet.jump('lobby'); // out on the farm while you wait in the exam room: no long walk back
@@ -279,17 +284,28 @@ export function createClinic({ vet, clock, emit, now, animal, hold, letGo, cure 
       return;
     }
     const a = patient();
-    if (exam.state === 'walk' || exam.state === 'leave') { // along exam.path: walking legs, and hops where the height changes
-      const P = exam.path, from = P[exam.k], to = P[exam.k + 1], d = Math.hypot(to[0] - from[0], to[2] - from[2]);
-      const hop = Math.abs(to[1] - from[1]) > 0.1 && d < HOP_REACH, happy = exam.state === 'leave';
-      const pace = CLINIC_T.walk * (happy ? CLINIC_T.happy : 1), dur = hop ? CLINIC_T.hop : Math.max(0.15, d / pace), u = Math.min(1, exam.t / dur);
-      const y = from[1] + (to[1] - from[1]) * u + (hop ? Math.sin(Math.PI * u) * CLINIC_T.hopH : happy ? Math.abs(Math.sin(exam.t * 9)) * CLINIC_T.bounce : 0);
-      hold(exam.who.kind, a, from[0] + (to[0] - from[0]) * u, y, from[2] + (to[2] - from[2]) * u, d > 0.02 ? Math.atan2(to[0] - from[0], to[2] - from[2]) : Math.PI / 2, hop ? 0 : pace);
-      if (u >= 1) {
-        exam.k++; exam.t = 0;
-        if (exam.k >= P.length - 1) { if (happy) discharge(); else { exam.state = 'patient'; hold(exam.who.kind, a, to[0], to[1], to[2], Math.PI / 2, 0); } }
-      }
-    } else if (exam.state === 'cured' && exam.t > CLINIC_T.cured) leave();
+    if (exam.state === 'walk') { if (stride(exam, exam.who.kind, a, false)) { exam.state = 'patient'; hold(exam.who.kind, a, ...exam.path.at(-1), Math.PI / 2, 0); } }
+    else if (exam.state === 'cured' && exam.t > CLINIC_T.cured) leave();
+  }
+  // one walker (o: { path, k, t }) along its path: walking legs, and hops where the height changes; true at the end
+  function stride(o, kind, a, happy) {
+    const P = o.path, from = P[o.k], to = P[o.k + 1], d = Math.hypot(to[0] - from[0], to[2] - from[2]);
+    const hop = Math.abs(to[1] - from[1]) > 0.1 && d < HOP_REACH;
+    const pace = CLINIC_T.walk * (happy ? CLINIC_T.happy : 1), dur = hop ? CLINIC_T.hop : Math.max(0.15, d / pace), u = Math.min(1, o.t / dur);
+    const y = from[1] + (to[1] - from[1]) * u + (hop ? Math.sin(Math.PI * u) * CLINIC_T.hopH : happy ? Math.abs(Math.sin(o.t * 9)) * CLINIC_T.bounce : 0);
+    hold(kind, a, from[0] + (to[0] - from[0]) * u, y, from[2] + (to[2] - from[2]) * u, d > 0.02 ? Math.atan2(to[0] - from[0], to[2] - from[2]) : Math.PI / 2, hop ? 0 : pace);
+    if (u < 1) return false;
+    o.k++; o.t = 0;
+    return o.k >= P.length - 1;
+  }
+  // the ones made better, on their way out
+  function walkOut(dt) {
+    for (let n = out.length - 1; n >= 0; n--) {
+      const w = out[n], a = animal(w.kind, w.i); w.t += dt;
+      const done = stride(w, w.kind, a, true);
+      if (w.k >= LEAVE_DOOR && exam.state === 'leave' && exam.who.kind === w.kind && exam.who.i === w.i) better();
+      if (done) { out.splice(n, 1); a.clinic = null; letGo(w.kind, a, door[0], door[1]); }
+    }
   }
   function callNext() {
     const w = queue[0], a = animal(w.kind, w.i), k = a.clinic.place, [bx, by, bz] = CLINIC.spots.benches[k];
@@ -300,16 +316,17 @@ export function createClinic({ vet, clock, emit, now, animal, hold, letGo, cure 
     exam.path = [[CLINIC.x + bx, by + a.r, CLINIC.z + bz], W(off), W(EXAM.lobby), W(EXAM.door), W(EXAM.inside), W(EXAM.mid), W(EXAM.side), [CLINIC.x + T[0], top + a.r, CLINIC.z + T[2]]];
     emit('exam', { what: 'next', text: 'Next please!', kind: w.kind, i: w.i, name: a.name });
   }
-  // made better: down off the table and out through the front door, walking happy
+  // made better: down off the table and out through the front door, walking happy (walkOut)
   function leave() {
     const a = patient(), T = CLINIC.spots.examTable.at, W = ([x, , z]) => [CLINIC.x + x, a.r, CLINIC.z + z];
-    exam.state = 'leave'; exam.t = 0; exam.k = 0;
-    exam.path = [[CLINIC.x + T[0], CLINIC.spots.tableTop + a.r, CLINIC.z + T[2]], W(EXAM.side), W(EXAM.mid), W(EXAM.inside), W(EXAM.door), W(EXAM.hall), W(EXAM.frontIn), W(FD)];
+    exam.state = 'leave'; exam.t = 0;
+    out.push({ kind: exam.who.kind, i: exam.who.i, k: 0, t: 0,
+      path: [[CLINIC.x + T[0], CLINIC.spots.tableTop + a.r, CLINIC.z + T[2]], W(EXAM.side), W(EXAM.mid), W(EXAM.inside), W(EXAM.door), W(EXAM.hall), W(EXAM.frontIn), W(FD)] });
   }
-  function discharge() {
-    const a = patient(), w = exam.who;
-    queue.shift(); a.clinic = null; exam.who = null; exam.state = 'empty'; exam.t = 0; exam.path = null;
-    letGo(w.kind, a, door[0], door[1]);
+  // 2.14.0: out of the exam room's doorway: better, one patient fewer, and the exam room is free for the next
+  function better() {
+    const w = exam.who, a = patient();
+    queue.shift(); exam.who = null; exam.state = 'empty'; exam.t = 0; exam.path = null;
     emit('clinic', { what: 'out', kind: w.kind, i: w.i, name: a.name });
   }
   return Object.assign(C, { admit, applyTool, step, patient, place: k => places[k], useProp: flat.useProp });

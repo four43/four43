@@ -248,9 +248,9 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     doorL.rotation.y = CUT.doorOpen * g; doorR.rotation.y = -CUT.doorOpen * g;
     popAnim += Math.sign((lay.coop.open ? 1 : 0) - popAnim) * Math.min(Math.abs((lay.coop.open ? 1 : 0) - popAnim), dt * 2.5);
     pop.position.y = popY + popAnim * COOP.popDoor.h;
-    const ex = sim.clinic.exam, out = ex.state === 'leave' ? sim.clinic.patient() : null;
     const by = (x, z) => Math.hypot(x - doorAt[0], z - doorAt[1]) < CUT.doorNear;
-    clinicOpen += ((by(sv.x, sv.z) || (out && by(out.px, out.pz)) ? 1 : 0) - clinicOpen) * Math.min(1, dt * 6);
+    const out = sim.clinic.out.some(w => { const a = w.kind === 'pig' ? sim.pigs[w.i] : sim.flock.birds[w.i]; return by(a.px, a.pz); }); // a patient made better, on its way out
+    clinicOpen += ((by(sv.x, sv.z) || out ? 1 : 0) - clinicOpen) * Math.min(1, dt * 6);
     hinge.rotation.y = -CUT.doorIn * smooth(clinicOpen);
     for (const { l, k } of lamps) l.intensity = night * k;
     updateVet(dt); plaques.update(frame++); exam.update(dt, s); emotes.update(dt); flat.update(dt);
