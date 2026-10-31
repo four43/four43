@@ -51,6 +51,11 @@ function route(adj, a, b) {
   return out;
 }
 
+// 2.15.0: the walk graph for Biscuit too (dogClinic.js): a point in world coordinates, and the fewest-links way between two
+const G = graph();
+export const clinicPoint = n => { const p = G.pts[n]; if (!p) throw new Error(`pig-pens: the clinic has no point '${n}'`); return p; };
+export const clinicRoute = (a, b) => route(G.adj, a, b);
+
 // createVet({ clock, seed, emit }) — emit(type, data): what she says (2.13.0: 'vet' { text })
 export function createVet({ clock, seed = 1, emit = () => {} }) {
   const rng = mulberry32((seed ^ 0x7e7) >>> 0), { pts, adj } = graph();

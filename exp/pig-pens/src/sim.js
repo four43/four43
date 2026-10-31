@@ -4,6 +4,7 @@ import { FlowGrid, hit } from './flow.js';
 import { createFlock, CST, aroundBuildings } from './chickens.js';
 import { createVet, createClinic } from './clinic.js';
 import { createSickness } from './sickness.js';
+import { createDogClinic, DOG_IN } from './dogClinic.js';
 import { createVisits, VET_R } from './visits.js';
 import { BED, assignStalls, doorOut, stallAt, stallFace, pathIn, pathOut } from './barn.js';
 
@@ -142,7 +143,7 @@ export function createSim(world, opts = {}) {
   // ---- dog ------------------------------------------------------------------
   const dog = animal(22, -9, 0.36, 25, { member: ['dog'], filter: ['ground', 'tall', 'pig', 'food', 'chick', 'fox'] }, 'pet',
     { tags: ['dog'], model: 'dog', draw: false, r: 0.36, x: 22, z: -9, yaw: -2.2, tx: 22, tz: -9, active: false, hop: 0, speed: 0, vx: 0, vz: 0, bark: 0,
-      home: 0, bored: 0, lie: 0, name: 'Biscuit', visit: null, calm: -1 }); // home: 0 out, 1 to the porch, 2 in through the door, 3 lying with his head out; visit: saying hello to the vet (visits.js)
+      home: 0, bored: 0, lie: 0, name: 'Biscuit', visit: null, calm: -1, sendIn: false, inn: null, zoom: -1 }); // home: 0 out, 1 to the porch, 2 in through the door, 3 lying with his head out; visit: saying hello to the vet (visits.js); sendIn, inn, zoom: in the clinic (dogClinic.js)
 
   // ---- food -------------------------------------------------------------------
   const foods = []; let foodSeq = 0;
@@ -161,7 +162,7 @@ export function createSim(world, opts = {}) {
     clock.hour = n ? 22 : 11;
     if (!n) for (const p of pigs) if (p.bed?.phase === 'sleep' && !p.bed.nap) p.wakeAt = t + bedRng() * BED.wakeStagger; // up in ones and twos
     for (const p of pigs) p.bedTry = 0;
-    if (n) { flock.onNight(); sickness.onNight(); } else flock.newDay();
+    if (n) { flock.onNight(); sickness.onNight(); } else { flock.newDay(); dog.sendIn = false; } // morning: Biscuit's up and out
     emit('daynight', { night: n });
   }
   const tmp = [0, 0];
@@ -174,9 +175,12 @@ export function createSim(world, opts = {}) {
       p.speed = p.state === ST.CLINIC ? p.walkSpeed ?? 0 : Math.hypot(lv.x, lv.z); // the clinic walks a patient: its body is off
       const q = p.body.rotation(); p.rot[0] = q.x; p.rot[1] = q.y; p.rot[2] = q.z; p.rot[3] = q.w;
     }
+    if (dog.inn) return; // in the clinic his body is off: dogClinic.js moves him
     const d = dog.body.translation(), dv = dog.body.linvel();
     dog.x = d.x; dog.z = d.z; dog.vx = dv.x; dog.vz = dv.z; dog.speed = Math.hypot(dv.x, dv.z);
   }
+  const dogClinic = createDogClinic({ dog, clock, emit, now: () => t });
+  if (clock.night) dogClinic.tuckIn(); // a farm that starts at night: Biscuit's asleep by the cat
   readState();
 
   // ---- raycast feelers --------------------------------------------------------
@@ -288,7 +292,7 @@ export function createSim(world, opts = {}) {
   // mixes into her rng and theirs, so her rounds and who comes differ from visit to visit of the page.
   const visitFields = {}; // by her stop: the way to her for a pig out in the open
   const visits = createVisits({ vet, pigs, birds: () => flock.birds, dog, lay, emit, now: () => t, seed: (opts.seed ?? 1) ^ (opts.rounds ?? 0),
-    can: (kind, a) => !clock.night && (kind === 'dog' ? !a.active : !a.sick && !a.clinic && (kind === 'pig'
+    can: (kind, a) => !clock.night && (kind === 'dog' ? !a.active && !a.sendIn && !a.inn : !a.sick && !a.clinic && (kind === 'pig'
       ? !a.piglet && !a.bed && a.panic < 0.1 && (a.state === ST.ROAM || a.state === ST.GRAZE)
       : flock.canVisit(a))),
     start(kind, a, visit) {
@@ -308,7 +312,7 @@ export function createSim(world, opts = {}) {
   function updateThreats() {
     threats.length = 0;
     // Biscuit trotting over to the vet, or sitting with her, is calm: the animals saying hello beside him stay put
-    threats.push({ kind: 'dog', x: dog.x, z: dog.z, R: dog.active || dog.speed > 1.5 ? P.dogRadiusActive : dog.visit || t < dog.calm ? P.dogRadiusVisit : P.dogRadiusIdle });
+    if (!dog.inn) threats.push({ kind: 'dog', x: dog.x, z: dog.z, R: dog.active || dog.speed > 1.5 ? P.dogRadiusActive : dog.visit || t < dog.calm ? P.dogRadiusVisit : P.dogRadiusIdle });
     const f = flock.fox; if (f.state !== 0) threats.push({ kind: 'fox', x: f.x, z: f.z, R: 6 });
   }
 
@@ -345,8 +349,10 @@ export function createSim(world, opts = {}) {
     hose.active = active;
     if (x !== null && x !== undefined) { hose.x = x; hose.z = z; hose.sx = sx ?? x; hose.sz = sz ?? z; }
   }
-  function setDog(x, z, active) {
+  // inside: Shoo pointed at the clinic, which sends him in (2.15.0)
+  function setDog(x, z, active, inside = false) {
     dog.active = active;
+    if (x !== null) dog.sendIn = inside;
     if (active) { dog.home = 0; dog.bored = 0; dog.visit = null; } // a job: up and out (and off from the vet's)
     if (x !== null) { dog.tx = Math.max(field.x0 + 1, Math.min(field.x1 - 1, x)); dog.tz = Math.max(field.z0 + 1, Math.min(field.z1 - 1, z)); }
   }
@@ -396,8 +402,9 @@ export function createSim(world, opts = {}) {
     // route-finding field toward the spray, refreshed at most twice a second as it moves
     hose.ft -= DT;
     if (hose.active && hose.ft <= 0 && Math.hypot(hose.x - hose.fx, hose.z - hose.fz) > 0.8) { hose.field = grid.field(hose.x, hose.z, 1.2); hose.fx = hose.x; hose.fz = hose.z; hose.ft = 0.5; }
-    // dog: with no job for a while he trots home, in through the door, and lies down with his head out
-    {
+    // dog: with no job for a while he trots home, in through the door, and lies down with his head out (2.15.0: at night,
+    // or sent there, into the clinic instead: dogClinic.js, which moves him itself while he is inside)
+    if (!dogClinic.step(DT)) {
       const H = lay.dogHouse, fx = Math.sin(H.rot), fz = Math.cos(H.rot);
       if (dog.visit && !dog.active) { // saying hello to the vet: to his place beside her, then sits facing her for his scratches
         const v = dog.visit, d = Math.hypot(v.x - dog.x, v.z - dog.z);
@@ -410,7 +417,7 @@ export function createSim(world, opts = {}) {
       // round a building in the way, not into its wall (2.12.0); straight on for the last bit, or at his house
       const [gx, gz] = dog.home >= 2 ? [dog.tx, dog.tz] : aroundBuildings(lay.buildings, P.dogBuildingMargin, dog.x, dog.z, dog.tx, dog.tz);
       const dx = gx - dog.x, dz = gz - dog.z, d = Math.hypot(dog.tx - dog.x, dog.tz - dog.z);
-      const sp = dog.active ? Math.min(8, d * 3) : Math.min(dog.visit || t < dog.calm ? P.dogVisitSpeed : 3, d * 2);
+      const sp = dog.active ? Math.min(8, d * 3) : Math.min(t < dog.zoom ? DOG_IN.run : dog.visit || t < dog.calm ? P.dogVisitSpeed : 3, d * 2); // zoom: out of the clinic in the morning
       const dl = Math.hypot(dx, dz) || 1, vdx = d > 0.05 ? dx / dl * sp : 0, vdz = d > 0.05 ? dz / dl * sp : 0;
       let ax = (vdx - dog.vx) / 0.15, az = (vdz - dog.vz) / 0.15; const al = Math.hypot(ax, az);
       if (al > 16) { ax *= 16 / al; az *= 16 / al; }

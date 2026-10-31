@@ -373,3 +373,54 @@ test('the bathroom (2.13.0): some mornings a shower, some a cup of tea; and now 
   assert.deepEqual([...firsts].sort(), ['kitchenVet', 'shower']);
   assert.ok(loo >= 8, `most days take in the bathroom within ten minutes (${loo} of 16)`);
 });
+
+// 2.15.0: Biscuit in the clinic
+const dogInWalls = (sim, dog) => { const c = sim.lay.clinic; return dog.x > c.x0 + 0.05 && dog.x < c.x1 - 0.05 && dog.z > c.z0 + 0.05 && dog.z < c.z1 - 0.05; };
+const nearBed = dog => Math.hypot(dog.x - CLINIC.x - CLINIC.spots.dogBed.at[0], dog.z - CLINIC.z - CLINIC.spots.dogBed.at[2]) < 1e-6;
+test('Biscuit at night (2.15.0): off duty he trots in through the front door to his bed by the cat’s, never through a wall', () => {
+  const { h, sim } = farm(), dog = sim.dog, door = CLINIC.walk.points.frontOut;
+  let byDoor = false;
+  h.tap('farm.night');
+  h.until(() => {
+    if (!dog.inn) assert.ok(!dogInWalls(sim, dog), `outside, kept out of the walls (${dog.x.toFixed(2)}, ${dog.z.toFixed(2)})`);
+    if (dog.inn && !byDoor) { byDoor = true; assert.ok(Math.hypot(dog.x - CLINIC.x - door[0], dog.z - CLINIC.z - door[1]) < 0.6, 'in at the front door'); }
+    return dog.inn?.mode === 'bed';
+  }, { maxSteps: 60 * 90, message: 'in his bed' });
+  assert.ok(nearBed(dog), 'on his bed'); assert.equal(dog.body.isEnabled(), false, 'his body off inside');
+  h.step(60 * 2); assert.ok(dog.lie > 0.9, 'lying down'); assert.equal(sim.dog.inn.mode, 'bed', 'and he stays');
+  assert.equal(h.state().dog.active, false);
+});
+
+test('Biscuit in the morning (2.15.0): up and running out of the front door to his day', () => {
+  const { h, sim } = farm(), dog = sim.dog, c = sim.lay.clinic;
+  h.tap('farm.night'); h.until(() => dog.inn?.mode === 'bed', { maxSteps: 60 * 90, message: 'in his bed' });
+  const m = h.mark(); h.tap('farm.night');
+  let ran = 0; h.until(() => { if (!dog.inn) ran = Math.max(ran, dog.speed); return !dog.inn && dog.z > c.z1 + 3; }, { maxSteps: 60 * 30, message: 'out' });
+  h.step(60 * 2);
+  assert.ok(ran > 3, `running (${ran.toFixed(1)} m/s)`); assert.ok(dog.body.isEnabled(), 'his body on again');
+  assert.ok(h.events.since(m).of('woof').length, 'a happy woof');
+});
+
+test('Shoo and the clinic (2.15.0): pointed at the clinic he runs in to his bed and naps; Shoo outside brings him out', () => {
+  const { h, sim } = farm(), dog = sim.dog, c = sim.lay.clinic;
+  sim.setDog((c.x0 + c.x1) / 2, (c.z0 + c.z1) / 2, true, true); h.step(60 * 2); sim.setDog(null, null, false);
+  h.until(() => dog.inn?.mode === 'bed', { maxSteps: 60 * 60, message: 'in his bed' });
+  h.step(60 * 40); assert.equal(dog.inn?.mode, 'bed', 'napping there, not off to his dog house');
+  const to = [c.x0 - 4, c.z1 + 4]; sim.setDog(to[0], to[1], true);
+  h.until(() => !dog.inn && Math.hypot(dog.x - to[0], dog.z - to[1]) < 0.8, { maxSteps: 60 * 30, message: 'out to where he was sent' });
+  sim.setDog(null, null, false);
+});
+
+test('Shoo and the clinic (2.15.0): the Shoo tool aimed at the clinic’s roof sends him in', () => {
+  const { h, s, sim } = farm(), dog = sim.dog, c = sim.lay.clinic;
+  h.tap('farm.tool.shoo'); assert.equal(s.tool, 'shoo');
+  const roof = [(c.x0 + c.x1) / 2, 4, (c.z0 + c.z1) / 2];
+  tool(h, 'down', roof); h.step(1); assert.equal(dog.sendIn, true, 'sent in');
+  tool(h, 'up', roof); h.step(1);
+  h.until(() => dog.inn?.mode === 'bed', { maxSteps: 60 * 60, message: 'in his bed' });
+});
+
+test('a farm that starts at night has Biscuit asleep in his bed by the cat', () => {
+  const sim = farmSim({ pigs: 4, seed: 3, night: true });
+  assert.equal(sim.dog.inn?.mode, 'bed'); assert.ok(nearBed(sim.dog));
+});

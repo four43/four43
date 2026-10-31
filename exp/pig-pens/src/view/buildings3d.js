@@ -59,12 +59,13 @@ const FURNISH = [
   { k: 'banana', at: [5.7, 2.85], yaw: 0.4, y: COUNTER, s: 0.7 },
   { k: 'apple', at: [6.0, 2.75], yaw: 0, y: COUNTER, s: 0.9 },
   { m: 'table', at: [S.table.at[0], S.table.at[2]], yaw: S.table.yaw, s: FS * 0.9 },
-  { m: 'chair', at: [2.95, 2.4], yaw: Math.PI / 2 },
-  { m: 'chair', at: [4.45, 2.4], yaw: -Math.PI / 2 },
-  { k: 'cupTea', at: [3.6, 1.95], yaw: 0.6, y: TABLE, s: 0.9 },
-  { k: 'bread', at: [3.75, 2.75], yaw: 0.3, y: TABLE, s: 0.9 },
-  { k: 'apple', at: [3.85, 2.3], yaw: 0, y: TABLE, s: 0.9 },
+  { m: 'chair', at: [2.95, 2.05], yaw: Math.PI / 2 },
+  { m: 'chair', at: [4.45, 2.05], yaw: -Math.PI / 2 },
+  { k: 'cupTea', at: [3.6, 1.6], yaw: 0.6, y: TABLE, s: 0.9 },
+  { k: 'bread', at: [3.75, 2.4], yaw: 0.3, y: TABLE, s: 0.9 },
+  { k: 'apple', at: [3.85, 1.95], yaw: 0, y: TABLE, s: 0.9 },
   { m: 'pillow', at: [S.catBed.at[0], S.catBed.at[2]], yaw: 0.3, s: FS * 1.3, flat: true }, // the cat's bed: the kit's pillow stands up, so it is laid down
+  { m: 'pillow', at: [S.dogBed.at[0], S.dogBed.at[2]], yaw: Math.PI / 2 + 0.15, s: FS * 1.9, flat: true }, // 2.15.0: Biscuit's, beside it and a size up
 ];
 export const VET_SCALE = 1.8, VET_H = 0.72, CAT_SCALE = 0.32; // VET_H: Kenney's mini character is about 0.72 m tall
 // 2.13.0: sitting up in bed, how far toward the pillow from the bed's middle and up off the covers (m: her legs, out in
@@ -250,7 +251,7 @@ export function createBuildings({ root, assets, sim, camera, renderer }) {
     pop.position.y = popY + popAnim * COOP.popDoor.h;
     const by = (x, z) => Math.hypot(x - doorAt[0], z - doorAt[1]) < CUT.doorNear;
     const out = sim.clinic.out.some(w => { const a = w.kind === 'pig' ? sim.pigs[w.i] : sim.flock.birds[w.i]; return by(a.px, a.pz); }); // a patient made better, on its way out
-    clinicOpen += ((by(sv.x, sv.z) || out ? 1 : 0) - clinicOpen) * Math.min(1, dt * 6);
+    clinicOpen += ((by(sv.x, sv.z) || out || by(sim.dog.x, sim.dog.z) ? 1 : 0) - clinicOpen) * Math.min(1, dt * 6); // and for Biscuit (2.15.0)
     hinge.rotation.y = -CUT.doorIn * smooth(clinicOpen);
     for (const { l, k } of lamps) l.intensity = night * k;
     updateVet(dt); plaques.update(frame++); exam.update(dt, s); emotes.update(dt); flat.update(dt);

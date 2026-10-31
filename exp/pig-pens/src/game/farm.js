@@ -5,7 +5,7 @@
 // events → farm.settle → farm.events → events.flush. The engine owns the scene's World (S-3) and steps Rapier.
 import { createSim, ST } from '../sim.js';
 import { CST } from '../chickens.js';
-import { planeHit, classify, grabTarget, rayBox } from './pick.js';
+import { planeHit, classify, grabTarget, rayBox, rayBuilding } from './pick.js';
 import { BUILDINGS, CLINIC } from '../defs/buildings.js';
 
 export const TOOLS = ['hand', 'shoo', 'feed', 'hose', 'grab'];
@@ -200,7 +200,9 @@ export function makeFarm() {
   }
   function shoo(e, s, ray, first) {
     const h = planeHit(ray, 0); if (!h) return;
-    s.sim.setDog(h.x, h.z, true); s.ring = [h.x, h.z];
+    // 2.15.0: pointed at the clinic (its roof, or the ground inside its walls): he runs in through the front door
+    const c = s.sim.lay.clinic, inside = rayBuilding(s.sim.lay, ray)?.b.id === 'clinic' || (h.x > c.x0 && h.x < c.x1 && h.z > c.z0 && h.z < c.z1);
+    s.sim.setDog(h.x, h.z, true, inside); s.ring = [h.x, h.z];
     if (first) e.emit('bark', { x: h.x, z: h.z });
   }
   // main.js aimHose: the nozzle stands 5.2 m back toward the camera (the ray origin) and 1.2 m to the side; it snaps when

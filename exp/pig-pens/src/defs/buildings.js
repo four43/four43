@@ -89,10 +89,11 @@ export const CLINIC = {
     bed:        { at: [2.64, 0, -0.45], yaw: 0 },              // the bed's middle; yaw 0: the pillow at -z
     study:      { at: [4.95, 0, -0.2], yaw: Math.PI / 2 },     // in front of her desk on the east wall
     kitchenVet: { at: [5.0, 0, 2.15], yaw: Math.PI / 2 },      // at the kitchen sink
-    dining:     { at: [3.7, 0, 1.35], yaw: 0 },                // at the head of the table
-    table:      { at: [3.7, 0, 2.4], yaw: Math.PI / 2 },       // long side along z
+    dining:     { at: [3.7, 0, 1.0], yaw: 0 },                 // at the head of the table
+    table:      { at: [3.7, 0, 2.05], yaw: Math.PI / 2 },      // long side along z (2.15.0: 35 cm north, for Biscuit's bed)
     rug:        { at: [4.2, 0, -0.3], yaw: Math.PI / 2 },
     catBed:     { at: [2.45, 0, 3.4], yaw: 0 },
+    dogBed:     { at: [3.45, 0, 3.3], yaw: 1.75 },             // 2.15.0: Biscuit's, beside the cat's (yaw: he lies along the south wall, his head to the east)
     // 2.13.0: the bathroom (through the hall's doorway): in front of the toilet (she lifts its lid and flushes it from here),
     // on its seat (y: the seat's top; facing out), at the basin, under the shower (facing out of it)
     bathroom:   { at: [5.12, 0, -1.55], yaw: Math.PI / 2 },
@@ -118,8 +119,9 @@ export const CLINIC = {
     // north end (deskEnd → aisle), never through it. In the flat everything hangs off `hub`, clear of the bed's foot and the table
     points: { deskVet: [-5.5, 1.7], deskEnd: [-5.5, 0.55], aisle: [-3.6, 0.55], lobby: [-1.0, 2.0], waiting: [0.0, -1.2],
       examDoor: [-4.6, 0.0], examVet: [-4.6, -1.05], aptDoor: [2.0, 1.2], aptIn: [2.7, 1.2], hub: [3.9, 0.85],
-      bedSide: [3.65, -0.45], study: [4.95, -0.2], dining: [3.7, 1.35], kitchenVet: [5.0, 2.15],
+      bedSide: [3.65, -0.45], study: [4.95, -0.2], dining: [3.7, 1.0], kitchenVet: [5.0, 2.15],
       // 2.13.0: down the hall, through the bathroom's doorway, to the toilet, the basin and into the shower
+      dogWay: [2.4, 2.45], dogBed: [3.45, 3.3],
       hall: [3.9, -2.0], bathIn: [4.85, -2.0], bathroom: [5.12, -1.55], washVet: [5.45, -2.3], showerStep: [5.55, -2.45], shower: [5.7, -3.15],
       // out of the front door (it opens for her) and along the strip of field between the buildings and the pens
       frontIn: [-0.4, 3.0], frontOut: [-0.4, 5.0], yard: [-0.4, 6.6], penEast: [-2.9, 7.0], barnFront: [-14.3, 6.6], penWest: [-23.4, 7.0], run: [-26.4, 3.7] },
@@ -128,6 +130,8 @@ export const CLINIC = {
       ['hub', 'kitchenVet'], ['bedSide', 'study'], ['dining', 'kitchenVet'],
       ['hub', 'hall'], ['bedSide', 'hall'], ['hall', 'bathIn'], ['bathIn', 'bathroom'], ['bathIn', 'washVet'], ['bathroom', 'washVet'],
       ['bathIn', 'showerStep'], ['showerStep', 'shower'],
+      // 2.15.0: Biscuit's way to his bed, down the flat's west wall past the table
+      ['aptIn', 'dogWay'], ['dogWay', 'dogBed'],
       ['lobby', 'frontIn'], ['frontIn', 'frontOut'], ['frontOut', 'yard'], ['yard', 'penEast'], ['penEast', 'barnFront'], ['barnFront', 'penWest'], ['penWest', 'run']],
   },
 };
