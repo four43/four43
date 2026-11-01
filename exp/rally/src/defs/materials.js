@@ -66,6 +66,11 @@ export default defineMaterials({
   marker:        { extends: 'plastic', phys: { friction: 0.9, restitution: 0 }, look: { roughness: 0.55, metalness: 0 } },
   'gate-post':   { extends: 'wood', phys: { friction: 0.6, restitution: 0 }, look: { color: '#2b2d31', roughness: 0.6, metalness: 0 } },
   'gate-banner': { extends: 'fabric', phys: { friction: 0.6, restitution: 0 }, look: { color: '#dedede', roughness: 0.7, metalness: 0 } },
+  // Scenery (R19): one drawn material (the models' face colours are vertex colours) and the colliders' three.
+  scenery:       { extends: 'wood', phys: { friction: 0.6, restitution: 0 }, look: { roughness: 0.95, metalness: 0 } },
+  tree:          { extends: 'wood', phys: { friction: 0.6, restitution: 0.05 } },
+  rock:          { extends: 'gravel', phys: { friction: 0.7, restitution: 0.02 } },
+  fence:         { extends: 'wood', phys: { friction: 0.5, restitution: 0.05 } },
   'pad-prop':    { extends: 'wood', phys: { friction: 0.8, restitution: 0 }, look: { color: '#9a8f80', roughness: 0.9, metalness: 0 } },
   'pad-stripe':  { extends: 'plastic', phys: { friction: 0.8, restitution: 0 }, look: { color: '#d8b13a', roughness: 0.7, metalness: 0 } },
   // The painted skidpad ring and start line: see-through, a little self-lit (the old unlit paint).

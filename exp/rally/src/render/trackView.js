@@ -14,6 +14,7 @@ import { ROAD_SURFACES, surfaceSlot, roadMaterial, groundMaterial, tuftMaterial,
 import { VERGE } from '../gen/surfaces.js';
 import { EDGE, edgeAt } from '../gen/edges.js';
 import { Pebbles } from './pebbles.js';
+import { SceneryView } from './sceneryView.js';
 
 const DROP = [0, 0.35, 0.9];      // coarse LODs sink under the road ribbon so they never poke through it
 const ROAD_LIFT = 0.03;
@@ -194,6 +195,7 @@ export class TrackView {
     this.buildMarkers();
     this.buildGates();
     this.buildCover();
+    this.scenery = new SceneryView(this.root, world, kit);
     this.terrainMesh.update(this.focus); // the first update is unbudgeted: the spawn's chunks are there on frame one
   }
 
@@ -378,7 +380,7 @@ export class TrackView {
     if (this.scene.fog) setSky(this.scene.fog.color); // the light rig sets the fog per look; reflections follow it
     if (p) {
       this.focus.position.x = p.x; this.focus.position.z = p.z;
-      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z); this.pebbles.update(p.x, p.z);
+      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z); this.pebbles.update(p.x, p.z); this.scenery.update(p);
     }
     const props = this.markerProps;
     if (!props.length) return;
@@ -391,7 +393,7 @@ export class TrackView {
     let t = 0;
     for (const m of this.terrainMesh.group.children) if (m.visible) t += m.geometry.index.count / 3;
     const cover = Object.values(this.cover).reduce((a, im) => a + im.count * im.geometry.index.count / 3, 0);
-    return { terrain: t, road: this.road.geometry.index.count / 3, pebbles: this.pebbles.triangles(), markers: this.markers.count * this.markers.geometry.index.count / 3, cover };
+    return { terrain: t, road: this.road.geometry.index.count / 3, pebbles: this.pebbles.triangles(), markers: this.markers.count * this.markers.geometry.index.count / 3, cover, scenery: this.scenery.triangles() };
   }
 
   // Geometries only: the compiler owns the materials, the page keeps the textures.

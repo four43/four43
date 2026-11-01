@@ -1,0 +1,2 @@
+{ "title": "Slab", "description": "A low faceted slab rock.", "size": [2.55, 0.75, 1.7], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
+  "nodes": ["lod0","lod1"], "budget": { "tris": 120, "materials": 1, "kb": 120 }, "checks": ["34 tile lod0: low wide slab sitting flat on the grid"] }

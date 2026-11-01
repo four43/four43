@@ -13,6 +13,7 @@ import { rumbleOut } from './rumbleOut.js';
 import { STRENGTH, PARAMS } from './defs/rumble.js';
 import { DRIVING } from './game/stage.js';
 import { CARS, DEFAULT_CAR } from './cars.js';
+import { SCENERY_IDS } from './defs/scenery.js';
 
 // Engine sound (rally-spec R15): the Sound setting's level for the sfx bus, the listening position per camera (chase,
 // bumper, bonnet), and the overlays that freeze the sim (the sound would hold its last note under them).
@@ -27,7 +28,7 @@ export const HELP = {
 };
 
 let renderer = null; // Rally's scene wiring over the engine's renderer, made on the first stage enter
-export const MODELS = ['cone']; // plus the car on show; another car's model loads when it is chosen (rally-spec R16-4)
+export const MODELS = ['cone', ...SCENERY_IDS]; // plus the car on show; another car's model loads when it is chosen (rally-spec R16-4)
 
 const lengthText = (m, units) => units === 'mph' ? `${(m / 1609.344).toFixed(1)} mi` : `${(m / 1000).toFixed(1)} km`;
 const BUILDING = 'Building the track…';
@@ -255,7 +256,7 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       doc.addEventListener('visibilitychange', hidden);
       // Browser-test seam: the car as view sync drew it (its wheel nodes) and the renderer's counters.
       win.__rallyView = { car: () => { const e = engine.scene.state?.sim?.car?.e, o = e && view.sync.objectOf(e); return o ? { name: o.name, wheels: ['wheel-front-left', 'wheel-front-right', 'wheel-back-left', 'wheel-back-right'].filter(n => o.getObjectByName(n)).length } : null; },
-        info: () => ({ ...view.gfx.info() }), garage: () => (renderer?.garage ? { ...renderer.garage } : null), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats,
+        info: () => ({ ...view.gfx.info() }), tris: () => renderer?.view?.triangles?.() ?? null, garage: () => (renderer?.garage ? { ...renderer.garage } : null), seats: () => view.localPlayers.map(lp => lp.pads.length), stopping: () => view.haptics?.stopping, rumble: () => pads.stats,
         sound: () => ({ mode: sound?.mode ?? null, mic: MIC[seen?.cam] ?? null, sfx: view.audio.volume('sfx'), hushed: !!hush, unlocked: view.audio.unlocked }) };
       off = () => { doc.removeEventListener('visibilitychange', hidden); };
     },

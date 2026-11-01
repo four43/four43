@@ -64,8 +64,8 @@ for (const id of ['impreza-555', 'escort-rs1800']) {
     const all = [];
     for (const seed of ['t1', 't2', 't3', 't4', 't5', 't6']) {
       const track = generateTrack(seed, { kind: 'stage', obstacles: 'wild' });
-      const sim = benchSim({ world: new TrackWorld(track), car: id, assist: false });
-      for (const f of track.features.filter(f => JUMPS.includes(f.type))) all.push({ seed, f, ...hit(sim, track, f, k) });
+      // A fresh world per jump: a run that ends off the road (in the trees, R19) must not leave the next one a different car.
+      for (const f of track.features.filter(f => JUMPS.includes(f.type))) all.push({ seed, f, ...hit(benchSim({ world: new TrackWorld(track), car: id, assist: false }), track, f, k) });
     }
     const clean = all.filter(r => r.line), flew = clean.filter(r => r.land !== null);
     for (const r of clean.filter(r => r.over)) console.log(`  over: ${r.seed} ${r.f.type} at ${r.f.s0.toFixed(0)} for ${(r.f.v * 3.6).toFixed(0)} km/h, air ${r.air.toFixed(2)} s`);

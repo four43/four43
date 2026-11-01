@@ -1,0 +1,2 @@
+{ "title": "Broadleaf", "description": "Broadleaf: trunk, two limbs and a crown of lumpy leaf blobs, lighter on top. lod2 is one blob.", "size": [5.1, 7.0, 4.8], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
+  "nodes": ["lod0","lod1","lod2"], "budget": { "tris": 720, "materials": 1, "kb": 120 }, "checks": ["34 tile lod0: crown reads as several leaf clusters, lighter on top", "FRONT tile lod0: trunk and limbs visible under the crown"] }

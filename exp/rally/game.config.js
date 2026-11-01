@@ -4,10 +4,13 @@
 // checks.materials. The engine's default optimise (weld on) applies: dropping the UVs lets weld merge vertices, so the
 // parity test compares triangle counts (3d note (a)).
 import { CAR_IDS } from './src/cars.js';
+import { SCENERY_IDS } from './src/defs/scenery.js';
 
 // The real cars (rally-spec R16-1): their paint slots bake to car-body. The colour is the vertex colour either way; a paint
 // slot would cost its own shader program (the PAINT feature) for a per-entity repaint Rally doesn't use.
 const CAR_PAINT = { rename: { materials: { 'paint-body': 'car-body', 'paint-livery': 'car-body' } } };
+// The scenery (rally-spec R19-1, tools/scenery/*.model.mjs): face colours are COLOR_0 already; every part draws as `scenery`.
+const SCENERY = { rename: { materials: Object.fromEntries(['bark', 'needle', 'needle_top', 'leaf', 'stone', 'rail', 'post'].map(m => [m, 'scenery'])) } };
 
 export default {
   id: 'rally', outEnv: 'RALLY_OUT',
@@ -19,6 +22,7 @@ export default {
       'wheel-racing': { rename: { materials: { colormap: 'tyre' } } },
       cone: { rename: { materials: { colormap: 'cone' } } },
       ...Object.fromEntries(CAR_IDS.map(id => [id, CAR_PAINT])),
+      ...Object.fromEntries(SCENERY_IDS.map(id => [id, SCENERY])),
     },
   },
   build: { out: '../../site/exp/rally', entry: 'src/main.js', template: 'index.template.html', pwa: 'pwa' },

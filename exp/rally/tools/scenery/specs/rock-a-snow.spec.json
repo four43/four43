@@ -1,0 +1,2 @@
+{ "title": "Boulder", "description": "A faceted boulder with a flat underside; mossy (or snowy) on top.", "size": [1.65, 0.95, 1.65], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
+  "nodes": ["lod0","lod1"], "budget": { "tris": 120, "materials": 1, "kb": 120 }, "checks": ["34 tile lod0: rock sits flat on the grid, top faces moss/snow"] }

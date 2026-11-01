@@ -1,0 +1,2 @@
+{ "title": "Fence post", "description": "The post that ends a run.", "size": [0.16, 1.15, 0.17], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
+  "nodes": ["lod0","lod1"], "budget": { "tris": 40, "materials": 1, "kb": 120 }, "checks": ["FRONT tile: one post on the grid"] }

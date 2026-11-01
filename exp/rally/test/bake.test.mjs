@@ -8,8 +8,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import MATERIALS from '../src/defs/materials.js';
 import { CAR_IDS } from '../src/cars.js';
+import { SCENERY_IDS } from '../src/defs/scenery.js';
 
-const MODELS = () => [...Object.keys(COUNTS), ...CAR_IDS].sort();
+const MODELS = () => [...Object.keys(COUNTS), ...CAR_IDS, ...SCENERY_IDS].sort();
 
 const COUNTS = { // node name → triangle count (index count / 3), from the retired src/assets.json at e03ed71
   'wheel-racing': { 'wheel-racing': 332 },
@@ -50,3 +51,13 @@ test('phys.json was baked against this registry', () => {
   assert.equal(phys.materials, MATERIALS.hash);
   assert.deepEqual(Object.keys(phys.models).sort(), MODELS());
 });
+// The scenery (R19-1): LOD nodes at one origin, every part drawn as `scenery` with its face colours in COLOR_0.
+for (const id of SCENERY_IDS) {
+  test(`${id}: lod nodes, scenery material, vertex colours`, async () => {
+    const doc = await io.read(fileURLToPath(new URL(`../baked/${manifest.models[id].glb}`, import.meta.url)));
+    const names = doc.getRoot().listNodes().map(n => n.getName());
+    for (const lod of ['lod0', 'lod1']) assert.ok(names.includes(lod), `${id} has ${lod}`);
+    assert.deepEqual([...new Set(doc.getRoot().listMaterials().map(m => m.getName()))], ['scenery']);
+    for (const mesh of doc.getRoot().listMeshes()) for (const p of mesh.listPrimitives()) assert.ok(p.getAttribute('COLOR_0'), `${mesh.getName()} has COLOR_0`);
+  });
+}

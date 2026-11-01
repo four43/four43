@@ -42,6 +42,10 @@ timing, bests) is specified there too (Phase 2).
 | `src/render/roadSurface.js` | Road and ground shading (R10, R13): painted palettes, edges, wear marks, cracks, dashes, puddles, ice, spill; `extend()` patches on `rally-road` / `rally-ground` |
 | `src/render/pebbles.js` | Loose stones on dirt and gravel (R10-6): ten pebble shapes, instanced, per 4 m road chunk near the camera |
 | `src/gen/edges.js`, `src/gen/wear.js` | The road's edges (physics + shader) and its driven lines (shader marks + pebbles), per layout sample |
+| `src/gen/scenery.js` | Off-track scenery (R19): trees, bushes, rocks and fence runs from the seed, with clearances from the road |
+| `src/defs/scenery.js` | The scenery models per theme and kind (bake, view and tests share it) |
+| `src/render/sceneryView.js` | Scenery drawing (R19): distance LODs from 32 m cells, fences posed from their bodies |
+| `tools/scenery/*.model.mjs` | The scenery models' sources (glb-author kit): `node tools/scenery/trees.model.mjs`, `props.model.mjs`, then `npm run bake` |
 | `src/gen/bumps.js` | Road bumps (R11): scattered humps and short ridges, and the whoops' ridge sets, in road space; stamped into the heightfield |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
 | `src/rumble/` | Rumble channels (R9): engine, suspension, body, aid, and the mix → `{ strong, weak, left, right }`; pure |
@@ -1119,3 +1123,66 @@ car widths; size each jump for its take-off speed; do the agreed aero round; the
   - Re-baselined: goldens re-blessed; `test/markers.mjs` post settle ≤ 5 s (on the narrower road a test post rolls
     down a falling verge, 4 s on R17 physics too); `test/verge.mjs` half throttle on grass ≤ 62 km/h (the turned
     loop's sample holds 61 on R17 physics, 60 on R18's).
+
+## Round 19: off-track scenery (0.14.0, 2026-11-01)
+
+The verges were all grass. The user asked for generated decoration in Art of Rally's style: chunky trees where the leaves
+still read, rocks and fences, each with LOD versions, and the car must hit them off the track.
+
+- **R19-1 Models** (`tools/scenery/`, glb-author kit; specs in `tools/scenery/specs/`). Faceted, flat colours, every
+  face's colour baked into COLOR_0 (a little brightness jitter per face so the facets, the leaves, read; the material
+  factor white), one material renamed `scenery` at bake so a single instanced program draws everything. Each GLB holds
+  nodes `lod0`, `lod1` (and `lod2` for trees) at one origin, bottom centre:
+  - `tree-pine` (7.6 m): a tapered trunk and five star-shaped tiers, drooping branch tips and a lumpy mid ring; lod1
+    plain six-point tiers; lod2 one six-sided cone (6 triangles). `tree-pine-snow`: the same tree, faces turned up past
+    ny ≈ 0.35 white.
+  - `tree-leafy` (7 m): trunk, two limbs and six lumpy leaf blobs (icosahedra, detail 1), lighter facing up, darker
+    facing down; lod1 the four biggest blobs at detail 0; lod2 one blob and a box trunk.
+  - `bush`: three small blobs; lod1 one.
+  - `rock-a` (boulder ~1.6 × 0.9 × 1.7 m) and `rock-b` (slab ~2.6 × 0.75 × 1.7 m): displaced icosahedra with a flat
+    underside, mossy on top in summer; `-snow` variants snow there. lod1 at detail 0.
+  - `fence`: one 3 m split-rail section, post at its back end (−Z), two sagging rails to the next post; `fence-post`
+    closes a run; `fence-snow` has snow on the rail tops.
+- **R19-2 Placement** (`gen/scenery.js`, its own rng fork, so no other generator's draws move). Pure data on the track:
+  `scenery = { trees, bushes, rocks, fences }`.
+  - Candidates on a jittered 5 m grid over the whole terrain. Forest patches from fbm noise (scale 170 m): full forest
+    above 0.25, open below −0.05; a 4% chance of a lone tree in the open. Pine or broadleaf by a second noise (summer
+    ~55% pine); winter only snowy pines and no bushes.
+  - Clearances past the road edge on that side: trees 5 m, rocks 3 m, bushes 2.5 m; density ramps to full over 8 m
+    more. Trees and rocks keep 12 m on the outside of bends tighter than R 90 m, 16 m within 30 m of a jump, and 18 m
+    within 30 m of a gate. Within 40 m of the centreline the distance is exact (locator); farther out, a 4 m chamfer
+    distance field.
+  - Rocks: rare (3.5% of candidates), up to 6× more on slopes. Bushes along forest edges.
+  - Fences: on stretches gentler than R 150 m, half of them get a run of 6–24 sections, 6–11 m past one edge, posts
+    every 3 m along the road, pitched to the ground; never within 30 m of a jump or 40 m of a gate, nor where the line
+    comes within reach of another stretch of road. Trees on a fence line are dropped.
+  - Cost: 3–25 ms per track (a medium loop ~2.9k trees, a long winter stage ~15k).
+- **R19-3 Physics** (`world/trackWorld.js` `SCENERY_PHYS`): everything stands 0.15 m into the ground (rocks × scale).
+  - Trunks: one fixed body, a cylinder per tree up to the lowest branches (pine r 0.24 m, broadleaf 0.26, × scale),
+    member `prop`. A 72 km/h hit stops the car.
+  - Rocks: one fixed body, a round box per rock, member `ground`, so the wheel rays ride up them.
+  - Fence sections and end posts: knock-over bodies asleep until hit (30 kg / 8 kg), like the markers; each section's
+    box stops 0.15 m short of each post so neighbours never touch (overlapping boxes pushed a whole run apart when one
+    was hit). A hit costs the car next to nothing. `resetProps` respawns them.
+  - Bushes have no colliders.
+  - Build ~40 ms for a medium loop, ~120 ms for a long stage (15k trunks); a physics step stays under 0.5 ms.
+- **R19-4 Drawing** (`render/sceneryView.js`). One engine instanced mesh per (model, lod). Static kinds are bucketed in
+  32 m cells with prebuilt matrices; when the camera changes cell each cell picks a LOD by its nearest distance: trees
+  lod0 to 70 m, lod1 to 230 m, lod2 to 720 m (the fog's end); bushes lod0 45 / lod1 160; rocks 60 / 320; fences
+  90 / 400, per section, from the body's pose each frame. Only lod0 casts shadows. The track view now waits for the
+  model preload. The scenery adds ~220–250k triangles at a typical spot (terrain ~400k); 60 fps at 4K on an RTX 5070 Ti.
+  iPad not yet checked.
+- **R19-5 Tests**: `test/scenery.mjs` (clearances on three tracks, same seed same scenery, a tree stops the car, a fence
+  is knocked and the run beside it stays, reset puts it back); `bake.test.mjs` checks every scenery model's LOD nodes,
+  material and COLOR_0. `test/jumps.mjs` now builds a fresh world per jump: one run that ended in the trees changed the
+  car the next run started with and tipped a borderline 1.15× crest over.
+- **R19-6 LOD cross-fade** (playtest: a lot of pop-in). Each LOD switch distance D is a band D ± w (trees 14 m, rocks
+  12, bushes and fences 10) where both models draw and every pixel shows one of them: a screen-space dither
+  (interleaved gradient noise on gl_FragCoord) against smoothstep(D − w, D + w, d), d being that instance's own
+  distance to the camera worked out on the GPU every frame. Both models test the same noise at a pixel, so together they
+  cover it exactly once. Past the last LOD a model dithers away the same way. The windows ride on each LOD geometry as
+  `aLod` (in, out, w), so one extend() of `scenery` (`rally-lod-fade`) draws everything; the shadow pass runs the same
+  patch from the view camera's position (`EYE`, not the light's), so shadows fade with their trees (+2 programs).
+  The CPU only chooses meshes: static kinds sit in 16 m cells and refill every 8 m of camera travel, each cell going into
+  every LOD whose widened window it can reach before the next refill; fences per frame. Cost: ~35% more scenery
+  triangles (instances in two meshes inside the bands), ~280–340k at a typical spot.

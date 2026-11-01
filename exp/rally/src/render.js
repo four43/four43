@@ -82,7 +82,8 @@ export class Renderer {
       return this.kit.assets.has('cone') ? Promise.resolve(make()) : this.kit.loaded.then(make);
     }
     this.setLook('day');
-    return import(`./render/${world.kind}View.js`).then((mod) => {
+    // Track views draw the scenery models, so they wait for the preload too.
+    return Promise.all([import(`./render/${world.kind}View.js`), this.kit.loaded]).then(([mod]) => {
       if (token !== this.worldToken) return null;
       const View = mod[world.kind[0].toUpperCase() + world.kind.slice(1) + 'View']; // e.g. TrackView
       shown(new View(this.scene, world, this.kit));

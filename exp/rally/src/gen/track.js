@@ -11,6 +11,7 @@ import { makeLocator } from './locate.js';
 import { generateEdges } from './edges.js';
 import { generateWear } from './wear.js';
 import { generateBumps } from './bumps.js';
+import { placeScenery } from './scenery.js';
 import { styleLevel, obstacleLevel } from './levels.js';
 import { flatOut, lineSpot, turnLoop } from './speed.js';
 import { ROADSIDE } from './roadside.js';
@@ -40,8 +41,9 @@ export function generateTrack(seed, { kind = 'loop', theme = 'summer', obstacles
   const roadside = placeRoadside(layout, heightFn, features, r.fork('roadside'), { edges });
   const locator = makeLocator(layout);
   const wear = generateWear(layout, surfaces, edges, r.fork('wear'));
+  const scenery = placeScenery({ layout, terrain, edges, features, locator, roadside, seed }, r.fork('scenery'), { theme });
   // Spawn on the centreline just past the start of the layout, facing along the road.
   const i = Math.min(10, layout.n - 1);
   const spawn = { x: layout.x[i], y: terrain.road[i] + 0.6, z: layout.z[i], yaw: layout.heading[i] };
-  return { seed, kind, style, theme, obstacles, size: length, layout, features, terrain, surfaces, edges, wear, bumps, roadside, locator, spawn, roadWidth: ROAD_WIDTH };
+  return { seed, kind, style, theme, obstacles, size: length, layout, features, terrain, surfaces, edges, wear, bumps, roadside, scenery, locator, spawn, roadWidth: ROAD_WIDTH };
 }

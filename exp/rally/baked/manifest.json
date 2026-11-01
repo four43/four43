@@ -1,6 +1,13 @@
 {
   "v": 1,
   "models": {
+    "bush": {
+      "glb": "models/bush.glb",
+      "anim": null,
+      "bytes": 17140,
+      "sha256": "6c5f772d8cc2b9c5c94e7516f052605539e54332d8ecc4728461bb9d7a23c2bc",
+      "options": "9f8cdc43dcdfd574"
+    },
     "cone": {
       "glb": "models/cone.glb",
       "anim": null,
@@ -14,6 +21,27 @@
       "bytes": 58880,
       "sha256": "62f315e28102f98b86137c925c89e5853f5f166f5fa5613056a3fc5662c7bce0",
       "options": "90eed57074a5cf12"
+    },
+    "fence": {
+      "glb": "models/fence.glb",
+      "anim": null,
+      "bytes": 12832,
+      "sha256": "73001b82ff26711e97395b0dcf8ad773d64127abe402e8b5611d8c201ac69d92",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "fence-post": {
+      "glb": "models/fence-post.glb",
+      "anim": null,
+      "bytes": 4884,
+      "sha256": "896293377afee0bb9588daa1bf9c319efc92efcd60f1c9defcb1ba89b55a8f3e",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "fence-snow": {
+      "glb": "models/fence-snow.glb",
+      "anim": null,
+      "bytes": 12864,
+      "sha256": "b0fdd385d389bdafa7183558d142560c6464f9b91f4945e29825467a2c33d18b",
+      "options": "9f8cdc43dcdfd574"
     },
     "impreza-555": {
       "glb": "models/impreza-555.glb",
@@ -50,6 +78,34 @@
       "sha256": "60e85de094e24c83f86cb4d0a855337968daa79a3faf2cbfacfea6c45806ea5f",
       "options": "90eed57074a5cf12"
     },
+    "rock-a": {
+      "glb": "models/rock-a.glb",
+      "anim": null,
+      "bytes": 7740,
+      "sha256": "b2b2100d078a66bea438143971387d7079e73593b2e0e0345c5bf7fda7b8b26d",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "rock-a-snow": {
+      "glb": "models/rock-a-snow.glb",
+      "anim": null,
+      "bytes": 7756,
+      "sha256": "59efbc1925a320f8fde680b62f4ddc98509fd24e3029b9758d00e7124263f77a",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "rock-b": {
+      "glb": "models/rock-b.glb",
+      "anim": null,
+      "bytes": 7696,
+      "sha256": "399b7b7662a9947df7707ac116ba2a04a4ca452cb35cece191c8dba1ecdf6b48",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "rock-b-snow": {
+      "glb": "models/rock-b-snow.glb",
+      "anim": null,
+      "bytes": 7704,
+      "sha256": "091939b7297e396cabd812d16cba54e6ec9150d0cf73c7abeece3a551157c104",
+      "options": "9f8cdc43dcdfd574"
+    },
     "sport-quattro-s1": {
       "glb": "models/sport-quattro-s1.glb",
       "anim": null,
@@ -63,6 +119,27 @@
       "bytes": 66404,
       "sha256": "912e15eb26143d1a03f9359ddc3e4183b51a2373b8da1c7b07f8df1517ce2b06",
       "options": "90eed57074a5cf12"
+    },
+    "tree-leafy": {
+      "glb": "models/tree-leafy.glb",
+      "anim": null,
+      "bytes": 49856,
+      "sha256": "9d0011ae07d4124f1e903a62ae894c4b02e91533f19ae495298e76d5373f8e6c",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "tree-pine": {
+      "glb": "models/tree-pine.glb",
+      "anim": null,
+      "bytes": 36356,
+      "sha256": "98d31f30170286712e32e64114a6a20b9760fae24e0b8a658c8ec7c19d54921c",
+      "options": "9f8cdc43dcdfd574"
+    },
+    "tree-pine-snow": {
+      "glb": "models/tree-pine-snow.glb",
+      "anim": null,
+      "bytes": 36896,
+      "sha256": "55811b623b4025944c84ca92beef40d4e3d1005984801adfe7c3a412d53c3cd9",
+      "options": "9f8cdc43dcdfd574"
     },
     "wheel-racing": {
       "glb": "models/wheel-racing.glb",
