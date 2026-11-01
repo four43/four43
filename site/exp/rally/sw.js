@@ -1,6 +1,6 @@
 // Offline support. The page plus every file `lion-hawk build` lists (manifest, icons, `assets/models/*`) is precached;
 // the Google Font is cached as it is first fetched.
-const CACHE = 'rally-0.14.0+lh0.14.1-2685dc0dd84a';
+const CACHE = 'rally-0.15.0+lh0.17.0-bd70b70bd55e';
 const PRECACHE = ["./","assets/models/bush.glb","assets/models/cone.glb","assets/models/escort-rs1800.glb","assets/models/fence.glb","assets/models/fence-post.glb","assets/models/fence-snow.glb","assets/models/impreza-555.glb","assets/models/lancer-evo6.glb","assets/models/peugeot-205-t16.glb","assets/models/peugeot-206-wrc.glb","assets/models/polo-r-wrc.glb","assets/models/rock-a.glb","assets/models/rock-a-snow.glb","assets/models/rock-b.glb","assets/models/rock-b-snow.glb","assets/models/sport-quattro-s1.glb","assets/models/stratos-hf.glb","assets/models/tree-leafy.glb","assets/models/tree-pine.glb","assets/models/tree-pine-snow.glb","assets/models/wheel-racing.glb","assets/models/xsara-wrc.glb","assets/models/yaris-wrc.glb","apple-touch-icon.png","icon-192.png","icon-512.png","icon.svg","manifest.webmanifest","og-image.jpg"];
 
 self.addEventListener('install', e => {
@@ -28,7 +28,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 0.14.0+lh0.14.1-2685dc0dd84a), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 0.15.0+lh0.17.0-bd70b70bd55e), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
