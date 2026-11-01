@@ -44,7 +44,7 @@ timing, bests) is specified there too (Phase 2).
 | `src/gen/edges.js`, `src/gen/wear.js` | The road's edges (physics + shader) and its driven lines (shader marks + pebbles), per layout sample |
 | `src/gen/scenery.js` | Off-track scenery (R19): trees, bushes, rocks and fence runs from the seed, with clearances from the road |
 | `src/defs/scenery.js` | The scenery models per theme and kind (bake, view and tests share it) |
-| `src/render/sceneryView.js` | Scenery drawing (R19): distance LODs from 32 m cells, fences posed from their bodies |
+| `src/render/sceneryView.js` | Scenery drawing (R19, R20): lion-hawk's `createScatter` per static kind, `createLodInstances` for fences posed from their bodies |
 | `tools/scenery/*.model.mjs` | The scenery models' sources (glb-author kit): `node tools/scenery/trees.model.mjs`, `props.model.mjs`, then `npm run bake` |
 | `src/gen/bumps.js` | Road bumps (R11): scattered humps and short ridges, and the whoops' ridge sets, in road space; stamped into the heightfield |
 | `src/ui.js` | `Hud`: the dash (speed, gear, rev arc) and the wheel-debug panel |
@@ -1186,3 +1186,22 @@ still read, rocks and fences, each with LOD versions, and the car must hit them 
   The CPU only chooses meshes: static kinds sit in 16 m cells and refill every 8 m of camera travel, each cell going into
   every LOD whose widened window it can reach before the next refill; fences per frame. Cost: ~35% more scenery
   triangles (instances in two meshes inside the bands), ~280–340k at a typical spot.
+
+## Round 20: the scenery's LOD on lion-hawk 0.17 (0.15.0, 2026-11-01)
+
+R19-6's cross-fade moved into the engine as lion-hawk 0.17.0's distance level of detail (its spec §6.4, [A-12]–[A-18]),
+and Rally moved from lion-hawk 0.14.1 to it (Tractor Pickup stays on 0.14.1, Pig Pens on 0.16.0; each game pins its own).
+
+- **R20-1** `render/sceneryView.js` draws through the engine: one `createScatter` per static kind (trees, bushes, rocks)
+  and one `createLodInstances` per prop kind (fence sections, posts). The LOD table (distances and bands) is unchanged;
+  Rally's own `rally-lod-fade` patch and cell code are gone, and `preload(…, { lod: SCENERY_IDS })` compiles the
+  `LOD_FADE` shaders and their shadow twins up front.
+- **R20-2** What the engine adds over R19-6: the scatter is culled to the camera's view cone (20° margin, everything
+  within 30 m kept for shadows), which roughly halves the scenery's triangles at a typical spot (~281k → ~105–145k);
+  the LOD distances scale with the camera's field of view (a zoomed camera keeps near levels farther away); distances
+  are 3D, not along the ground.
+- **R20-3** The bake checks the scenery models' `lod0`…`lodN` nodes and builds their sidecars from `lod0` alone
+  (the pine's 13 collider parts are now 6); `manifest.json` lists each model's triangles per level.
+- **R20-4** Engine changes between 0.14.1 and 0.17.0 that reach Rally: the sun's default shadow bias (0.15.0, could show
+  acne on double-sided materials in a low sun; none seen on the winter or summer tracks), debug panels under `?debug`
+  (0.16.0). All suites pass unchanged.

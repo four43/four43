@@ -234,7 +234,7 @@ export function rallyView({ save = () => {}, rumble = createRumble(PARAMS) } = {
       seat0 = view.localPlayers[0]; haptics = view.haptics;
       renderer ??= new Renderer(view.gfx);
       // The models: view sync draws the car once its GLB is in, and the pad view's cones wait for them (Renderer.setWorld).
-      loaded ??= view.assets.preload([...MODELS, CARS[engine.scene.state?.settings?.car]?.model ?? DEFAULT_CAR]).then(() => { doc.getElementById('loading')?.remove(); });
+      loaded ??= view.assets.preload([...MODELS, CARS[engine.scene.state?.settings?.car]?.model ?? DEFAULT_CAR], { lod: SCENERY_IDS }).then(() => { doc.getElementById('loading')?.remove(); });
       view.wait(loaded);
       renderer.setKit({ assets: view.assets, mc: view.materials, loaded }); renderer.setSync(view.sync);
       carHook ??= carView(view.sync, (e) => (engine.scene.state?.sim?.car?.e === e ? engine.scene.state.sim.car : null));

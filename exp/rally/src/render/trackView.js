@@ -380,7 +380,8 @@ export class TrackView {
     if (this.scene.fog) setSky(this.scene.fog.color); // the light rig sets the fog per look; reflections follow it
     if (p) {
       this.focus.position.x = p.x; this.focus.position.z = p.z;
-      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z); this.pebbles.update(p.x, p.z); this.scenery.update(p);
+      this.terrainMesh.update(this.focus); this.updateCover(p.x, p.z); this.pebbles.update(p.x, p.z);
+      if (this.camera) this.scenery.update(this.camera);
     }
     const props = this.markerProps;
     if (!props.length) return;
@@ -398,6 +399,7 @@ export class TrackView {
 
   // Geometries only: the compiler owns the materials, the page keeps the textures.
   dispose() {
+    this.scenery.dispose();
     this.terrainMesh.dispose();
     this.scene.remove(this.root);
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
