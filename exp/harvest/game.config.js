@@ -37,5 +37,9 @@ export default {
     },
     optimise: { meshopt: true, quantize: false, weld: false, prune: true, dedupe: true },
   },
-  build: { out: '../../site/exp/harvest', entry: 'src/main.js', template: 'template.html' },
+  // the installed app opens full screen; the manifest is the engine's (build.manifest), the icons and the service worker are in pwa/
+  build: {
+    out: '../../site/exp/harvest', entry: 'src/main.js', template: 'template.html', pwa: 'pwa',
+    manifest: { name: 'Harvest', themeColor: '#bfe6f5', backgroundColor: '#bfe6f5', icon: 'pwa/icon.svg', display: 'fullscreen' },
+  },
 };
