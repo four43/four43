@@ -5,7 +5,7 @@
 // `progress`; the scene persists them through events (record()). Sim-pure.
 import { createFields } from './field.js';
 import { createLoad } from './load.js';
-import { staticShapes, ZONES, SELL_ZONES, inZone, BACKYARD } from './layout.js';
+import { staticShapes, ZONES, SELL_ZONES, inZone, GATES } from './layout.js';
 import { GATE } from '../defs/models.js';
 import { vehicleDesc, attachVehicle, createCarts, headerStrip, axes } from './combine.js';
 import { TUNE, CROP_IDS, FIELD_IDS, START_COINS } from '../defs/econ.js';
@@ -41,20 +41,21 @@ const capsOf = (v, levels) => Array.from({ length: (VEHICLES[v].bag ? 1 : 0) + u
 export function createFarm(world, { progress }) {
   const prog = clampProgress(progress);
   world.spawn({ tags: ['ground'], body: 'fixed', groups: { member: ['ground'] },
-    colliders: [{ shape: 'box', half: [150, 0.5, 150], p: [0, -0.5, 0], q: [0, 0, 0, 1], material: 'ground' }] });
+    colliders: [{ shape: 'box', half: [200, 0.5, 200], p: [0, -0.5, 0], q: [0, 0, 0, 1], material: 'ground' }] });
   for (const s of staticShapes()) {
     const collider = s.box ? { shape: 'box', half: s.box, p: [0, 0, 0], q: [0, 0, 0, 1], material: s.wall ? 'fence' : 'building' }
       : { shape: 'cylinder', halfHeight: s.cyl[1] / 2, r: s.cyl[0], p: [0, 0, 0], q: [0, 0, 0, 1], material: 'building' };
     const q = s.yaw ? [0, Math.sin(s.yaw / 2), 0, Math.cos(s.yaw / 2)] : [0, 0, 0, 1];
     world.spawn({ tags: [s.wall ? 'fence' : 'building'], body: 'fixed', at: s.at, q, groups: { member: [s.wall ? 'wall' : 'static'] }, colliders: [collider] });
   }
-  // H-F8: the gate in the backyard fence stays shut until the combine is owned
-  let gate = null;
+  // H-F8, H-F9: each gate stays shut (a collider) until the vehicle it opens for is owned
+  const gates = {};
   const gateShut = () => {
-    if (prog.owned.combine) { if (gate) { world.despawn(gate); gate = null; } return; }
-    const g = BACKYARD.gate;
-    gate ??= world.spawn({ tags: ['gate'], body: 'fixed', at: [g.x, GATE.h / 2, g.z], groups: { member: ['wall'] },
-      colliders: [{ shape: 'box', half: [g.half, GATE.h / 2, 0.2], p: [0, 0, 0], q: [0, 0, 0, 1], material: 'fence' }] });
+    for (const [id, g] of Object.entries(GATES)) {
+      if (prog.owned[g.opens]) { if (gates[id]) { world.despawn(gates[id]); delete gates[id]; } continue; }
+      gates[id] ??= world.spawn({ tags: ['gate'], body: 'fixed', at: [g.x, GATE.h / 2, g.z], q: [0, Math.sin(g.yaw / 2), 0, Math.cos(g.yaw / 2)], groups: { member: ['wall'] },
+        colliders: [{ shape: 'box', half: [g.half, GATE.h / 2, 0.2], p: [0, 0, 0], q: [0, 0, 0, 1], material: 'fence' }] });
+    }
   };
   gateShut();
   const fields = createFields();
@@ -155,7 +156,7 @@ export function createFarm(world, { progress }) {
           const q = body.translation();
           if (b.n === 0 || !overSell(q.x, q.z)) { r.pend[i] = 0; continue; }
           r.selling = true;
-          r.pend[i] = (r.pend[i] ?? 0) + TUNE.unloadRate * dt;
+          r.pend[i] = (r.pend[i] ?? 0) + (VEHICLES[r.vehicle].unload ?? TUNE.unloadRate) * dt;
           const n = Math.floor(r.pend[i]); if (n <= 0) continue;
           r.pend[i] -= n; const before = b.n, coins = r.load.unloadBin(i, n);
           prog.coins += coins; r.sold.acc += before - b.n; r.sold.coins += coins; r.sold.cart = i;

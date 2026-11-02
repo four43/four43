@@ -6,7 +6,7 @@
 // tongue to tow point by spherical joints, with Tractor's jackknife limit; backing up, each is turned in line behind the one in front.
 // Sim-pure.
 import { createVehicle } from 'lion-hawk/kits/vehicle';
-import { COMBINE, CART, HEADER, MOWER, TIPCART } from '../defs/models.js';
+import { COMBINE, CART, HEADER, MOWER, TIPCART, TRACTOR, BALETRAILER } from '../defs/models.js';
 import { afterWheels } from './wheels.js';
 
 export const GROUPS = Object.freeze(['ground', 'static', 'vehicle', 'cart', 'wall']);
@@ -16,7 +16,7 @@ const Q0 = [0, 0, 0, 1], QI = { x: 0, y: 0, z: 0, w: 1 };
 // Feel (mutable for ?tune), for the combine's mass: a kind's forces scale with its mass. vmax: the road speed; vcut: the speed in
 // crop (the speed upgrade's)
 export const CP = {
-  mass: 4000, force: 16000, revForce: 14000, vrev: 3.5, brake: 85, handbrake: 170, roll: 4,
+  mass: 4000, force: 16000, revForce: 14000, vrev: 3.5, brake: 85, handbrake: 170, coast: 60,
   steerRate: 5, inputRate: 4, suspRest: 0.35, stiffness: 20, compression: 2.2, relaxation: 2.8, travel: 0.4,
   slip: 2.4, side: 1.2, turnRate: 1.4, revTurn: 0.5, grip: 6, rightTilt: Math.cos(35 * Math.PI / 180), rightK: 26000,
 };
@@ -35,6 +35,14 @@ export const KINDS = Object.freeze({
       box([w / 2, 0.35, HEADER.depth / 2], [0, 0.55, COMBINE.header[2] + HEADER.depth / 2], 'header')],
     cut: Object.freeze({ z: COMBINE.header[2] + HEADER.depth / 2, depth: HEADER.depth }),
     cart: Object.freeze({ model: 'cart', dims: CART, mass: 500, inertia: [380, 530, 250], com: [0, 1.0, -0.4], bed: [0, 1.45], susp: { rest: 0.35, travel: 0.35, lift: 0.3, stiffness: 80 } }),
+  }),
+  tractor: Object.freeze({
+    model: 'tractor', mass: 2000, com: [0, 0.85, -0.3], inertia: [1800, 2200, 900], wheels: TRACTOR.wheels, hitch: TRACTOR.hitch,
+    susp: { rest: 0.3, travel: 0.25, stiffness: 60 }, turn: 1.15, driveFront: false,
+    colliders: w => [box([0.8, 0.55, 1.7], [0, 1.15, 0.05], 'body'), box([0.7, 0.6, 0.75], [0, 2.0, -0.35], 'cab'),
+      box([w / 2, 0.08, TRACTOR.deck.depth / 2], [0, TRACTOR.deck.y + 0.3, TRACTOR.deck.z], 'deck')],
+    cut: Object.freeze({ z: TRACTOR.deck.z, depth: TRACTOR.deck.depth }),
+    cart: Object.freeze({ model: 'baletrailer', dims: BALETRAILER, mass: 400, inertia: [300, 420, 200], com: [0, 0.9, -0.2], bed: [0, 1.6], susp: { rest: 0.3, travel: 0.25, lift: 0.25, stiffness: 80 } }),
   }),
   mower: Object.freeze({
     model: 'mower', mass: 350, com: [0, 0.45, -0.1], inertia: [60, 80, 40], wheels: MOWER.wheels, hitch: MOWER.hitch,
@@ -99,7 +107,7 @@ export function attachVehicle(world, e, kind, { vmax = 8, vcut = 4 } = {}) {
       let force = 0, brake = 0;
       if (c.thr > 0.05) { if (v < -0.3) brake = CP.brake * c.thr; else force = CP.force * c.thr * Math.max(-0.5, Math.min(1, 3 * (1 - v / vmax))); } // full pull until ~2/3 of vmax
       else if (c.thr < -0.05) { if (v > 0.3) brake = CP.brake * -c.thr; else force = -CP.revForce * -c.thr * Math.max(0, 1 + v / CP.vrev); }
-      else brake = c.speed < 0.3 ? CP.handbrake : CP.roll;
+      else brake = c.speed < 0.3 ? CP.handbrake : CP.coast; // stick let go: brake to a stop
       if (force < 0 && c.thr > 0) { brake = -force / CP.force * CP.brake; force = 0; } // over the top speed (cutting slows it): brake gently
       if (c.hold) { force = 0; brake = CP.handbrake; }
       c.engine = Math.abs(force) / CP.force;

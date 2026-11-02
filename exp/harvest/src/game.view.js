@@ -11,6 +11,7 @@ import { createHud } from './view/hud.js';
 import { shopHalf } from './view/cards.js';
 import { createSound } from './view/sound.js';
 import { createGrain } from './view/grain.js';
+import { VEHICLES } from './defs/vehicles.js';
 
 export const RENDER = Object.freeze({
   assets: { manifest: MANIFEST, base: './assets/' },
@@ -65,7 +66,7 @@ function farmHalf() {
       const r = s.rig, c = r.c, dt = view.dt;
       const swapped = r.vehicle !== camFor; // a new vehicle starts at its own home: the camera jumps there
       if (swapped) { camFor = r.vehicle; rig.setVehicle(r.vehicle); rig.combine = c; }
-      w.update(r.zone, r.selling, dt);
+      w.update(r.zone, r.selling ? VEHICLES[r.vehicle].sell : null, dt);
       grain?.update(dt);
       const o = drawn(c.e), p = o?.position ?? c.body.translation(), lv = c.body.linvel();
       pose.x = p.x; pose.y = p.y; pose.z = p.z; pose.yaw = c.yaw; pose.fwd = c.fwd; pose.speed = c.speed; pose.velYaw = Math.atan2(lv.x, lv.z);

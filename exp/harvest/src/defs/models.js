@@ -94,3 +94,38 @@ export const GATE = Object.freeze({ half: 3.5, h: 1.3, post: 0.22 });
 // (the bench's front faces +z in its model).
 export const GARAGE = Object.freeze({ hx: 4, hz: 4 });
 export const WORKBENCH = Object.freeze({ w: 3.4, d: 0.9, h: 0.95, board: 2.1 });
+
+// ---- the meadow (vehicle ladder chapter 2) ----
+
+// The compact tractor. Big rear wheels drive; a mower deck hangs in front of the front wheels, built 1 m wide (node `deck`, scaled in
+// x by the view). Hay goes into the baler it tows, which drops round bales onto the bale trailers behind (the view draws them).
+export const TRACTOR = Object.freeze({
+  length: 3.6, width: 1.9, height: 2.6, z0: -1.75, z1: 1.85,
+  wheels: Object.freeze([
+    { name: 'wheel_FL', x: 0.72, y: 0.42, z: 1.05, r: 0.42, front: true },
+    { name: 'wheel_FR', x: -0.72, y: 0.42, z: 1.05, r: 0.42, front: true },
+    { name: 'wheel_BL', x: 0.82, y: 0.72, z: -0.75, r: 0.72, front: false },
+    { name: 'wheel_BR', x: -0.82, y: 0.72, z: -0.75, r: 0.72, front: false },
+  ].map(Object.freeze)),
+  deck: Object.freeze({ z: 2.45, depth: 1.1, y: 0.1, h: 0.4 }),     // the front mower: centre along z (ahead of the front tyres), depth
+  cab: Object.freeze({ z0: -1.1, z1: 0.4, y0: 1.3, y1: 2.6, half: 0.7 }), // a cab (or a roll frame and canopy) over the seat
+  hitch: Object.freeze([0, 0.55, -1.9]),                           // Socket_Hitch: the bale trailer's tongue tip joins here
+});
+
+// The bale trailer: a flatbed on two wheels; round bales ride on it lying on their sides (axis along x), two across and two along,
+// up to three layers. The view places them from Socket_Bed (the bed's top centre).
+export const BALE = Object.freeze({ r: 0.72, w: 1.15 });             // a round bale: radius, width (along its axis)
+export const BALETRAILER = Object.freeze({
+  length: 5.4, width: 2.5, height: 1.3,
+  hitch: Object.freeze([0, 0.55, 2.7]),
+  tow: Object.freeze([0, 0.55, -2.6]),
+  wheels: Object.freeze([{ name: 'wheel_L', x: 1.12, y: 0.5, z: -0.6, r: 0.5 }, { name: 'wheel_R', x: -1.12, y: 0.5, z: -0.6, r: 0.5 }].map(Object.freeze)),
+  bed: Object.freeze({ z0: -2.3, z1: 1.9, top: 1.2, half: 1.2 }),   // the flatbed's deck (its top face), with low rails at the edges; 20 cm over the tyres
+  hopper: Object.freeze({ z0: -2.3, z1: 1.9, floor: 1.2, top: 2.6, half: 1.2 }), // as a bin, for the sim's cart contract
+});
+
+// The hay barn: the meadow's sell point, a drive-through along z (open at both ends); bales are lifted off the trailers inside.
+export const HAYBARN = Object.freeze({ half: 7.5, depth: 16, eave: 6.5, ridge: 11, door: 5.4, wall: 0.3 });
+
+// Meadow crops: one clump fills a 1 m cell. Heights at full growth.
+export const MEADOW_CROPS = Object.freeze({ hay: Object.freeze({ h: 0.8 }), alfalfa: Object.freeze({ h: 0.7 }), wildflowers: Object.freeze({ h: 0.65 }) });

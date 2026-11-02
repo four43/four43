@@ -6,25 +6,51 @@
 import * as THREE from 'three';
 import { disposeTree } from 'lion-hawk/view';
 import { modelGeometry } from './geom.js';
-import { makeGrassTexture, makeGravelTexture, makeDetailTexture, worldUV, withDetail } from './textures.js';
-import { FARM, FIELDS, YARD, BACKYARD, SIGNS, ZONES } from '../sim/layout.js';
+import { makeGrassTexture, makeGravelTexture, makeDetailTexture, makeNoiseTexture, blendedGround, worldUV, withDetail } from './textures.js';
+import { FARM, FIELDS, YARD, BACKYARD, MEADOW, GATES, FENCES, fenceSegments, SIGNS, ZONES } from '../sim/layout.js';
 import { CROP } from '../defs/econ.js';
 import { VEHICLES } from '../defs/vehicles.js';
 
 export const SCENERY = ['oak', 'tree', 'treeFat', 'bush', 'bushL', 'rock'];
-export const MODELS = ['mower', 'tipcart', 'combine', 'header', 'cart', 'lawn', 'longgrass', 'clover', 'wheat', 'corn', 'sunflower', 'silo', 'shed', 'sign',
+export const MODELS = ['mower', 'tipcart', 'tractor', 'baletrailer', 'bale', 'combine', 'header', 'cart', 'lawn', 'longgrass', 'clover', 'hay', 'alfalfa', 'wildflowers',
+  'wheat', 'corn', 'sunflower', 'silo', 'shed', 'haybarn', 'sign',
   'farmhouse', 'compost', 'doghouse', 'flowerbed', 'gate', 'workbench', 'fence', ...SCENERY];
 
 const hash = (i, j, s = 0) => { let h = Math.imul(i * 73856093 ^ j * 19349663 ^ s * 83492791, 0x9e3779b1); h ^= h >>> 15; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; return (h >>> 0) / 4294967296; };
 
-// The ground (H-L2): tiled grass sampled in world space, gravel planes for the yard, the lanes and the backyard's paths, a soil
-// border round each grain field, and each zone's pad as its own sharp decal. Planes a little apart in height, with polygon offset.
-const GRAVEL = [
-  [-24, -20, 22, 18],                       // the yard
-  [-5, 16, 5, 24], [18, -1, 28, 9], [-28, -1, -18, 9], // to the wheat, the corn, the sunflowers
-  [-3, -37, 4, -20],                        // from the yard through the backyard gate
-  [4, -46, 31, -36],                        // along the compost bins to the garage
+// The ground (H-L2): tiled grass sampled in world space with gravel blended in along the paths (a soft mask drawn from wobbly lines,
+// its edge frayed by noise in the shader, after Rally's road edges), a soil border round each grain field, and each zone's pad as its
+// own sharp decal. Planes a little apart in height, with polygon offset.
+const MASK_BOX = [-100, -160, 160, 100], MASK_PX = 1024; // the mask's ground box [x0, z0, x1, z1] and its size in pixels
+// paths: [width m, points [x, z]…]; the yard is a rounded block
+const PATHS = [
+  [10, [0, 16], [0, 24]], [10, [20, 4], [28, 4]], [10, [-22, 4], [-28, 4]],                 // the yard to the wheat, the corn, the sunflowers
+  [7, [0, -18], [0, -30], [-1, -36], [0, -40]],                                             // the yard through the backyard gate
+  [5, [0, -40], [0.5, -56], [-0.5, -70.5], [-18, -71]],                                     // the garden path, past the lawn to the porch
+  [8.5, [-2, -40], [10, -42], [20, -41], [31, -41]],                                        // along the compost bins to the garage
+  [8, [31, -41], [52, -41], [80, -41.5], [100, -40.5], [116, -42]],                         // through the meadow gate, the meadow's north edge
+  [5.5, [115.5, -42], [114.5, -60], [115.5, -80], [114.8, -100]],                           // down between the hay and the alfalfa
+  [8, [114.8, -100], [122, -104], [126, -108]],                                             // to the hay barn's door
 ];
+function pathMask() {
+  const c = document.createElement('canvas'); c.width = c.height = MASK_PX; const g = c.getContext('2d');
+  const [x0, z0, x1] = MASK_BOX, K = MASK_PX / (x1 - x0), X = x => (x - x0) * K, Z = z => (z - z0) * K;
+  g.fillStyle = '#000'; g.fillRect(0, 0, MASK_PX, MASK_PX);
+  g.filter = 'blur(3px)'; g.fillStyle = g.strokeStyle = '#fff'; g.lineCap = g.lineJoin = 'round';
+  g.beginPath(); g.roundRect(X(-24), Z(-20), 46 * K, 38 * K, 5 * K); g.fill();                  // the yard
+  let seed = 0;
+  for (const [w, ...pts] of PATHS) {
+    // every ~3 m along the line: the centre nudged sideways and the width varied a little, so it wanders
+    const way = [];
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const [ax, az] = pts[k], [bx, bz] = pts[k + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 3)), nx = -(bz - az) / L, nz = (bx - ax) / L;
+      for (let i = 0; i <= n; i++) { const t = i / n, j = i === 0 || i === n ? 0 : (hash(seed, i, 5) - 0.5) * 1.2; way.push([ax + (bx - ax) * t + nx * j, az + (bz - az) * t + nz * j, w * (0.85 + hash(seed, i, 6) * 0.3)]); }
+      seed++;
+    }
+    for (let k = 0; k + 1 < way.length; k++) { g.lineWidth = (way[k][2] + way[k + 1][2]) / 2 * K; g.beginPath(); g.moveTo(X(way[k][0]), Z(way[k][1])); g.lineTo(X(way[k + 1][0]), Z(way[k + 1][1])); g.stroke(); }
+  }
+  const t = new THREE.CanvasTexture(c); t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; return t;
+}
 const flat = (w, d, x, y, z, mat, tile) => {
   const geo = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2); if (tile) worldUV(geo, x, z, tile);
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.receiveShadow = true; return m;
@@ -47,24 +73,26 @@ function padTexture(z, col, text) {
 }
 function buildGround(group, renderer) {
   const an = renderer.capabilities.getMaxAnisotropy();
-  group.add(flat(420, 420, 0, 0, 0, new THREE.MeshLambertMaterial({ map: makeGrassTexture(an) }), 8));
-  const gravel = lift(new THREE.MeshLambertMaterial({ map: makeGravelTexture(an) }), 1);
-  for (const [x0, z0, x1, z1] of GRAVEL) group.add(flat(x1 - x0, z1 - z0, (x0 + x1) / 2, 0.01, (z0 + z1) / 2, gravel, 6));
+  group.add(flat(420, 420, 0, 0, 0, blendedGround(makeGrassTexture(an), makeGravelTexture(an), pathMask(), makeNoiseTexture(), MASK_BOX), 8));
   const soil = lift(new THREE.MeshLambertMaterial({ color: '#7a5634' }), 2);
-  for (const f of Object.values(FIELDS)) if (f.size === 1) group.add(flat(f.w + 1, f.h + 1, f.x0 + f.w / 2, 0.012, f.z0 + f.h / 2, soil));
-  for (const [z, col, text] of [[ZONES.sell, '#e8a21a', 'SELL'], [ZONES.shop, '#3a7bd5', 'UPGRADE'], [ZONES.garage, '#3a7bd5', 'GARAGE'], [ZONES.compost, '#6f8f2e', 'COMPOST']]) {
+  for (const f of Object.values(FIELDS)) if (CROP[f.crop].vehicle === 'combine') group.add(flat(f.w + 1, f.h + 1, f.x0 + f.w / 2, 0.012, f.z0 + f.h / 2, soil)); // a soil border round the grain fields
+  for (const [z, col, text] of [[ZONES.sell, '#e8a21a', 'SELL'], [ZONES.shop, '#3a7bd5', 'UPGRADE'], [ZONES.garage, '#3a7bd5', 'GARAGE'], [ZONES.compost, '#6f8f2e', 'COMPOST'],
+    [ZONES.tractorshed, '#3a7bd5', 'GARAGE'], [ZONES.haybarn, '#e8a21a', 'SELL HAY']]) {
     const m = flat(2 * z.hx, 2 * z.hz, z.x, 0.016, z.z, lift(new THREE.MeshLambertMaterial({ map: padTexture(z, col, text), transparent: true }), 3));
     m.rotation.y = z.yaw; group.add(m);
   }
 }
 
 // a field's cell colours: the ground under the ripe crop, just cut, and greening as it grows back. Grain: soil, pale stubble.
-// The backyard's: dark grass under the tufts, a pale mown stripe.
+// The backyard's and the meadow's: dark grass under the crop, a pale mown stripe.
 const GRAIN_GROUND = { ripe: [122, 86, 52], cut: [214, 190, 120], sprout: [104, 150, 60] };
 const GROUND = {
   lawn: { ripe: [70, 132, 44], cut: [156, 208, 98], sprout: [104, 168, 66] },
   longgrass: { ripe: [92, 124, 48], cut: [172, 196, 104], sprout: [116, 160, 70] },
   clover: { ripe: [66, 120, 52], cut: [150, 196, 108], sprout: [100, 160, 72] },
+  hay: { ripe: [96, 118, 50], cut: [196, 186, 112], sprout: [120, 160, 70] },
+  alfalfa: { ripe: [78, 112, 48], cut: [176, 186, 108], sprout: [110, 158, 68] },
+  wildflowers: { ripe: [84, 120, 54], cut: [184, 190, 116], sprout: [116, 162, 74] },
 };
 function cellColour(P, g, out, o) {
   const a = g < 0.3 ? 0 : Math.min(1, (g - 0.3) / 0.5), b = g >= 1 ? 1 : 0;
@@ -77,7 +105,7 @@ const CH = 16;
 function buildField(group, f, { assets, detail }) {
   const geo = modelGeometry(assets, f.crop), mat = firstMaterial(assets.get(f.crop).scene), Z = f.size, P0 = GROUND[f.crop] ?? GRAIN_GROUND;
   const data = new Uint8Array(f.w * f.h * 4), tex = new THREE.DataTexture(data, f.w, f.h); tex.magFilter = THREE.LinearFilter; tex.colorSpace = THREE.SRGBColorSpace;
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(f.w * Z, f.h * Z).rotateX(-Math.PI / 2), withDetail(new THREE.MeshLambertMaterial({ map: tex }), detail, 2.5));
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(f.w * Z, f.h * Z).rotateX(-Math.PI / 2), lift(withDetail(new THREE.MeshLambertMaterial({ map: tex }), detail, 2.5), 4)); // over the ground's layers
   plane.position.set(f.x0 + f.w * Z / 2, 0.02, f.z0 + f.h * Z / 2); plane.receiveShadow = true; group.add(plane);
   const chunks = [], shown = new Int8Array(f.w * f.h).fill(-1), M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
   const grey = new THREE.Color(0.62, 0.62, 0.58), white = new THREE.Color(1, 1, 1);
@@ -164,9 +192,15 @@ export function buildWorld({ view, farm, rig }) {
   // the backyard
   const B = BACKYARD;
   for (const [key, p] of [['farmhouse', B.house], ['compost', B.compost], ['doghouse', B.doghouse], ['workbench', B.bench], ...B.beds.map(b => ['flowerbed', b])]) place(key, p.x, p.z, p.yaw);
-  // H-F8: the gate in the backyard fence, its leaves swinging open (north) once the combine is owned
-  const gate = place('gate', B.gate.x, B.gate.z, 0), leaves = [[gate.getObjectByName('leaf_L'), 1], [gate.getObjectByName('leaf_R'), -1]].filter(([o]) => o);
-  let gateOpen = 0;
+  // the meadow: the hay barn (its top comes off while a trailer unloads in it) and the tractor's workbench
+  const haybarn = place('haybarn', MEADOW.barn.x, MEADOW.barn.z, MEADOW.barn.yaw), haybarnTop = ['roof', 'gables', 'signboard'].map(n => haybarn.getObjectByName(n)).filter(Boolean);
+  paintBoard(haybarn.getObjectByName('signboard'), buildingSign(1024, 256, 'HAY BARN', 'sell your bales'));
+  place('workbench', MEADOW.bench.x, MEADOW.bench.z, MEADOW.bench.yaw);
+  // H-F8, H-F9: the gates, their leaves swinging open once the vehicle each opens for is owned
+  const gates = Object.values(GATES).map(g => {
+    const o = place('gate', g.x, g.z, g.yaw);
+    return { g, open: 0, leaves: [[o.getObjectByName('leaf_L'), 1], [o.getObjectByName('leaf_R'), -1]].filter(([l]) => l) };
+  });
   // field signs, repainted when what the field needs changes
   const signs = farm.fields.list.map(f => {
     const s = SIGNS[f.id], o = place('sign', s.x, s.z, s.yaw);
@@ -186,32 +220,40 @@ export function buildWorld({ view, farm, rig }) {
     m.castShadow = true; m.receiveShadow = true; group.add(m);
   };
   const fenceBox = new THREE.Box3().setFromBufferAttribute(modelGeometry(assets, 'fence').attributes.position), len = Math.max(0.5, fenceBox.max.x - fenceBox.min.x);
-  const fence = [], H = FARM.half;
-  for (let a = -H + len / 2; a < H; a += len) fence.push([a, H, 0, 1], [a, -H, 0, 1], [H, a, Math.PI / 2, 1], [-H, a, Math.PI / 2, 1]);
-  const gap = B.gate.half + 0.3; // the backyard fence, either side of the gate
-  for (let a = -H + len / 2; a < H; a += len) if (Math.abs(a - B.gate.x) > gap + len / 2) fence.push([a, B.fence, 0, 1]);
+  const fence = [], { x0, x1, z0, z1 } = FARM;
+  // fence pieces along a straight line from (ax, az) to (bx, bz), each `len` long
+  const FS = 1.6; // the kit's fence is knee-high: scaled up to a proper farm fence
+  const line = (ax, az, bx, bz) => { const L = Math.hypot(bx - ax, bz - az), yaw = az === bz ? 0 : Math.PI / 2, step = len * FS;
+    for (let a = step / 2; a < L; a += step) fence.push([ax + (bx - ax) * a / L, az + (bz - az) * a / L, yaw, FS]); };
+  line(x0, z1, x1, z1); line(x0, z0, x1, z0); line(x0, z0, x0, z1); line(x1, z0, x1, z1);
+  for (const f of FENCES) for (const s of fenceSegments(f)) line(...s);
   scatter('fence', fence);
-  const trees = Object.fromEntries(SCENERY.map(k => [k, []]));
-  for (let n = 0; n < 420; n++) {
-    const a = hash(n, 11) * Math.PI * 2, r = H + 4 + hash(n, 12) * 40, x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (Math.max(Math.abs(x), Math.abs(z)) < H + 3) continue;
+  // trees in a band round the outside of the fence
+  const trees = Object.fromEntries(SCENERY.map(k => [k, []])), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, hx = (x1 - x0) / 2, hz = (z1 - z0) / 2;
+  for (let n = 0; n < 700; n++) {
+    const a = hash(n, 11) * Math.PI * 2, r = 1.02 + hash(n, 12) * 0.35, x = cx + Math.cos(a) * hx * r * 1.15, z = cz + Math.sin(a) * hz * r * 1.15;
+    if (x > x0 - 3 && x < x1 + 3 && z > z0 - 3 && z < z1 + 3) continue;
     const pick = hash(n, 13), key = pick < 0.35 ? 'tree' : pick < 0.55 ? 'oak' : pick < 0.7 ? 'treeFat' : pick < 0.85 ? 'bushL' : pick < 0.95 ? 'bush' : 'rock';
     trees[key].push([x, z, hash(n, 14) * 6.3, key.startsWith('bush') || key === 'rock' ? 2 + hash(n, 15) * 2 : 3 + hash(n, 15) * 2.5]);
   }
   for (const [k, spots] of Object.entries(trees)) scatter(k, spots);
   return {
     group,
-    // zone: the vehicle's; in the workshop, the garage or the sell bay that roof comes off, so the camera sees it
+    // zone: the vehicle's; selling: the sell zone it unloads in, or null. In the workshop or a sell bay that roof comes off, so the
+    // camera sees in
     update(zone, selling, dt = 0) {
-      gateOpen += ((farm.prog.owned.combine ? 1 : 0) - gateOpen) * Math.min(1, dt * 2);
-      for (const [o, s] of leaves) o.rotation.y = s * gateOpen * Math.PI / 2;
+      for (const g of gates) {
+        g.open += ((farm.prog.owned[g.g.opens] ? 1 : 0) - g.open) * Math.min(1, dt * 2);
+        for (const [o, s] of g.leaves) o.rotation.y = s * g.open * Math.PI / 2;
+      }
       for (let k = 0; k < fields.length; k++) fields[k].draw(farm.fields.list[k], !!needOf(farm.fields.list[k]));
       for (const s of signs) {
         const need = needOf(s.f); if (need === s.need) continue;
         s.board?.material?.map?.dispose(); paintBoard(s.board, fieldSign(s.f, need)); s.need = need;
       }
       for (const o of shedTop) o.visible = zone !== 'shop';
-      for (const o of siloTop) o.visible = zone !== 'sell' && !selling;
+      for (const o of siloTop) o.visible = zone !== 'sell' && selling !== 'sell';
+      for (const o of haybarnTop) o.visible = zone !== 'haybarn' && selling !== 'haybarn';
     },
     dispose() { scene.remove(group); disposeTree(group, { keepShared: r => r.userData?.lhShared }); },
   };

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { headless } from 'lion-hawk/test';
 import { harvestGame, initPhysics } from '../src/game.sim.js';
-import { YARD, FIELDS, ZONES, BACKYARD } from '../src/sim/layout.js';
+import { YARD, FIELDS, ZONES, BACKYARD, MEADOW, GATES } from '../src/sim/layout.js';
 import { DONE_AT, TUNE, CROP } from '../src/defs/econ.js';
 import { costOf, upgrade, VEHICLES } from '../src/defs/vehicles.js';
 import { clampProgress } from '../src/sim/farm.js';
@@ -24,6 +24,8 @@ function teleport(h, x, z, turn = 0) {
     b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
 }
+// the rig at x, z, its vehicle facing `yaw` (0 north, π/2 east)
+const place = (h, x, z, yaw) => teleport(h, x, z, yaw - h.state().combine.yaw);
 const drive = (h, thr, steer, steps) => { h.debug.drive({ thr, steer }); h.step(steps); };
 // move the whole rig so wagon i stands over the silo pit
 function wagonToPit(h, i = 0) {
@@ -92,12 +94,12 @@ test('a wagon over the silo pit unloads its grain and it is paid for; the combin
 });
 
 test('buying: the barn opens the shop, an upgrade costs coins and changes the rig', () => {
-  const h = open({ coins: 50000 }); h.step(30);
+  const h = open({ coins: 100000 }); h.step(30);
   teleport(h, ZONES.shop.x, ZONES.shop.z + 2, Math.PI); drive(h, 0, 0, 30); // drove in heading south: the carts trail out of the north door
   assert.ok(h.engine.scene.overlays.includes('shop'), 'the shop is open in the shed');
   h.engine.command('buy', { what: 'carts' }); h.step(2);
   let s = h.state();
-  assert.equal(s.levels.carts, 1); assert.equal(s.carts, 2); assert.equal(s.coins, 50000 - costOf('combine', 'carts', 0));
+  assert.equal(s.levels.carts, 1); assert.equal(s.carts, 2); assert.equal(s.coins, 100000 - costOf('combine', 'carts', 0));
   const bin = l => upgrade('combine', 'bins').value(l);
   assert.equal(s.load.cap, 2 * bin(0));
   h.engine.command('buy', { what: 'width' }); h.step(2);
@@ -175,7 +177,7 @@ test('a save restores the vehicle\'s levels, the done fields and every field\'s 
 test('a new farm starts in the mower in the backyard; it mows the lawn into its catcher', () => {
   const h = open({ fresh: true }); h.step(60);
   let s = h.state();
-  assert.equal(s.vehicle, 'mower'); assert.deepEqual(s.owned, { mower: true, combine: false }); assert.equal(s.carts, 0);
+  assert.equal(s.vehicle, 'mower'); assert.deepEqual(s.owned, { mower: true, tractor: false, combine: false }); assert.equal(s.carts, 0);
   assert.ok(Math.hypot(s.combine.x - BACKYARD.start.x, s.combine.z - BACKYARD.start.z) < 0.5, JSON.stringify(s.combine));
   assert.ok(s.combine.y > -0.2 && s.combine.y < 0.4, `rests on its wheels (y ${s.combine.y})`);
   const lawn = FIELDS.lawn.w * FIELDS.lawn.h;
@@ -204,7 +206,7 @@ test('the catcher unloads by the compost bins and is paid for', () => {
 });
 
 test('the combine is bought in the garage and driven; the mower keeps its load and levels; swapping back is free', () => {
-  const h = open({ fresh: true, coins: 9000 }); h.step(30);
+  const C0 = VEHICLES.combine.price + 1000, h = open({ fresh: true, coins: C0 }); h.step(30);
   drive(h, 1, 0, 60 * 3); drive(h, 0, 0, 30);
   h.engine.command('buy', { what: 'speed' }); h.step(2);
   assert.equal(h.state().levels.speed, 1);
@@ -212,18 +214,18 @@ test('the combine is bought in the garage and driven; the mower keeps its load a
   const mowed = h.state().load.n; assert.ok(mowed > 0);
   h.engine.command('drive', { vehicle: 'combine' }); h.step(30);
   let s = h.state();
-  assert.equal(s.vehicle, 'combine'); assert.equal(s.owned.combine, true); assert.equal(s.coins, 9000 - costOf('mower', 'speed', 0) - 8000);
+  assert.equal(s.vehicle, 'combine'); assert.equal(s.owned.combine, true); assert.equal(s.coins, C0 - costOf('mower', 'speed', 0) - VEHICLES.combine.price);
   assert.equal(s.levels.speed, 0); assert.equal(s.load.n, 0); assert.equal(s.carts, 1);
   assert.ok(h.events.some(e => e.type === 'vehicle' && e.how === 'bought'));
   assert.equal(h.events.findLast(e => e.type === 'progress').progress.active, 'combine');
   h.engine.command('drive', { vehicle: 'mower' }); h.step(30);
-  s = h.state(); assert.equal(s.vehicle, 'mower'); assert.equal(s.load.n, mowed); assert.equal(s.levels.speed, 1); assert.equal(s.coins, 9000 - costOf('mower', 'speed', 0) - 8000);
+  s = h.state(); assert.equal(s.vehicle, 'mower'); assert.equal(s.load.n, mowed); assert.equal(s.levels.speed, 1); assert.equal(s.coins, C0 - costOf('mower', 'speed', 0) - VEHICLES.combine.price);
   h.engine.command('drive', { vehicle: 'combine' }); h.step(2); assert.equal(h.state().vehicle, 'combine', 'swapping to an owned vehicle is free');
 });
 
 test('the backyard gate keeps the mower in until the combine is owned (H-F8)', () => {
-  const h = open({ fresh: true, coins: 9000 }); h.step(30);
-  teleport(h, BACKYARD.gate.x, BACKYARD.fence - 4, Math.PI / 2); h.step(10); // turned to face north, at the gate
+  const C0 = VEHICLES.combine.price + 1000, h = open({ fresh: true, coins: C0 }); h.step(30);
+  teleport(h, GATES.grain.x, BACKYARD.fence - 4, Math.PI / 2); h.step(10); // turned to face north, at the gate
   drive(h, 1, 0, 60 * 3);
   assert.ok(h.state().combine.z < BACKYARD.fence, `held by the shut gate (z ${h.state().combine.z})`);
   teleport(h, ZONES.garage.x, ZONES.garage.z); drive(h, 0, 0, 10);
@@ -231,7 +233,7 @@ test('the backyard gate keeps the mower in until the combine is owned (H-F8)', (
   h.engine.command('drive', { vehicle: 'combine' }); h.step(10);
   const c = h.state(); assert.ok(Math.hypot(c.combine.x - YARD.start.x, c.combine.z - YARD.start.z) < 1, 'the combine starts at its home in the yard');
   h.engine.command('drive', { vehicle: 'mower' }); h.step(30);
-  teleport(h, BACKYARD.gate.x, BACKYARD.fence - 4, Math.PI / 2); h.step(10); // back from its home, facing north
+  teleport(h, GATES.grain.x, BACKYARD.fence - 4, Math.PI / 2); h.step(10); // back from its home, facing north
   drive(h, 1, 0, 60 * 3);
   assert.ok(h.state().combine.z > BACKYARD.fence + 2, `through the open gate (z ${h.state().combine.z})`);
 });
@@ -240,4 +242,44 @@ test('a new farm cannot afford the combine', () => {
   const h = open({ fresh: true, coins: 100 }); h.step(5);
   h.engine.command('drive', { vehicle: 'combine' }); h.step(2);
   assert.equal(h.state().vehicle, 'mower'); assert.equal(h.state().coins, 100);
+});
+
+// ---- the meadow: the tractor (H-F9, H-H8)
+
+test('the tractor is bought in the garage: it starts in the meadow, its gate opens, the grain gate stays shut', () => {
+  const T0 = VEHICLES.tractor.price + 500, h = open({ fresh: true, coins: T0 }); h.step(30);
+  place(h, GATES.meadow.x - 4, GATES.meadow.z, Math.PI / 2); h.step(10); // facing east, at the shut meadow gate
+  drive(h, 1, 0, 60 * 2);
+  assert.ok(h.state().combine.x < GATES.meadow.x, `held by the shut meadow gate (x ${h.state().combine.x})`);
+  teleport(h, ZONES.garage.x, ZONES.garage.z); drive(h, 0, 0, 10);
+  h.engine.command('drive', { vehicle: 'tractor' }); h.step(30);
+  const s = h.state();
+  assert.equal(s.vehicle, 'tractor'); assert.equal(s.coins, T0 - VEHICLES.tractor.price); assert.equal(s.carts, 1);
+  assert.ok(Math.hypot(s.combine.x - MEADOW.start.x, s.combine.z - MEADOW.start.z) < 1, 'it starts at its home in the meadow');
+  assert.ok(s.combine.y > -0.2 && s.combine.y < 0.4, `rests on its wheels (y ${s.combine.y})`);
+  h.engine.command('drive', { vehicle: 'mower' }); h.step(30);
+  place(h, GATES.meadow.x - 6, GATES.meadow.z, Math.PI / 2); h.step(10);
+  drive(h, 1, 0, 60 * 3);
+  assert.ok(h.state().combine.x > GATES.meadow.x + 2, `through the open meadow gate (x ${h.state().combine.x})`);
+  place(h, GATES.grain.x, BACKYARD.fence - 4, 0); h.step(5);
+  drive(h, 1, 0, 60 * 3);
+  assert.ok(h.state().combine.z < BACKYARD.fence, 'the grain gate is still shut');
+});
+
+test('the tractor bales hay onto its trailer and sells the bales at the hay barn', () => {
+  const h = open({ progress: { v: 4, owned: { mower: true, tractor: true }, active: 'tractor' } }); h.step(60);
+  const F = FIELDS.hay, cap = upgrade('tractor', 'bins').value(0);
+  place(h, F.x0 + 10, F.z0 + F.h + 3, Math.PI); h.step(10); // facing south, into the hay
+  drive(h, 1, 0, 60 * 6);
+  let s = h.state();
+  assert.equal(s.blocked, null); assert.ok(s.load.n > 0 && s.load.bins[0][2] === 'hay', JSON.stringify(s.load));
+  assert.equal(s.load.cap, cap, 'one trailer of four bales');
+  drive(h, 0, 0, 60);
+  const n = h.state().load.n;
+  // the trailer over the hay barn's floor
+  const r = h.debug.rig, q = r.train.carts[0].body.translation(), p = r.c.body.translation();
+  teleport(h, ZONES.haybarn.x + p.x - q.x, ZONES.haybarn.z + p.z - q.z); drive(h, 0, 0, 30);
+  assert.ok(h.state().selling);
+  drive(h, 0, 0, Math.ceil(60 * n / VEHICLES.tractor.unload) + 30);
+  s = h.state(); assert.equal(s.load.n, 0); assert.equal(s.coins, n * CROP.hay.price);
 });

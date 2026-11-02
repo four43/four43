@@ -1,0 +1,14 @@
+{
+  "title": "Meadow hay",
+  "description": "One clump of tall meadow grass for a 1 m meadow cell: four leaning golden-green tufts, loose blades flopping outward and seven thin stems with pale seed heads. A single mesh node `crop` (materials crop + head), instanced.",
+  "size": [0.88, 0.8, 0.88],
+  "tolerance": 0.12,
+  "grounded": true,
+  "nodes": ["crop"],
+  "budget": { "tris": 110, "materials": 2, "kb": 20 },
+  "checks": [
+    "3/4 tile: tall golden-green grass with pale seed heads standing above the blades",
+    "TOP tile: the clump stays inside the 1 m cell and covers most of it",
+    "FRONT tile: the tallest seed head reaches the top of the box (0.8 m), everything starts on the grid line"
+  ]
+}

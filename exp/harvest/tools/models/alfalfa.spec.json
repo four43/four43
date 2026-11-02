@@ -1,0 +1,14 @@
+{
+  "title": "Alfalfa",
+  "description": "One bushy alfalfa clump for a 1 m meadow cell: six faceted leafy green bushes with small purple flower clusters at their crowns. A single mesh node `crop` (materials crop + petal), instanced.",
+  "size": [0.9, 0.7, 0.9],
+  "tolerance": 0.12,
+  "grounded": true,
+  "nodes": ["crop"],
+  "budget": { "tris": 110, "materials": 2, "kb": 20 },
+  "checks": [
+    "3/4 tile: a bushy green clump with small purple flower clusters poking out of the top",
+    "TOP tile: the bushes stay inside the 1 m cell and cover most of it; purple dots scattered over it",
+    "FRONT tile: the tallest purple cluster reaches the top of the box (0.7 m), the bushes sit on the grid line"
+  ]
+}

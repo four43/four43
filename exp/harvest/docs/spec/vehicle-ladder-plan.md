@@ -1,6 +1,6 @@
 # Harvest: the vehicle ladder (plan)
 
-Status: plan, 2026-11-01; the user's calls are in §9. Phases 1 and 2 are done (spec §14, §15); phase 3 (the meadow and the tractor) is next.
+Status: plan, 2026-11-01; the user's calls are in §9. Phases 1–3 are done (spec §14–§16, Harvest 0.2.0); phase 4 (bumper crops) is next.
 
 The goal is a longer game in chapters. Each chapter has its own vehicle, its own area of the farm, its own crops and its own way
 of carrying the harvest. The loop stays the same as now: cut, fill, sell, upgrade. Buying the next vehicle opens the next area.

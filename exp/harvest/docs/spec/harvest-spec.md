@@ -205,3 +205,43 @@ The tables in §6 (H-U2) and the prices in §5 (H-S2) above give the pre-rebase 
     fenders and the tip carts no longer pitch forward.
   - The farmhouse's porch steps rise toward the deck, and its windows read as set into the walls.
   - The backyard's signs are out of the way: the lawn's against the fence, the others at their fields' outer corners.
+
+## 16. Vehicles, phase 3: the meadow and the tractor (2026-11-01)
+
+- **The ladder is now mower → tractor (1,500) → combine (8,000).** Both later vehicles are bought on the workshop card (at the
+  garage, the tractor's garage or the barn) and appear at their own home.
+- **H-F9** The farm grows to x -85..140, z -140..85. The **meadow** is south-east, behind a fence along x = 52 with its own gate
+  (shut until the tractor is owned) on the path from the backyard's garage.
+  - **Fields:** hay (40 × 32 m), alfalfa (18 × 32 m, blades 1) and wildflowers (40 × 28 m, blades 2), with 1 m cells.
+  - **The hay barn** is the tractor's sell point: a drive-through along z in the meadow's south-east corner.
+  - **The tractor's garage** is a pad with a workbench by the meadow gate; the workshop card opens there.
+  - Gravel lanes run from the gate along the meadow's north edge and down between the hay and the alfalfa to the barn.
+- **The gates** (`GATES` in the layout) each sit in a fence line (`FENCES`) and open for their vehicle: the grain gate for the
+  combine, the meadow gate for the tractor.
+- **H-H8 The tractor** has a front mower (2.5 m, up to 6 m), a road speed of 8 m/s, a cutting speed of 2.8 m/s (up to 5.3), and
+  tows bale trailers (1, up to 4).
+  - **Bales:** every 12 cells cut make a round bale on the trailer: 4 bales a trailer, up to 12 (two across, two along, three
+    layers). The stack sways with the turns.
+  - **Selling:** at the hay barn the bales are lifted off one at a time (30 cells a second, a bale every 0.4 s) and fly up into the
+    loft.
+  - **Prices:** hay 4, alfalfa 8, wildflowers 12 a cell. Tractor upgrades start at 150.
+- A vehicle's definition may set its own unload rate (`unload`); the tractor's is slower than the bins' 150 a second.
+- The meadow's ground is grassy under its crops (no soil border); the tractor's camera rides higher, over the bale stack.
+
+### 16.1 Playtest fixes and balance (2026-11-01)
+
+- **Letting go of the stick brakes** to a stop (`CP.coast` 60, near the foot brake's 85); before, the vehicle rolled on.
+- **Paths:** the ground is one tiled grass texture with gravel blended in through a soft mask drawn from wobbly lines (centres
+  nudged and widths varied every ~3 m), its edge frayed by noise at two scales in the shader, after Rally's road edges. The gravel
+  rectangles are gone.
+- **The backyard re-laid around one garden path** from the gate past the lawn to the farmhouse porch: the lawn (28 × 22 m) west of
+  the path, the farmhouse behind it with the flower beds either side of the porch, clover west of the lawn. The mower starts on the
+  path, facing the lawn. Both workbenches stand against the backyard fence, facing their pads. The fences are 1.6× taller.
+- **Balance:** each blades level costs about 70–90 % of the first harvest of the field before it, and each vehicle about what its
+  chapter's fields pay, so a field is mostly cut before the next opens:
+
+| Vehicle | Price | Blades (1 / 2) | Bin size (level 0) | Upgrade bases (speed / width / bins / carts) |
+|---|---|---|---|---|
+| Mower | free | 1,800 / 3,600 | 300 clippings | 120 / 150 / 100 / 600 |
+| Tractor | 8,000 | 3,800 / 4,370 | 6 bales a trailer (up to 12) | 400 / 600 / 500 / 1,500 |
+| Combine | 30,000 | 30,000 / 72,000 | 600 grain a wagon | 3,000 / 5,000 / 4,000 / 12,000 |

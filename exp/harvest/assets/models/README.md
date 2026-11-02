@@ -29,8 +29,16 @@ for the bake's palette `'vertex'`.
 | `compost.glb` | static, three bays open to +Z | - | `board`, `wood`, `soil`, `seed`, `crop`, `sign`, `white` | 648 |
 | `doghouse.glb` | static, door faces +Z, bowl in front | - | `red`, `white`, `roof`, `board`, `dark`, `sign`, `metal`, `seed` | 292 |
 | `flowerbed.glb` | static | - | `wood`, `board`, `soil`, `crop`, `petal`, `red`, `white`, `flower`, `seed` | 1060 |
+| `tractor.glb` | `body` (with the deck's two arms); `driver` (origin on the seat top centre); `deck` (exactly 1 m wide, x -0.5..0.5, origin on its underside centre at `TRACTOR.deck` z/y: scale X to the cutting width, 2.5..6 m; nothing round in x); `wheel_FL` `wheel_FR` `wheel_BL` `wheel_BR` (origin on the hub, spin about X) | `Socket_Hitch` (`TRACTOR.hitch`) | `paint` (repaint per player), `trim`, `rim`, `tyre`, `metal`, `light`, `red`, `seat`, `skin`, `shirt`, `jeans`, `hat` | 3066 |
+| `baletrailer.glb` | `bed` (plank deck, low side rails, headboard, A-frame tongue, mudguards); `wheel_L` `wheel_R` (hub origin, spin about X); no grain node (the game draws the bales) | `Socket_Hitch` (tongue tip), `Socket_Tow`, `Socket_Bed` (the deck's top centre) | `paint` (repaint per player), `rim`, `tyre`, `metal`, `wood`, `red` | 1460 |
+| `bale.glb` | `bale` (one mesh node, instanced; lying on its side, axis along X, centre at y = `BALE.r`) | - | `grain`, `seed` | 128 |
+| `haybarn.glb` | `walls` (side walls, trim, windows and the bale stacks inside; 11.4 m clear lane), `gables` (with the hayloft door and hoist beam), `roof` (gambrel), `signboard` (front face UVs 0..1, material `sign`); static | - | `red`, `board`, `white`, `roof`, `glass`, `wood`, `dark`, `sign`, `grain`, `seed` | 3484 |
+| `hay.glb` | `crop` (one mesh node, instanced) | - | `crop`, `head` | 102 |
+| `alfalfa.glb` | `crop` (one mesh node, instanced) | - | `crop`, `petal` | 108 |
+| `wildflowers.glb` | `crop` (one mesh node, instanced) | - | `crop`, `petal` (red), `head` (yellow), `flower` (blue), `seed` (white) | 101 |
 
-Crops fill one 1 m cell (footprint inside x, z +/-0.5) at the full-growth height in `CROPS`; the backyard crops (`lawn`, `longgrass`,
+Crops fill one 1 m cell (footprint inside x, z +/-0.5) at the full-growth height in `CROPS` (the meadow's `hay`, `alfalfa`,
+`wildflowers`: `MEADOW_CROPS`); the backyard crops (`lawn`, `longgrass`,
 `clover`) fill one 0.5 m cell (inside x, z +/-0.25) at the heights in `YARD_CROPS`.
 
 ### Rebuild

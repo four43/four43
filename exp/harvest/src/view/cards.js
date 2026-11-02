@@ -19,7 +19,8 @@ const el = (doc, tag, cls, html) => { const x = doc.createElement(tag); if (cls)
 const cuts = (veh, l) => CROP[CROP_IDS.findLast(k => CROP[k].vehicle === veh && CROP[k].tough <= l)].label.toLowerCase();
 const fmt = (veh, id, l) => {
   const u = upgrade(veh, id), v = u.value(l);
-  return id === 'speed' ? `${(v * 3.6).toFixed(0)} km/h` : id === 'width' ? `${+v.toFixed(1)} m` : id === 'bins' ? `${v}` : id === 'blades' ? cuts(veh, v)
+  const bale = VEHICLES[veh].bale;
+  return id === 'speed' ? `${(v * 3.6).toFixed(0)} km/h` : id === 'width' ? `${+v.toFixed(1)} m` : id === 'bins' ? (bale ? `${v / bale} bales` : `${v}`) : id === 'blades' ? cuts(veh, v)
     : `${v} ${u.noun[v === 1 ? 0 : 1]}`;
 };
 

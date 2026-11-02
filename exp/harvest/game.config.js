@@ -9,6 +9,8 @@ const MATS = {
   // the backyard: the mower's driver and seat, the farmhouse, compost bins, kennel and flower bed
   seat: 'scenery', skin: 'scenery', shirt: 'scenery', jeans: 'scenery', hat: 'scenery',
   wall: 'wood', dark: 'wood', brick: 'stone', soil: 'stone', flower: 'crop',
+  // the meadow: the tractor's and bale trailer's yellow wheel rims
+  rim: 'paint',
 };
 const custom = f => ({ file: `custom/${f}.glb`, rename: { materials: MATS } });
 const nature = f => ({ file: `nature-kit/${f}.glb` });
@@ -28,6 +30,8 @@ export default {
       lawn: custom('lawn'), longgrass: custom('longgrass'), clover: custom('clover'),
       farmhouse: { ...custom('farmhouse'), static: true }, compost: { ...custom('compost'), static: true },
       doghouse: { ...custom('doghouse'), static: true }, flowerbed: { ...custom('flowerbed'), static: true }, gate: custom('gate'), workbench: { ...custom('workbench'), static: true },
+      tractor: custom('tractor'), baletrailer: custom('baletrailer'), bale: custom('bale'), haybarn: { ...custom('haybarn'), static: true },
+      hay: custom('hay'), alfalfa: custom('alfalfa'), wildflowers: custom('wildflowers'),
       fence: nature('fence_simple'), oak: nature('tree_oak'), tree: nature('tree_default'), treeFat: nature('tree_fat'),
       bush: nature('plant_bush'), bushL: nature('plant_bushLarge'), rock: nature('rock_smallC'),
     },

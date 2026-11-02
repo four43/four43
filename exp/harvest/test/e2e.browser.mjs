@@ -3,7 +3,8 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, openGame, expectScene } from 'lion-hawk/playwright';
 import { serveHarvest } from './serve.mjs';
-import { ZONES, FIELDS, YARD, BACKYARD } from '../src/sim/layout.js';
+import { ZONES, FIELDS, YARD, BACKYARD, GATES } from '../src/sim/layout.js';
+import { VEHICLES } from '../src/defs/vehicles.js';
 
 // a save driving the combine (the flows that test the grain fields start from it)
 const COMBINE = { v: 4, owned: { mower: true, combine: true }, active: 'combine' };
@@ -33,7 +34,7 @@ test('desktop: a new farm boots into the mower by the compost bins; W drives it 
 
 test('desktop: the barn opens the workshop card; Buy spends coins', async t => {
   if (skip) return t.skip(skip);
-  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { coins: 5000 } });
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { coins: 20000 } });
   try {
     await game.page.evaluate(([x, z]) => {
       const r = window.engine.debug.rig, p = r.c.body.translation(), dx = x - p.x, dz = z - p.z;
@@ -43,7 +44,7 @@ test('desktop: the barn opens the workshop card; Buy spends coins', async t => {
     assert.ok(await game.page.evaluate(() => !!document.getElementById('shop')), 'the card is drawn');
     await game.page.click('[data-testid="shop.speed"]'); await game.step(3); await frames(game);
     const s = await game.state();
-    assert.equal(s.levels.speed, 1); assert.ok(s.coins < 5000);
+    assert.equal(s.levels.speed, 1); assert.ok(s.coins < 20000);
     console.log('shot', await game.shot('shop'));
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
@@ -103,7 +104,7 @@ for (const preset of ['iPhone 15 Pro portrait', 'iPad Pro 11 landscape']) test(`
 
 test('desktop: corn is too tough for blunt blades; Blades 1 unlocks it with a banner; a field done says so', async t => {
   if (skip) return t.skip(skip);
-  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { progress: COMBINE, coins: 20000 } });
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { progress: COMBINE, coins: 40000 } });
   const place = (x, z, yaw) => game.page.evaluate(([x, z, yaw]) => {
     const r = window.engine.debug.rig, p = r.c.body.translation(), c = Math.cos(yaw - r.c.yaw), s = Math.sin(yaw - r.c.yaw), h = (yaw - r.c.yaw) / 2;
     for (const b of [r.c.body, ...r.train.carts.map(k => k.body)]) {
@@ -137,7 +138,7 @@ test('desktop: corn is too tough for blunt blades; Blades 1 unlocks it with a ba
 
 test('desktop: the mower\'s day: mow the lawn, tip the clippings at the compost bins, buy the combine in the garage', async t => {
   if (skip) return t.skip(skip);
-  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { coins: 8000 } });
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { coins: VEHICLES.combine.price } });
   const move = (x, z) => game.page.evaluate(([x, z]) => {
     const r = window.engine.debug.rig, p = r.c.body.translation(), dx = x - p.x, dz = z - p.z;
     for (const b of [r.c.body, ...r.train.carts.map(c => c.body)]) { const t = b.translation(); b.setTranslation({ x: t.x + dx, y: t.y, z: t.z + dz }, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); }
@@ -152,7 +153,7 @@ test('desktop: the mower\'s day: mow the lawn, tip the clippings at the compost 
     assert.ok((await game.state()).selling, 'the catcher is over the compost');
     console.log('shot', await game.shot('compost'));
     await game.step(60 * 3);
-    s = await game.state(); assert.equal(s.load.n, 0); assert.ok(s.coins > 8000);
+    s = await game.state(); assert.equal(s.load.n, 0); assert.ok(s.coins > VEHICLES.combine.price);
     await move(ZONES.garage.x, ZONES.garage.z); await game.step(20); for (let k = 0; k < 10; k++) await frames(game);
     assert.ok(await game.page.evaluate(() => !!document.querySelector('[data-testid="shop.veh.combine"]')), 'the garage card offers the combine');
     console.log('shot', await game.shot('shop-vehicles'));
@@ -180,9 +181,42 @@ test('desktop: the backyard: the start, the garage, and from the gate the farmho
     await game.page.evaluate(([x, z]) => {
       const r = window.engine.debug.rig, p = r.c.body.translation(), q = { x: 0, y: 1, z: 0, w: 0 }; // turned to face south
       r.c.body.setTranslation({ x, y: p.y, z }, true); r.c.body.setRotation(q, true);
-    }, [BACKYARD.gate.x + 3, BACKYARD.fence - 3]);
+    }, [GATES.grain.x + 3, BACKYARD.fence - 3]);
     await game.step(30); for (let k = 0; k < 30; k++) await frames(game);
     console.log('shot', await game.shot('backyard'));
+    assert.deepEqual(await game.errors(), []);
+  } finally { await game.close(); }
+});
+
+test('desktop: the tractor\'s day: bale the hay onto the trailer, sell the bales at the hay barn', async t => {
+  if (skip) return t.skip(skip);
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { progress: { v: 4, owned: { mower: true, tractor: true }, active: 'tractor', vehicles: { tractor: { levels: { bins: 4, width: 3 } } } } } });
+  // the rig at x, z, facing yaw (0 north, π/2 east), every body keeping its offset
+  const place = (x, z, yaw) => game.page.evaluate(([x, z, yaw]) => {
+    const r = window.engine.debug.rig, p = r.c.body.translation(), d = yaw - r.c.yaw, c = Math.cos(d), s = Math.sin(d), qy = Math.sin(d / 2), qw = Math.cos(d / 2);
+    for (const b of [r.c.body, ...r.train.carts.map(k => k.body)]) {
+      const t = b.translation(), ox = t.x - p.x, oz = t.z - p.z, o = b.rotation();
+      b.setTranslation({ x: x + ox * c + oz * s, y: t.y, z: z - ox * s + oz * c }, true);
+      b.setRotation({ x: qw * o.x + qy * o.z, y: qw * o.y + qy * o.w, z: qw * o.z - qy * o.x, w: qw * o.w - qy * o.y }, true);
+      b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    }
+  }, [x, z, yaw]);
+  try {
+    await expectScene(game, 'farm');
+    const F = FIELDS.hay;
+    await place(F.x0 + 12, F.z0 + F.h + 4, Math.PI); await game.step(20);
+    await game.page.evaluate(() => window.engine.debug.drive({ thr: 1, steer: 0 }));
+    await game.step(60 * 9); for (let k = 0; k < 20; k++) await frames(game);
+    let s = await game.state(); assert.equal(s.vehicle, 'tractor'); assert.ok(s.load.n >= 3 * VEHICLES.tractor.bale, `baled ${s.load.n}`);
+    console.log('shot', await game.shot('baling'));
+    await game.page.evaluate(() => window.engine.debug.drive({ thr: 0, steer: 0 })); await game.step(60);
+    const off = await game.page.evaluate(() => { const r = window.engine.debug.rig, p = r.c.body.translation(), q = r.train.carts[0].body.translation(); return [p.x - q.x, p.z - q.z]; });
+    await place(ZONES.haybarn.x + off[0], ZONES.haybarn.z + off[1], Math.PI); await game.step(20); for (let k = 0; k < 10; k++) await frames(game);
+    assert.ok((await game.state()).selling, 'the trailer is in the hay barn');
+    await game.step(30); for (let k = 0; k < 6; k++) await frames(game);
+    console.log('shot', await game.shot('haybarn'));
+    await game.step(60 * 12);
+    s = await game.state(); assert.equal(s.load.n, 0); assert.ok(s.coins > 0);
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });

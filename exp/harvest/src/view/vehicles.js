@@ -3,16 +3,22 @@
 // the reel with the ground speed, keep the chute pointing back at the wagon that is filling with its nozzle turned along the stream
 // (H-H7). The mower's deck is scaled to its width and its own catcher heap shows the catcher's fill. Both blow their crop into the bin
 // that is filling while they cut, raise each cart's heap with its bin's fill, and drop the crop out of a bin while it unloads over a
-// sell zone (H-S1). Nothing here writes the sim.
+// sell zone (H-S1). The tractor's bale trailers carry round bales instead (H-H8): one appears on the stack for every bale's worth of
+// hay cut, the stack sways with the turns, and at the hay barn the bales are lifted off one by one into the loft. Nothing here
+// writes the sim.
 import * as THREE from 'three';
-import { COMBINE, CART, TIPCART } from '../defs/models.js';
+import { COMBINE, CART, TIPCART, BALETRAILER, BALE, HAYBARN } from '../defs/models.js';
+import { MEADOW } from '../sim/layout.js';
 import { CROP, CROP_IDS } from '../defs/econ.js';
 import { VEHICLES } from '../defs/vehicles.js';
 import { G } from './grain.js';
 
 const SP = COMBINE.spout, STREAM = 90; // kernels a second in the stream
 const FLIGHT = { combine: 0.45, mower: 0.22 }; // a kernel's flight time (s), chute to bin
-const DIMS = { cart: CART, tipcart: TIPCART }; // a cart model's dimensions (its hopper)
+const DIMS = { cart: CART, tipcart: TIPCART, baletrailer: BALETRAILER }; // a cart model's dimensions (its hopper)
+const LOFT = { x: MEADOW.barn.x, y: HAYBARN.eave + 1, z: MEADOW.barn.z }; // where sold bales fly to
+// the k-th bale's place on a trailer bed, from the bed's top centre: two across, two along, then the next layer up
+const slot = (k, out) => out.set(((k % 2) - 0.5) * (BALE.w + 0.05), Math.floor(k / 4) * BALE.r * 2 * 0.96, (((k >> 1) % 2) - 0.5) * BALE.r * 2.2);
 const jitter = () => (Math.random() - 0.5) * 0.8;
 const V = () => new THREE.Vector3(), DOWN = new THREE.Vector3(0, -1, 0);
 
@@ -96,11 +102,45 @@ export function vehicleViews(sync, { assets, rigOf, grain }) {
     },
     remove(e) { st.delete(e.id); },
   });
+  const flying = []; // sold bales on their way to the loft: { o, from, t }
+  // a bale trailer's stack: bales added and taken off to match the bin, popped in, flown off at the hay barn, swaying with the turns
+  function baleFrame(s, obj, r, b, dt) {
+    if (!assets.has('bale')) return;
+    const want = Math.floor((b?.n ?? 0) / VEHICLES[r.vehicle].bale);
+    while (s.bales.length < want) {
+      const o = assets.clone('bale'); slot(s.bales.length, o.position); o.scale.setScalar(0.01); s.stack.add(o); s.bales.push({ o, pop: 0 });
+    }
+    while (s.bales.length > want) {
+      const { o } = s.bales.pop();
+      if (r.selling) { o.getWorldPosition(at); s.stack.remove(o); obj.parent.add(o); o.position.copy(at); o.rotation.set(0, obj.rotation.y, 0); flying.push({ o, from: at.clone(), t: 0 }); }
+      else s.stack.remove(o);
+    }
+    for (const k of s.bales) if (k.pop < 1) { k.pop = Math.min(1, k.pop + dt * 4); k.o.scale.setScalar(0.3 + 0.7 * Math.sin(k.pop * Math.PI / 2) + 0.15 * Math.sin(k.pop * Math.PI)); }
+    // sway: lean out of the turn by the turn rate times the speed
+    const lean = Math.max(-0.12, Math.min(0.12, -r.c.body.angvel().y * r.c.speed * 0.03));
+    s.stack.rotation.z += (lean - s.stack.rotation.z) * Math.min(1, dt * 4);
+  }
+  // the flying bales arc up to the loft and vanish
+  function flyFrame(dt) {
+    for (let i = flying.length - 1; i >= 0; i--) {
+      const f = flying[i]; f.t += dt / 0.8;
+      if (f.t >= 1) { f.o.removeFromParent(); flying.splice(i, 1); continue; }
+      const t = f.t, k = t * t * (3 - 2 * t);
+      f.o.position.set(f.from.x + (LOFT.x - f.from.x) * k, f.from.y + (LOFT.y - f.from.y) * k + Math.sin(t * Math.PI) * 3, f.from.z + (LOFT.z - f.from.z) * k);
+      f.o.rotation.x += dt * 4; f.o.scale.setScalar(1 - 0.5 * t);
+    }
+  }
   const offCart = sync.on('#cart', {
-    create(e, obj) { carts.set(e.id, obj); st.set(e.id, { dims: DIMS[e.model] ?? CART, grain: obj.getObjectByName('grain'), lastFill: -1, lastN: -1, owed: 0 }); },
+    create(e, obj) {
+      carts.set(e.id, obj);
+      const s = { dims: DIMS[e.model] ?? CART, grain: obj.getObjectByName('grain'), lastFill: -1, lastN: -1, owed: 0, bales: null, stack: null };
+      if (e.model === 'baletrailer') { const B = BALETRAILER.bed; s.bales = []; s.stack = new THREE.Group(); s.stack.position.set(0, B.top, (B.z0 + B.z1) / 2); obj.add(s.stack); }
+      st.set(e.id, s);
+    },
     frame(e, obj, alpha, view) {
       const s = st.get(e.id), r = rigOf(e); if (!s || !r) return;
       const b = r.load.bins[(VEHICLES[r.vehicle].bag ? 1 : 0) + (e.cart ?? 0)], fill = b ? b.n / b.cap : 0;
+      if (s.bales) { const dt = view?.dt ?? 0; baleFrame(s, obj, r, b, dt); if (e.cart === 0) flyFrame(dt); return; }
       if (s.grain && fill !== s.lastFill) { s.lastFill = fill; s.grain.visible = fill > 0.01; s.grain.scale.y = Math.max(0.05, fill); }
       // unloading over a sell zone: the crop falls out of the floor
       const n = b?.n ?? 0, dropping = s.lastN > n && r.selling; s.lastN = n;
@@ -114,5 +154,5 @@ export function vehicleViews(sync, { assets, rigOf, grain }) {
     },
     remove(e) { carts.delete(e.id); st.delete(e.id); },
   });
-  return () => { offRig(); offCart(); st.clear(); carts.clear(); };
+  return () => { offRig(); offCart(); st.clear(); carts.clear(); for (const f of flying) f.o.removeFromParent(); flying.length = 0; };
 }

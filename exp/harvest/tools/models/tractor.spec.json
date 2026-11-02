@@ -1,0 +1,19 @@
+{
+  "title": "Compact tractor",
+  "description": "Friendly bright-blue compact farm tractor: a chunky hood with a white grille surround, side headlights and an exhaust stack, big lugged yellow-rimmed rear wheels under arched mudguards and small front wheels, an open roll frame with a white canopy roof over the seat, steps up to the footplate, a drawbar hitch at the back, a driver in a cap, and a front-mounted mower deck (node `deck`, exactly 1 m wide, scaled in x to 2.5..6 m) on two arms ahead of the front tyres. Material `paint` is repainted per player.",
+  "size": [2.01, 2.6, 4.9],
+  "tolerance": 0.05,
+  "grounded": true,
+  "nodes": ["body", "driver", "deck", "wheel_FL", "wheel_FR", "wheel_BL", "wheel_BR"],
+  "sockets": ["Socket_Hitch"],
+  "contacts": ["tread_FL", "tread_FR", "tread_BL", "tread_BR"],
+  "budget": { "tris": 4000, "materials": 12, "kb": 400 },
+  "checks": [
+    "LEFT tile: small front wheels and big rear wheels all touching the grid line, hood at the front end, the deck low ahead of the front tyre with a gap",
+    "LEFT tile: the mudguard arcs over the rear tyre with a visible gap all round; no tyre passes through a mudguard, step, floor or deck",
+    "3/4 tile: a driver in a cap sits on the seat under the canopy, hands on the steering wheel, boots on the floor",
+    "3/4 tile: reads as a friendly blue farm tractor (not a mower or a car): chunky hood, exhaust stack, roll frame with a canopy",
+    "BACK tile: the drawbar and hitch pin low in the middle, both rear tyres clear of the mudguards, the canopy above",
+    "TOP tile: the canopy covers the seat; the two deck arms reach from under the hood to the deck's back edge"
+  ]
+}

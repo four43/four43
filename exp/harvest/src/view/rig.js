@@ -8,6 +8,7 @@ export const CAM = { distance: 12, height: 12.5, lookAhead: 10, lookHeight: 0, l
 const CAMS = {
   combine: { distance: 12, height: 12.5, lookAhead: 10 },
   mower: { distance: 7, height: 7.5, lookAhead: 5 },
+  tractor: { distance: 11, height: 13, lookAhead: 9 }, // high: over the bale stack
 };
 const NDC = { nx: 0, ny: 0, nz: 0, behind: false }; let proj = null;
 export const rig = {

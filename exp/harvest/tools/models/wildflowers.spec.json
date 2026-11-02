@@ -1,0 +1,14 @@
+{
+  "title": "Wildflowers",
+  "description": "One cheerful wildflower clump for a 1 m meadow cell: low green leaf tufts and blades, and eight thin stems topped by flat star flowers, two each of red, yellow, blue and white. A single mesh node `crop` (materials crop + petal + head + flower + seed), instanced.",
+  "size": [0.84, 0.65, 0.84],
+  "tolerance": 0.12,
+  "grounded": true,
+  "nodes": ["crop"],
+  "budget": { "tris": 110, "materials": 5, "kb": 20 },
+  "checks": [
+    "3/4 tile: red, yellow, blue and white flower heads on thin green stems above low green leaves",
+    "TOP tile: the clump stays inside the 1 m cell; the eight flower heads are spread across it",
+    "FRONT tile: the tallest flower reaches the top of the box (0.65 m), stems start on the grid line"
+  ]
+}

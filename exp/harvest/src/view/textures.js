@@ -73,3 +73,33 @@ export function withDetail(material, detail, tile) {
   material.customProgramCacheKey = () => `hv-detail-${tile}`;
   return material;
 }
+
+// Soft value noise (blurred random blobs), tiling, in the red channel: frays the edges where gravel meets grass
+export function makeNoiseTexture() {
+  const N = 256, c = canvas(N), g = c.getContext('2d'), rnd = lcg(41), wrap = wrapped(N);
+  g.fillStyle = 'rgb(128,128,128)'; g.fillRect(0, 0, N, N);
+  g.filter = 'blur(6px)';
+  for (let i = 0; i < 260; i++) {
+    const x = rnd() * N, y = rnd() * N, r = 6 + rnd() * 16, v = Math.round(rnd() * 255);
+    g.fillStyle = `rgba(${v},${v},${v},.55)`; wrap(x, y, (px, py) => { g.beginPath(); g.arc(px, py, r, 0, 7); g.fill(); });
+  }
+  return finish(c, 1, false);
+}
+
+// The ground's material: grass, with gravel blended in where `mask` (a canvas over the box [x0, z0, x1, z1]) is white. The edge is
+// frayed by noise at two scales, so the paths' borders wander instead of running ruler-straight.
+export function blendedGround(grass, gravel, mask, noise, [x0, z0, x1, z1]) {
+  const m = new THREE.MeshLambertMaterial({ map: grass });
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, { hvGravel: { value: gravel }, hvMask: { value: mask }, hvNoise: { value: noise }, hvBox: { value: new THREE.Vector4(x0, z0, 1 / (x1 - x0), 1 / (z1 - z0)) } });
+    sh.vertexShader = 'varying vec2 vHvXZ;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvHvXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    sh.fragmentShader = 'uniform sampler2D hvGravel, hvMask, hvNoise;\nuniform vec4 hvBox;\nvarying vec2 vHvXZ;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      vec2 hvM = (vHvXZ - hvBox.xy) * hvBox.zw;
+      float hvK = texture2D(hvMask, vec2(hvM.x, 1.0 - hvM.y)).r;
+      float hvN = texture2D(hvNoise, vHvXZ / 9.0).r * 0.65 + texture2D(hvNoise, vHvXZ / 2.3).r * 0.35;
+      float hvB = smoothstep(0.42, 0.58, hvK + (hvN - 0.5) * 0.45);
+      diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(hvGravel, vHvXZ / 6.0).rgb, hvB);`);
+  };
+  m.customProgramCacheKey = () => 'hv-ground';
+  return m;
+}

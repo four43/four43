@@ -1,6 +1,27 @@
 {
   "v": 1,
   "models": {
+    "alfalfa": {
+      "glb": "models/alfalfa.glb",
+      "anim": null,
+      "bytes": 7008,
+      "sha256": "b2c37dce926e955abe6582b64a1ac5e0bf8db2a7b826e88069c09c4d85228094",
+      "options": "baafb5175816342f"
+    },
+    "bale": {
+      "glb": "models/bale.glb",
+      "anim": null,
+      "bytes": 6360,
+      "sha256": "fe294961d673350008a4a3b2e690284dd6184f986049017931d2c6d780de9163",
+      "options": "baafb5175816342f"
+    },
+    "baletrailer": {
+      "glb": "models/baletrailer.glb",
+      "anim": null,
+      "bytes": 55484,
+      "sha256": "6c966c810fa8875b58afa94042a4c818ce9d2d8b74e8c5a4fce4c0dc735158f3",
+      "options": "baafb5175816342f"
+    },
     "bush": {
       "glb": "models/bush.glb",
       "anim": null,
@@ -20,49 +41,49 @@
       "anim": null,
       "bytes": 38504,
       "sha256": "2a5ecf8444b184e6b3e8344535a7f5ea7c24baa50e443d9e755fe7fe2889cf96",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "clover": {
       "glb": "models/clover.glb",
       "anim": null,
       "bytes": 6956,
       "sha256": "9445c8be94a3e228ef96a8f4ce7b1883ea23b653969378d8ff1a22387bc5d750",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "combine": {
       "glb": "models/combine.glb",
       "anim": null,
       "bytes": 99568,
       "sha256": "acc1a910e9887afc172b9c68638792fc2f6ef0f2b9a108844734f017b3643606",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "compost": {
       "glb": "models/compost.glb",
       "anim": null,
       "bytes": 29332,
       "sha256": "6516a2f5407639bef13549369092671c4ab452f775a825de00cd216da18b8b0b",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     },
     "corn": {
       "glb": "models/corn.glb",
       "anim": null,
       "bytes": 8196,
       "sha256": "228010c535c1e583589dc204c48f28546831e0e3187c6e7851fca7ffbe8de420",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "doghouse": {
       "glb": "models/doghouse.glb",
       "anim": null,
       "bytes": 21736,
       "sha256": "678d7abe1ae6877727df058ac2cc654f10dc179a9a5ce29a9621d938bf74222a",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     },
     "farmhouse": {
       "glb": "models/farmhouse.glb",
       "anim": null,
       "bytes": 92108,
       "sha256": "d0f8e60ed6710f1d68a1a7da36fa137d40a69dd1356753f5d6cc72fd0c4eb2a4",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     },
     "fence": {
       "glb": "models/fence.glb",
@@ -76,42 +97,56 @@
       "anim": null,
       "bytes": 46552,
       "sha256": "2a7feefc1078beec16634469b58e98ebb404d3c9c1df45208ffd0f71d045b5b7",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     },
     "gate": {
       "glb": "models/gate.glb",
       "anim": null,
       "bytes": 11696,
       "sha256": "96ed05bbeea1e831dd2e5cc0454ca2354fcde1e55fc35b65995036dc062fd7e9",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
+    },
+    "hay": {
+      "glb": "models/hay.glb",
+      "anim": null,
+      "bytes": 6724,
+      "sha256": "1cd7d269dfcf473ddfb31842fcb04552120c1e612f20f5e0c88b914a096ae463",
+      "options": "baafb5175816342f"
+    },
+    "haybarn": {
+      "glb": "models/haybarn.glb",
+      "anim": null,
+      "bytes": 104252,
+      "sha256": "16e80285034c4d63807d0028bdfb59b09d13ef544b8f1262292e09a282a99be5",
+      "options": "67491681787f01fa"
     },
     "header": {
       "glb": "models/header.glb",
       "anim": null,
       "bytes": 30988,
       "sha256": "7fb5f9efa682f4ba01940665f59c09dc71398e22f4cf5707638738f033226d3f",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "lawn": {
       "glb": "models/lawn.glb",
       "anim": null,
       "bytes": 2584,
       "sha256": "8e6b6a750e25340b7b1c1f0575b895342147b2905a45a1f3e886770fbaf5cfe2",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "longgrass": {
       "glb": "models/longgrass.glb",
       "anim": null,
       "bytes": 5624,
       "sha256": "ae1b544085b3eb0b3492e36d4621c22a798e6c07a8f95e1926c8278c63ef70cc",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "mower": {
       "glb": "models/mower.glb",
       "anim": null,
       "bytes": 116212,
       "sha256": "d785643140f531f73de61457c1d2bf807269036b4dc5ad4548cf7ce9549ed136",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "oak": {
       "glb": "models/oak.glb",
@@ -132,35 +167,42 @@
       "anim": null,
       "bytes": 28708,
       "sha256": "708700883504efe4cfec420ccafe5e6d41b1545409575d2cb9a165a2c8dc65e8",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     },
     "sign": {
       "glb": "models/sign.glb",
       "anim": null,
       "bytes": 7008,
       "sha256": "698cb80e90c7a327b79a816dd362d97047eb9e1287a4f84a13ceee928c7d76d3",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "silo": {
       "glb": "models/silo.glb",
       "anim": null,
       "bytes": 63124,
       "sha256": "06eff7f95247c1683f404ed353ec961021bfdbd91c87eac646f552339cb851ed",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     },
     "sunflower": {
       "glb": "models/sunflower.glb",
       "anim": null,
       "bytes": 8496,
       "sha256": "daef3c5dc123c60e301489f5705ca0753d59f6e66160a63e9f93e2fb5349402c",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
     },
     "tipcart": {
       "glb": "models/tipcart.glb",
       "anim": null,
       "bytes": 35292,
       "sha256": "8b12752ed3056288b7afd88efb69675ece56a3bbf60a3285f2d6a0a18e33edb2",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
+    },
+    "tractor": {
+      "glb": "models/tractor.glb",
+      "anim": null,
+      "bytes": 125620,
+      "sha256": "cc406a8c94dfcf9774e5c26d28dfdb1ea751412f26c032f2b65be3fada5952d1",
+      "options": "baafb5175816342f"
     },
     "tree": {
       "glb": "models/tree.glb",
@@ -181,14 +223,21 @@
       "anim": null,
       "bytes": 7088,
       "sha256": "e36bb18b68b6adc7616f77e9556419368d8bfbb211a459d0db08c6f9116e4b31",
-      "options": "326d919a377ff73b"
+      "options": "baafb5175816342f"
+    },
+    "wildflowers": {
+      "glb": "models/wildflowers.glb",
+      "anim": null,
+      "bytes": 10388,
+      "sha256": "65d52398ceb94163d3ab52ae189f3d4630b4c108898ce0424336d01a09ae5379",
+      "options": "baafb5175816342f"
     },
     "workbench": {
       "glb": "models/workbench.glb",
       "anim": null,
       "bytes": 26952,
       "sha256": "eaf04f68c3da3a19285067051196af8d07be847baccd6c226c868e3cba9fe399",
-      "options": "375059c5cbeb081c"
+      "options": "67491681787f01fa"
     }
   }
 }

@@ -1,0 +1,37 @@
+{
+  "title": "Bale trailer",
+  "description": "Blue flatbed hay trailer on two lugged yellow-rimmed wheels: a wooden plank deck at BALETRAILER.bed.top, low side rails on stakes, a planked headboard at the front, an A-frame tongue to the hitch eye with a jack stand, mudguard arcs in front of and behind each tyre, and a tow pin at the back. No grain node: the game draws round bales on the deck from Socket_Bed. Material `paint` is repainted per player.",
+  "size": [
+    2.59,
+    2.46,
+    5.35
+  ],
+  "tolerance": 0.05,
+  "grounded": true,
+  "nodes": [
+    "bed",
+    "wheel_L",
+    "wheel_R"
+  ],
+  "sockets": [
+    "Socket_Hitch",
+    "Socket_Tow",
+    "Socket_Bed"
+  ],
+  "contacts": [
+    "tread_L",
+    "tread_R"
+  ],
+  "budget": {
+    "tris": 2500,
+    "materials": 6,
+    "kb": 250
+  },
+  "checks": [
+    "LEFT tile: a long flat deck with a tall headboard at the front end, the tongue reaching forward to the hitch eye, both wheels on the grid line",
+    "LEFT tile: the mudguard arcs sit in front of and behind the tyre with a gap to it; the tyre top stays under the deck",
+    "3/4 tile: a planked wooden deck with low blue rails along both edges, open at the back",
+    "BACK tile: the tow pin low in the middle, red tail lights, both tyres under the deck's edges",
+    "TOP tile: the deck is a clear flat rectangle for two bales across and two along"
+  ]
+}

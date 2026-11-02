@@ -1,0 +1,14 @@
+{
+  "title": "Round hay bale",
+  "description": "A round hay bale lying on its side, axis along X (radius BALE.r 0.72, width BALE.w 1.15): a 14-sided golden straw barrel with two darker twine bands and a darker ring with a pale core on each round face. A single mesh node `bale`, instanced by the game.",
+  "size": [1.15, 1.44, 1.44],
+  "tolerance": 0.05,
+  "grounded": true,
+  "nodes": ["bale"],
+  "budget": { "tris": 160, "materials": 2, "kb": 20 },
+  "checks": [
+    "LEFT tile: a round face (near-circle) with a darker ring and a pale centre, sitting on the grid line",
+    "FRONT tile: a golden barrel, as wide as it is tall-ish, with two darker twine bands running round it",
+    "3/4 tile: reads as a round hay bale, not a log or a drum"
+  ]
+}
