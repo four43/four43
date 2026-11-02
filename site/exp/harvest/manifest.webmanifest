@@ -1,0 +1,17 @@
+{
+  "name": "Harvest",
+  "short_name": "Harvest",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "theme_color": "#bfe6f5",
+  "background_color": "#bfe6f5",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
