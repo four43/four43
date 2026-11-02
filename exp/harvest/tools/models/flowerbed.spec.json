@@ -1,0 +1,13 @@
+{
+  "title": "Flower bed",
+  "description": "A raised wooden plank bed (3 x 1 m, 0.3 m high) with corner posts, dark soil inside and two staggered rows of eleven flowers on green stems: red, yellow, purple and white heads with brown centres. Static scenery.",
+  "size": [3.02, 0.68, 1.02],
+  "tolerance": 0.08,
+  "grounded": true,
+  "budget": { "tris": 1500, "materials": 9, "kb": 120 },
+  "checks": [
+    "3/4 tile: a low wooden box with darker corner posts, filled with dark soil",
+    "FRONT tile: a row of flowers in four colours (red, yellow, purple, white) standing above the planks on green stems",
+    "TOP tile: the flowers stay inside the bed, in a staggered row along its length"
+  ]
+}

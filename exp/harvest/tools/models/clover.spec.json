@@ -1,0 +1,14 @@
+{
+  "title": "Clover",
+  "description": "One low clover patch for a 0.5 m yard cell: three trefoils of flat green leaflets and three round flower heads on stems, two pink and one white. A single mesh node `crop` (materials crop + petal + head), instanced.",
+  "size": [0.39, 0.3, 0.43],
+  "tolerance": 0.12,
+  "grounded": true,
+  "nodes": ["crop"],
+  "budget": { "tris": 80, "materials": 3, "kb": 15 },
+  "checks": [
+    "TOP tile: three three-leaf clovers (each three leaflets in a Y) and three round flower heads, inside the 0.5 m cell",
+    "3/4 tile: two pink flower heads and one white one stand above the low leaves on thin stems",
+    "FRONT tile: the tallest flower head reaches the top of the box (0.3 m), the stems start on the grid line"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "title": "Grain cart",
+  "description": "Hopper grain cart on two lugged wheels: sloped open-top hopper with a yellow lip and band, a scalable grain heap inside, chassis rails, mudguards, an A-frame tongue to the hitch eye at the front and a tow clevis at the back. Material `paint` is repainted per player.",
+  "size": [2.81, 2.04, 4.43],
+  "tolerance": 0.05,
+  "grounded": true,
+  "nodes": ["bed", "grain", "wheel_L", "wheel_R"],
+  "sockets": ["Socket_Hitch", "Socket_Tow"],
+  "contacts": ["tread_L", "tread_R"],
+  "budget": { "tris": 4000, "materials": 6, "kb": 250 },
+  "checks": [
+    "LEFT tile: a hopper wider at the top than the bottom, on one axle of big wheels that touch the grid line, a tongue reaching forward to the front end",
+    "3/4 tile: the hopper is open on top and holds a golden grain mound below the yellow lip",
+    "BACK tile: the hopper sides slope out (a V/trapezoid), mudguards over both wheels, a tow clevis in the middle at the bottom",
+    "TOP tile: the tongue is an A-frame meeting at a single hitch eye on the centre line"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "title": "Long grass",
+  "description": "One overgrown yellow-green grass clump for a 0.5 m yard cell: four tall leaning tufts, eight loose blades flopping out, and four thin stems with pale seed heads. A single mesh node `crop` (materials crop + head), instanced.",
+  "size": [0.48, 0.6, 0.48],
+  "tolerance": 0.12,
+  "grounded": true,
+  "nodes": ["crop"],
+  "budget": { "tris": 80, "materials": 2, "kb": 15 },
+  "checks": [
+    "3/4 tile: a wild, untidy yellow-green clump, clearly taller and shaggier than a lawn tuft",
+    "FRONT tile: pale seed heads on thin stems reach the top of the box (0.6 m), every blade starts on the grid line",
+    "TOP tile: the clump stays inside the 0.5 m cell"
+  ]
+}

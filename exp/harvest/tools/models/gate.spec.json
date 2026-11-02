@@ -1,0 +1,25 @@
+{
+  "title": "Farm gate",
+  "description": "A white five-bar double farm gate (two leaves with a diagonal brace each) between two chunky wooden posts with white caps, 7 m across, closing a gap in a fence. Nodes leaf_L (pivot at its +x post) and leaf_R (pivot at its -x post) swing about Y to open.",
+  "size": [
+    7.5,
+    1.71,
+    0.28
+  ],
+  "tolerance": 0.08,
+  "grounded": true,
+  "nodes": [
+    "posts",
+    "leaf_L",
+    "leaf_R"
+  ],
+  "budget": {
+    "tris": 400,
+    "materials": 2,
+    "kb": 40
+  },
+  "checks": [
+    "FRONT tile: two white five-bar leaves meeting in the middle between two brown posts, a diagonal brace on each",
+    "TOP tile: a thin straight line along X with the posts at the ends"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "title": "Garden tip cart",
+  "description": "Small red garden tip cart on two lugged wheels: an open-top box hopper (walls leaning out a little) with a yellow lip and band, a scalable green clippings heap inside, steel mudguards, a single tongue to the hitch eye at the front with a little stand, and a tow bar with a pin at the back. Same contract as cart.glb. Material `paint` is repainted per player.",
+  "size": [1.31, 0.875, 1.75],
+  "tolerance": 0.06,
+  "grounded": true,
+  "nodes": ["bed", "grain", "wheel_L", "wheel_R"],
+  "sockets": ["Socket_Hitch", "Socket_Tow"],
+  "contacts": ["tread_L", "tread_R"],
+  "budget": { "tris": 2000, "materials": 5, "kb": 200 },
+  "checks": [
+    "LEFT tile: a box hopper on one axle of small wheels that touch the grid line, a tongue reaching forward to the front end, a tow bar at the back end",
+    "3/4 tile: the hopper is open on top and holds a green clippings mound below the yellow lip",
+    "BACK tile: wheels either side under mudguards, the tow pin in the middle at the bottom",
+    "TOP tile: the tongue runs straight down the centre line to a single hitch eye"
+  ]
+}

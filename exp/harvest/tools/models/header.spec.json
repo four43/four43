@@ -1,0 +1,15 @@
+{
+  "title": "Header",
+  "description": "The combine's cutting table, exactly 1 m wide for the game to stretch: `bar` (floor pan, back wall, cutter bar with guards, cross auger) and `reel` (6 yellow bats on an axle at HEADER.reel) scale in X; `end_L` / `end_R` side shields with pointed crop dividers pivot at x = +/-0.5. Origin: back edge centre on the ground.",
+  "size": [1.24, 1.55, 2.4],
+  "tolerance": 0.06,
+  "grounded": true,
+  "nodes": ["bar", "reel", "end_L", "end_R"],
+  "budget": { "tris": 1500, "materials": 4, "kb": 150 },
+  "checks": [
+    "LEFT tile: a low tray with a tall back wall at the back end, the reel up front above the floor, a pointed divider reaching forward past the cutter bar",
+    "FRONT tile: six yellow bats round the reel axle, an auger tube across the back, the side shields at both ends",
+    "3/4 tile: the reel axle sits in bearings on arms coming forward from the back wall top",
+    "TOP tile: the dividers point forward (toward the front end) and stand outside the 1 m bar on both sides"
+  ]
+}

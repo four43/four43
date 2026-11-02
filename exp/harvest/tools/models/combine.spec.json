@@ -1,0 +1,46 @@
+{
+  "title": "Combine",
+  "description": "Chunky toy-like green combine harvester: big lugged drive wheels at the front, small steering wheels at the back, cab with glass and a yellow roof, open-top grain tank with a scalable grain heap, folded unloading spout on a Y pivot, engine and exhaust at the back. No header (header.glb hangs on Socket_Header). Material `paint` is repainted per player.",
+  "size": [
+    3.15,
+    3.6,
+    7.71
+  ],
+  "tolerance": 0.05,
+  "grounded": true,
+  "nodes": [
+    "body",
+    "grain",
+    "spout",
+    "wheel_FL",
+    "wheel_FR",
+    "wheel_BL",
+    "wheel_BR",
+    "nozzle"
+  ],
+  "sockets": [
+    "Socket_Header",
+    "Socket_Hitch",
+    "Socket_SpoutTip"
+  ],
+  "contacts": [
+    "tread_FL",
+    "tread_FR",
+    "tread_BL",
+    "tread_BR"
+  ],
+  "budget": {
+    "tris": 4000,
+    "materials": 8,
+    "kb": 400
+  },
+  "checks": [
+    "BACK tile (the chase camera's view): reads as a combine - tall boxy body, cab with glass up front on top, open grain tank behind the cab, big front wheels and small rear wheels",
+    "LEFT tile: the front drive wheels are clearly bigger than the rear steering wheels, and all four touch the grid line",
+    "LEFT tile: the feeder house slopes from the body front down toward the ground at the front (where the header mounts)",
+    "3/4 tile: the grain tank is open on top with a golden grain mound inside, below the yellow lip",
+    "3/4 tile: the unloading spout lies folded along the left side above the body and runs past the back end",
+    "3/4 tile: a ladder climbs the left side to the cab deck, with yellow handrails on the deck",
+    "TOP tile: the cab is at the front end, the tank in the middle, the engine and exhaust at the back"
+  ]
+}

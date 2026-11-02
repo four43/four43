@@ -1,0 +1,32 @@
+{
+  "title": "Silo (sell station)",
+  "description": "The sell station: a red-and-white drive-through bay along Z (corner posts at x +/-6.5, z +/-7, red gable roof on beams at 6 m, white gable ends) with a yellow-bordered dump-pit grate in the middle of its concrete floor, and two tall ribbed galvanised silos with cone roofs and ladders on its +X side, joined by a red bucket-elevator leg with spouts to both cones. Socket_Pit at the bay centre on the ground.",
+  "size": [
+    21.9,
+    17.25,
+    15.1
+  ],
+  "tolerance": 0.05,
+  "grounded": true,
+  "nodes": [
+    "bay",
+    "silos",
+    "grate",
+    "signboard"
+  ],
+  "sockets": [
+    "Socket_Pit"
+  ],
+  "budget": {
+    "tris": 3000,
+    "materials": 6,
+    "kb": 300
+  },
+  "checks": [
+    "3/4 tile: a roofed bay open at both Z ends (drive-through), posts only at the four corners",
+    "3/4 tile: a dark grate with a yellow border lies in the middle of the bay floor",
+    "LEFT tile: two silver silos with cone tops and horizontal bands, a red tower between them with spouts to each cone",
+    "RIGHT tile: each silo has a ladder on the side facing the bay",
+    "TOP tile: the silos sit to the +X side of the bay, clear of its roof"
+  ]
+}

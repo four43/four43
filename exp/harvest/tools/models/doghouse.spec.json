@@ -1,0 +1,14 @@
+{
+  "title": "Dog house",
+  "description": "A little red kennel with a slate pitched roof (ridge along z), white corner boards and ridge cap, an arched dark doorway in a white frame facing +Z with a yellow name plate above it, on a wooden skid base; a steel food bowl with kibble sits in front. Static scenery.",
+  "size": [1.2, 1.3, 1.4],
+  "tolerance": 0.05,
+  "grounded": true,
+  "budget": { "tris": 600, "materials": 8, "kb": 80 },
+  "checks": [
+    "FRONT tile: a gable end with an arched dark doorway in a white frame and a yellow name plate above it",
+    "3/4 tile: red walls, a two-sided slate roof overhanging the walls, a steel bowl of kibble on the ground in front to the left",
+    "LEFT tile: the kennel stands on the grid line (skid base), the bowl in front of the front end",
+    "TOP tile: a plain roof with a white ridge down the middle along z"
+  ]
+}

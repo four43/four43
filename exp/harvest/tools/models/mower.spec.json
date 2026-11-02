@@ -1,0 +1,19 @@
+{
+  "title": "Ride-on mower",
+  "description": "Chunky red garden-tractor-style ride-on mower: rounded engine hood with a grille and headlights, footboards, a black seat behind a steering wheel, big lugged rear wheels under arched fenders and small front wheels, a 1 m cutting deck (node `deck`, scaled in x to the cutting width) under the middle with a chute out of its back, a pipe up to an open-top grass catcher on the back holding a scalable green clippings heap, a hitch at the back, and a friendly driver in a straw hat. Material `paint` is repainted per player.",
+  "size": [1.33, 1.48, 2.41],
+  "tolerance": 0.06,
+  "grounded": true,
+  "nodes": ["body", "driver", "deck", "grain", "wheel_FL", "wheel_FR", "wheel_BL", "wheel_BR"],
+  "sockets": ["Socket_SpoutTip", "Socket_Bag", "Socket_Hitch"],
+  "contacts": ["tread_FL", "tread_FR", "tread_BL", "tread_BR"],
+  "budget": { "tris": 5000, "materials": 13, "kb": 400 },
+  "checks": [
+    "LEFT tile: small front wheels and big rear wheels all touching the grid line, the hood at the front end, the catcher box at the back end",
+    "LEFT tile: the cutting deck sits low between the front and rear wheels, close to the ground",
+    "3/4 tile: a driver in a straw hat sits on the seat with both hands on the steering wheel and boots on the footboards",
+    "3/4 tile: reads as a friendly red ride-on mower, not a car or a tractor",
+    "BACK tile (the chase camera's view): the open-top catcher with green clippings inside, the hitch below it, the driver's hat above",
+    "TOP tile: the green clippings heap fills the catcher; the chute pipe reaches the catcher's front edge on the centre line"
+  ]
+}
