@@ -1,5 +1,5 @@
 // Offline support: the page, its model files (assets/models, D1), the icons and the Google Font.
-const CACHE = 'harvest-0.2.1+lh0.17.0-caa98aa3f084';
+const CACHE = 'harvest-0.2.2+lh0.17.0-01f1aeeb2aeb';
 const PRECACHE = ["./","assets/models/alfalfa.glb","assets/models/bale.glb","assets/models/baletrailer.glb","assets/models/bush.glb","assets/models/bushL.glb","assets/models/cart.glb","assets/models/clover.glb","assets/models/combine.glb","assets/models/compost.glb","assets/models/corn.glb","assets/models/doghouse.glb","assets/models/farmhouse.glb","assets/models/fence.glb","assets/models/flowerbed.glb","assets/models/gate.glb","assets/models/hay.glb","assets/models/haybarn.glb","assets/models/header.glb","assets/models/lawn.glb","assets/models/longgrass.glb","assets/models/mower.glb","assets/models/oak.glb","assets/models/rock.glb","assets/models/shed.glb","assets/models/sign.glb","assets/models/silo.glb","assets/models/sunflower.glb","assets/models/tipcart.glb","assets/models/tractor.glb","assets/models/tree.glb","assets/models/treeFat.glb","assets/models/wheat.glb","assets/models/wildflowers.glb","assets/models/workbench.glb","apple-touch-icon.png","icon.svg","manifest.webmanifest"]; // lion-hawk build stamps the list: ./, the manifest, the icons and every assets/models file (D1)
 
 self.addEventListener('install', e => {
@@ -27,7 +27,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match('./')));
     return;
   }
-  // Everything else is cache-first; a new build changes CACHE (via 0.2.1+lh0.17.0-caa98aa3f084), which re-fetches it.
+  // Everything else is cache-first; a new build changes CACHE (via 0.2.2+lh0.17.0-01f1aeeb2aeb), which re-fetches it.
   e.respondWith(caches.match(req, { ignoreSearch: !font }).then(hit => hit || fetch(req).then(res => {
     if (res.ok || res.type === 'opaque') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
