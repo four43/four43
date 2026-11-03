@@ -17,7 +17,7 @@
 <style>
 :root{--ink:#5a3820;--panel:rgba(255,252,248,.94);--edge:#6b4428;--sky:#bfe6f5;font-family:"Sniglet","Arial Rounded MT Bold",ui-rounded,system-ui,sans-serif}
 html,body{height:var(--app-h,100%);margin:0;-webkit-text-size-adjust:100%;overflow:hidden;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
-body{background:var(--sky);color:var(--ink)}
+body{position:relative;background:var(--sky);color:var(--ink)} /* the canvas and #ui fill the body, so --app-h reaches them */
 *,*::before,*::after{box-sizing:border-box}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 #ui{position:absolute;inset:0;pointer-events:none;z-index:5}
@@ -27,7 +27,7 @@ body{background:var(--sky);color:var(--ink)}
 #stickBase[hidden]{display:none}
 #stickKnob{width:64px;height:64px;border-radius:50%;background:#f5c84c;box-shadow:inset 0 0 0 3px #b07a12}
 /* HUD */
-.hv-top{position:absolute;top:calc(var(--lh-sa-top,0px) + 10px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.hv-top{position:absolute;top:calc(var(--lh-sa-top,0px) + 16px);left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
 .hv-coins{display:flex;align-items:center;gap:6px;padding:4px 18px 4px 6px;border-radius:30px;background:var(--panel);border:4px solid var(--edge);box-shadow:0 4px 0 rgba(107,68,40,.4);font:800 30px/1 Sniglet,system-ui}
 .hv-coins svg{width:38px;height:38px}
 .hv-coins.bump{animation:bump .3s ease-out}
@@ -37,7 +37,7 @@ body{background:var(--sky);color:var(--ink)}
 .hv-seg{flex:1 1 0;border-radius:6px;background:#e8dcc6;overflow:hidden;border:2px solid #b89a70}
 .hv-seg i{display:block;height:100%;background:#f2c230;transform-origin:left;transform:scaleX(0);transition:transform .15s}
 .hv-loadn{font:800 16px/1 Sniglet,system-ui;min-width:72px;text-align:right;white-space:nowrap}
-.hv-full{position:absolute;top:calc(var(--lh-sa-top,0px) + 142px);left:50%;transform:translateX(-50%);padding:6px 22px;border-radius:22px;background:#d84a3a;color:#fff;font:400 26px/1.1 Sniglet,system-ui;border:4px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.25);animation:pulse 1s ease-in-out infinite}
+.hv-full{position:absolute;top:calc(var(--lh-sa-top,0px) + 148px);left:50%;transform:translateX(-50%);padding:6px 22px;border-radius:22px;background:#d84a3a;color:#fff;font:400 26px/1.1 Sniglet,system-ui;border:4px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.25);animation:pulse 1s ease-in-out infinite}
 .hv-full b{font-weight:800}
 .hv-tip{background:#e8a21a;font-size:22px;animation:none;white-space:nowrap}
 .hv-full[hidden],.hv-arrow[hidden],.hv-done[hidden],.hv-field[hidden]{display:none}
@@ -50,7 +50,7 @@ body{background:var(--sky);color:var(--ink)}
 .hv-done span{font:400 22px/1.2 Sniglet,system-ui}
 @keyframes donein{from{transform:translate(-50%,-50%) scale(.4);opacity:0}}
 @keyframes pulse{50%{transform:translateX(-50%) scale(1.06)}}
-.hv-arrow{position:absolute;top:calc(var(--lh-sa-top,0px) + 194px);left:50%;width:64px;height:64px;transform-origin:50% 50%}
+.hv-arrow{position:absolute;top:calc(var(--lh-sa-top,0px) + 200px);left:50%;width:64px;height:64px;transform-origin:50% 50%}
 .hv-arrow svg{width:100%;height:100%}
 .hv-fly{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;transition:transform .6s cubic-bezier(.4,-.3,.7,1),opacity .6s;z-index:7;pointer-events:none}
 .hv-fly svg{width:100%;height:100%}
@@ -82,11 +82,11 @@ body{background:var(--sky);color:var(--ink)}
 #tune{position:absolute;left:8px;bottom:8px;z-index:9;background:rgba(255,255,255,.92);padding:8px;border-radius:10px;font:14px system-ui;color:#222;touch-action:pan-y}
 #tune label{display:grid;grid-template-columns:90px 160px 48px;gap:6px;align-items:center;min-height:36px}
 @media (max-width:520px){.hv-name b{display:none}.hv-pips i{width:11px;height:11px}.hv-buy{width:108px;min-height:50px;font-size:20px}.hv-buy svg{width:24px;height:24px}.hv-vehs{gap:6px}.hv-veh{padding:6px 4px}.hv-veh b{font-size:16px}.hv-veh span{font-size:13px}.hv-card{gap:8px;padding:12px 12px 14px}.hv-row{padding:4px 8px}.hv-tip{font-size:17px}.hv-done b{font-size:32px}}
-@media (max-height:520px){.hv-coins{font-size:22px;padding:2px 14px 2px 4px}.hv-coins svg{width:28px;height:28px}.hv-bars{width:min(180px,40vw);height:14px}.hv-loadn{font-size:14px;min-width:60px}.hv-field{font-size:13px}.hv-full{top:calc(var(--lh-sa-top,0px) + 104px);font-size:20px}.hv-arrow{top:calc(var(--lh-sa-top,0px) + 140px);width:48px;height:48px}
+@media (max-height:520px){.hv-coins{font-size:22px;padding:2px 14px 2px 4px}.hv-coins svg{width:28px;height:28px}.hv-bars{width:min(180px,40vw);height:14px}.hv-loadn{font-size:14px;min-width:60px}.hv-field{font-size:13px}.hv-full{top:calc(var(--lh-sa-top,0px) + 110px);font-size:20px}.hv-arrow{top:calc(var(--lh-sa-top,0px) + 146px);width:48px;height:48px}
   #ui:has(#shop) .hv-top{left:calc(var(--lh-sa-left,0px) + 12px);transform:none;align-items:flex-start}
-  .hv-card{top:calc(var(--lh-sa-top,0px) + 8px);transform:none;max-height:calc(100% - var(--lh-sa-top,0px) - var(--lh-sa-bottom,0px) - 16px);width:min(440px,calc(100vw - var(--lh-sa-left,0px) - var(--lh-sa-right,0px) - 330px))}@keyframes cardin{from{transform:translateX(40px);opacity:0}}
+  .hv-card{top:calc(var(--lh-sa-top,0px) + 14px);transform:none;max-height:calc(100% - var(--lh-sa-top,0px) - var(--lh-sa-bottom,0px) - 16px);width:min(440px,calc(100vw - var(--lh-sa-left,0px) - var(--lh-sa-right,0px) - 330px))}@keyframes cardin{from{transform:translateX(40px);opacity:0}}
   .hv-name b{display:none}.hv-val{font-size:14px}.hv-card h2{display:none}.hv-done{top:55%;padding:8px 22px}.hv-done b{font-size:28px}.hv-done span{font-size:17px}.hv-vehs{margin-right:52px}.hv-buy{min-height:42px}.hv-pips i{width:11px;height:11px}.hv-veh{padding:3px 6px}.hv-veh b{font-size:16px}.hv-card{gap:5px;padding:8px 12px 10px}.hv-card h2{font-size:22px}.hv-row{padding:2px 8px}.hv-icon svg{width:34px;height:34px}.hv-buy{min-height:44px;font-size:20px}.hv-x{width:44px;height:44px}}
-@media (orientation:portrait){.hv-card{right:50%;top:auto;bottom:calc(var(--lh-sa-bottom,0px) + 14px);transform:translateX(50%);max-height:calc(100% - var(--lh-sa-top,0px) - var(--lh-sa-bottom,0px) - 150px)}@keyframes cardin{from{transform:translateX(50%) translateY(40px);opacity:0}}}
+@media (orientation:portrait){.hv-card{right:50%;top:auto;bottom:calc(var(--lh-sa-bottom,0px) + 14px);transform:translateX(50%);max-height:calc(100% - var(--lh-sa-top,0px) - var(--lh-sa-bottom,0px) - 156px)}@keyframes cardin{from{transform:translateX(50%) translateY(40px);opacity:0}}}
 </style>
 </head>
 <body>
