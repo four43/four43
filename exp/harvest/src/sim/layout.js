@@ -44,11 +44,12 @@ export const BACKYARD = Object.freeze({
 });
 
 // The meadow (H-F9), behind its own gate east of the backyard: the hay, alfalfa and wildflower fields, the hay barn (the tractor's
-// sell point, a drive-through along z) in its south-east corner, and the tractor's garage pad with a workbench by the gate.
+// sell point, a drive-through along z) in its south-east corner, and the tractor's garage pad beside it (playtest 2026-11-04: sell,
+// then upgrade without the drive back), between the barn and the wildflowers, its workbench against the south fence facing it.
 export const MEADOW = Object.freeze({
   fence: 52,                                                        // the fence along x = 52, south of the backyard fence
-  pad: Object.freeze({ x: 60, z: -41, yaw: 0 }),
-  bench: Object.freeze({ x: 60, z: -35.75, yaw: Math.PI }),  // against the backyard fence, facing the pad
+  pad: Object.freeze({ x: 109, z: -133.5, yaw: 0 }),
+  bench: Object.freeze({ x: 109, z: -138.75, yaw: 0 }),      // against the south fence, facing the pad
   barn: Object.freeze({ x: 126, z: -118, yaw: 0 }),
   start: Object.freeze({ x: 70, z: -41, yaw: Math.PI / 2 }),
 });

@@ -13,8 +13,12 @@ const up = (label, max, base, growth, value, noun) => Object.freeze({ label, max
 export const VEHICLE_IDS = Object.freeze(['mower', 'tractor', 'combine']);
 // Balance (playtest 2026-11-01: "upgrade the blades and move on after barely touching the first field"): each blades level costs
 // about 70-90 % of what the field before it pays on its first harvest, and each vehicle about what its chapter's fields pay, so a
-// field is mostly cut before the next opens. First harvests: lawn 2,464, long grass 3,840, clover 4,800; hay 5,120, alfalfa 4,608,
-// wildflowers 13,440; wheat 38,400, corn 91,520, sunflowers 183,040.
+// field is mostly cut before the next opens. Playtest 2026-11-04 ("the tractor should be an exciting jump, not a reset to a
+// slog"): a new vehicle out-earns the one before it fully upgraded (per second and per load), so its crops pay ~10x the last
+// chapter's. Cells cut a second: mower 4·deck·speed (0.5 m cells) 9.7 → 48; tractor deck·speed 7 → 35; combine 9.6 → 64. So the
+// tractor on hay makes ~280 a second from the start against a maxed mower's ~145 on clover, the combine on wheat ~3,800 against a
+// maxed tractor's ~3,100. First harvests: lawn 2,464, long grass 3,840, clover 4,800; hay 51,200, alfalfa 34,560, wildflowers
+// 100,800; wheat 768,000, corn 1,372,800, sunflowers 2,059,200.
 export const VEHICLES = Object.freeze({
   mower: Object.freeze({
     label: 'Mower', price: 0, road: 6.5, sell: 'compost', start: BACKYARD.start, bag: true,
@@ -30,21 +34,21 @@ export const VEHICLES = Object.freeze({
   tractor: Object.freeze({
     label: 'Tractor', price: 8000, road: 8, sell: 'haybarn', start: MEADOW.start, bag: false, bale: 12, unload: 30, // 30 cells a second: a bale every 0.4 s
     upgrades: Object.freeze({
-      speed: up('Cut speed', 6, 400, 1.55, l => 2.8 + 0.5 * l),
-      width: up('Mower', 5, 600, 1.6, l => 2.5 + 0.7 * l),
-      bins: up('Bales a trailer', 3, 500, 1.7, l => (6 + 2 * l) * 12), // 6 bales, up to 12 (three layers)
-      carts: up('Trailers', 3, 1500, 2.2, l => 1 + l, ['trailer', 'trailers']),
-      blades: up('Blades', 2, 3800, 1.15, l => l),          // alfalfa 3,800, wildflowers 4,370
+      speed: up('Cut speed', 6, 3200, 1.55, l => 2.8 + 0.5 * l),
+      width: up('Mower', 5, 4800, 1.6, l => 2.5 + 0.7 * l),
+      bins: up('Bales a trailer', 2, 4000, 1.7, l => (12 + 4 * l) * 12), // 12 bales (three layers), up to 20 (five)
+      carts: up('Trailers', 3, 12000, 2.2, l => 1 + l, ['trailer', 'trailers']),
+      blades: up('Blades', 2, 32000, 1.1, l => l),          // alfalfa 32,000, wildflowers 35,200
     }),
   }),
   combine: Object.freeze({
-    label: 'Combine', price: 30000, road: 10, sell: 'sell', start: YARD.start, bag: false,
+    label: 'Combine', price: 180000, road: 10, sell: 'sell', start: YARD.start, bag: false,
     upgrades: Object.freeze({
-      speed: up('Cut speed', 8, 3000, 1.5, l => 3.2 + 0.6 * l),
-      width: up('Header', 5, 5000, 1.75, l => 3 + l),
-      bins: up('Bin size', 6, 4000, 1.55, l => 600 + 150 * l), // grain one wagon holds
-      carts: up('Wagons', 4, 12000, 2.1, l => 1 + l, ['wagon', 'wagons']),
-      blades: up('Blades', 2, 30000, 2.4, l => l),           // corn 30,000, sunflowers 72,000
+      speed: up('Cut speed', 8, 40000, 1.5, l => 3.2 + 0.6 * l),
+      width: up('Header', 5, 67000, 1.75, l => 3 + l),
+      bins: up('Bin size', 6, 54000, 1.55, l => 600 + 150 * l), // grain one wagon holds
+      carts: up('Wagons', 4, 160000, 2.1, l => 1 + l, ['wagon', 'wagons']),
+      blades: up('Blades', 2, 600000, 1.85, l => l),         // corn 600,000, sunflowers 1,110,000
     }),
   }),
 });

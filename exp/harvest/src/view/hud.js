@@ -6,6 +6,8 @@ import { SIGN } from '../defs/models.js';
 import { VEHICLES } from '../defs/vehicles.js';
 import { CROP, DONE_AT } from '../defs/econ.js';
 
+// a coin count with thousands separators (later chapters pay in the millions)
+export const num = n => Math.round(n).toLocaleString('en-US');
 export const COIN_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="#f5c84c" stroke="#b07a12" stroke-width="4"/><circle cx="20" cy="20" r="10" fill="none" stroke="#fff3b0" stroke-width="3"/></svg>';
 const ARROW_SVG = '<svg viewBox="0 0 60 60" aria-hidden="true"><path d="M30 4 L54 34 H39 V56 H21 V34 H6 Z" fill="#f5c84c" stroke="#6b4428" stroke-width="5" stroke-linejoin="round"/></svg>';
 
@@ -72,7 +74,7 @@ export function createHud(root, { project }) {
       target = f.prog.coins;
       if (shownCoins < 0) shownCoins = target;
       if (shownCoins !== target) { const d = target - shownCoins; shownCoins = Math.abs(d) < 1 ? target : shownCoins + d * Math.min(1, dt * 8) + Math.sign(d); if (Math.sign(target - shownCoins) !== Math.sign(d)) shownCoins = target; }
-      const txt = String(Math.round(shownCoins)); if (coinN.textContent !== txt) coinN.textContent = txt;
+      const txt = num(shownCoins); if (coinN.textContent !== txt) coinN.textContent = txt;
       bins(r.load);
       const lt = `${r.load.total()} / ${r.load.capacity()}`; if (loadN.textContent !== lt) loadN.textContent = lt;
       // the field last cut: its crop and how much is cut (done at DONE_AT, shown as 100 %)

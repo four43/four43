@@ -77,7 +77,7 @@ test('desktop: cutting wheat blows grain into the wagon; the wagon unloads over 
 
 for (const preset of ['iPhone 15 Pro portrait', 'iPad Pro 11 landscape']) test(`${preset}: the workshop card fits; a fully upgraded rig harvests`, async t => {
   if (skip) return t.skip(skip);
-  const game = await openGame(chrome.browser, site.url, { preset, args: { progress: COMBINE, coins: 1e6 } });
+  const game = await openGame(chrome.browser, site.url, { preset, args: { progress: COMBINE, coins: 1e9 } });
   try {
     await game.page.evaluate(([x, z]) => {
       const r = window.engine.debug.rig, p = r.c.body.translation(), dx = x - p.x, dz = z - p.z;
@@ -104,7 +104,7 @@ for (const preset of ['iPhone 15 Pro portrait', 'iPad Pro 11 landscape']) test(`
 
 test('desktop: corn is too tough for blunt blades; Blades 1 unlocks it with a banner; a field done says so', async t => {
   if (skip) return t.skip(skip);
-  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { progress: COMBINE, coins: 40000 } });
+  const game = await openGame(chrome.browser, site.url, { preset: 'desktop', args: { progress: COMBINE, coins: 1e6 } });
   const place = (x, z, yaw) => game.page.evaluate(([x, z, yaw]) => {
     const r = window.engine.debug.rig, p = r.c.body.translation(), c = Math.cos(yaw - r.c.yaw), s = Math.sin(yaw - r.c.yaw), h = (yaw - r.c.yaw) / 2;
     for (const b of [r.c.body, ...r.train.carts.map(k => k.body)]) {
@@ -217,6 +217,11 @@ test('desktop: the tractor\'s day: bale the hay onto the trailer, sell the bales
     console.log('shot', await game.shot('haybarn'));
     await game.step(60 * 12);
     s = await game.state(); assert.equal(s.load.n, 0); assert.ok(s.coins > 0);
+    // the tractor's garage is beside the barn: out of its far door, onto the pad, the workshop card opens
+    await place(ZONES.tractorshed.x, ZONES.tractorshed.z, Math.PI); await game.step(20); for (let k = 0; k < 10; k++) await frames(game);
+    assert.ok(Math.hypot(ZONES.tractorshed.x - ZONES.haybarn.x, ZONES.tractorshed.z - ZONES.haybarn.z) < 30, 'the garage is by the hay barn');
+    assert.ok(await game.page.evaluate(() => !!document.getElementById('shop')), 'the workshop card opens on the tractor\'s garage');
+    console.log('shot', await game.shot('tractor-garage'));
     assert.deepEqual(await game.errors(), []);
   } finally { await game.close(); }
 });

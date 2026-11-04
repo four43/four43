@@ -214,7 +214,7 @@ The tables in §6 (H-U2) and the prices in §5 (H-S2) above give the pre-rebase 
   (shut until the tractor is owned) on the path from the backyard's garage.
   - **Fields:** hay (40 × 32 m), alfalfa (18 × 32 m, blades 1) and wildflowers (40 × 28 m, blades 2), with 1 m cells.
   - **The hay barn** is the tractor's sell point: a drive-through along z in the meadow's south-east corner.
-  - **The tractor's garage** is a pad with a workbench by the meadow gate; the workshop card opens there.
+  - **The tractor's garage** is a pad with a workbench (by the meadow gate; moved beside the hay barn in §16.2); the workshop card opens there.
   - Gravel lanes run from the gate along the meadow's north edge and down between the hay and the alfalfa to the barn.
 - **The gates** (`GATES` in the layout) each sit in a fence line (`FENCES`) and open for their vehicle: the grain gate for the
   combine, the meadow gate for the tractor.
@@ -245,3 +245,33 @@ The tables in §6 (H-U2) and the prices in §5 (H-S2) above give the pre-rebase 
 | Mower | free | 1,800 / 3,600 | 300 clippings | 120 / 150 / 100 / 600 |
 | Tractor | 8,000 | 3,800 / 4,370 | 6 bales a trailer (up to 12) | 400 / 600 / 500 / 1,500 |
 | Combine | 30,000 | 30,000 / 72,000 | 600 grain a wagon | 3,000 / 5,000 / 4,000 / 12,000 |
+
+### 16.2 The tractor is a jump, not a reset (2026-11-04 playtest)
+
+The playtest call: "We need the tractor be an exciting jump from the small lawn mower, not a reset to a slog." Before, a fresh
+tractor made about 28 coins a second on hay (7 cells a second at 4) and 288 a load, while a maxed mower made about 145 a second on
+clover and up to 7,000 a load: going back to the mower paid better.
+
+- **The rule now:** a new vehicle out-earns the one before it fully upgraded, per second and per load. Each chapter's crops pay
+  about ten times the last chapter's. Cells cut a second (deck × speed, the mower's 0.5 m cells four to a square metre): mower
+  9.7 → 48, tractor 7 → 35, combine 9.6 → 64.
+- **Prices:** hay 40, alfalfa 60, wildflowers 90 a cell (the meadow's signs say it by the bale: 480, 720, 1,080); wheat 400, corn
+  600, sunflowers 900. A fresh tractor on hay makes ~280 a second, a maxed mower on clover ~145; a fresh combine on wheat ~3,800,
+  a maxed tractor on wildflowers ~3,100.
+- **Bales:** a trailer holds 12 bales from the start (three layers), up to 20 (five layers; two upgrades). A first load of hay is
+  5,760 coins, enough for the first upgrade.
+- **The tractor's garage** moved beside the hay barn, between the barn and the wildflowers, its workbench against the south fence;
+  a gravel path runs from the barn's far door to it. Sell, then upgrade, with no drive back across the meadow. The tractor still
+  starts by the meadow gate (where it is bought).
+- The combine is re-based with the same ×10 step so it stays a jump from the tractor. The blades and vehicle prices keep the
+  §16.1 rule (blades ≈ 70–90 % of the field before; a vehicle ≈ its chapter's fields' pay).
+- Coin counts show thousands separators; prices of six digits and more get a smaller font on the buy button so the coin stays whole.
+
+| Vehicle | Price | Blades (1 / 2) | Bin size (level 0) | Upgrade bases (speed / width / bins / carts) |
+|---|---|---|---|---|
+| Mower | free | 1,800 / 3,600 | 300 clippings | 120 / 150 / 100 / 600 |
+| Tractor | 8,000 | 32,000 / 35,200 | 12 bales a trailer (up to 20) | 3,200 / 4,800 / 4,000 / 12,000 |
+| Combine | 180,000 | 600,000 / 1,110,000 | 600 grain a wagon | 40,000 / 67,000 / 54,000 / 160,000 |
+
+First harvests: lawn 2,464, long grass 3,840, clover 4,800; hay 51,200, alfalfa 34,560, wildflowers 100,800; wheat 768,000, corn
+1,372,800, sunflowers 2,059,200.

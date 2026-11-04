@@ -3,7 +3,7 @@
 // taps them and greys them out when they cannot be bought; this half only draws the levels, the values and the prices.
 import { CROP, CROP_IDS } from '../defs/econ.js';
 import { UPGRADE_IDS, VEHICLES, VEHICLE_IDS, costOf, upgrade } from '../defs/vehicles.js';
-import { COIN_SVG } from './hud.js';
+import { COIN_SVG, num } from './hud.js';
 
 const ICONS = {
   speed: '<svg viewBox="0 0 48 48"><path d="M8 34 A18 18 0 1 1 40 34" fill="none" stroke="#3a7bd5" stroke-width="6" stroke-linecap="round"/><path d="M24 30 L34 16" stroke="#d84a3a" stroke-width="5" stroke-linecap="round"/><circle cx="24" cy="30" r="4" fill="#5a3820"/></svg>',
@@ -55,7 +55,7 @@ export function shopHalf({ sound }) {
         const owned = engine.scene.state.farm.prog.owned[v.id], k = `${owned}:${r.vehicle === v.id}`; if (k === v.key) continue;
         const label = VEHICLES[v.id].label;
         v.key = k; v.btn.innerHTML = r.vehicle === v.id ? `<b>${label}</b><span>driving</span>` : owned ? `<b>${label}</b><span>drive</span>`
-          : `<b>${label}</b><span>${COIN_SVG}${VEHICLES[v.id].price}</span>`;
+          : `<b>${label}</b><span>${COIN_SVG}${num(VEHICLES[v.id].price)}</span>`;
         v.btn.classList.toggle('on', r.vehicle === v.id);
       }
       for (const row of rows) {
@@ -64,7 +64,8 @@ export function shopHalf({ sound }) {
         const c = costOf(row.veh, row.id, l), f = k => fmt(row.veh, row.id, k);
         const pre = row.id === 'blades' ? 'Cuts ' : '';
         row.val.textContent = pre + (c === null ? f(l) : `${f(l)} → ${f(l + 1)}`);
-        row.buy.innerHTML = c === null ? '<b>MAX</b>' : `${COIN_SVG}<b>${c}</b>`;
+        row.buy.innerHTML = c === null ? '<b>MAX</b>' : `${COIN_SVG}<b>${num(c)}</b>`;
+        row.buy.classList.toggle('long', c !== null && c >= 100000); // six digits and more: a smaller font, the coin kept whole
       }
     },
     exit() { card?.remove(); card = rows = null; vehs = []; builtFor = null; },

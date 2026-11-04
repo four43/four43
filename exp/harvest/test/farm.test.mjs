@@ -94,12 +94,12 @@ test('a wagon over the silo pit unloads its grain and it is paid for; the combin
 });
 
 test('buying: the barn opens the shop, an upgrade costs coins and changes the rig', () => {
-  const h = open({ coins: 100000 }); h.step(30);
+  const h = open({ coins: 1000000 }); h.step(30);
   teleport(h, ZONES.shop.x, ZONES.shop.z + 2, Math.PI); drive(h, 0, 0, 30); // drove in heading south: the carts trail out of the north door
   assert.ok(h.engine.scene.overlays.includes('shop'), 'the shop is open in the shed');
   h.engine.command('buy', { what: 'carts' }); h.step(2);
   let s = h.state();
-  assert.equal(s.levels.carts, 1); assert.equal(s.carts, 2); assert.equal(s.coins, 100000 - costOf('combine', 'carts', 0));
+  assert.equal(s.levels.carts, 1); assert.equal(s.carts, 2); assert.equal(s.coins, 1000000 - costOf('combine', 'carts', 0));
   const bin = l => upgrade('combine', 'bins').value(l);
   assert.equal(s.load.cap, 2 * bin(0));
   h.engine.command('buy', { what: 'width' }); h.step(2);

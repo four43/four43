@@ -31,6 +31,7 @@ const PATHS = [
   [8, [31, -41], [52, -41], [80, -41.5], [100, -40.5], [116, -42]],                         // through the meadow gate, the meadow's north edge
   [5.5, [115.5, -42], [114.5, -60], [115.5, -80], [114.8, -100]],                           // down between the hay and the alfalfa
   [8, [114.8, -100], [122, -104], [126, -108]],                                             // to the hay barn's door
+  [8, [126, -127], [121, -132], [113, -133.5]],                                            // out of its far door to the tractor's garage
 ];
 function pathMask() {
   const c = document.createElement('canvas'); c.width = c.height = MASK_PX; const g = c.getContext('2d');
@@ -152,14 +153,15 @@ function boardCanvas(w, h, paint) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 const COIN = (g, x, y, r) => { g.fillStyle = '#f5c84c'; g.strokeStyle = '#b07a12'; g.lineWidth = r * 0.22; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke(); };
-// a field sign (H-F6): the crop's name and colour, what a grain sells for; when it cannot be cut, why: `need` (the vehicle or blades)
+// a field sign (H-F6): the crop's name and colour, what a grain (a bale for the tractor's) sells for; when it cannot be cut, why: `need` (the vehicle or blades)
 function fieldSign(f, need) {
   const crop = CROP[f.crop];
   return boardCanvas(512, 256, g => {
     g.fillStyle = crop.grain; g.beginPath(); g.arc(76, 72, 38, 0, Math.PI * 2); g.fill();
     g.fillStyle = '#5a3820'; g.font = `800 ${crop.label.length > 8 ? 54 : 68}px ${FONT}`; g.textAlign = 'left'; g.fillText(crop.label.toUpperCase(), 132, 74);
     g.font = `800 40px ${FONT}`;
-    COIN(g, 62, 146, 22); g.fillStyle = '#5a3820'; g.fillText(`${crop.price} a ${f.vehicle === 'mower' ? 'clipping' : 'grain'}`, 98, 148);
+    COIN(g, 62, 146, 22); g.fillStyle = '#5a3820'; const bale = VEHICLES[f.vehicle].bale; // the tractor's crops sell by the bale
+    g.fillText(`${(bale ? crop.price * bale : crop.price).toLocaleString('en-US')} a ${bale ? 'bale' : f.vehicle === 'mower' ? 'clipping' : 'grain'}`, 98, 148);
     if (need) { g.fillStyle = '#9a3a2a'; g.fillText(need, 40, 204); }
   });
 }
