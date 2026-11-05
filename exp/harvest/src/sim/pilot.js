@@ -15,11 +15,24 @@ export function stickToWorld(sx, sy, camYaw, out) {
   return out;
 }
 
+// Lane hold (H-C5, playtest 2026-11-04: "precision movements are kind of tough"): driving forward across one of its fields, the
+// vehicle holds the row line, the field axis (N, E, S or W: the fields are axis-aligned) nearest its heading when the hold took it.
+// A stick within `hold` of a quarter turn of that line (TUNE.laneHold, 0.75: 67.5 deg) asks for the line itself; past it, the stick
+// steers as ever and the line is let go, so a firm turn leaves the field. Out of the field, backing up or the stick let go: no line.
+const QUARTER = Math.PI / 2;
+export const nearestAxis = yaw => Math.round(yaw / QUARTER) * QUARTER;
+
 // stick: { x, y } on the screen (x right, y up), length 0..1. Yaws as tractor.yaw (positive steer turns the yaw up, screen right is camYaw - 90 deg).
 export function createPilot() {
-  const out = { thr: 0, steer: 0, onTarget: true }; // reused: nothing allocated per step
-  // m: stick distance 0..1; want: the wanted world yaw; back: the stick is in the reverse cone
-  function go(m, want, back, yaw, speed) {
+  const out = { thr: 0, steer: 0, onTarget: true, line: null }; // reused: nothing allocated per step. line: the held row yaw, or null
+  // m: stick distance 0..1; want: the wanted world yaw; back: the stick is in the reverse cone; hold: the lane hold's share of a
+  // quarter turn (0: none, out of a field)
+  function go(m, want, back, yaw, speed, hold = 0) {
+    if (m === 0 || back || hold <= 0) out.line = null;
+    else {
+      out.line ??= nearestAxis(yaw);
+      if (Math.abs(wrap(want - out.line)) <= hold * QUARTER) want = out.line; else out.line = null;
+    }
     if (m === 0) { out.thr = out.steer = 0; out.onTarget = true; return out; }
     if (back) { // C-8: back up, the rear of the tractor turning toward the stick
       const err = wrap(want - (yaw + Math.PI));
@@ -38,9 +51,10 @@ export function createPilot() {
       return go(m, camYaw - a, Math.abs(a) > Math.PI - PILOT.revCone, yaw, speed);
     },
     // The world-frame stick (the goX/goZ/goBack actions, stickToWorld): what update gives for the same stick, within 1e-9 (#81)
-    drive(goX, goZ, back, yaw, speed) {
+    // hold: the lane hold's share of a quarter turn while over one of the vehicle's fields, else 0
+    drive(goX, goZ, back, yaw, speed, hold = 0) {
       const m = Math.min(1, Math.hypot(goX, goZ));
-      return go(m, m === 0 ? 0 : Math.atan2(goX, goZ), back, yaw, speed);
+      return go(m, m === 0 ? 0 : Math.atan2(goX, goZ), back, yaw, speed, hold);
     },
   };
 }

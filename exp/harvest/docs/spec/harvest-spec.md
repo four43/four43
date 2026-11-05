@@ -275,3 +275,18 @@ clover and up to 7,000 a load: going back to the mower paid better.
 
 First harvests: lawn 2,464, long grass 3,840, clover 4,800; hay 51,200, alfalfa 34,560, wildflowers 100,800; wheat 768,000, corn
 1,372,800, sunflowers 2,059,200.
+
+### 16.3 Lane hold (2026-11-04 playtest)
+
+The playtest call: "Precision movements are kind of tough. A user should be able to turn away and out of the field, but it should
+take like 75%+ steering to get out of it."
+
+- **H-C5** While a vehicle's cutter is over one of its own fields (`fields.under`) and it drives forward, the pilot holds a row line:
+  the field axis (N, E, S or W; the fields are axis-aligned) nearest its heading when the hold took it.
+  - A stick within `TUNE.laneHold` (0.75) of a quarter turn of that line (67.5°) asks for the line itself, so a thumb a little
+    off centre, or W with A or D, goes straight down the row. Entering a field a little crooked, the vehicle straightens onto the row.
+  - Past that share (the stick 75 % or more of the way to full side) the stick steers as ever and the line is let go: a firm turn
+    leaves the field. The hold takes a new line once the stick comes back inside the share.
+  - Out of the field, backing up or with the stick let go there is no line.
+- Every vehicle has it (the mower on its lawns, the tractor in the meadow, the combine in the grain), each over its own crops'
+  fields only. `laneHold` is on the `?tune` panel (0 turns it off).

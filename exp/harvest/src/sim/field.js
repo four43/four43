@@ -20,6 +20,11 @@ export function createFields() {
     progress(f) { return 1 - f.ripe / f.total; },
     // the field and cell under a world point, or -1
     cellAt(f, x, z) { const i = Math.floor((x - f.x0) / f.size), j = Math.floor((z - f.z0) / f.size); return i < 0 || j < 0 || i >= f.w || j >= f.h ? -1 : j * f.w + i; },
+    // a field of `vehicle`'s crops under a world point (cut or not), or null
+    under(x, z, vehicle) {
+      for (const f of list) if (f.vehicle === vehicle && fields.cellAt(f, x, z) >= 0) return f;
+      return null;
+    },
     // the field with ripe crop under a world point, or null
     ripeAt(x, z) {
       for (const f of list) { const c = fields.cellAt(f, x, z); if (c >= 0 && f.grow[c] >= 1) return f; }

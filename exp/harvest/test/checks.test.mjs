@@ -7,7 +7,7 @@ import { harvestGame, initPhysics } from '../src/game.sim.js';
 await initPhysics();
 const src = p => fileURLToPath(new URL(`../src/${p}`, import.meta.url));
 // a slow weave north through the wheat: the combine cuts, fills up and turns
-const drive = i => ({ goX: Math.sin(i / 120) * 0.6, goZ: 0.8, goBack: { down: false }, horn: false });
+const drive = i => ({ goX: Math.sin(i / 120) * 0.6, goZ: 0.8, goBack: false, horn: false }); // goBack is a button: a boolean (an object reads as held)
 
 test('determinism: two runs of 1800 steps agree at every checksum', () => {
   const r = checks.determinism(harvestGame(), { seed: 1, steps: 1800, input: drive }); assert.ok(r.ok, JSON.stringify(r));

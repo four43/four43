@@ -283,3 +283,48 @@ test('the tractor bales hay onto its trailer and sells the bales at the hay barn
   drive(h, 0, 0, Math.ceil(60 * n / VEHICLES.tractor.unload) + 30);
   s = h.state(); assert.equal(s.load.n, 0); assert.equal(s.coins, n * CROP.hay.price);
 });
+
+// ---- the lane hold (H-C5)
+
+// a stick held `a` (radians) right of the vehicle's heading, as a thumb off-centre with the camera behind: point to go's world vector
+const offStick = a => h => { const yaw = h.state().combine.yaw - a; return { goX: Math.sin(yaw), goZ: Math.cos(yaw), goBack: false, horn: false }; };
+const TRACTOR = { v: 4, owned: { mower: true, tractor: true }, active: 'tractor' };
+const turned = (h, yaw0) => Math.abs(Math.atan2(Math.sin(h.state().combine.yaw - yaw0), Math.cos(h.state().combine.yaw - yaw0)));
+
+test('lane hold: across the hay, a stick 45° off keeps the tractor on its row; 85° turns it out', () => {
+  const F = FIELDS.hay, D = Math.PI / 180;
+  let h = open({ progress: TRACTOR }); h.step(60);
+  place(h, F.x0 + 12, F.z0 + F.h - 2, Math.PI); h.step(10); // in the hay, facing south along the rows
+  h.step(60 * 3, offStick(45 * D));
+  assert.ok(turned(h, Math.PI) < 3 * D, `held the row (turned ${(turned(h, Math.PI) / D).toFixed(1)}°)`);
+  assert.ok(h.state().combine.z < F.z0 + F.h - 6, 'and kept going');
+  h = open({ progress: TRACTOR }); h.step(60);
+  place(h, F.x0 + 12, F.z0 + F.h - 2, Math.PI); h.step(10);
+  h.step(60 * 2, offStick(85 * D));
+  assert.ok(turned(h, Math.PI) > 60 * D, `a firm stick turns out (turned ${(turned(h, Math.PI) / D).toFixed(1)}°)`);
+});
+
+test('lane hold: off the field, or with laneHold 0, a stick 45° off turns as ever', () => {
+  const F = FIELDS.hay, D = Math.PI / 180, was = TUNE.laneHold;
+  let h = open({ progress: TRACTOR }); h.step(60);
+  place(h, F.x0 + 12, F.z0 + F.h + 8, 0); h.step(10); // north of the hay, facing north, away from it
+  h.step(60 * 2, offStick(45 * D));
+  assert.ok(turned(h, 0) > 30 * D, `off the field it turns (${(turned(h, 0) / D).toFixed(1)}°)`);
+  try {
+    h = open({ progress: TRACTOR }); h.step(60); h.engine.command('tune', { key: 'laneHold', value: 0 }); h.step(1);
+    place(h, F.x0 + 12, F.z0 + F.h - 2, Math.PI); h.step(10);
+    h.step(60 * 2, offStick(45 * D));
+    assert.ok(turned(h, Math.PI) > 30 * D, `laneHold 0: it turns (${(turned(h, Math.PI) / D).toFixed(1)}°)`);
+  } finally { TUNE.laneHold = was; }
+});
+
+for (const [veh, field, progress, x, z, yaw] of [
+  ['mower', 'lawn', { v: 4, owned: { mower: true }, active: 'mower' }, -8, -55, -Math.PI / 2],  // across the lawn, heading west
+  ['combine', 'wheat', withLevels({}), 0, 24, 0],                                            // into the wheat, heading north
+]) test(`lane hold: the ${veh} holds its row across the ${field} too`, () => {
+  const D = Math.PI / 180, h = open({ progress }); h.step(60);
+  assert.equal(h.state().vehicle, veh);
+  place(h, x, z, yaw); h.step(10);
+  h.step(60 * 2, offStick(45 * D));
+  assert.ok(turned(h, yaw) < 3 * D, `held the row (turned ${(turned(h, yaw) / D).toFixed(1)}°)`);
+});

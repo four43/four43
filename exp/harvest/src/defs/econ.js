@@ -31,5 +31,6 @@ export const TUNE = {
   growS: 45,          // H-H2: seconds from cut to ripe
   unloadRate: 150,    // H-S1: grain per second each wagon over the pit drops
   toughSlow: 0.4,     // H-H6: speed share pushing through a crop too tough to cut
+  laneHold: 0.75,     // H-C5: over a field, a stick within this share of a quarter turn of the row holds the row (0: off)
 };
-export const TUNE_RANGE = Object.freeze({ growS: [5, 180], unloadRate: [5, 300], toughSlow: [0.1, 1] });
+export const TUNE_RANGE = Object.freeze({ growS: [5, 180], unloadRate: [5, 300], toughSlow: [0.1, 1], laneHold: [0, 1] });

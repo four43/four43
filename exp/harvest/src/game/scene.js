@@ -32,7 +32,9 @@ export function makeScenes() {
       f.step(dt, r => {
         if (r !== s.rig) { drive.thr = drive.steer = 0; return drive; } // other players' rigs: their own input (multiplayer, later)
         if (s.raw) { drive.thr = s.raw.thr; drive.steer = s.raw.steer; return drive; }
-        const p = pilot.drive(I.goX, I.goZ, I.goBack.down, r.c.yaw, r.c.speed);
+        // H-C5: the lane hold, while the cutter is over one of the vehicle's fields
+        const hold = f.fields.under(r.strip.x, r.strip.z, r.vehicle) ? TUNE.laneHold : 0;
+        const p = pilot.drive(I.goX, I.goZ, I.goBack.down, r.c.yaw, r.c.speed, hold);
         drive.thr = p.thr; drive.steer = p.steer; return drive;
       }, events);
       for (let i = 0; i < events.length; i++) {
