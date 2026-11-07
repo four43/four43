@@ -12,4 +12,4 @@ RUN bundle install
 
 EXPOSE 4000 35729
 
-CMD ["bundle", "exec", "jekyll", "serve", "--source", "site", "--host", "0.0.0.0", "--livereload"]
+CMD ["sh", "-c", "ruby scripts/fetch-games.rb && exec bundle exec jekyll serve --source site --host 0.0.0.0 --livereload"]

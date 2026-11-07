@@ -1,0 +1,19 @@
+# Games served under /exp/, each built and released from its own repo. scripts/fetch-games.rb downloads
+# https://github.com/<repo>/releases/download/<version>/site.tar.gz into site/<path> before Jekyll builds.
+# To deploy a new game version: tag it in the game's repo (its Release workflow builds it), then bump the version here.
+harvest:
+  repo: four43/harvest
+  version: v0.3.1
+  path: exp/harvest
+pig-pens:
+  repo: four43/pig-pens
+  version: v2.15.0
+  path: exp/piggie-game
+rally:
+  repo: four43/rally
+  version: v0.15.0
+  path: exp/rally
+tractor-pickup:
+  repo: four43/tractor-pickup
+  version: v1.11.1
+  path: exp/tractor-pickup

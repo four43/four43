@@ -1,2 +1,0 @@
-{ "title": "Pine", "description": "Chunky five-tier pine: star-shaped branch tiers over a tapered trunk. lod0 near, lod1 mid, lod2 a six-sided cone for the distance.", "size": [4.2, 7.6, 4.2], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
-  "nodes": ["lod0","lod1","lod2"], "budget": { "tris": 450, "materials": 1, "kb": 120 }, "checks": ["34 tile lod0: five tiers, each skirt a star of drooping branch tips", "FRONT tile lod0: trunk visible under the lowest tier, touching the grid"] }

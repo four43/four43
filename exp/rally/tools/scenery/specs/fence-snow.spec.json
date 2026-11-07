@@ -1,2 +1,0 @@
-{ "title": "Fence section", "description": "3 m post-and-rail section: post at the back (-Z), two sagging rails to the next post.", "size": [0.25, 1.15, 3.1], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
-  "nodes": ["lod0","lod1"], "budget": { "tris": 130, "materials": 1, "kb": 120 }, "checks": ["34 tile lod0: one post, two rails running along Z"] }

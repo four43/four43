@@ -1,2 +1,0 @@
-{ "title": "Snowy pine", "description": "The pine under snow: upward faces white.", "size": [4.2, 7.6, 4.2], "tolerance": [0.15, 0.08, 0.15], "grounded": true,
-  "nodes": ["lod0","lod1","lod2"], "budget": { "tris": 450, "materials": 1, "kb": 120 }, "checks": ["34 tile lod0: snow on the tops of the tiers, green under the tips"] }

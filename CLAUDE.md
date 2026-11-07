@@ -20,7 +20,15 @@ docker compose down              # Stop the dev server
 
 A VS Code build task (`Ctrl+Shift+B`) is configured in `.vscode/tasks.json` — it runs `docker compose up`.
 
-Deployment is automatic: push to `gh-pages` branch → GitHub Actions builds Jekyll → published to four43.com.
+Deployment is automatic: push to `gh-pages` branch → GitHub Actions fetches the game builds, builds Jekyll → published to four43.com.
+
+## Games (`/exp/`)
+
+The games live in their own repos ([four43/harvest](https://github.com/four43/harvest), [four43/pig-pens](https://github.com/four43/pig-pens), [four43/rally](https://github.com/four43/rally), [four43/tractor-pickup](https://github.com/four43/tractor-pickup)), each on the lion-hawk engine. A tag `vX.Y.Z` in a game repo runs its Release workflow, which attaches `site.tar.gz` (the built game) to a GitHub Release.
+
+`site/_data/games.yml` pins which release each `/exp/<path>/` serves. `scripts/fetch-games.rb` downloads them into `site/exp/<path>/` (gitignored); the deploy workflow and the Docker dev server both run it first. To deploy a new game version, bump its `version` in `games.yml` and push `gh-pages`. To preview a local game build, symlink it in place: `ln -s ~/projects/four43/harvest/dist site/exp/harvest`.
+
+`site/exp/engine-sound-lab/` is a plain page kept in this repo.
 
 ## Architecture
 
@@ -40,6 +48,7 @@ Deployment is automatic: push to `gh-pages` branch → GitHub Actions builds Jek
 │   └── tmp/                 # Draft posts (excluded from build)
 │
 ├── site/                    # Jekyll source (--source site)
+│   ├── _data/games.yml      # Game releases served under /exp/
 │   ├── _config.yml          # Jekyll config (collections_dir: content)
 │   ├── _includes/           # Partials (topbar, sidebar, etc.)
 │   ├── _layouts/            # Layouts (post, page, home, etc.)
@@ -50,6 +59,7 @@ Deployment is automatic: push to `gh-pages` branch → GitHub Actions builds Jek
 │   ├── index.md, about.md, etc.
 │   └── CNAME
 │
+├── scripts/fetch-games.rb   # Downloads the pinned game releases into site/exp/
 ├── Gemfile                  # Ruby dependencies
 ├── Dockerfile
 └── docker-compose.yml

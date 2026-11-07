@@ -8,5 +8,10 @@ vendor/
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .superpowers/
-exp/node_modules
-exp/tractor-pickup/node_modules
+
+# game builds fetched from their release by scripts/fetch-games.rb (site/_data/games.yml)
+site/exp/harvest
+site/exp/piggie-game
+site/exp/rally
+site/exp/tractor-pickup
+site/exp/*.download
