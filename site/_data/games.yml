@@ -7,7 +7,7 @@ harvest:
   path: exp/harvest
 pig-pens:
   repo: four43/pig-pens
-  version: v2.15.0
+  version: v2.16.0
   path: exp/piggie-game
 rally:
   repo: four43/rally
